@@ -84,6 +84,7 @@ export class SecureConnection {
   private messageListener: ((message: ServerMessage) => void) | null = null;
   private closeListener: ((failure: RemoteFailure) => void) | null = null;
   private failure: RemoteFailure | null = null;
+  private reported: RemoteFailure | null = null;
   private keepAlive: NodeJS.Timeout | null = null;
   private awaitingPong = false;
 
@@ -152,6 +153,9 @@ export class SecureConnection {
 
   onClose(listener: (failure: RemoteFailure) => void): void {
     this.closeListener = listener;
+    if (this.reported !== null) {
+      listener(this.reported);
+    }
   }
 
   next(timeoutMs: number): Promise<ServerMessage> {
@@ -254,6 +258,7 @@ export class SecureConnection {
     if (!notify) {
       return;
     }
+    this.reported = failure;
     this.closeListener?.(failure);
   }
 }

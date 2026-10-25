@@ -141,4 +141,16 @@ describe('SecureConnection', () => {
     expect(failures).toEqual([]);
     await expect(connection.next(100)).rejects.toMatchObject({ kind: 'connection-lost' });
   });
+
+  it('reports a close that happened before the listener was registered', async () => {
+    const serverKey = generateKeyPair();
+    responder = await startResponder((socket, opening) => {
+      acceptSession(socket, opening, serverKey);
+      setTimeout(() => socket.close(closeCodeFor('revoked'), 'revoked'), 20);
+    });
+    const connection = await SecureConnection.open(responder.url, beginSession(generateKeyPair(), serverKey.publicKey), OPTIONS);
+    await expect(connection.next(1000)).rejects.toMatchObject({ kind: 'device-unknown' });
+
+    expect(await new Promise((resolve) => connection.onClose(resolve))).toMatchObject({ kind: 'device-unknown' });
+  });
 });
