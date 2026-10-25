@@ -50,6 +50,7 @@ mac:
   notarize: false
   extendInfo:
     NSMicrophoneUsageDescription: Codevo Whisper potrebuje mikrofón na diktovanie. Mikrofón je zapnutý iba počas diktovania.
+    ElectronSquirrelPreventDowngrades: true
 dmg:
   sign: true
   writeUpdateInfo: false

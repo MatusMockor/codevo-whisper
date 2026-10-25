@@ -32,4 +32,10 @@ describe('electron-builder.yml', () => {
   it('publishes to the public GitHub repository the updater reads', () => {
     expect(BUILDER_CONFIG).toMatch(/publish:\n {2}provider: github\n {2}owner: MatusMockor\n {2}repo: codevo-whisper\n/);
   });
+
+  it('lets Squirrel.Mac refuse a signed bundle older than the running app, whatever the manifest says', () => {
+    const extendInfo = /\nmac:\n(?: {2}.*\n)*? {2}extendInfo:\n((?: {4}.*\n)+)/.exec(BUILDER_CONFIG)?.[1] ?? '';
+
+    expect(extendInfo).toContain('    ElectronSquirrelPreventDowngrades: true\n');
+  });
 });
