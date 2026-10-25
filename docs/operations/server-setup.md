@@ -31,6 +31,7 @@ Set in `infrastructure/compose/.env`:
 | `CW_PUBLIC_ENDPOINT` | The `ws://` or `wss://` URL devices use; it is written into pairing tokens. |
 | `VIDEO_GID`, `RENDER_GID` | Numeric GIDs of the host `video` and `render` groups (from `getent group video render`), so the non-root `stt` user can open `/dev/dri`. |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
+| `STT_ENGINE` | `worker` (default) keeps the model loaded in one resident `cw-stt-worker` process; `cli` starts `transcribe-cli` for every call (the phase 2 behaviour, about 400 ms slower per call). |
 | `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
 
 ## Build, provision, start

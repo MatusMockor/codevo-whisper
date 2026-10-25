@@ -31,6 +31,7 @@ services:
       dockerfile: apps/stt/Dockerfile
     image: codevo-whisper-stt:local
     environment:
+      STT_ENGINE: ${STT_ENGINE:-worker}
       STT_BACKEND: ${STT_BACKEND:-vulkan}
       STT_THREADS: ${STT_THREADS:-4}
       TMPDIR: /tmp

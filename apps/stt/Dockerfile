@@ -9,14 +9,17 @@ RUN git init --quiet transcribe.cpp \
   && git -C transcribe.cpp fetch --quiet --depth 1 origin "${TRANSCRIBE_COMMIT}" \
   && git -C transcribe.cpp checkout --quiet FETCH_HEAD \
   && test "$(git -C transcribe.cpp rev-parse HEAD)" = "${TRANSCRIBE_COMMIT}"
+COPY native/stt-worker /src/stt-worker
 RUN cmake -S transcribe.cpp -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PROJECT_transcribe_INCLUDE=/src/stt-worker/stt-worker.cmake \
     -DTRANSCRIBE_VULKAN=ON \
     -DTRANSCRIBE_BUILD_TESTS=OFF \
     -DGGML_NATIVE=OFF \
     -DBUILD_SHARED_LIBS=OFF \
-  && cmake --build build --target transcribe-cli \
-  && install -D -m 0755 build/bin/transcribe-cli /opt/transcribe/bin/transcribe-cli
+  && cmake --build build --target transcribe-cli cw-stt-worker \
+  && install -D -m 0755 build/bin/transcribe-cli /opt/transcribe/bin/transcribe-cli \
+  && install -D -m 0755 build/bin/cw-stt-worker /opt/transcribe/bin/cw-stt-worker
 
 FROM node:24-trixie-slim AS app
 WORKDIR /repo
@@ -33,11 +36,13 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers libopenblas0 libgomp1 \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=engine /opt/transcribe /opt/transcribe
-RUN if ldd /opt/transcribe/bin/transcribe-cli | grep -q 'not found'; then ldd /opt/transcribe/bin/transcribe-cli; exit 1; fi
+RUN for binary in /opt/transcribe/bin/*; do if ldd "$binary" | grep -q 'not found'; then ldd "$binary"; exit 1; fi; done
 WORKDIR /app
 COPY --from=app /repo/apps/stt/dist ./dist
 RUN mkdir -p /models && chown node:node /models
 ENV NODE_ENV=production \
+  STT_ENGINE=worker \
+  STT_WORKER_BINARY=/opt/transcribe/bin/cw-stt-worker \
   STT_BINARY=/opt/transcribe/bin/transcribe-cli \
   STT_MODEL_PATH=/models/parakeet-ultra-F16.gguf \
   STT_BACKEND=vulkan \

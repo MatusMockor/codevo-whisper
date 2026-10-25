@@ -9,4 +9,12 @@ export class CliTranscriber implements Transcriber {
   transcribe(pcm: Uint8Array, language: TranscribeLanguage, signal: AbortSignal): Promise<string> {
     return runTranscribeCli({ ...this.options, language, pcm, signal });
   }
+
+  warmUp(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  close(): Promise<void> {
+    return Promise.resolve();
+  }
 }
