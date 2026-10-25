@@ -14,12 +14,14 @@
     "test:e2e": "electron-vite build && env -u ELECTRON_RUN_AS_NODE playwright test"
   },
   "devDependencies": {
+    "@codevo-whisper/protocol": "workspace:*",
     "@codevo-whisper/stt-runner": "workspace:*",
     "@electron/fuses": "1.8.0",
     "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "6.1.2",
     "electron": "45.0.0",
     "electron-builder": "26.18.0",
@@ -28,6 +30,7 @@
     "react-dom": "19.3.1",
     "typescript": "6.0.3",
     "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "ws": "8.22.0"
   }
 }
