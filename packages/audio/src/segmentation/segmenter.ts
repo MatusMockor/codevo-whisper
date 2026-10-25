@@ -46,6 +46,10 @@ export class Segmenter {
     return this.start;
   }
 
+  get openLeadInSamples(): number {
+    return this.leadIn;
+  }
+
   onFrame(frame: VadFrame): Segment | undefined {
     this.trackVoice(frame);
     const endedPause = this.pauses.observe(frame);

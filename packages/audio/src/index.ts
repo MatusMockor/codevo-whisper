@@ -22,3 +22,6 @@ export type { DropReason, Dropped, JobKind, TranscriptionJob } from './schedulin
 export type { DeviceRegistry, JobOutcome, JobSubmitter } from './scheduling/job-outcome';
 export type { SegmentTranscriber } from './scheduling/segment-transcriber';
 export { TranscriptionDispatcher, type TranscriptionDispatcherDeps } from './scheduling/transcription-dispatcher';
+export { RollingSession } from './session/rolling-session';
+export { DEFAULT_MIN_PARTIAL_TAIL_MS, DEFAULT_MS_PER_OVERLAP_WORD, type RollingSessionOptions } from './session/rolling-session-options';
+export { SegmentFailedError, SessionCancelledError } from './session/session-errors';

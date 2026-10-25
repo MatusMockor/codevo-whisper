@@ -1,0 +1,63 @@
+import { decodePcm16le } from '../../src/pcm/pcm-format';
+import type { SegmentTranscriber } from '../../src/scheduling/segment-transcriber';
+
+const KEY_SAMPLES = 8;
+const LETTERS = 'bcdfghjklmnprstvzaeiou';
+
+function wordFor(block: number): string {
+  let state = (block + 1) * 2654435761;
+  let word = '';
+  for (let index = 0; index < 8; index += 1) {
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+    word += LETTERS[state % LETTERS.length] ?? 'a';
+  }
+  return word;
+}
+
+function inflect(word: string): string {
+  return `${word.slice(0, -1)}.`;
+}
+
+export class TimelineTranscriber implements SegmentTranscriber {
+  private readonly offsets = new Map<string, number>();
+
+  constructor(
+    source: Int16Array,
+    private readonly blockSamples = 4800,
+  ) {
+    for (let offset = source.length - KEY_SAMPLES; offset >= 0; offset -= 1) {
+      this.offsets.set(source.subarray(offset, offset + KEY_SAMPLES).join(','), offset);
+    }
+  }
+
+  transcribe(pcm: Uint8Array): Promise<string> {
+    const samples = decodePcm16le(pcm);
+    const offset = this.offsets.get(samples.subarray(0, KEY_SAMPLES).join(',')) ?? -1;
+    if (offset < 0) {
+      return Promise.reject(new Error('audio not found in the timeline source'));
+    }
+    const words = this.blocksIn(offset, offset + samples.length).map(wordFor);
+    const first = words[0];
+    if (offset > 0 && first !== undefined) {
+      words[0] = inflect(first);
+    }
+    return Promise.resolve(words.join(' '));
+  }
+
+  expectedText(endSample: number): string {
+    return this.blocksIn(0, endSample).map(wordFor).join(' ');
+  }
+
+  vocabulary(endSample: number): string[] {
+    return this.blocksIn(0, endSample).map(wordFor);
+  }
+
+  private blocksIn(from: number, to: number): number[] {
+    const blocks: number[] = [];
+    const first = Math.max(0, Math.ceil(from / this.blockSamples - 0.5));
+    for (let block = first; (block + 0.5) * this.blockSamples < to; block += 1) {
+      blocks.push(block);
+    }
+    return blocks;
+  }
+}

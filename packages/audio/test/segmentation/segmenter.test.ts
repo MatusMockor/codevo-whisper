@@ -39,6 +39,7 @@ describe('Segmenter', () => {
     expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(11.15), leadInSamples: 0, reason: 'pause', voiced: true }]);
     expect(segmenter.openStartSample).toBe(at(10.65));
     expect(segmenter.openSegmentId).toBe(1);
+    expect(segmenter.openLeadInSamples).toBe(at(0.5));
   });
 
   it('cuts on a settled 500 ms silence without waiting for speech', () => {
