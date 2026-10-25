@@ -1,4 +1,4 @@
-import { publicKeyOf } from '@codevo-whisper/protocol';
+import { IDENTIFIER_PATTERN, MAX_IDENTIFIER_CHARS, publicKeyOf } from '@codevo-whisper/protocol';
 import type { ServerPairing } from './pairing-repository';
 
 type StoredPairing = {
@@ -12,7 +12,6 @@ type StoredPairing = {
 };
 
 const KEY_BYTES = 32;
-const DEVICE_ID = /^[0-9a-f]{8}$/;
 const ENDPOINT_PROTOCOLS = ['ws:', 'wss:'];
 
 const toText = (bytes: Uint8Array): string => Buffer.from(bytes).toString('base64url');
@@ -42,13 +41,14 @@ function endpoint(value: unknown): string {
 
 function deviceId(value: unknown): string {
   const id = text(value, 'deviceId');
-  if (!DEVICE_ID.test(id)) {
+  if (id.length > MAX_IDENTIFIER_CHARS || !IDENTIFIER_PATTERN.test(id)) {
     throw new Error('deviceId has an invalid format');
   }
   return id;
 }
 
 export function encodePairing(pairing: ServerPairing): string {
+  deviceId(pairing.deviceId);
   const stored: StoredPairing = {
     version: 1,
     devicePrivateKey: toText(pairing.deviceKey.privateKey),

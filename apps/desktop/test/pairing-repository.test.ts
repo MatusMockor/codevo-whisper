@@ -93,4 +93,15 @@ describe('EncryptedPairingFile', () => {
     await Promise.all([repository.clear(), repository.save(saved)]);
     expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
   });
+
+  it('round-trips any device id the protocol accepts and refuses to write one it does not', async () => {
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+    const saved = { ...pairing(), deviceId: 'Device_01-A' };
+
+    await repository.save(saved);
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
+
+    await expect(repository.save({ ...pairing(), deviceId: 'not an id!' })).rejects.toThrow(/deviceId/);
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
+  });
 });
