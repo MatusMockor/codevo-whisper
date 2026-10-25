@@ -2,7 +2,8 @@ import { app } from 'electron';
 import type { Logger } from '../logging/logger';
 import type { AppUpdater } from '../updates/app-updater';
 import type { DictationGuard } from '../updates/dictation-guard';
-import { ElectronUpdaterAdapter, type UpdaterLike } from '../updates/electron-updater-adapter';
+import type { UpdaterLike } from '../updates/electron-updater-adapter';
+import { loadElectronUpdater } from '../updates/load-electron-updater';
 import { resolveUpdateMode } from '../updates/update-policy';
 import { UpdateScheduler } from '../updates/update-scheduler';
 import { UpdateService } from '../updates/update-service';
@@ -34,7 +35,11 @@ async function electronUpdater(logger: Logger): Promise<UpdaterChoice> {
   if (mode === 'unsupported') {
     return { updater: UNAVAILABLE_UPDATER, mode, fake: null };
   }
-  return { updater: new ElectronUpdaterAdapter(await loadAutoUpdater(), logger), mode, fake: null };
+  const updater = await loadElectronUpdater(loadAutoUpdater, logger);
+  if (updater === null) {
+    return { updater: UNAVAILABLE_UPDATER, mode: 'unsupported', fake: null };
+  }
+  return { updater, mode, fake: null };
 }
 
 export async function createUpdates({ e2e, dictation, send, logger }: UpdateWiringDeps): Promise<Updates> {

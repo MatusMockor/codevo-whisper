@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { ElectronUpdaterAdapter, type UpdaterLike, type UpdaterLogger } from '../src/main/updates/electron-updater-adapter';
+import { loadElectronUpdater } from '../src/main/updates/load-electron-updater';
 import { RecordingLogger } from './recording-logger';
 
 type CheckResult = Awaited<ReturnType<UpdaterLike['checkForUpdates']>>;
@@ -97,5 +98,25 @@ describe('ElectronUpdaterAdapter', () => {
 
     expect(() => updater.emit('error', error)).not.toThrow();
     expect(logger.errors).toEqual([{ message: 'electron-updater emitted an error', error }]);
+  });
+});
+
+describe('loadElectronUpdater', () => {
+  it('wraps the loaded updater in the adapter', async () => {
+    const updater = new StandInUpdater();
+    updater.result = { isUpdateAvailable: true, updateInfo: { version: '1.2.0' } };
+
+    const adapter = await loadElectronUpdater(() => Promise.resolve(updater), new RecordingLogger());
+
+    expect(await adapter?.check()).toEqual({ version: '1.2.0' });
+    expect(updater.autoInstallOnAppQuit).toBe(false);
+  });
+
+  it('logs and gives up when electron-updater cannot be loaded, so the app still starts', async () => {
+    const logger = new RecordingLogger();
+    const error = new Error('Cannot find module');
+
+    expect(await loadElectronUpdater(() => Promise.reject(error), logger)).toBeNull();
+    expect(logger.errors).toEqual([{ message: 'The updater could not be loaded', error }]);
   });
 });
