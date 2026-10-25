@@ -8,7 +8,7 @@ export type CaptureCommand = CaptureRequest & { id: number };
 
 export type CaptureReply = { id: number; ok: true; value: unknown } | { id: number; ok: false; error: string };
 
-export type CaptureStartResult = { label: string };
+export type CaptureStartResult = { label: string; fallback: boolean };
 
 export type CaptureBridge = {
   onCommand(listener: (command: CaptureCommand) => void): void;

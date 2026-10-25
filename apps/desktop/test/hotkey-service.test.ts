@@ -118,12 +118,12 @@ describe('HotkeyService', () => {
     expect(events).toEqual(['start', 'stop:input-lost', 'start', 'stop:input-lost']);
   });
 
-  it('stops at max duration', async () => {
+  it('stops at the 10 minute max duration', async () => {
     vi.useFakeTimers();
     const { helper, events } = await started();
 
     helper.pressKey('down', 63);
-    vi.advanceTimersByTime(119_999);
+    vi.advanceTimersByTime(599_999);
     const beforeLimit = [...events];
     vi.advanceTimersByTime(1);
     helper.pressKey('up', 63);
@@ -137,9 +137,28 @@ describe('HotkeyService', () => {
     const { helper, events } = await started({ clock: () => now });
 
     helper.pressKey('down', 63);
-    now += 120_000;
+    now += 599_999;
+    helper.pressKey('up', 63);
+    expect(events).toEqual(['start', 'stop:released']);
+
+    helper.pressKey('down', 63);
+    now += 600_000;
     helper.pressKey('up', 63);
 
+    expect(events).toEqual(['start', 'stop:released', 'start', 'stop:max-duration']);
+  });
+
+  it('keeps a toggle session running past 2 minutes until the 10 minute limit', async () => {
+    vi.useFakeTimers();
+    const { helper, events } = await started({ settings: { mode: 'toggle' } });
+
+    helper.pressKey('down', 63);
+    helper.pressKey('up', 63);
+    vi.advanceTimersByTime(120_000);
+    const afterTwoMinutes = [...events];
+    vi.advanceTimersByTime(480_000);
+
+    expect(afterTwoMinutes).toEqual(['start']);
     expect(events).toEqual(['start', 'stop:max-duration']);
   });
 

@@ -1,5 +1,5 @@
 import type { CaptureMode } from '../../shared/capture-contract';
-import { concatPcm, PCM_BYTES_PER_SECOND } from '../../shared/pcm';
+import { PCM_BYTES_PER_SAMPLE, PCM_BYTES_PER_SECOND } from '../../shared/pcm';
 import type { MicrophoneSetting } from '../../shared/settings';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
@@ -7,25 +7,36 @@ import type { AudioCapture, CaptureStart } from './audio-capture';
 import type { CaptureHost } from './capture-host';
 import { parseDeviceList, parseStartResult } from './capture-payloads';
 import { resolveDevice, toAudioDevices, type AudioDevice } from './device-resolver';
+import { PcmRecording } from './pcm-recording';
 
-const MAX_RECORDING_BYTES = PCM_BYTES_PER_SECOND * 130;
+export const MAX_RECORDING_MS = 600_000;
+
+export type WindowAudioCaptureOptions = { maxRecordingMs?: number };
 
 type Mode = 'idle' | CaptureMode;
 
+function recordingBytes(maxRecordingMs: number): number {
+  const samples = Math.floor((maxRecordingMs * PCM_BYTES_PER_SECOND) / 1000 / PCM_BYTES_PER_SAMPLE);
+  return samples * PCM_BYTES_PER_SAMPLE;
+}
+
 export class WindowAudioCapture implements AudioCapture {
   private mode: Mode = 'idle';
-  private frames: Uint8Array[] = [];
-  private recordedBytes = 0;
+  private readonly recording: PcmRecording;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly levels: Listeners<number>;
   private readonly devices: Listeners<AudioDevice[]>;
+  private readonly limits: Listeners<void>;
 
   constructor(
     private readonly host: CaptureHost,
     private readonly logger: Logger,
+    options: WindowAudioCaptureOptions = {},
   ) {
+    this.recording = new PcmRecording(recordingBytes(options.maxRecordingMs ?? MAX_RECORDING_MS));
     this.levels = new Listeners(logger, 'A microphone level listener failed');
     this.devices = new Listeners(logger, 'A microphone list listener failed');
+    this.limits = new Listeners(logger, 'A recording limit listener failed');
     host.onFrame((pcm) => {
       this.keep(pcm);
     });
@@ -52,6 +63,10 @@ export class WindowAudioCapture implements AudioCapture {
 
   onLevel(listener: (rms: number) => void): () => void {
     return this.levels.add(listener);
+  }
+
+  onLimitReached(listener: () => void): () => void {
+    return this.limits.add(listener);
   }
 
   start(chosen: MicrophoneSetting): Promise<CaptureStart> {
@@ -81,8 +96,7 @@ export class WindowAudioCapture implements AudioCapture {
       throw new Error('Recording is already running');
     }
     await this.stopMetering();
-    this.frames = [];
-    this.recordedBytes = 0;
+    this.recording.clear();
     return this.open(chosen, 'record');
   }
 
@@ -92,10 +106,7 @@ export class WindowAudioCapture implements AudioCapture {
     }
     await this.closeStream();
     this.mode = 'idle';
-    const pcm = concatPcm(this.frames);
-    this.frames = [];
-    this.recordedBytes = 0;
-    return pcm;
+    return this.recording.take();
   }
 
   private async startMetering(chosen: MicrophoneSetting): Promise<void> {
@@ -119,7 +130,7 @@ export class WindowAudioCapture implements AudioCapture {
     this.mode = mode;
     try {
       const started = parseStartResult(await this.host.request({ type: 'start', deviceId: device?.deviceId ?? null, mode }));
-      return { fallback, deviceLabel: started.label };
+      return { fallback: fallback || started.fallback, deviceLabel: started.label };
     } catch (error) {
       await this.closeStream();
       this.mode = 'idle';
@@ -137,10 +148,9 @@ export class WindowAudioCapture implements AudioCapture {
   }
 
   private keep(pcm: Uint8Array): void {
-    if (this.mode !== 'record' || this.recordedBytes + pcm.byteLength > MAX_RECORDING_BYTES) {
+    if (this.mode !== 'record' || this.recording.append(pcm) !== 'limit-reached') {
       return;
     }
-    this.frames.push(pcm);
-    this.recordedBytes += pcm.byteLength;
+    this.limits.emit(undefined);
   }
 }

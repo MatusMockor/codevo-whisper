@@ -138,6 +138,49 @@ test.describe('with Chromium fake media', () => {
     expect(await app.evaluate(async () => (await (globalThis as unknown as HookGlobal).codevoE2e.capture.stop()).byteLength)).toBe(0);
   });
 
+
+  test('switching from the settings meter to a recording records audio and releases every track', async () => {
+    const capture = await openCapturePage();
+
+    const bytes = await app.evaluate(async (_electron, chosen) => {
+      const { capture: audio } = (globalThis as unknown as HookGlobal).codevoE2e;
+      await audio.startMeter(chosen);
+      await audio.start(chosen);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return (await audio.stop()).byteLength;
+    }, SYSTEM_DEFAULT);
+
+    expect(bytes).toBeGreaterThan(0);
+    expect(await trackStates(capture)).toEqual(['audio:ended', 'audio:ended']);
+  });
+
+  test('records with the system default when the chosen device vanishes before it opens', async () => {
+    const capture = await openCapturePage();
+    const devices = await app.evaluate(() => (globalThis as unknown as HookGlobal).codevoE2e.capture.listDevices());
+    const chosen = devices[0] as (typeof devices)[number];
+    await capture.evaluate(() => {
+      const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (constraints) => {
+        const audio = constraints?.audio;
+        if (typeof audio === 'object' && audio.deviceId !== undefined) {
+          return Promise.reject(new DOMException('Requested device not found', 'NotFoundError'));
+        }
+        return original(constraints);
+      };
+    });
+
+    const result = await app.evaluate(async (_electron, microphone) => {
+      const { capture: audio } = (globalThis as unknown as HookGlobal).codevoE2e;
+      const started = await audio.start(microphone);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { started, bytes: (await audio.stop()).byteLength };
+    }, { deviceId: chosen.deviceId, label: chosen.label });
+
+    expect(result.started.fallback).toBe(true);
+    expect(result.started.deviceLabel).not.toBe('');
+    expect(result.bytes).toBeGreaterThan(0);
+    expect(await trackStates(capture)).toEqual(['audio:ended']);
+  });
 });
 
 test.describe('with the app permission handler', () => {

@@ -31,6 +31,13 @@ function createHiddenWindow(): BrowserWindow {
   });
 }
 
+function destroy(window: BrowserWindow): void {
+  if (window.isDestroyed()) {
+    return;
+  }
+  window.destroy();
+}
+
 export class CaptureWindow implements CaptureHost {
   private window: BrowserWindow | null = null;
   private ready: Promise<WebContents> | null = null;
@@ -78,7 +85,11 @@ export class CaptureWindow implements CaptureHost {
     }
     const contents = await this.ensure();
     const { id, promise } = this.requests.create(REQUEST_TIMEOUT_MS);
-    contents.send(CAPTURE_CHANNELS.command, { ...request, id });
+    try {
+      contents.send(CAPTURE_CHANNELS.command, { ...request, id });
+    } catch (error) {
+      this.requests.settle({ id, ok: false, error: `The capture command could not be sent: ${String(error)}` });
+    }
     return promise;
   }
 
@@ -94,7 +105,7 @@ export class CaptureWindow implements CaptureHost {
       return;
     }
     this.forget(window, new Error('The capture window was discarded'));
-    window.destroy();
+    destroy(window);
   }
 
   onFrame(listener: (pcm: Uint8Array) => void): () => void {
@@ -118,7 +129,7 @@ export class CaptureWindow implements CaptureHost {
     this.window = window;
     contents.once('render-process-gone', () => {
       this.forget(window, new Error('The capture renderer is gone'));
-      window.destroy();
+      destroy(window);
     });
     window.once('closed', () => {
       this.forget(window, new Error('The capture window was closed'));
@@ -127,7 +138,7 @@ export class CaptureWindow implements CaptureHost {
       () => contents,
       (error: unknown) => {
         this.forget(window, new Error('The capture page failed to load'));
-        window.destroy();
+        destroy(window);
         throw error;
       },
     );

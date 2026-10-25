@@ -38,10 +38,12 @@ describe('capture payloads', () => {
     }
   });
 
-  it('parses the start result label', () => {
-    expect(parseStartResult({ label: 'Fake Audio Input 1' })).toEqual({ label: 'Fake Audio Input 1' });
-    expect(() => parseStartResult({ label: 5 })).toThrow(IpcValidationError);
-    expect(() => parseStartResult(null)).toThrow(IpcValidationError);
+  it('parses the start result label and fallback flag', () => {
+    expect(parseStartResult({ label: 'Fake Audio Input 1', fallback: false })).toEqual({ label: 'Fake Audio Input 1', fallback: false });
+    expect(parseStartResult({ label: 'Fake Audio Input 1', fallback: true })).toEqual({ label: 'Fake Audio Input 1', fallback: true });
+    for (const value of [{ label: 5, fallback: false }, { label: 'a' }, { label: 'a', fallback: 'no' }, null]) {
+      expect(() => parseStartResult(value)).toThrow(IpcValidationError);
+    }
   });
 
   it('parses success and failure replies', () => {

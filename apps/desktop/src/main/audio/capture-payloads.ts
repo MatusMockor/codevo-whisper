@@ -47,10 +47,10 @@ export function parseDeviceList(value: unknown): RawAudioDevice[] {
 }
 
 export function parseStartResult(value: unknown): CaptureStartResult {
-  if (!isPlainRecord(value) || !isBoundedText(value['label'])) {
-    throw new IpcValidationError('Start result must carry a label');
+  if (!isPlainRecord(value) || !isBoundedText(value['label']) || typeof value['fallback'] !== 'boolean') {
+    throw new IpcValidationError('Start result must carry a label and a fallback flag');
   }
-  return { label: value['label'] };
+  return { label: value['label'], fallback: value['fallback'] };
 }
 
 function isRequestId(value: unknown): value is number {

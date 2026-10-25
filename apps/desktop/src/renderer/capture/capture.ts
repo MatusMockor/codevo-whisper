@@ -31,7 +31,7 @@ async function start(deviceId: string | null, mode: CaptureMode): Promise<Captur
       bridge.level(rms);
     },
   });
-  return { label: session.label };
+  return { label: session.label, fallback: session.fallback };
 }
 
 function execute(command: CaptureCommand): Promise<unknown> {
@@ -69,7 +69,10 @@ bridge.onCommand((command) => {
 });
 
 navigator.mediaDevices.addEventListener('devicechange', () => {
-  void listDevices().then((devices) => {
-    bridge.devicesChanged(devices);
-  });
+  listDevices().then(
+    (devices) => {
+      bridge.devicesChanged(devices);
+    },
+    () => undefined,
+  );
 });

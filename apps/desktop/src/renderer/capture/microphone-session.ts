@@ -1,5 +1,6 @@
 import { PCM_PROCESSOR_NAME, type CaptureMode } from '../../shared/capture-contract';
 import type { PcmSink } from '../../shared/pcm-framer';
+import { openWithFallback } from './open-with-fallback';
 import workletUrl from './pcm-worklet.ts?worker&url';
 
 const FLUSH_TIMEOUT_MS = 1000;
@@ -45,6 +46,7 @@ export class MicrophoneSession {
     private readonly context: AudioContext,
     private readonly node: AudioWorkletNode,
     private readonly sink: PcmSink,
+    readonly fallback: boolean,
   ) {
     node.port.onmessage = (event: MessageEvent<WorkletMessage>) => {
       this.receive(event.data);
@@ -52,10 +54,13 @@ export class MicrophoneSession {
   }
 
   static async open(deviceId: string | null, mode: CaptureMode, sink: PcmSink): Promise<MicrophoneSession> {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(deviceId), video: false });
+    const { value: stream, fallback } = await openWithFallback(
+      (id) => navigator.mediaDevices.getUserMedia({ audio: audioConstraints(id), video: false }),
+      deviceId,
+    );
     const context = new AudioContext();
     try {
-      return new MicrophoneSession(stream, context, await connect(stream, context, mode), sink);
+      return new MicrophoneSession(stream, context, await connect(stream, context, mode), sink, fallback);
     } catch (error) {
       await release(stream, context);
       throw error;

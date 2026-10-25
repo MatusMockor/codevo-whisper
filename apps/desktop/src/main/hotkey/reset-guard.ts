@@ -3,7 +3,7 @@ import type { PowerEvents } from './power-events';
 
 export type ResetReason = 'max-duration' | 'lock' | 'suspend' | 'input-lost';
 
-export const MAX_SESSION_MS = 120_000;
+export const MAX_SESSION_MS = 600_000;
 
 type InputLossSource = Pick<InputHelper, 'onInputLost'>;
 

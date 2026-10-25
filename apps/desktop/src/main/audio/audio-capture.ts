@@ -9,6 +9,7 @@ export interface AudioCapture {
   start(chosen: MicrophoneSetting): Promise<CaptureStart>;
   stop(): Promise<Uint8Array>;
   onLevel(listener: (rms: number) => void): () => void;
+  onLimitReached(listener: () => void): () => void;
   startMeter(chosen: MicrophoneSetting): Promise<void>;
   stopMeter(): Promise<void>;
 }
