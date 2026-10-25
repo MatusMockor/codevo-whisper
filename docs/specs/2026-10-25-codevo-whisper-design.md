@@ -84,7 +84,7 @@ The two ends are the user's device and the user's own gateway. Everything betwee
 ### 4.2 Pairing
 
 - `codevo-whisper pair` on the server opens a pairing window (default 10 minutes, one device) and prints a pairing token as text and as a terminal QR code:
-  `cw1:<server-static-public-key>:<128-bit random secret>:<endpoint hint>`
+  `cw1:<server-static-public-key>:<256-bit random secret>:<endpoint hint>` (the secret is used directly as the 32-byte Noise PSK, no derivation)
 - The user pastes the token into the app (or scans the QR on a future mobile client). The token carries the server's static public key, so the client authenticates the server from the first message. No short codes, so no offline guessing.
 - Handshake: `Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s`. The PSK is the token secret. The prologue binds protocol version, role and mode (`cw1/pair`).
 - The server then prints the device name and the device key fingerprint and asks the operator to confirm (`y/N`). The device becomes active only after the confirmation; until then the session can do nothing else.
