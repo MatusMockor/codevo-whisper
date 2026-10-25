@@ -307,6 +307,42 @@ describe('gateway sessions', () => {
     expect((await session.closed).code).toBe(4005);
   });
 
+  it('lets a dictation started near the session limit complete', async () => {
+    let now = 1_000_000;
+    await fake.close();
+    fake = await startFakeSttServer({
+      respond: () => {
+        now += 600_001;
+        return { status: 200, body: { text: 'ahoj svet' } };
+      },
+    });
+    const server = await start({ clock: () => now });
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 'late', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 'late', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 'late' },
+    ]);
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'session_expired' });
+  });
+
+  it('closes even a busy session at the hard limit', async () => {
+    let now = 1_000_000;
+    const server = await start({ clock: () => now });
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(301));
+    expect(await session.next()).toEqual({ type: 'flow', paused: true });
+    now += 1_800_001;
+    sendAudio(session, pcmSeconds(1));
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'session_expired' });
+    expect(fake.requests).toHaveLength(0);
+  });
+
   it('rejects a text frame and an oversized frame', async () => {
     const server = await start();
     const text = await openSocket(server.url);

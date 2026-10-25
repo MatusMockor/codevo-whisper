@@ -1,5 +1,6 @@
 export const HANDSHAKE_TIMEOUT_MS = 5_000;
 export const MAX_SESSION_MS = 600_000;
+export const MAX_SESSION_HARD_MS = 1_800_000;
 export const MAX_AUDIO_SECONDS = 600;
 export const FLOW_PAUSE_SECONDS = 300;
 export const MAX_WS_PAYLOAD = 65_536;

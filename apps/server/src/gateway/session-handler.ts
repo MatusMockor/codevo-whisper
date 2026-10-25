@@ -3,7 +3,7 @@ import type { Logger } from '../logging/logger';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { AudioBuffer } from './audio-buffer';
 import { logDictation } from './dictation-log';
-import { CLOSE_INTERNAL_ERROR, FLOW_PAUSE_SECONDS, MAX_AUDIO_SECONDS, MAX_SESSION_MS } from './limits';
+import { CLOSE_INTERNAL_ERROR, FLOW_PAUSE_SECONDS, MAX_AUDIO_SECONDS, MAX_SESSION_HARD_MS, MAX_SESSION_MS } from './limits';
 import type { SecureChannel } from './secure-channel';
 import { transcribeDictation } from './transcribe-dictation';
 
@@ -21,7 +21,7 @@ export class SessionHandler {
   private readonly audio = new AudioBuffer();
   private paused = false;
   private readonly connectedAt: number;
-  private readonly expiry: NodeJS.Timeout;
+  private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
     start: (message) => this.onStart(message.sessionId, message.language),
@@ -37,14 +37,17 @@ export class SessionHandler {
     private readonly deps: SessionDeps,
   ) {
     this.connectedAt = deps.clock();
-    this.expiry = setTimeout(() => this.channel.fail('session_expired'), MAX_SESSION_MS);
-    this.expiry.unref();
+    this.timers = [
+      setTimeout(() => this.expireIfIdle(), MAX_SESSION_MS + 1),
+      setTimeout(() => this.channel.fail('session_expired'), MAX_SESSION_HARD_MS + 1),
+    ];
+    this.timers.forEach((timer) => timer.unref());
     channel.onMessage((message) => this.handle(message));
     channel.onClose(() => this.dispose());
   }
 
   private handle(message: ClientMessage): void {
-    if (this.deps.clock() - this.connectedAt > MAX_SESSION_MS) {
+    if (this.expired()) {
       this.channel.fail('session_expired');
       return;
     }
@@ -120,10 +123,22 @@ export class SessionHandler {
       this.paused = false;
       this.channel.send({ type: 'flow', paused: false });
     }
+    this.expireIfIdle();
+  }
+
+  private expired(): boolean {
+    const elapsed = this.deps.clock() - this.connectedAt;
+    return elapsed > MAX_SESSION_HARD_MS || (elapsed > MAX_SESSION_MS && this.state.kind === 'idle');
+  }
+
+  private expireIfIdle(): void {
+    if (this.state.kind === 'idle' && this.deps.clock() - this.connectedAt > MAX_SESSION_MS) {
+      this.channel.fail('session_expired');
+    }
   }
 
   private dispose(): void {
-    clearTimeout(this.expiry);
+    this.timers.forEach((timer) => clearTimeout(timer));
     if (this.state.kind === 'finishing') {
       this.state.controller.abort();
     }
