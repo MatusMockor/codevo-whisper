@@ -17,6 +17,7 @@ export type ResponderSession = {
   socket: WebSocket;
   send(message: ServerMessage): void;
   received: ClientMessage[];
+  onMessage(listener: (message: ClientMessage) => void): void;
 };
 
 export type ScriptedResponder = {
@@ -56,6 +57,16 @@ export function acceptSession(socket: WebSocket, opening: Uint8Array, serverKey:
   socket.send(responder.writeMessage(new Uint8Array(0)));
   const transport = new SecureTransport(responder.result(), rekeyEvery);
   const received: ClientMessage[] = [];
-  socket.on('message', (data: Buffer) => received.push(decodeClientMessage(transport.open(new Uint8Array(data)))));
-  return { socket, received, send: (message) => socket.send(transport.seal(encodeServerMessage(message))) };
+  const listeners: Array<(message: ClientMessage) => void> = [];
+  socket.on('message', (data: Buffer) => {
+    const message = decodeClientMessage(transport.open(new Uint8Array(data)));
+    received.push(message);
+    listeners.forEach((listener) => listener(message));
+  });
+  return {
+    socket,
+    received,
+    send: (message) => socket.send(transport.seal(encodeServerMessage(message))),
+    onMessage: (listener) => listeners.push(listener),
+  };
 }
