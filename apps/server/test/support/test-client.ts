@@ -50,6 +50,8 @@ export async function runHandshake(url: string, handshake: ClientHandshake): Pro
   return sessionOver(socket, inbox, transport, result.handshakeHash);
 }
 
-export function connectSession(url: string, device: KeyPair, serverPublicKey: Uint8Array): Promise<TestSession> {
-  return runHandshake(url, beginSession(device, serverPublicKey));
+export async function connectSession(url: string, device: KeyPair, serverPublicKey: Uint8Array): Promise<TestSession> {
+  const session = await runHandshake(url, beginSession(device, serverPublicKey));
+  session.send({ type: 'hello' });
+  return session;
 }

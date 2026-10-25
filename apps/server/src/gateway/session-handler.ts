@@ -23,6 +23,7 @@ export class SessionHandler {
   private readonly connectedAt: number;
   private readonly expiry: NodeJS.Timeout;
   private readonly handlers: Handlers = {
+    hello: () => this.channel.fail('bad_message'),
     start: (message) => this.onStart(message.language),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),

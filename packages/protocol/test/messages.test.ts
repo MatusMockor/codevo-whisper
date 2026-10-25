@@ -27,6 +27,7 @@ function expectBadMessage(work: () => unknown): void {
 
 describe('client messages', () => {
   const messages: ClientMessage[] = [
+    { type: 'hello' },
     { type: 'start', sessionId: '3f1c2a9e-0b4e-4d8a-a651-f03c9d6e27a4', language: 'sk' },
     { type: 'audio', pcm: new Uint8Array([1, 2, 3, 4]) },
     { type: 'finish' },

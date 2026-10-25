@@ -16,7 +16,7 @@ import {
 } from './message-types';
 import { jsonFrame, splitTag, tagged } from './tagged-frame';
 
-const JSON_TYPES = ['start', 'finish', 'cancel', 'pair-request'] as const;
+const JSON_TYPES = ['hello', 'start', 'finish', 'cancel', 'pair-request'] as const;
 
 type JsonClientMessage = Exclude<ClientMessage, { type: 'audio' }>;
 

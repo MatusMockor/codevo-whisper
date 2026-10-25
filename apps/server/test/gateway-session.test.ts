@@ -1,4 +1,4 @@
-import { generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
+import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
 import WebSocket from 'ws';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
@@ -6,7 +6,7 @@ import { pcmSeconds } from './support/pcm';
 import { sendAudio } from './support/send-audio';
 import { startHarness, type Harness } from './support/server-harness';
 import { createTempDir } from './support/temp-dir';
-import { connectSession, openSocket, type TestSession } from './support/test-client';
+import { connectSession, openSocket, runHandshake, type TestSession } from './support/test-client';
 import { waitUntil } from './support/wait-until';
 
 let dir: Awaited<ReturnType<typeof createTempDir>>;
@@ -97,6 +97,46 @@ describe('gateway sessions', () => {
       code: 'unknown_device',
     });
     expect(fake.requests).toHaveLength(0);
+  });
+
+  it('has no side effects when a captured opening frame is replayed', async () => {
+    let now = 1_000_000;
+    const server = await start({ clock: () => now, handshakeTimeoutMs: 200 });
+    const device = await server.addDevice();
+    const handshake = beginSession(device, server.serverKey.publicKey);
+    const original = await runHandshake(server.url, handshake);
+    original.send({ type: 'hello' });
+    expect(await original.next()).toMatchObject({ type: 'ready' });
+    original.close();
+    await original.closed;
+    await waitUntil(() => server.gateway.sessions.count() === 0 && server.gateway.limiter.pending() === 0);
+    const seenAt = (await server.devices.list())[0]?.lastSeenAt;
+    now += 60_000;
+
+    const replay = await openSocket(server.url);
+    replay.socket.send(handshake.openingFrame);
+    const reply = await replay.inbox.next();
+    expect(reply.length).toBeGreaterThan(0);
+    expect(server.gateway.sessions.count()).toBe(0);
+    expect(server.gateway.limiter.pending()).toBe(1);
+
+    expect((await replay.inbox.closed).code).toBe(1008);
+    await expect(replay.inbox.next()).rejects.toBeInstanceOf(Error);
+    await waitUntil(() => server.gateway.limiter.pending() === 0);
+    expect(server.gateway.sessions.count()).toBe(0);
+    expect((await server.devices.list())[0]?.lastSeenAt).toBe(seenAt);
+  });
+
+  it('requires hello as the first transport message', async () => {
+    const server = await start();
+    const device = await server.addDevice();
+    const session = await runHandshake(server.url, beginSession(device, server.serverKey.publicKey));
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'bad_message' });
+    expect((await session.closed).code).toBe(4000);
+    expect(server.gateway.sessions.count()).toBe(0);
+    expect((await server.devices.list())[0]?.lastSeenAt).toBeNull();
   });
 
   it('rejects a client that expects another server key', async () => {

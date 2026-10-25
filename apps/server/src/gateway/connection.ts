@@ -4,8 +4,8 @@ import {
   HandshakeMode,
   ProtocolError,
   SecureTransport,
+  type ClientMessage,
   type ErrorCode,
-  type HandshakeResult,
   type HandshakeState,
   type KeyPair,
 } from '@codevo-whisper/protocol';
@@ -103,13 +103,22 @@ export class GatewayConnection {
       return;
     }
     const channel = this.establish(handshake);
-    const unregister = this.deps.sessions.add(device.id, (code) => channel.fail(code));
+    channel.onMessage((message) => void this.startSession(channel, device.id, message));
+  }
+
+  private async startSession(channel: WebSocketSecureChannel, deviceId: string, first: ClientMessage): Promise<void> {
+    if (first.type !== 'hello') {
+      channel.fail('bad_message');
+      return;
+    }
+    channel.onMessage(() => channel.fail('bad_message'));
+    const unregister = this.deps.sessions.add(deviceId, (code) => channel.fail(code));
     channel.onClose(unregister);
-    await this.deps.devices.touch(device.id, new Date(this.deps.clock())).catch(() => undefined);
+    await this.deps.devices.touch(deviceId, new Date(this.deps.clock())).catch(() => undefined);
     if (!channel.isOpen()) {
       return;
     }
-    new SessionHandler(channel, device.id, { queue: this.deps.queue, clock: this.deps.clock, logger: this.deps.logger });
+    new SessionHandler(channel, deviceId, { queue: this.deps.queue, clock: this.deps.clock, logger: this.deps.logger });
     channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
   }
 
@@ -126,12 +135,14 @@ export class GatewayConnection {
 
   private establish(handshake: HandshakeState): WebSocketSecureChannel {
     this.socket.send(handshake.writeMessage(EMPTY));
-    const result: HandshakeResult = handshake.result();
+    const channel = new WebSocketSecureChannel(this.socket, new SecureTransport(handshake.result()), () => this.confirm());
+    this.route = (bytes) => channel.receive(bytes);
+    return channel;
+  }
+
+  private confirm(): void {
     clearTimeout(this.deadline);
     this.authenticated = true;
     this.deps.limiter.promote(this.ip);
-    const channel = new WebSocketSecureChannel(this.socket, new SecureTransport(result));
-    this.route = (bytes) => channel.receive(bytes);
-    return channel;
   }
 }

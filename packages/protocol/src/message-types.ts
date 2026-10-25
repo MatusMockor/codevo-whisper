@@ -16,6 +16,7 @@ export const MAX_ERROR_MESSAGE_CHARS = 512;
 export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type ClientMessage =
+  | { type: 'hello' }
   | { type: 'start'; sessionId: string; language: Language }
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }

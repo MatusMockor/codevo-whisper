@@ -20,16 +20,22 @@ export interface SecureChannel {
 
 export class WebSocketSecureChannel implements SecureChannel {
   private messageHandler: (message: ClientMessage) => void = () => this.fail('bad_message');
+  private confirmed = false;
 
   constructor(
     private readonly socket: WebSocket,
     private readonly transport: SecureTransport,
+    private readonly onConfirmed: () => void,
   ) {}
 
   receive(ciphertext: Uint8Array): void {
     const message = this.decode(ciphertext);
     if (message === null) {
       return;
+    }
+    if (!this.confirmed) {
+      this.confirmed = true;
+      this.onConfirmed();
     }
     this.messageHandler(message);
   }
