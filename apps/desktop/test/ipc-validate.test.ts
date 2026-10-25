@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, validateMicrophone, validateModelId, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('returns a valid patch', () => {
@@ -7,7 +7,6 @@ describe('validateSettingsPatch', () => {
       hotkey: { keycode: 61, label: 'Pravý ⌥ Option' },
       microphone: { deviceId: null, label: null },
       engineOrder: ['local'],
-      localModelId: 'parakeet-ultra-f16',
       launchAtLogin: true,
     });
 
@@ -15,7 +14,6 @@ describe('validateSettingsPatch', () => {
       hotkey: { keycode: 61, label: 'Pravý ⌥ Option' },
       microphone: { deviceId: null, label: null },
       engineOrder: ['local'],
-      localModelId: 'parakeet-ultra-f16',
       launchAtLogin: true,
     });
   });
@@ -56,5 +54,47 @@ describe('validateSettingsPatch', () => {
     expect(() => validateSettingsPatch({ insertion: 'type' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ overlay: 'fullscreen' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ launchAtLogin: 'true' })).toThrow(IpcValidationError);
+  });
+});
+
+describe('validateSettingsPatch and the active model', () => {
+  it('rejects setting the active model directly, it goes through activateModel', () => {
+    expect(() => validateSettingsPatch({ localModelId: 'parakeet-ultra-q8' })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ localModelId: null })).toThrow(IpcValidationError);
+  });
+});
+
+describe('validateModelId', () => {
+  it('accepts a catalog style id', () => {
+    expect(validateModelId('parakeet-ultra-q8')).toBe('parakeet-ultra-q8');
+    expect(validateModelId('tc-whisper-turbo-q8')).toBe('tc-whisper-turbo-q8');
+  });
+
+  it.each([[''], ['../models'], ['A'.repeat(200)], [42], [null], [{ id: 'x' }]])('rejects %j', (input) => {
+    expect(() => validateModelId(input)).toThrow(IpcValidationError);
+  });
+});
+
+describe('validatePermissionKind', () => {
+  it('accepts the three permissions', () => {
+    expect(['microphone', 'input-monitoring', 'accessibility'].map((kind) => validatePermissionKind(kind))).toEqual(['microphone', 'input-monitoring', 'accessibility']);
+  });
+
+  it('rejects anything else', () => {
+    expect(() => validatePermissionKind('camera')).toThrow(IpcValidationError);
+    expect(() => validatePermissionKind(undefined)).toThrow(IpcValidationError);
+  });
+});
+
+describe('validateMicrophone', () => {
+  it('accepts the system default and a chosen device', () => {
+    expect(validateMicrophone({ deviceId: null, label: null })).toEqual({ deviceId: null, label: null });
+    expect(validateMicrophone({ deviceId: 'abc', label: 'AirPods Pro' })).toEqual({ deviceId: 'abc', label: 'AirPods Pro' });
+  });
+
+  it('rejects malformed microphones', () => {
+    expect(() => validateMicrophone({ deviceId: 'abc' })).toThrow(IpcValidationError);
+    expect(() => validateMicrophone({ deviceId: 1, label: null })).toThrow(IpcValidationError);
+    expect(() => validateMicrophone('default')).toThrow(IpcValidationError);
   });
 });

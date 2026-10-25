@@ -1,7 +1,8 @@
 import type { RawAudioDevice } from '../../shared/capture-contract';
+import type { AudioDevice } from '../../shared/microphones';
 import type { MicrophoneSetting } from '../../shared/settings';
 
-export type AudioDevice = { deviceId: string; label: string; isBluetooth: boolean };
+export type { AudioDevice };
 
 export type ResolvedDevice = { device: AudioDevice | null; fallback: boolean };
 

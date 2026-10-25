@@ -1,6 +1,6 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { startExternalSite, type ExternalSite } from './external-site';
-import { createUserDataDir, launchApp, removeUserDataDir } from './launch-app';
+import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 const SETTLE_MS = 750;
 
@@ -11,7 +11,7 @@ let userDataDir: string;
 
 test.beforeEach(async () => {
   external = await startExternalSite();
-  userDataDir = await createUserDataDir();
+  userDataDir = await createUserDataDir(ONBOARDED);
   app = await launchApp(userDataDir);
   page = await app.firstWindow();
 });
@@ -59,4 +59,26 @@ test('the real window blocks navigation to external URLs', async () => {
 
   expect(external.requestCount()).toBe(0);
   expect(page.url()).toBe(startUrl);
+});
+
+test('closing the main window keeps the app running in the tray and it opens again', async () => {
+  await page.getByRole('tab', { name: 'Nastavenia' }).click();
+  await expect(page.getByRole('meter', { name: 'Úroveň mikrofónu' })).toBeVisible();
+
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((window) => window.webContents.getURL().endsWith('/renderer/index.html'))
+      ?.close();
+  });
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith('/renderer/index.html')))).toBe(false);
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+
+  const reopened = app.waitForEvent('window');
+  await app.evaluate(({ app: electronApp }) => {
+    electronApp.emit('activate');
+  });
+  const window = await reopened;
+
+  await expect(window.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
+  expect(await app.evaluate(({ app: electronApp }) => electronApp.isReady())).toBe(true);
 });

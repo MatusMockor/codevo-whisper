@@ -1,8 +1,8 @@
 import type { InputHelper } from '../helper/input-helper';
 import { HOTKEY_LABELS, isHotkeyKeycode } from '../../shared/hotkey-labels';
-import type { HotkeySetting } from '../../shared/settings';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 
-export type RecordResult = NonNullable<HotkeySetting> | 'unsupported' | 'timeout';
+export type RecordResult = HotkeyRecordResult;
 
 const DEFAULT_RECORD_TIMEOUT_MS = 10_000;
 

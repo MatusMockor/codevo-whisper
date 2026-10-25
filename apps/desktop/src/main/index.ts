@@ -39,6 +39,10 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
+app.on('before-quit', (event) => {
+  application.beforeQuit(event);
+});
+
 app.on('will-quit', () => {
   application.dispose();
 });

@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
 import type { AppStatus } from '../shared/app-status';
+import type { HotkeyRecordResult } from '../shared/hotkey-record';
+import type { AudioDevice } from '../shared/microphones';
+import type { ModelCatalogView, ModelState } from '../shared/models';
+import type { PermissionsStatus } from '../shared/permissions';
 import type { Settings } from '../shared/settings';
 import type { DayStats } from '../shared/stats';
 
@@ -28,6 +32,20 @@ const api: IpcApi = {
   resetStats: () => ipcRenderer.invoke(INVOKE_CHANNELS.resetStats) as Promise<void>,
   getStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getStatus) as Promise<AppStatus>,
   getLastTranscript: () => ipcRenderer.invoke(INVOKE_CHANNELS.getLastTranscript) as Promise<string | null>,
+  getPermissions: () => ipcRenderer.invoke(INVOKE_CHANNELS.getPermissions) as Promise<PermissionsStatus>,
+  requestPermission: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.requestPermission, kind) as Promise<void>,
+  openPermissionSettings: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.openPermissionSettings, kind) as Promise<void>,
+  relaunch: () => ipcRenderer.invoke(INVOKE_CHANNELS.relaunch) as Promise<void>,
+  recordHotkey: () => ipcRenderer.invoke(INVOKE_CHANNELS.recordHotkey) as Promise<HotkeyRecordResult>,
+  getModelCatalog: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelCatalog) as Promise<ModelCatalogView>,
+  getModelStates: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelStates) as Promise<ModelState[]>,
+  downloadModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.downloadModel, id) as Promise<void>,
+  pauseModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.pauseModel, id) as Promise<void>,
+  deleteModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteModel, id) as Promise<void>,
+  activateModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.activateModel, id) as Promise<void>,
+  getMicrophones: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMicrophones) as Promise<AudioDevice[]>,
+  startMicrophoneMeter: (microphone) => ipcRenderer.invoke(INVOKE_CHANNELS.startMicrophoneMeter, microphone) as Promise<void>,
+  stopMicrophoneMeter: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMicrophoneMeter) as Promise<void>,
   on: subscribe,
 };
 

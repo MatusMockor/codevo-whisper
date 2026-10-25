@@ -27,7 +27,7 @@ export function StatusBanner({ status, onOpenSettings }: StatusBannerProps) {
           <CheckIcon />
         </span>
         <span>
-          Všetko je pripravené. Podržte <kbd>{content.hotkeyLabel}</kbd> v ľubovoľnej aplikácii a hovorte.
+          Všetko je pripravené. {content.verb} <kbd>{content.hotkeyLabel}</kbd> v ľubovoľnej aplikácii a hovorte.
         </span>
       </div>
     );

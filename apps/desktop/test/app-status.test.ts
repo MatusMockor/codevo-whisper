@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import { ModelManager } from '../src/main/models/model-manager';
+import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
 import { PermissionsService } from '../src/main/permissions/permissions-service';
 import { PauseState } from '../src/main/session/pause-state';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -35,10 +36,23 @@ async function prepared() {
   const modelsDir = join(scratch, 'models');
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
-  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY), testEntry('other', 'OTHER')], settings, warmUp: () => Promise.resolve(), logger });
+  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY), testEntry('other', 'OTHER')], settings, fetchImpl: () => Promise.reject(new Error('offline')), warmUp: () => Promise.resolve(), logger });
   const helper = new FakeInputHelper();
   let microphone = 'granted';
-  const permissions = new PermissionsService(helper, () => microphone, logger);
+  let permissionReads = 0;
+  const permissions = new PermissionsService({
+    helper,
+    microphone: {
+      status: () => {
+        permissionReads += 1;
+        return microphone;
+      },
+      ask: () => Promise.resolve(true),
+    },
+    links: MACOS_PERMISSION_LINKS,
+    openUrl: () => Promise.resolve(),
+    logger,
+  });
   const pause = new PauseState(logger);
   service = new AppStatusService({ settings, models, permissions, pause, logger });
   const changes: AppStatus[] = [];
@@ -46,6 +60,8 @@ async function prepared() {
   service.start();
   return {
     settings,
+    models,
+    permissionReads: () => permissionReads,
     helper,
     pause,
     service,
@@ -60,10 +76,10 @@ describe('AppStatusService', () => {
   it('reports the hotkey, the active model, permissions and pause', async () => {
     const harness = await prepared();
 
-    expect(await harness.service.status()).toEqual({ hotkeyLabel: null, modelReady: false, permissionsOk: true, paused: false });
+    expect(await harness.service.status()).toEqual({ hotkeyLabel: null, mode: 'hold', modelReady: false, permissionsOk: true, paused: false });
 
     await harness.settings.update({ hotkey: FN, localModelId: 'tiny' });
-    await expect.poll(() => harness.changes.at(-1)).toEqual({ hotkeyLabel: 'Fn / 🌐', modelReady: true, permissionsOk: true, paused: false });
+    await expect.poll(() => harness.changes.at(-1)).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'hold', modelReady: true, permissionsOk: true, paused: false });
 
     await harness.settings.update({ localModelId: 'other' });
     await expect.poll(() => harness.changes.at(-1)).toMatchObject({ modelReady: false });
@@ -75,7 +91,7 @@ describe('AppStatusService', () => {
     harness.service.refresh();
     await expect.poll(() => harness.changes.at(-1)).toMatchObject({ permissionsOk: false });
 
-    expect(await harness.service.status()).toEqual({ hotkeyLabel: 'Fn / 🌐', modelReady: false, permissionsOk: false, paused: true });
+    expect(await harness.service.status()).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'hold', modelReady: false, permissionsOk: false, paused: true });
   });
 
   it('requires input monitoring and accessibility and emits only real changes', async () => {
@@ -94,5 +110,27 @@ describe('AppStatusService', () => {
     harness.service.refresh();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(harness.changes).toHaveLength(2);
+  });
+
+  it('reports the dictation mode so the banner can say press instead of hold', async () => {
+    const harness = await prepared();
+
+    await harness.settings.update({ mode: 'toggle' });
+
+    await expect.poll(() => harness.changes.at(-1)).toMatchObject({ mode: 'toggle' });
+  });
+
+  it('refreshes on model changes only when the readiness of the active model changes', async () => {
+    const harness = await prepared();
+    await harness.settings.update({ localModelId: 'tiny' });
+    await expect.poll(() => harness.changes.at(-1)).toMatchObject({ modelReady: true });
+    const reads = harness.permissionReads();
+
+    await harness.models.download('other').catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.permissionReads()).toBe(reads);
+
+    await harness.models.delete('tiny');
+    await expect.poll(() => harness.changes.at(-1)).toMatchObject({ modelReady: false });
   });
 });

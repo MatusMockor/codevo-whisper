@@ -1,32 +1,30 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { INVOKE_CHANNELS, type IpcInvokeApi } from '../../shared/ipc-contract';
-import type { LastTranscript } from '../insertion/last-transcript';
 import type { SettingsStore } from '../settings/settings-store';
-import type { StatsStore } from '../stats/stats-store';
-import type { AppStatusService } from '../status/app-status-service';
 import type { RendererSource } from '../windows/renderer-source';
 import { broadcast } from './broadcast';
+import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
+import type { InvokeHandlers } from './invoke-handlers';
+import { microphoneHandlers, type MicrophoneHandlerDeps } from './microphone-handlers';
+import { modelHandlers, type ModelHandlerDeps } from './model-handlers';
+import { permissionHandlers, type PermissionHandlerDeps } from './permission-handlers';
 import { isTrustedSenderUrl } from './trusted-sender';
-import { IpcValidationError, validateSettingsPatch } from './validate';
+import { IpcValidationError } from './validate';
 
-export type IpcDependencies = {
-  settings: SettingsStore;
-  stats: Pick<StatsStore, 'days' | 'reset'>;
-  status: Pick<AppStatusService, 'status'>;
-  lastTranscript: Pick<LastTranscript, 'get'>;
-  source: RendererSource;
-};
+export type IpcDependencies = CoreHandlerDeps &
+  PermissionHandlerDeps &
+  ModelHandlerDeps &
+  MicrophoneHandlerDeps & {
+    settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
+    source: RendererSource;
+  };
 
-type InvokeHandlers = { readonly [K in keyof IpcInvokeApi]: (...args: unknown[]) => ReturnType<IpcInvokeApi[K]> };
-
-function invokeHandlers({ settings, stats, status, lastTranscript }: IpcDependencies): InvokeHandlers {
+function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
   return {
-    getSettings: () => Promise.resolve(settings.get()),
-    updateSettings: (patch) => settings.update(validateSettingsPatch(patch)),
-    getStats: () => stats.days(),
-    resetStats: () => stats.reset(),
-    getStatus: () => status.status(),
-    getLastTranscript: () => Promise.resolve(lastTranscript.get()),
+    ...coreHandlers(dependencies),
+    ...permissionHandlers(dependencies),
+    ...modelHandlers(dependencies),
+    ...microphoneHandlers(dependencies),
   };
 }
 

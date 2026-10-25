@@ -40,6 +40,9 @@
   --win-bg: #FFFFFF;
   --win-side: rgba(234, 237, 242, .92);
   --hover: rgba(24, 32, 44, .05);
+  --press: rgba(24, 32, 44, .1);
+  --lamp-hover: #F5AE4E;
+  --lamp-press: #E39328;
   --sel: rgba(240, 162, 58, .22);
   --seg-bg: rgba(24, 32, 44, .07);
   --seg-on: #FFFFFF;
@@ -68,7 +71,8 @@
     --focus: #F5B866;
     --win-bg: #1A1F2A;
     --win-side: rgba(32, 38, 50, .92);
-    --hover: rgba(255, 255, 255, .05);
+    --hover: rgba(255, 255, 255, .06);
+    --press: rgba(255, 255, 255, .11);
     --sel: rgba(240, 162, 58, .2);
     --seg-bg: rgba(255, 255, 255, .07);
     --seg-on: #3A4252;

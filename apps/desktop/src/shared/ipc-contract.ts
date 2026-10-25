@@ -1,6 +1,10 @@
 import type { AppStatus } from './app-status';
+import type { HotkeyRecordResult } from './hotkey-record';
+import type { AudioDevice } from './microphones';
+import type { ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
-import type { Settings } from './settings';
+import type { PermissionKind, PermissionsStatus } from './permissions';
+import type { MicrophoneSetting, Settings } from './settings';
 import type { DayStats } from './stats';
 
 export type IpcInvokeApi = {
@@ -10,6 +14,20 @@ export type IpcInvokeApi = {
   resetStats(): Promise<void>;
   getStatus(): Promise<AppStatus>;
   getLastTranscript(): Promise<string | null>;
+  getPermissions(): Promise<PermissionsStatus>;
+  requestPermission(kind: PermissionKind): Promise<void>;
+  openPermissionSettings(kind: PermissionKind): Promise<void>;
+  relaunch(): Promise<void>;
+  recordHotkey(): Promise<HotkeyRecordResult>;
+  getModelCatalog(): Promise<ModelCatalogView>;
+  getModelStates(): Promise<ModelState[]>;
+  downloadModel(id: string): Promise<void>;
+  pauseModel(id: string): Promise<void>;
+  deleteModel(id: string): Promise<void>;
+  activateModel(id: string): Promise<void>;
+  getMicrophones(): Promise<AudioDevice[]>;
+  startMicrophoneMeter(microphone: MicrophoneSetting): Promise<void>;
+  stopMicrophoneMeter(): Promise<void>;
 };
 
 export type IpcEvents = {
@@ -18,6 +36,9 @@ export type IpcEvents = {
   'stats-changed': DayStats[];
   'status-changed': AppStatus;
   'last-transcript-changed': string | null;
+  'model-states-changed': ModelState[];
+  'microphones-changed': AudioDevice[];
+  'microphone-level': number;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -35,6 +56,20 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   resetStats: 'stats:reset',
   getStatus: 'status:get',
   getLastTranscript: 'last-transcript:get',
+  getPermissions: 'permissions:get',
+  requestPermission: 'permissions:request',
+  openPermissionSettings: 'permissions:open-settings',
+  relaunch: 'app:relaunch',
+  recordHotkey: 'hotkey:record',
+  getModelCatalog: 'models:catalog',
+  getModelStates: 'models:states',
+  downloadModel: 'models:download',
+  pauseModel: 'models:pause',
+  deleteModel: 'models:delete',
+  activateModel: 'models:activate',
+  getMicrophones: 'microphones:list',
+  startMicrophoneMeter: 'microphones:meter-start',
+  stopMicrophoneMeter: 'microphones:meter-stop',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -43,4 +78,7 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'stats-changed': 'stats:changed',
   'status-changed': 'status:changed',
   'last-transcript-changed': 'last-transcript:changed',
+  'model-states-changed': 'models:states-changed',
+  'microphones-changed': 'microphones:changed',
+  'microphone-level': 'microphones:level',
 });

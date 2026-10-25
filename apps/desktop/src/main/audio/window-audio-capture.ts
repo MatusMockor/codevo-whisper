@@ -24,6 +24,7 @@ export class WindowAudioCapture implements AudioCapture {
   private mode: Mode = 'idle';
   private readonly recording: PcmRecording;
   private queue: Promise<unknown> = Promise.resolve();
+  private readonly inFlight = new Set<Promise<unknown>>();
   private readonly levels: Listeners<number>;
   private readonly devices: Listeners<AudioDevice[]>;
   private readonly limits: Listeners<void>;
@@ -52,7 +53,15 @@ export class WindowAudioCapture implements AudioCapture {
   }
 
   async listDevices(): Promise<AudioDevice[]> {
-    return toAudioDevices(parseDeviceList(await this.host.request({ type: 'list-devices' })));
+    return toAudioDevices(parseDeviceList(await this.track(this.host.request({ type: 'list-devices' }))));
+  }
+
+  isBusy(): boolean {
+    return this.inFlight.size > 0;
+  }
+
+  async settled(): Promise<void> {
+    await Promise.allSettled([...this.inFlight]);
   }
 
   onDevicesChanged(listener: (devices: AudioDevice[]) => void): () => void {
@@ -85,8 +94,16 @@ export class WindowAudioCapture implements AudioCapture {
     return this.serialize(() => this.stopMetering());
   }
 
+  private track<T>(work: Promise<T>): Promise<T> {
+    const tracked: Promise<T> = work.finally(() => {
+      this.inFlight.delete(tracked);
+    });
+    this.inFlight.add(tracked);
+    return tracked;
+  }
+
   private serialize<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task);
+    const run = this.track(this.queue.then(task));
     this.queue = run.catch(() => undefined);
     return run;
   }

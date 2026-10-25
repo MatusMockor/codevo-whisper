@@ -5,12 +5,12 @@ import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { addDays, localDate, weekStart } from '../src/shared/calendar-date';
 import type { AppStatus } from '../src/shared/app-status';
 import type { DayStats } from '../src/shared/stats';
-import { createUserDataDir, launchApp, removeUserDataDir } from './launch-app';
+import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks };
 
 const RIGHT_CONTROL = { keycode: 62, label: 'Pravý ⌃ Control' } as const;
-const READY: AppStatus = { hotkeyLabel: RIGHT_CONTROL.label, modelReady: true, permissionsOk: true, paused: false };
+const READY: AppStatus = { hotkeyLabel: RIGHT_CONTROL.label, mode: 'hold', modelReady: true, permissionsOk: true, paused: false };
 const TRANSCRIPT = 'Ahoj Peter, pozrel som si ten pull request.';
 
 let app: ElectronApplication;
@@ -23,7 +23,7 @@ async function start(): Promise<void> {
 }
 
 test.beforeEach(async () => {
-  userDataDir = await createUserDataDir();
+  userDataDir = await createUserDataDir(ONBOARDED);
 });
 
 test.afterEach(async () => {
@@ -63,6 +63,11 @@ test('banner shows the call to action or the hotkey label', async () => {
     await expect(banner()).toHaveText('Všetko je pripravené. Podržte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
   }).toPass();
   await expect(banner().locator('kbd')).toHaveText(RIGHT_CONTROL.label);
+
+  await expect(async () => {
+    await pushStatus({ ...READY, mode: 'toggle' });
+    await expect(banner()).toHaveText('Všetko je pripravené. Stlačte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
+  }).toPass();
 });
 
 test('tiles show values from seeded stats and switch periods', async () => {

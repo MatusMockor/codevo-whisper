@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import type { Permissions } from '../src/main/helper/input-helper';
-import { PermissionsService } from '../src/main/permissions/permissions-service';
+import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
+import { PermissionsService, type MicrophoneAccess } from '../src/main/permissions/permissions-service';
+import type { PermissionsStatus } from '../src/shared/permissions';
 import { RecordingLogger } from './recording-logger';
 
 class UnavailableHelper extends FakeInputHelper {
@@ -10,39 +12,123 @@ class UnavailableHelper extends FakeInputHelper {
   }
 }
 
+class SystemMicrophone implements MicrophoneAccess {
+  asked = 0;
+
+  constructor(public mediaStatus: string) {}
+
+  status(): string {
+    return this.mediaStatus;
+  }
+
+  ask(): Promise<boolean> {
+    this.asked += 1;
+    this.mediaStatus = 'granted';
+    return Promise.resolve(true);
+  }
+}
+
+function service(helper: FakeInputHelper, microphone = new SystemMicrophone('granted'), inputReady?: Promise<void>) {
+  const opened: string[] = [];
+  const logger = new RecordingLogger();
+  const permissions = new PermissionsService({
+    helper,
+    microphone,
+    links: MACOS_PERMISSION_LINKS,
+    openUrl: (url) => {
+      opened.push(url);
+      return Promise.resolve();
+    },
+    logger,
+    inputReady,
+  });
+  return { permissions, opened, logger, microphone };
+}
+
 describe('PermissionsService', () => {
-  it('reports microphone, input monitoring and accessibility', async () => {
+  it('maps the helper permissions and the media access status', async () => {
     const helper = new FakeInputHelper({ permissions: { listen: true, post: false, accessibility: false } });
-    let microphone = 'granted';
-    const service = new PermissionsService(helper, () => microphone, new RecordingLogger());
+    const microphone = new SystemMicrophone('granted');
+    const { permissions } = service(helper, microphone);
 
-    expect(await service.status()).toEqual({ microphone: true, listen: true, accessibility: false });
+    expect(await permissions.status()).toEqual({ microphone: 'granted', inputMonitoring: true, accessibility: false });
 
-    microphone = 'not-determined';
-    helper.permissionState = { listen: true, post: true, accessibility: true };
-    expect(await service.status()).toEqual({ microphone: false, listen: true, accessibility: true });
+    helper.permissionState = { listen: false, post: true, accessibility: true };
+    for (const [mediaStatus, expected] of [
+      ['denied', 'denied'],
+      ['restricted', 'denied'],
+      ['not-determined', 'not-determined'],
+      ['unknown', 'not-determined'],
+    ] as const) {
+      microphone.mediaStatus = mediaStatus;
+      expect(await permissions.status()).toEqual({ microphone: expected, inputMonitoring: false, accessibility: true });
+    }
   });
 
   it('waits until the input helper has started before reading permissions', async () => {
     const started = Promise.withResolvers<void>();
-    const service = new PermissionsService(new UnavailableHelper(), () => 'granted', new RecordingLogger(), started.promise);
+    const { permissions } = service(new UnavailableHelper(), new SystemMicrophone('granted'), started.promise);
     let settled = false;
 
-    const status = service.status().finally(() => {
+    const status = permissions.status().finally(() => {
       settled = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(settled).toBe(false);
 
     started.resolve();
-    await expect(status).resolves.toEqual({ microphone: true, listen: false, accessibility: false });
+    await expect(status).resolves.toEqual({ microphone: 'granted', inputMonitoring: false, accessibility: false });
   });
 
   it('treats an unavailable helper as missing permissions and logs it', async () => {
-    const logger = new RecordingLogger();
-    const service = new PermissionsService(new UnavailableHelper(), () => 'granted', logger);
+    const { permissions, logger } = service(new UnavailableHelper());
 
-    expect(await service.status()).toEqual({ microphone: true, listen: false, accessibility: false });
+    expect(await permissions.status()).toEqual({ microphone: 'granted', inputMonitoring: false, accessibility: false });
     expect(logger.errors).toHaveLength(1);
+  });
+
+  it('requests the microphone from the system and input permissions from the helper', async () => {
+    const helper = new FakeInputHelper();
+    const microphone = new SystemMicrophone('not-determined');
+    const { permissions } = service(helper, microphone);
+
+    await permissions.request('microphone');
+    await permissions.request('input-monitoring');
+    await permissions.request('accessibility');
+
+    expect(microphone.asked).toBe(1);
+    expect(helper.requestedPermissions).toEqual(['listen', 'accessibility']);
+    expect((await permissions.status()).microphone).toBe('granted');
+  });
+
+  it('opens the System Settings pane of each permission', async () => {
+    const { permissions, opened } = service(new FakeInputHelper());
+
+    await permissions.openSettings('input-monitoring');
+    await permissions.openSettings('accessibility');
+    await permissions.openSettings('microphone');
+
+    expect(opened).toEqual([
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+    ]);
+  });
+
+  it('notifies about changed permissions with the previous status', async () => {
+    const helper = new FakeInputHelper({ permissions: { listen: false, post: true, accessibility: true } });
+    const { permissions } = service(helper);
+    const changes: Array<{ next: PermissionsStatus; previous: PermissionsStatus | null }> = [];
+    permissions.onChange((next, previous) => changes.push({ next, previous }));
+
+    await permissions.status();
+    await permissions.status();
+    helper.permissionState = { listen: true, post: true, accessibility: true };
+    await permissions.status();
+
+    expect(changes).toEqual([
+      { next: { microphone: 'granted', inputMonitoring: false, accessibility: true }, previous: null },
+      { next: { microphone: 'granted', inputMonitoring: true, accessibility: true }, previous: { microphone: 'granted', inputMonitoring: false, accessibility: true } },
+    ]);
   });
 });

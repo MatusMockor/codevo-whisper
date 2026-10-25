@@ -43,6 +43,10 @@ export class HotkeyService {
     await this.listen();
   }
 
+  isArmed(): boolean {
+    return this.permitted;
+  }
+
   onStart(listener: () => void): () => void {
     return this.starts.add(listener);
   }

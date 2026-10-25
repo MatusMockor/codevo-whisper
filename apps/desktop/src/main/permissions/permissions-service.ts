@@ -1,30 +1,82 @@
 import type { InputHelper, Permissions } from '../helper/input-helper';
+import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
+import type { MicrophonePermission, PermissionKind, PermissionsStatus } from '../../shared/permissions';
 
-export type PermissionsStatus = { microphone: boolean; listen: boolean; accessibility: boolean };
+export interface MicrophoneAccess {
+  status(): string;
+  ask(): Promise<boolean>;
+}
 
-export type MicrophoneAccess = () => string;
+export type OpenUrl = (url: string) => Promise<void>;
+
+export type PermissionsChange = { next: PermissionsStatus; previous: PermissionsStatus | null };
+
+export type PermissionsDeps = {
+  helper: Pick<InputHelper, 'permissions' | 'requestPermission'>;
+  microphone: MicrophoneAccess;
+  links: Readonly<Record<PermissionKind, string>>;
+  openUrl: OpenUrl;
+  logger: Logger;
+  inputReady?: Promise<void> | undefined;
+};
 
 const NO_INPUT_PERMISSIONS: Permissions = { listen: false, post: false, accessibility: false };
 
-export function allGranted(status: PermissionsStatus): boolean {
-  return status.microphone && status.listen && status.accessibility;
+const DENIED_MEDIA_STATUSES: ReadonlySet<string> = new Set(['denied', 'restricted']);
+
+function microphonePermission(mediaStatus: string): MicrophonePermission {
+  if (mediaStatus === 'granted') {
+    return 'granted';
+  }
+  return DENIED_MEDIA_STATUSES.has(mediaStatus) ? 'denied' : 'not-determined';
+}
+
+function sameStatus(a: PermissionsStatus | null, b: PermissionsStatus): boolean {
+  return a !== null && a.microphone === b.microphone && a.inputMonitoring === b.inputMonitoring && a.accessibility === b.accessibility;
 }
 
 export class PermissionsService {
-  constructor(
-    private readonly helper: Pick<InputHelper, 'permissions'>,
-    private readonly microphoneAccess: MicrophoneAccess,
-    private readonly logger: Logger,
-    private readonly inputReady: Promise<void> = Promise.resolve(),
-  ) {}
+  private readonly changes: Listeners<PermissionsChange>;
+  private last: PermissionsStatus | null = null;
+
+  constructor(private readonly deps: PermissionsDeps) {
+    this.changes = new Listeners(deps.logger, 'A permissions listener failed');
+  }
 
   async status(): Promise<PermissionsStatus> {
-    await this.inputReady;
-    const input = await this.helper.permissions().catch((error: unknown) => {
-      this.logger.error('The input permissions could not be read', error);
+    await (this.deps.inputReady ?? Promise.resolve());
+    const input = await this.deps.helper.permissions().catch((error: unknown) => {
+      this.deps.logger.error('The input permissions could not be read', error);
       return NO_INPUT_PERMISSIONS;
     });
-    return { microphone: this.microphoneAccess() === 'granted', listen: input.listen, accessibility: input.accessibility };
+    const next = { microphone: microphonePermission(this.deps.microphone.status()), inputMonitoring: input.listen, accessibility: input.accessibility };
+    this.remember(next);
+    return next;
+  }
+
+  async request(kind: PermissionKind): Promise<void> {
+    if (kind === 'microphone') {
+      await this.deps.microphone.ask();
+      return;
+    }
+    await this.deps.helper.requestPermission(kind === 'input-monitoring' ? 'listen' : 'accessibility');
+  }
+
+  openSettings(kind: PermissionKind): Promise<void> {
+    return this.deps.openUrl(this.deps.links[kind]);
+  }
+
+  onChange(listener: (next: PermissionsStatus, previous: PermissionsStatus | null) => void): () => void {
+    return this.changes.add(({ next, previous }) => listener(next, previous));
+  }
+
+  private remember(next: PermissionsStatus): void {
+    const previous = this.last;
+    if (sameStatus(previous, next)) {
+      return;
+    }
+    this.last = next;
+    this.changes.emit({ next, previous });
   }
 }

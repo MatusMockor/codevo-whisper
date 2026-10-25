@@ -9,17 +9,20 @@ import { foregroundPresentation, type WindowPresentation } from './window-presen
 export type MainWindowEvents = {
   send<E extends IpcEventName>(event: E, payload: IpcEvents[E]): void;
   onFocus(listener: () => void): () => void;
+  onClose(listener: () => void): () => void;
 };
 
 export class MainWindowController implements MainWindowEvents {
   private window: BrowserWindow | null = null;
   private readonly focusListeners: Listeners<void>;
+  private readonly closeListeners: Listeners<void>;
 
   constructor(
     logger: Logger = consoleLogger,
     private readonly presentation: WindowPresentation = foregroundPresentation,
   ) {
     this.focusListeners = new Listeners(logger, 'A main window focus listener failed');
+    this.closeListeners = new Listeners(logger, 'A main window close listener failed');
   }
 
   isOpen(): boolean {
@@ -56,6 +59,10 @@ export class MainWindowController implements MainWindowEvents {
     return this.focusListeners.add(listener);
   }
 
+  onClose(listener: () => void): () => void {
+    return this.closeListeners.add(listener);
+  }
+
   private create(page: PageId | undefined): void {
     const window = createMainWindow(page ?? 'home', this.presentation);
     this.window = window;
@@ -63,9 +70,11 @@ export class MainWindowController implements MainWindowEvents {
       this.focusListeners.emit();
     });
     window.once('closed', () => {
-      if (this.window === window) {
-        this.window = null;
+      if (this.window !== window) {
+        return;
       }
+      this.window = null;
+      this.closeListeners.emit();
     });
   }
 

@@ -21,6 +21,7 @@ export class InProcessCapture implements AudioCapture {
   failNextStart = false;
   failureDelayMs = 0;
   recording = false;
+  metering: MicrophoneSetting | null = null;
   readonly starts: MicrophoneSetting[] = [];
   private frames: Uint8Array[] = [];
   private readonly levels = new Listeners<number>(new RecordingLogger(), 'In-process level listener failed');
@@ -60,6 +61,10 @@ export class InProcessCapture implements AudioCapture {
   }
 
   speak(pcm: Uint8Array, level = 0.2): void {
+    if (this.metering !== null) {
+      this.levels.emit(level);
+      return;
+    }
     if (!this.recording) {
       return;
     }
@@ -79,11 +84,15 @@ export class InProcessCapture implements AudioCapture {
     return this.limits.add(listener);
   }
 
-  startMeter(): Promise<void> {
+  startMeter(chosen: MicrophoneSetting): Promise<void> {
+    if (!this.recording) {
+      this.metering = chosen;
+    }
     return Promise.resolve();
   }
 
   stopMeter(): Promise<void> {
+    this.metering = null;
     return Promise.resolve();
   }
 }

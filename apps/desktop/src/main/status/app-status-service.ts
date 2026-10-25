@@ -1,8 +1,10 @@
 import type { AppStatus } from '../../shared/app-status';
+import type { ModelState } from '../../shared/models';
+import { allPermissionsGranted } from '../../shared/permissions';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
 import type { ModelManager } from '../models/model-manager';
-import { allGranted, type PermissionsService } from '../permissions/permissions-service';
+import type { PermissionsService } from '../permissions/permissions-service';
 import type { PauseState } from '../session/pause-state';
 import type { SettingsStore } from '../settings/settings-store';
 
@@ -14,8 +16,14 @@ export type AppStatusDeps = {
   logger: Logger;
 };
 
+const STATUS_KEYS = ['hotkeyLabel', 'mode', 'modelReady', 'permissionsOk', 'paused'] as const satisfies ReadonlyArray<keyof AppStatus>;
+
 function sameStatus(a: AppStatus | null, b: AppStatus): boolean {
-  return a !== null && a.hotkeyLabel === b.hotkeyLabel && a.modelReady === b.modelReady && a.permissionsOk === b.permissionsOk && a.paused === b.paused;
+  return a !== null && STATUS_KEYS.every((key) => a[key] === b[key]);
+}
+
+function isReady(states: readonly ModelState[], id: string | null): boolean {
+  return id !== null && states.some((state) => state.id === id && state.status === 'ready');
 }
 
 export class AppStatusService {
@@ -30,16 +38,17 @@ export class AppStatusService {
 
   start(): void {
     const refresh = (): void => this.refresh();
-    this.unsubscribers = [this.deps.settings.onChange(refresh), this.deps.models.onChange(refresh), this.deps.pause.onChange(refresh)];
+    this.unsubscribers = [this.deps.settings.onChange(refresh), this.deps.models.onChange((states) => this.refreshOnReadiness(states)), this.deps.pause.onChange(refresh)];
   }
 
   async status(): Promise<AppStatus> {
-    const { hotkey, localModelId } = this.deps.settings.get();
+    const { hotkey, mode, localModelId } = this.deps.settings.get();
     const permissions = await this.deps.permissions.status();
     return {
       hotkeyLabel: hotkey?.label ?? null,
-      modelReady: localModelId !== null && this.deps.models.states().some((state) => state.id === localModelId && state.status === 'ready'),
-      permissionsOk: allGranted(permissions),
+      mode,
+      modelReady: isReady(this.deps.models.states(), localModelId),
+      permissionsOk: allPermissionsGranted(permissions),
       paused: this.deps.pause.isPaused(),
     };
   }
@@ -68,5 +77,13 @@ export class AppStatusService {
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe();
     }
+  }
+
+  private refreshOnReadiness(states: readonly ModelState[]): void {
+    const ready = isReady(states, this.deps.settings.get().localModelId);
+    if (this.lastEmitted !== null && this.lastEmitted.modelReady === ready) {
+      return;
+    }
+    this.refresh();
   }
 }

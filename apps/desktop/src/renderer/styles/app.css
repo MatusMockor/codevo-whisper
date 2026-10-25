@@ -91,10 +91,6 @@ button {
   color: var(--ink);
 }
 
-.nav button:hover {
-  background: var(--hover);
-}
-
 .nav button .ic {
   color: var(--ink-3);
 }
@@ -158,32 +154,14 @@ kbd {
   transition: background .15s, transform .1s;
 }
 
-.btn:hover {
-  background: var(--group);
-}
-
-.btn:active {
-  transform: translateY(.5px);
-}
-
 .btn:disabled {
   opacity: .55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn:disabled:hover {
-  background: var(--surface-2);
 }
 
 .btn.primary {
   background: var(--lamp);
   border-color: transparent;
   color: #2A1600;
-}
-
-.btn.primary:hover {
-  background: #F5AE4E;
 }
 
 .btn.ok {

@@ -1,0 +1,106 @@
+:is(button, select, summary, [role="tab"], [role="switch"], .linkbtn, input[type="radio"], input[type="checkbox"]):not(:disabled),
+label:has(> input:not(:disabled)) {
+  cursor: pointer;
+}
+
+:is(button, select, input, textarea):disabled,
+label:has(> input:disabled) {
+  cursor: not-allowed;
+}
+
+.btn:not(:disabled):hover {
+  background: var(--group);
+  border-color: var(--line);
+}
+
+.btn:not(:disabled):active {
+  background: var(--press);
+  transform: translateY(.5px);
+}
+
+.btn.primary:not(:disabled):hover {
+  background: var(--lamp-hover);
+}
+
+.btn.primary:not(:disabled):active {
+  background: var(--lamp-press);
+}
+
+.btn.ghost:not(:disabled):hover {
+  background: var(--hover);
+}
+
+.btn.ghost:not(:disabled):active {
+  background: var(--press);
+}
+
+.nav button:hover {
+  background: var(--hover);
+}
+
+.nav button:active {
+  background: var(--press);
+}
+
+.nav button[aria-selected="true"]:hover {
+  background: var(--sel);
+}
+
+.seg button:not(:disabled):not([aria-pressed="true"]):hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.seg button:not(:disabled):active {
+  background: var(--press);
+}
+
+.switch:hover {
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+}
+
+.switch[aria-checked="true"]:hover {
+  background: var(--lamp-hover);
+  box-shadow: none;
+}
+
+.switch:active::after {
+  width: 21px;
+}
+
+.switch[aria-checked="true"]:active::after {
+  transform: translateX(13px);
+}
+
+.hk:not(:disabled):hover,
+.select:not(:disabled):hover {
+  border-color: var(--ink-3);
+}
+
+.hk:not(:disabled):active {
+  background: var(--group);
+}
+
+.linkbtn:hover {
+  color: var(--ink);
+}
+
+.linkbtn:active {
+  opacity: .75;
+}
+
+.radio label:has(> input:not(:disabled)):hover,
+.model-pick:has(> input:not(:disabled)):hover {
+  background: var(--hover);
+}
+
+:is(.btn, .seg button, .nav button, .hk, .switch, .select, .linkbtn, .radio input, .model-pick input):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+}

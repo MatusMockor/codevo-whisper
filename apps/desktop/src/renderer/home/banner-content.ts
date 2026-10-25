@@ -1,6 +1,13 @@
 import type { AppStatus } from '../../shared/app-status';
+import type { DictationMode } from '../../shared/settings';
 
-export type BannerContent = { kind: 'ready'; hotkeyLabel: string } | { kind: 'paused' } | { kind: 'action'; message: string };
+export type HotkeyVerb = 'Podržte' | 'Stlačte';
+
+export type BannerContent = { kind: 'ready'; hotkeyLabel: string; verb: HotkeyVerb } | { kind: 'paused' } | { kind: 'action'; message: string };
+
+export function hotkeyVerb(mode: DictationMode): HotkeyVerb {
+  return mode === 'toggle' ? 'Stlačte' : 'Podržte';
+}
 
 export const ACTION_MESSAGES = {
   hotkey: 'Nastavte klávesovú skratku, ktorou budete diktovať.',
@@ -21,5 +28,5 @@ export function bannerContent(status: AppStatus): BannerContent {
   if (status.paused) {
     return { kind: 'paused' };
   }
-  return { kind: 'ready', hotkeyLabel: status.hotkeyLabel };
+  return { kind: 'ready', hotkeyLabel: status.hotkeyLabel, verb: hotkeyVerb(status.mode) };
 }
