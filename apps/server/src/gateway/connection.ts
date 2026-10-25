@@ -17,6 +17,7 @@ import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
 import { closeSocket } from './close-socket';
+import type { DeviceAudioBudget } from './device-audio-budget';
 import { CLOSE_INTERNAL_ERROR, CLOSE_UNSUPPORTED_DATA } from './limits';
 import { WebSocketSecureChannel } from './secure-channel';
 import { SessionHandler } from './session-handler';
@@ -31,6 +32,7 @@ export type ConnectionDeps = {
   clock: () => number;
   beforeReady: (deviceId: string) => Promise<void>;
   logger: Logger;
+  budget: DeviceAudioBudget;
 };
 
 const EMPTY = new Uint8Array(0);
@@ -120,7 +122,12 @@ export class GatewayConnection {
     if (!channel.isOpen()) {
       return;
     }
-    new SessionHandler(channel, deviceId, { queue: this.deps.queue, clock: this.deps.clock, logger: this.deps.logger });
+    new SessionHandler(channel, deviceId, {
+      queue: this.deps.queue,
+      clock: this.deps.clock,
+      logger: this.deps.logger,
+      budget: this.deps.budget,
+    });
     channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
   }
 

@@ -48,6 +48,10 @@ export class FairJobList {
     return removed;
   }
 
+  countFor(deviceId: string): number {
+    return this.byDevice.get(deviceId)?.length ?? 0;
+  }
+
   size(): number {
     let total = 0;
     this.byDevice.forEach((jobs) => {

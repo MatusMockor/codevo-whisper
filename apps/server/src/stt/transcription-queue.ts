@@ -3,25 +3,31 @@ import { FairJobList } from './fair-job-list';
 import type { SttClient } from './stt-client';
 import { abortError, type TranscriptionJob } from './transcription-job';
 
-export type TranscriptionQueueOptions = { waitTimeoutMs: number };
+export type TranscriptionQueueOptions = { waitTimeoutMs: number; maxJobsPerDevice?: number };
 
 export const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
+export const DEFAULT_MAX_JOBS_PER_DEVICE = 4;
 
 export class TranscriptionQueue {
   private readonly waiting = new FairJobList();
   private running: TranscriptionJob | null = null;
   private readonly waitTimeoutMs: number;
+  private readonly maxJobsPerDevice: number;
 
   constructor(
     private readonly client: SttClient,
     options: TranscriptionQueueOptions = { waitTimeoutMs: DEFAULT_WAIT_TIMEOUT_MS },
   ) {
     this.waitTimeoutMs = options.waitTimeoutMs;
+    this.maxJobsPerDevice = options.maxJobsPerDevice ?? DEFAULT_MAX_JOBS_PER_DEVICE;
   }
 
   enqueue(deviceId: string, pcm: Uint8Array, language: Language, signal?: AbortSignal): Promise<string> {
     if (signal?.aborted === true) {
       return Promise.reject(abortError());
+    }
+    if (this.jobsOf(deviceId) >= this.maxJobsPerDevice) {
+      return Promise.reject(new ProtocolError('busy', 'too many transcriptions for this device'));
     }
     return new Promise<string>((resolve, reject) => {
       const job = this.createJob({ deviceId, pcm, language, signal, resolve, reject });
@@ -32,6 +38,10 @@ export class TranscriptionQueue {
 
   cancelDevice(deviceId: string): void {
     this.cancel((job) => job.deviceId === deviceId);
+  }
+
+  private jobsOf(deviceId: string): number {
+    return this.waiting.countFor(deviceId) + (this.running?.deviceId === deviceId ? 1 : 0);
   }
 
   size(): number {

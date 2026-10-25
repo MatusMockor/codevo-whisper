@@ -343,6 +343,53 @@ describe('gateway sessions', () => {
     expect(fake.requests).toHaveLength(0);
   });
 
+  it('rejects audio frames shorter than 20 ms unless they are the last one', async () => {
+    const server = await start();
+    const last = await readySession(server);
+    last.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(last, pcmSeconds(1));
+    last.send({ type: 'audio', pcm: new Uint8Array(100) });
+    last.send({ type: 'finish' });
+    expect((await collectUntilDone(last)).at(-1)).toEqual({ type: 'done', sessionId: 's1' });
+
+    const tiny = await readySession(server);
+    tiny.send({ type: 'start', sessionId: 's2', language: 'sk' });
+    for (let index = 0; index < 10_000; index += 1) {
+      tiny.send({ type: 'audio', pcm: new Uint8Array(2) });
+    }
+    await expectBadMessageClose(tiny);
+    expect(fake.requests).toHaveLength(1);
+  });
+
+  it('limits the message rate per connection', async () => {
+    const now = 1_000_000;
+    const server = await start({ clock: () => now });
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    for (let index = 0; index < 1_001; index += 1) {
+      session.send({ type: 'audio', pcm: new Uint8Array(640) });
+    }
+
+    await expectBadMessageClose(session);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('caps the audio one device can buffer across its sessions', async () => {
+    const server = await start();
+    const device = await server.addDevice();
+    const first = await connectSession(server.url, device, server.serverKey.publicKey);
+    const second = await connectSession(server.url, device, server.serverKey.publicKey);
+    expect(await first.next()).toMatchObject({ type: 'ready' });
+    expect(await second.next()).toMatchObject({ type: 'ready' });
+    first.send({ type: 'start', sessionId: 'a', language: 'sk' });
+    sendAudio(first, pcmSeconds(301));
+    expect(await first.next()).toEqual({ type: 'flow', paused: true });
+    second.send({ type: 'start', sessionId: 'b', language: 'sk' });
+    sendAudio(second, pcmSeconds(300));
+
+    expect(await second.next()).toMatchObject({ type: 'error', code: 'too_long' });
+  });
+
   it('rejects a text frame and an oversized frame', async () => {
     const server = await start();
     const text = await openSocket(server.url);

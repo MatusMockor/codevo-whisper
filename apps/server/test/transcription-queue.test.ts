@@ -89,6 +89,18 @@ describe('TranscriptionQueue', () => {
     await expect(queue.enqueue('A', pcmSeconds(0.1, 4), 'sk', session.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('limits the jobs one device can have in the queue', async () => {
+    fake = await startFakeSttServer({ respond: echoFill, delayMs: 50 });
+    const queue = new TranscriptionQueue(new HttpSttClient(fake.url), { waitTimeoutMs: 1000, maxJobsPerDevice: 2 });
+    const first = queue.enqueue('A', pcmSeconds(0.1, 1), 'sk');
+    const second = queue.enqueue('A', pcmSeconds(0.1, 2), 'sk');
+
+    await expect(queue.enqueue('A', pcmSeconds(0.1, 3), 'sk')).rejects.toMatchObject({ code: 'busy' });
+    expect(await queue.enqueue('B', pcmSeconds(0.1, 4), 'sk')).toBe('job-4');
+    expect(await first).toBe('job-1');
+    expect(await second).toBe('job-2');
+  });
+
   it('keeps serving after a failed job', async () => {
     fake = await startFakeSttServer({
       respond: (pcm) => (pcm[0] === 1 ? { status: 500, body: {} } : { status: 200, body: { text: 'ok' } }),

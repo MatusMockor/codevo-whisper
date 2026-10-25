@@ -3,6 +3,8 @@ export const MAX_SESSION_MS = 600_000;
 export const MAX_SESSION_HARD_MS = 1_800_000;
 export const MAX_AUDIO_SECONDS = 600;
 export const FLOW_PAUSE_SECONDS = 300;
+export const MIN_AUDIO_FRAME_BYTES = 640;
+export const MESSAGE_RATE = { burst: 1000, perSecond: 200 } as const;
 export const MAX_WS_PAYLOAD = 65_536;
 
 export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4, maxConnectionsPerIp: 8 } as const;

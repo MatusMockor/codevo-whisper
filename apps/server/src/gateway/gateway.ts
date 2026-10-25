@@ -8,7 +8,9 @@ import { silentLogger, type Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { GatewayConnection } from './connection';
-import { CLOSE_GOING_AWAY, HANDSHAKE_TIMEOUT_MS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS } from './limits';
+import { CLOSE_GOING_AWAY, HANDSHAKE_TIMEOUT_MS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS } from './limits';
+import { BYTES_PER_SECOND } from '../stt/chunk-audio';
+import { DeviceAudioBudget } from './device-audio-budget';
 import { PreAuthLimiter } from './pre-auth-limiter';
 import { TcpAdmission } from './tcp-admission';
 import { SessionRegistry } from './session-registry';
@@ -54,6 +56,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     sessions,
     clock: deps.clock ?? Date.now,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),
+    budget: new DeviceAudioBudget(MAX_AUDIO_SECONDS * BYTES_PER_SECOND),
     logger: deps.logger ?? silentLogger,
   };
   sockets.on('error', () => undefined);

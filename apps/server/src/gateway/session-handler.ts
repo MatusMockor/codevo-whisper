@@ -1,13 +1,24 @@
 import type { ClientMessage, Language } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
+import { BYTES_PER_SECOND } from '../stt/chunk-audio';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { AudioBuffer } from './audio-buffer';
 import { logDictation } from './dictation-log';
-import { CLOSE_INTERNAL_ERROR, FLOW_PAUSE_SECONDS, MAX_AUDIO_SECONDS, MAX_SESSION_HARD_MS, MAX_SESSION_MS } from './limits';
+import type { DeviceAudioBudget } from './device-audio-budget';
+import {
+  CLOSE_INTERNAL_ERROR,
+  FLOW_PAUSE_SECONDS,
+  MAX_AUDIO_SECONDS,
+  MAX_SESSION_HARD_MS,
+  MAX_SESSION_MS,
+  MESSAGE_RATE,
+  MIN_AUDIO_FRAME_BYTES,
+} from './limits';
+import { MessageRateLimiter } from './message-rate-limiter';
 import type { SecureChannel } from './secure-channel';
 import { transcribeDictation } from './transcribe-dictation';
 
-export type SessionDeps = { queue: TranscriptionQueue; clock: () => number; logger: Logger };
+export type SessionDeps = { queue: TranscriptionQueue; clock: () => number; logger: Logger; budget: DeviceAudioBudget };
 
 type State =
   | { kind: 'idle' }
@@ -20,6 +31,9 @@ export class SessionHandler {
   private state: State = { kind: 'idle' };
   private readonly audio = new AudioBuffer();
   private paused = false;
+  private shortFrameSeen = false;
+  private reservedBytes = 0;
+  private readonly rate: MessageRateLimiter;
   private readonly connectedAt: number;
   private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
@@ -37,6 +51,7 @@ export class SessionHandler {
     private readonly deps: SessionDeps,
   ) {
     this.connectedAt = deps.clock();
+    this.rate = new MessageRateLimiter(deps.clock, MESSAGE_RATE);
     this.timers = [
       setTimeout(() => this.expireIfIdle(), MAX_SESSION_MS + 1),
       setTimeout(() => this.channel.fail('session_expired'), MAX_SESSION_HARD_MS + 1),
@@ -51,6 +66,10 @@ export class SessionHandler {
       this.channel.fail('session_expired');
       return;
     }
+    if (!this.rate.take()) {
+      this.channel.fail('bad_message', 'message rate exceeded');
+      return;
+    }
     const handler = this.handlers[message.type] as (message: ClientMessage) => void;
     handler(message);
   }
@@ -61,6 +80,7 @@ export class SessionHandler {
       return;
     }
     this.state = { kind: 'recording', sessionId, language, startedAt: this.deps.clock() };
+    this.shortFrameSeen = false;
   }
 
   private onAudio(pcm: Uint8Array): void {
@@ -68,11 +88,17 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    this.audio.append(pcm);
-    if (this.audio.seconds() > MAX_AUDIO_SECONDS) {
+    if (this.shortFrameSeen) {
+      this.channel.fail('bad_message', 'only the last audio frame may be shorter than 20 ms');
+      return;
+    }
+    this.shortFrameSeen = pcm.length < MIN_AUDIO_FRAME_BYTES;
+    if ((this.audio.bytes() + pcm.length) / BYTES_PER_SECOND > MAX_AUDIO_SECONDS || !this.deps.budget.reserve(this.deviceId, pcm.length)) {
       this.channel.fail('too_long');
       return;
     }
+    this.reservedBytes += pcm.length;
+    this.audio.append(pcm);
     if (!this.paused && this.audio.seconds() > FLOW_PAUSE_SECONDS) {
       this.paused = true;
       this.channel.send({ type: 'flow', paused: true });
@@ -119,11 +145,17 @@ export class SessionHandler {
   private becomeIdle(): void {
     this.state = { kind: 'idle' };
     this.audio.clear();
+    this.releaseBudget();
     if (this.paused) {
       this.paused = false;
       this.channel.send({ type: 'flow', paused: false });
     }
     this.expireIfIdle();
+  }
+
+  private releaseBudget(): void {
+    this.deps.budget.release(this.deviceId, this.reservedBytes);
+    this.reservedBytes = 0;
   }
 
   private expired(): boolean {
@@ -144,5 +176,6 @@ export class SessionHandler {
     }
     this.state = { kind: 'idle' };
     this.audio.clear();
+    this.releaseBudget();
   }
 }
