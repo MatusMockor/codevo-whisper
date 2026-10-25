@@ -13,3 +13,7 @@ export { removeBoundaryDuplicates } from './dedup/remove-boundary-duplicates';
 export { wordsMatch } from './dedup/words-match';
 export { TranscriptAssembler } from './transcript/transcript-assembler';
 export type { TranscriptEvent } from './transcript/transcript-event';
+export { DEFAULT_PARTIAL_CONFIG, type PartialConfig, validatePartialConfig } from './partials/partial-config';
+export { PartialGate } from './partials/partial-gate';
+export { partialIntervalMs, type PartialIntervalSource } from './partials/partial-interval';
+export { ServiceTimeEstimator } from './partials/service-time-estimator';
