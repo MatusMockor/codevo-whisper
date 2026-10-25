@@ -14,26 +14,32 @@ class RecordingGuard implements DictationGuard {
     return this.dictating;
   }
 
-  suspend(): () => void {
+  readonly prepared = Promise.withResolvers<void>();
+  holdPreparation = false;
+
+  async suspend(): Promise<() => void> {
     this.suspended += 1;
+    if (this.holdPreparation) {
+      await this.prepared.promise;
+    }
     return () => {
       this.released += 1;
     };
   }
 }
 
-function harness(mode: UpdateMode = 'in-app') {
+function harness(mode: UpdateMode = 'in-app', installStallMs = 120_000) {
   const updater = new FakeAppUpdater();
   const guard = new RecordingGuard();
   const logger = new RecordingLogger();
-  const service = new UpdateService({ updater, mode, currentVersion: '1.1.0', dictation: guard, logger });
+  const service = new UpdateService({ updater, mode, currentVersion: '1.1.0', dictation: guard, logger, installStallMs });
   const phases: UpdatePhase[] = [];
   service.onChange((status) => phases.push(status.phase));
   return { updater, guard, logger, service, phases };
 }
 
-async function readyHarness() {
-  const parts = harness();
+async function readyHarness(installStallMs?: number) {
+  const parts = harness('in-app', installStallMs);
   parts.updater.latest = '1.2.0';
   await parts.service.check();
   expect(parts.service.status().phase).toEqual({ kind: 'ready', version: '1.2.0' });
@@ -85,7 +91,7 @@ describe('UpdateService', () => {
 
     expect(status.phase).toEqual({ kind: 'available', version: '1.2.0' });
     expect(updater.downloads).toBe(0);
-    expect(service.install()).toBe('not-ready');
+    expect(await service.install()).toBe('not-ready');
   });
 
   it('never contacts the update feed when updates are unsupported', async () => {
@@ -166,12 +172,12 @@ describe('UpdateService', () => {
   it('refuses to install before an update is ready', async () => {
     const { service, updater } = harness();
 
-    expect(service.install()).toBe('not-ready');
+    expect(await service.install()).toBe('not-ready');
     updater.latest = '1.2.0';
     updater.holdDownloads = true;
     void service.check();
     await expect.poll(() => updater.pendingDownloads()).toBe(1);
-    expect(service.install()).toBe('not-ready');
+    expect(await service.install()).toBe('not-ready');
     expect(updater.installs).toBe(0);
   });
 
@@ -179,7 +185,7 @@ describe('UpdateService', () => {
     const { service, updater, guard } = await readyHarness();
     guard.dictating = true;
 
-    expect(service.install()).toBe('dictation-active');
+    expect(await service.install()).toBe('dictation-active');
     expect(updater.installs).toBe(0);
     expect(guard.suspended).toBe(0);
     expect(service.status().phase).toEqual({ kind: 'ready', version: '1.2.0' });
@@ -188,25 +194,64 @@ describe('UpdateService', () => {
   it('suspends dictation and restarts into the update after the confirmation', async () => {
     const { service, updater, guard } = await readyHarness();
 
-    expect(service.install()).toBe('restarting');
+    expect(await service.install()).toBe('restarting');
 
     expect(updater.installs).toBe(1);
     expect(guard.suspended).toBe(1);
     expect(guard.released).toBe(0);
     expect(service.status().phase).toEqual({ kind: 'installing', version: '1.2.0' });
-    expect(service.install()).toBe('not-ready');
+    expect(await service.install()).toBe('not-ready');
     expect(updater.installs).toBe(1);
+  });
+
+  it('hands the update to the installer only after dictation and the microphone are settled', async () => {
+    const { service, updater, guard } = await readyHarness();
+    guard.holdPreparation = true;
+
+    const installing = service.install();
+    await expect.poll(() => guard.suspended).toBe(1);
+    expect(service.status().phase).toEqual({ kind: 'installing', version: '1.2.0' });
+    expect(await service.install()).toBe('not-ready');
+    expect(updater.installs).toBe(0);
+    guard.prepared.resolve();
+
+    expect(await installing).toBe('restarting');
+    expect(updater.installs).toBe(1);
+  });
+
+  it('keeps dictation paused and asks for a manual restart when the install neither restarts nor fails', async () => {
+    const { service, updater, guard } = await readyHarness(30);
+
+    await service.install();
+    await expect.poll(() => service.status().phase).toEqual({ kind: 'stalled', version: '1.2.0' });
+    expect(guard.released).toBe(0);
+
+    updater.failInstall('Squirrel gave up');
+    await expect.poll(() => service.status().phase).toEqual({ kind: 'error', failed: 'install' });
+    expect(guard.released).toBe(1);
   });
 
   it('install failure resumes dictation and shows the error', async () => {
     const { service, updater, guard, logger } = await readyHarness();
-    service.install();
+    await service.install();
 
     updater.failInstall('Code signature did not pass validation');
 
     await expect.poll(() => service.status().phase).toEqual({ kind: 'error', failed: 'install' });
     expect(guard.released).toBe(1);
     expect(logger.errors.map((entry) => entry.message)).toEqual(['The update could not be installed']);
+  });
+
+  it('a check the user asks for while a background check runs reports its failure', async () => {
+    const { service, updater, logger } = harness();
+    updater.checkFails = true;
+
+    const background = service.checkInBackground();
+    const user = await service.check();
+    await background;
+
+    expect(user.phase).toEqual({ kind: 'error', failed: 'check' });
+    expect(logger.errors.map((entry) => entry.message)).toEqual(['The update check failed']);
   });
 
   it('stops notifying a removed listener', async () => {

@@ -2,8 +2,9 @@ import { app } from 'electron';
 import type { Logger } from '../logging/logger';
 import type { AppUpdater } from '../updates/app-updater';
 import type { DictationGuard } from '../updates/dictation-guard';
-import type { UpdaterLike } from '../updates/electron-updater-adapter';
-import { loadElectronUpdater } from '../updates/load-electron-updater';
+import { ElectronUpdaterAdapter, type UpdaterLike } from '../updates/electron-updater-adapter';
+import { LazyAppUpdater } from '../updates/lazy-app-updater';
+import { readPackageType } from '../updates/package-type';
 import { resolveUpdateMode } from '../updates/update-policy';
 import { UpdateScheduler } from '../updates/update-scheduler';
 import { UpdateService } from '../updates/update-service';
@@ -11,9 +12,9 @@ import type { UpdateMode, UpdateStatus } from '../../shared/updates';
 
 export type UpdateWiringDeps = { e2e: boolean; dictation: DictationGuard; send: (status: UpdateStatus) => void; logger: Logger };
 
-export type Updates = { service: UpdateService; fake: AppUpdater | null; start(): void; dispose(): void };
+export type Updates = { service: UpdateService; fake: Promise<AppUpdater> | null; start(): void; dispose(): void };
 
-type UpdaterChoice = { updater: AppUpdater; mode: UpdateMode; fake: AppUpdater | null };
+type UpdaterChoice = { updater: AppUpdater; mode: UpdateMode; fake: Promise<AppUpdater> | null; scheduled: boolean };
 
 const unavailable = (): Promise<never> => Promise.reject(new Error('Updates are not supported in this build'));
 
@@ -24,33 +25,43 @@ export async function loadAutoUpdater(): Promise<UpdaterLike> {
   return autoUpdater;
 }
 
-async function fakeUpdater(): Promise<UpdaterChoice> {
-  const { FakeAppUpdater } = await import('../updates/fake-app-updater');
-  const fake = new FakeAppUpdater();
-  return { updater: fake, fake, mode: process.env['CW_E2E_UPDATE_MODE'] === 'manual' ? 'manual' : 'in-app' };
+async function loadAdapter(mode: UpdateMode, logger: Logger): Promise<AppUpdater> {
+  const { autoUpdater, CancellationToken } = await import('electron-updater');
+  return new ElectronUpdaterAdapter(autoUpdater, logger, { installable: mode === 'in-app', createCancellationToken: () => new CancellationToken() });
 }
 
-async function electronUpdater(logger: Logger): Promise<UpdaterChoice> {
-  const mode = resolveUpdateMode({ platform: process.platform, isPackaged: app.isPackaged, appImage: process.env['APPIMAGE'] });
+function fakeUpdater(): UpdaterChoice {
+  const fake = import('../updates/fake-app-updater').then(({ FakeAppUpdater }): AppUpdater => new FakeAppUpdater());
+  const mode = process.env['CW_E2E_UPDATE_MODE'] === 'manual' ? 'manual' : 'in-app';
+  return { updater: new LazyAppUpdater(() => fake), mode, fake, scheduled: false };
+}
+
+function electronUpdater(logger: Logger): UpdaterChoice {
+  const mode = resolveUpdateMode({
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    appImage: process.env['APPIMAGE'],
+    packageType: readPackageType(process.resourcesPath),
+  });
   if (mode === 'unsupported') {
-    return { updater: UNAVAILABLE_UPDATER, mode, fake: null };
+    return { updater: UNAVAILABLE_UPDATER, mode, fake: null, scheduled: false };
   }
-  const updater = await loadElectronUpdater(loadAutoUpdater, logger);
-  if (updater === null) {
-    return { updater: UNAVAILABLE_UPDATER, mode: 'unsupported', fake: null };
-  }
-  return { updater, mode, fake: null };
+  return { updater: new LazyAppUpdater(() => loadAdapter(mode, logger)), mode, fake: null, scheduled: true };
 }
 
-export async function createUpdates({ e2e, dictation, send, logger }: UpdateWiringDeps): Promise<Updates> {
-  const choice = e2e ? await fakeUpdater() : await electronUpdater(logger);
+export function createUpdates({ e2e, dictation, send, logger }: UpdateWiringDeps): Updates {
+  const choice = e2e ? fakeUpdater() : electronUpdater(logger);
   const service = new UpdateService({ updater: choice.updater, mode: choice.mode, currentVersion: app.getVersion(), dictation, logger });
   const scheduler = new UpdateScheduler(() => service.checkInBackground(), logger);
   const unsubscribe = service.onChange(send);
   return {
     service,
     fake: choice.fake,
-    start: () => scheduler.start(),
+    start: () => {
+      if (choice.scheduled) {
+        scheduler.start();
+      }
+    },
     dispose: () => {
       unsubscribe();
       scheduler.dispose();

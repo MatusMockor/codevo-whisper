@@ -11,6 +11,8 @@ import { PcmRecording } from './pcm-recording';
 
 export const MAX_RECORDING_MS = 600_000;
 
+const BLOCKED_MESSAGE = 'The microphone is closed for an app update';
+
 export type WindowAudioCaptureOptions = { maxRecordingMs?: number };
 
 type Mode = 'idle' | CaptureMode;
@@ -22,6 +24,7 @@ function recordingBytes(maxRecordingMs: number): number {
 
 export class WindowAudioCapture implements AudioCapture {
   private mode: Mode = 'idle';
+  private blocks = 0;
   private readonly recording: PcmRecording;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly inFlight = new Set<Promise<unknown>>();
@@ -84,7 +87,22 @@ export class WindowAudioCapture implements AudioCapture {
     return this.recordingStops.add(listener);
   }
 
+  block(): () => void {
+    this.blocks += 1;
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this.blocks -= 1;
+    };
+  }
+
   start(chosen: MicrophoneSetting): Promise<CaptureStart> {
+    if (this.blocks > 0) {
+      return Promise.reject(new Error(BLOCKED_MESSAGE));
+    }
     return this.serialize(() => this.startRecording(chosen));
   }
 
@@ -93,6 +111,9 @@ export class WindowAudioCapture implements AudioCapture {
   }
 
   startMeter(chosen: MicrophoneSetting): Promise<void> {
+    if (this.blocks > 0) {
+      return Promise.reject(new Error(BLOCKED_MESSAGE));
+    }
     return this.serialize(() => this.startMetering(chosen));
   }
 

@@ -11,6 +11,7 @@ export type TrayMenuModel = {
   language: Language;
   autoLanguageAllowed: boolean;
   readyUpdate: string | null;
+  installingUpdate: boolean;
 };
 
 export type TrayMenuActions = {
@@ -109,7 +110,7 @@ function updateItems(model: TrayMenuModel, actions: TrayMenuActions): MenuItemCo
   if (model.readyUpdate === null) {
     return [];
   }
-  return [{ label: `Reštartovať a aktualizovať na ${model.readyUpdate}`, click: () => actions.installUpdate() }];
+  return [{ label: `Reštartovať a aktualizovať na verziu ${model.readyUpdate}`, click: () => actions.installUpdate() }];
 }
 
 export function trayMenuTemplate(model: TrayMenuModel, actions: TrayMenuActions): MenuItemConstructorOptions[] {
@@ -119,7 +120,7 @@ export function trayMenuTemplate(model: TrayMenuModel, actions: TrayMenuActions)
     SEPARATOR,
     ...lastTranscriptItems(model, actions),
     SEPARATOR,
-    { label: model.paused ? 'Pokračovať' : 'Pozastaviť diktovanie', click: () => actions.togglePause() },
+    { label: model.paused ? 'Pokračovať' : 'Pozastaviť diktovanie', enabled: !model.installingUpdate, click: () => actions.togglePause() },
     microphoneMenu(model, actions),
     languageMenu(model, actions),
     SEPARATOR,

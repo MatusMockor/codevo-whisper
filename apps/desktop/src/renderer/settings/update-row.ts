@@ -33,6 +33,7 @@ const PHASE_VIEWS: PhaseViews = {
   downloading: (phase) => ({ description: `Sťahujem verziu ${phase.version}… ${phase.percent} %`, actions: [check(true)] }),
   ready: (phase) => ({ description: `Verzia ${phase.version} je pripravená. Nainštaluje sa po reštarte.`, actions: [install()] }),
   installing: (phase) => ({ description: `Reštartujem a inštalujem verziu ${phase.version}…`, actions: [install(true)] }),
+  stalled: (phase) => ({ description: `Inštalácia verzie ${phase.version} sa nedokončila. Ukončite Codevo Whisper a spustite ho znova.`, actions: [] }),
   error: (phase, status) => ({ description: FAILURES[phase.failed](status), actions: [check()] }),
 };
 
@@ -47,7 +48,7 @@ export function updateRowView(status: UpdateStatus, notice: InstallOutcome | nul
     return { description: `Verzia ${status.currentVersion}. Aktualizácie fungujú iba v nainštalovanej aplikácii.`, actions: [check(true)] };
   }
   if (phase.kind === 'ready' && notice === 'dictation-active') {
-    return { description: `Verzia ${phase.version} je pripravená. Najprv dokončite diktovanie, potom aplikáciu reštartujte.`, actions: [install()] };
+    return { description: `Verzia ${phase.version} je pripravená. Po dokončení diktovania to skúste znova.`, actions: [install()] };
   }
   return phaseView(phase, status);
 }

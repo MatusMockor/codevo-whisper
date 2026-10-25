@@ -10,9 +10,12 @@ export type UpdateServiceDeps = {
   currentVersion: string;
   dictation: DictationGuard;
   logger: Logger;
+  installStallMs?: number;
 };
 
 type CheckOrigin = 'user' | 'background';
+
+const INSTALL_STALL_MS = 120_000;
 
 const CHECKABLE: ReadonlySet<UpdatePhase['kind']> = new Set(['idle', 'available', 'error']);
 
@@ -24,6 +27,7 @@ const CHECK_FAILURES: Readonly<Record<CheckOrigin, string>> = {
 export class UpdateService {
   private phase: UpdatePhase = { kind: 'idle', checked: false };
   private running: Promise<void> | null = null;
+  private origin: CheckOrigin = 'background';
   private readonly listeners: Listeners<UpdateStatus>;
 
   constructor(private readonly deps: UpdateServiceDeps) {
@@ -46,7 +50,7 @@ export class UpdateService {
     return this.run('background');
   }
 
-  install(): InstallOutcome {
+  async install(): Promise<InstallOutcome> {
     const phase = this.phase;
     if (phase.kind !== 'ready' || this.deps.mode !== 'in-app') {
       return 'not-ready';
@@ -54,10 +58,13 @@ export class UpdateService {
     if (this.deps.dictation.isDictating()) {
       return 'dictation-active';
     }
-    const release = this.deps.dictation.suspend();
-    this.deps.logger.info('Restarting to install an update', { version: phase.version });
-    this.transition({ kind: 'installing', version: phase.version });
+    const { version } = phase;
+    this.transition({ kind: 'installing', version });
+    const release = await this.deps.dictation.suspend();
+    this.deps.logger.info('Restarting to install an update', { version });
+    const stall = setTimeout(() => this.stalled(version), this.deps.installStallMs ?? INSTALL_STALL_MS);
     this.deps.updater.install().catch((error: unknown) => {
+      clearTimeout(stall);
       release();
       this.deps.logger.error('The update could not be installed', error);
       this.transition({ kind: 'error', failed: 'install' });
@@ -67,24 +74,26 @@ export class UpdateService {
 
   private run(origin: CheckOrigin): Promise<void> {
     if (this.running !== null && this.phase.kind === 'checking') {
+      this.origin = origin === 'user' ? 'user' : this.origin;
       return this.running;
     }
     if (this.deps.mode === 'unsupported' || !CHECKABLE.has(this.phase.kind)) {
       return Promise.resolve();
     }
-    const running = this.execute(origin).finally(() => {
+    this.origin = origin;
+    const running = this.execute().finally(() => {
       this.running = null;
     });
     this.running = running;
     return running;
   }
 
-  private async execute(origin: CheckOrigin): Promise<void> {
+  private async execute(): Promise<void> {
     const previous = this.phase;
     this.transition({ kind: 'checking' });
-    const found = await this.find(origin);
+    const found = await this.find();
     if (found === 'failed') {
-      this.transition(origin === 'background' ? previous : { kind: 'error', failed: 'check' });
+      this.transition(this.origin === 'background' ? previous : { kind: 'error', failed: 'check' });
       return;
     }
     if (found === null) {
@@ -99,11 +108,11 @@ export class UpdateService {
     await this.download(found.version);
   }
 
-  private async find(origin: CheckOrigin): Promise<AvailableUpdate | null | 'failed'> {
+  private async find(): Promise<AvailableUpdate | null | 'failed'> {
     try {
       return await this.deps.updater.check();
     } catch (error) {
-      this.deps.logger.error(CHECK_FAILURES[origin], error);
+      this.deps.logger.error(CHECK_FAILURES[this.origin], error);
       return 'failed';
     }
   }
@@ -125,6 +134,14 @@ export class UpdateService {
       return;
     }
     this.transition({ kind: 'downloading', version, percent });
+  }
+
+  private stalled(version: string): void {
+    if (this.phase.kind !== 'installing') {
+      return;
+    }
+    this.deps.logger.warn('The update did not restart the app in time', { version });
+    this.transition({ kind: 'stalled', version });
   }
 
   private transition(phase: UpdatePhase): void {

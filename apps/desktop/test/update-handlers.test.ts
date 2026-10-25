@@ -12,7 +12,7 @@ function harness() {
     updater,
     mode: 'in-app',
     currentVersion: '1.1.0',
-    dictation: { isDictating: () => false, suspend: () => () => undefined },
+    dictation: { isDictating: () => false, suspend: () => Promise.resolve(() => undefined) },
     logger: new RecordingLogger(),
   });
   const opened: string[] = [];

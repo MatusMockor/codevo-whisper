@@ -9,6 +9,7 @@ export type UpdatePhase =
   | { kind: 'downloading'; version: string; percent: number }
   | { kind: 'ready'; version: string }
   | { kind: 'installing'; version: string }
+  | { kind: 'stalled'; version: string }
   | { kind: 'error'; failed: UpdateFailure };
 
 export type UpdateStatus = { currentVersion: string; mode: UpdateMode; phase: UpdatePhase };

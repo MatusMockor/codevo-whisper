@@ -10,7 +10,7 @@ export type E2eHooks = {
   overlay: { show(state: OverlayState): void };
   lastTranscript: Pick<LastTranscript, 'set'>;
   helper: InputHelper;
-  updater?: AppUpdater | null;
+  updater?: Promise<AppUpdater> | null;
   loadUpdater?: () => Promise<UpdaterLike>;
 };
 

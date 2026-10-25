@@ -109,9 +109,9 @@ export function composeApplication(logger: Logger): Application {
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
     const rearm = new HotkeyRearm(permissions, hotkey, logger);
-    const updates = await createUpdates({
+    const updates = createUpdates({
       e2e,
-      dictation: coordinatorDictationGuard(() => coordinator),
+      dictation: coordinatorDictationGuard({ coordinator: () => coordinator, microphone: capture, meter: settingsServices.microphones, logger }),
       send: (status) => mainWindow.send('update-status-changed', status),
       logger,
     });

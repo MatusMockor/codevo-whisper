@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
 import type { AppTarget } from '../src/main/helper/input-helper';
@@ -18,6 +19,7 @@ import { localDate } from '../src/shared/calendar-date';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FakeCaptureHost } from './fake-capture-host';
 import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
@@ -424,25 +426,34 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.coordinator.isDictating()).toBe(false);
   });
 
-  it('the update dictation guard pauses dictation until it is released', async () => {
+  it('the update guard pauses dictation, stops the meter and lets the microphone settle before the install', async () => {
     const harness = await prepared();
-    const guard = coordinatorDictationGuard(() => harness.coordinator);
+    const host = new FakeCaptureHost();
+    const microphone = new WindowAudioCapture(host, harness.logger);
+    await microphone.startMeter({ deviceId: null, label: null });
+    const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
 
-    const release = guard.suspend();
+    const release = await guard.suspend();
+
     expect(harness.coordinator.isPaused()).toBe(true);
+    expect(host.requests.at(-1)).toEqual({ type: 'stop' });
+    expect(microphone.isBusy()).toBe(false);
+    await expect(microphone.startMeter({ deviceId: null, label: null })).rejects.toThrow('The microphone is closed for an app update');
     harness.helper.pressKey('down', FN.keycode);
     expect(guard.isDictating()).toBe(false);
     release();
 
     expect(harness.coordinator.isPaused()).toBe(false);
+    await expect(microphone.startMeter({ deviceId: null, label: null })).resolves.toBeUndefined();
   });
 
-  it('the update dictation guard keeps a pause the user chose', async () => {
+  it('the update guard keeps a pause the user chose', async () => {
     const harness = await prepared();
-    const guard = coordinatorDictationGuard(() => harness.coordinator);
+    const microphone = new WindowAudioCapture(new FakeCaptureHost(), harness.logger);
+    const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
     harness.coordinator.pause();
 
-    guard.suspend()();
+    (await guard.suspend())();
 
     expect(harness.coordinator.isPaused()).toBe(true);
   });

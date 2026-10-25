@@ -14,6 +14,7 @@ const MODEL: TrayMenuModel = {
   language: 'sk',
   autoLanguageAllowed: true,
   readyUpdate: null,
+  installingUpdate: false,
 };
 
 function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
@@ -153,8 +154,16 @@ describe('trayMenuTemplate with a downloaded update', () => {
     const { actions, calls } = recordingActions();
     const items = trayMenuTemplate({ ...MODEL, readyUpdate: '1.2.0' }, actions);
 
-    expect(labels(items).slice(0, 4)).toEqual(['Pripravené · Pravý ⌃ Control', 'Reštartovať a aktualizovať na 1.2.0', '---', 'Posledné diktovanie']);
-    click(item(items, 'Reštartovať a aktualizovať na 1.2.0'));
+    expect(labels(items).slice(0, 4)).toEqual(['Pripravené · Pravý ⌃ Control', 'Reštartovať a aktualizovať na verziu 1.2.0', '---', 'Posledné diktovanie']);
+    click(item(items, 'Reštartovať a aktualizovať na verziu 1.2.0'));
     expect(calls).toEqual(['install-update']);
+  });
+
+  it('does not let the pause item resume dictation while the update installs', () => {
+    const { actions } = recordingActions();
+    const items = trayMenuTemplate({ ...MODEL, paused: true, installingUpdate: true }, actions);
+
+    expect(item(items, 'Pokračovať')).toMatchObject({ enabled: false });
+    expect(item(trayMenuTemplate({ ...MODEL, paused: true }, actions), 'Pokračovať').enabled).not.toBe(false);
   });
 });

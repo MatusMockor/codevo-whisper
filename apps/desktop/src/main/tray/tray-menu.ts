@@ -20,7 +20,7 @@ export type TrayMenuDeps = {
   settings: Pick<SettingsStore, 'get' | 'update'>;
   lastTranscript: Pick<LastTranscript, 'get'>;
   models: Pick<ActiveModel, 'activeLanguageHint'>;
-  updates?: Pick<UpdateService, 'status' | 'install'>;
+  updates: Pick<UpdateService, 'status' | 'install'>;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -92,6 +92,7 @@ export class TrayMenu {
       language: settings.language,
       autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
       readyUpdate: this.readyUpdate(),
+      installingUpdate: this.installingUpdate(),
     };
   }
 
@@ -112,19 +113,34 @@ export class TrayMenu {
   }
 
   private readyUpdate(): string | null {
-    const phase = this.deps.updates?.status().phase;
-    return phase?.kind === 'ready' ? phase.version : null;
+    const phase = this.deps.updates.status().phase;
+    return phase.kind === 'ready' ? phase.version : null;
+  }
+
+  private installingUpdate(): boolean {
+    const { kind } = this.deps.updates.status().phase;
+    return kind === 'installing' || kind === 'stalled';
   }
 
   private installUpdate(): void {
-    const outcome = this.deps.updates?.install();
-    if (outcome === 'restarting') {
-      return;
-    }
-    this.deps.logger.info('The update was not installed from the tray', { outcome });
+    this.deps.updates
+      .install()
+      .then((outcome) => {
+        if (outcome === 'restarting') {
+          return;
+        }
+        this.deps.logger.info('The update was not installed from the tray', { outcome });
+      })
+      .catch((error: unknown) => {
+        this.deps.logger.error('Installing the update from the tray failed', error);
+      });
   }
 
   private togglePause(): void {
+    if (this.installingUpdate()) {
+      this.deps.logger.info('Dictation stays paused while the update installs', null);
+      return;
+    }
     const { coordinator } = this.deps;
     const toggle = coordinator.isPaused() ? () => coordinator.resume() : () => coordinator.pause();
     toggle();

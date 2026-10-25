@@ -1,6 +1,6 @@
 import type { UpdateMode } from '../../shared/updates';
 
-export type PlatformFacts = { platform: NodeJS.Platform; isPackaged: boolean; appImage: string | undefined };
+export type PlatformFacts = { platform: NodeJS.Platform; isPackaged: boolean; appImage: string | undefined; packageType: string | null };
 
 export interface PlatformUpdatePolicy {
   mode(facts: PlatformFacts): UpdateMode;
@@ -9,7 +9,12 @@ export interface PlatformUpdatePolicy {
 const macPolicy: PlatformUpdatePolicy = { mode: () => 'in-app' };
 
 const linuxPolicy: PlatformUpdatePolicy = {
-  mode: ({ appImage }) => (appImage !== undefined && appImage !== '' ? 'in-app' : 'manual'),
+  mode: ({ appImage, packageType }) => {
+    if (packageType !== null) {
+      return 'manual';
+    }
+    return appImage !== undefined && appImage !== '' ? 'in-app' : 'manual';
+  },
 };
 
 const POLICIES: Partial<Record<NodeJS.Platform, PlatformUpdatePolicy>> = { darwin: macPolicy, linux: linuxPolicy };

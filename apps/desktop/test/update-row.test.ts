@@ -33,9 +33,16 @@ describe('updateRowView', () => {
     });
   });
 
+  it('asks for a manual restart when the install stalls', () => {
+    expect(view({ kind: 'stalled', version: '1.2.0' })).toEqual({
+      description: 'Inštalácia verzie 1.2.0 sa nedokončila. Ukončite Codevo Whisper a spustite ho znova.',
+      actions: [],
+    });
+  });
+
   it('asks to finish the dictation first when the restart was refused', () => {
     expect(updateRowView(status({ kind: 'ready', version: '1.2.0' }), 'dictation-active')).toEqual({
-      description: 'Verzia 1.2.0 je pripravená. Najprv dokončite diktovanie, potom aplikáciu reštartujte.',
+      description: 'Verzia 1.2.0 je pripravená. Po dokončení diktovania to skúste znova.',
       actions: [INSTALL],
     });
     expect(updateRowView(status({ kind: 'idle', checked: true }), 'dictation-active').description).toBe('Verzia 1.1.0 je najnovšia.');

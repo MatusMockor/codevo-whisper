@@ -1,1 +1,1 @@
-export type DictationGuard = { isDictating(): boolean; suspend(): () => void };
+export type DictationGuard = { isDictating(): boolean; suspend(): Promise<() => void> };
