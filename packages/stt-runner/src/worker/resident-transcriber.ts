@@ -13,6 +13,10 @@ export type ResidentTranscriberOptions = {
 
 export type WorkerCall = { pcm: Uint8Array; language: TranscribeLanguage; signal?: AbortSignal };
 
+function closedError(): TranscribeCliError {
+  return new TranscribeCliError('exit', 'transcribe worker is closed');
+}
+
 function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -31,6 +35,9 @@ export class ResidentTranscriber {
   }
 
   async warmUp(): Promise<void> {
+    if (this.closed) {
+      throw closedError();
+    }
     const worker = this.current();
     try {
       await worker.ready;
@@ -40,14 +47,19 @@ export class ResidentTranscriber {
     }
   }
 
-  close(): Promise<void> {
+  async close(): Promise<void> {
     this.closed = true;
-    this.worker?.kill();
+    const worker = this.worker;
     this.worker = undefined;
-    return this.queue.then(() => undefined);
+    worker?.kill();
+    await worker?.terminated;
+    await this.queue;
   }
 
   private run(call: WorkerCall): Promise<string> {
+    if (this.closed) {
+      return Promise.reject(closedError());
+    }
     call.signal?.throwIfAborted();
     const worker = this.current();
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -81,7 +93,9 @@ export class ResidentTranscriber {
   }
 
   private current(): WorkerProcess {
-    this.worker ??= this.spawn();
+    if (this.worker === undefined || !this.worker.alive) {
+      this.worker = this.spawn();
+    }
     return this.worker;
   }
 

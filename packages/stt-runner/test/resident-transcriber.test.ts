@@ -20,6 +20,36 @@ function pcm(samples: number): Uint8Array {
   return new Uint8Array(samples * 2);
 }
 
+async function waitForFile(file: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const present = await readFile(file, 'utf8').then(
+      () => true,
+      () => false,
+    );
+    if (present) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect.fail(`${file} was never written`);
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForExit(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 200 && isAlive(pid); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect(isAlive(pid)).toBe(false);
+}
+
 function pidOf(text: string): string {
   return text.split(':')[0] ?? '';
 }
@@ -120,6 +150,34 @@ describe('ResidentTranscriber', () => {
 
     await expect(create().transcribe({ pcm: pcm(1), language: 'sk', signal: controller.signal })).rejects.toBeInstanceOf(DOMException);
     await expect(readFile(argsFile, 'utf8')).rejects.toThrow();
+  });
+
+  it('close rejects queued and later calls and starts no new worker', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_SLOW_SAMPLES', '1');
+    const worker = create();
+    const running = worker.transcribe({ pcm: pcm(1), language: 'sk' });
+    const queued = worker.transcribe({ pcm: pcm(2), language: 'sk' });
+    await waitForFile(argsFile);
+    await worker.close();
+
+    await expect(running).rejects.toBeInstanceOf(TranscribeCliError);
+    await expect(queued).rejects.toMatchObject({ message: expect.stringContaining('closed') as string });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).rejects.toBeInstanceOf(TranscribeCliError);
+    await expect(worker.warmUp()).rejects.toBeInstanceOf(TranscribeCliError);
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+
+  it('replaces a worker that died while idle before the next call', async () => {
+    const worker = create();
+    const before = Number(pidOf(await worker.transcribe({ pcm: pcm(1), language: 'sk' })));
+    process.kill(before, 'SIGKILL');
+    await waitForExit(before);
+
+    const after = await worker.transcribe({ pcm: pcm(2), language: 'sk' });
+    expect(after).toMatch(/:sk:2$/);
+    expect(Number(pidOf(after))).not.toBe(before);
   });
 
   it('a crash rejects the call in flight and the next call recovers', async () => {

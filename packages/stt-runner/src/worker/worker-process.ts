@@ -11,6 +11,7 @@ export type WorkerCommand = { binary: string; args: string[]; maxTextBytes: numb
 
 export class WorkerProcess {
   readonly ready: Promise<void>;
+  readonly terminated: Promise<void>;
   private readonly child: ChildProcessByStdio<Writable, Readable, Readable>;
   private readonly reader: WorkerReplyReader;
   private readonly pending: Pending[] = [];
@@ -31,8 +32,16 @@ export class WorkerProcess {
     this.child.stderr.on('data', (chunk: Buffer) => {
       this.stderr = `${this.stderr}${chunk.toString('utf8')}`.slice(-STDERR_LIMIT);
     });
-    this.child.once('error', (error) => this.fail(new TranscribeCliError('spawn', `transcribe worker could not start: ${error.message}`)));
-    this.child.once('close', (code, signal) => this.fail(this.exitError(code, signal)));
+    this.terminated = new Promise<void>((resolve) => {
+      this.child.once('error', (error) => {
+        this.fail(new TranscribeCliError('spawn', `transcribe worker could not start: ${error.message}`));
+        resolve();
+      });
+      this.child.once('close', (code, signal) => {
+        this.fail(this.exitError(code, signal));
+        resolve();
+      });
+    });
   }
 
   get alive(): boolean {
