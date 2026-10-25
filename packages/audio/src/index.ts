@@ -19,3 +19,6 @@ export { partialIntervalMs, type PartialIntervalSource } from './partials/partia
 export { ServiceTimeEstimator } from './partials/service-time-estimator';
 export { FairJobQueue } from './scheduling/fair-job-queue';
 export type { DropReason, Dropped, JobKind, TranscriptionJob } from './scheduling/transcription-job';
+export type { DeviceRegistry, JobOutcome, JobSubmitter } from './scheduling/job-outcome';
+export type { SegmentTranscriber } from './scheduling/segment-transcriber';
+export { TranscriptionDispatcher, type TranscriptionDispatcherDeps } from './scheduling/transcription-dispatcher';
