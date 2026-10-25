@@ -29,8 +29,7 @@ describe('electron-builder.yml', () => {
     }
   });
 
-  it('publishes to the public GitHub repository with a named updater cache', () => {
+  it('publishes to the public GitHub repository the updater reads', () => {
     expect(BUILDER_CONFIG).toMatch(/publish:\n {2}provider: github\n {2}owner: MatusMockor\n {2}repo: codevo-whisper\n/);
-    expect(BUILDER_CONFIG).toContain('  updaterCacheDirName: codevo-whisper-updater\n');
   });
 });

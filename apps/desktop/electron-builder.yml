@@ -65,4 +65,3 @@ publish:
   owner: MatusMockor
   repo: codevo-whisper
   releaseType: draft
-  updaterCacheDirName: codevo-whisper-updater
