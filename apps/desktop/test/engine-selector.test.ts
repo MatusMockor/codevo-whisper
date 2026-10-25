@@ -1,8 +1,11 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer, type Server, type Socket } from 'node:net';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EngineSelector } from '../src/main/engines/engine-selector';
+import type { Preparation, TranscriptionEngine } from '../src/main/engines/transcription-engine';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
@@ -120,6 +123,45 @@ describe('EngineSelector', () => {
       const preparation = await selector.prepare(['server', 'local']);
 
       expect(preparation.ready && preparation.engine.id).toBe('local');
+    });
+  });
+
+  describe('Server, potom lokálne with an unreachable server', () => {
+    let silent: Server | null = null;
+    const sockets: Socket[] = [];
+
+    afterEach(async () => {
+      sockets.splice(0).forEach((socket) => socket.destroy());
+      await new Promise<void>((resolve) => (silent === null ? resolve() : silent.close(() => resolve())));
+      silent = null;
+    });
+
+    function timed(engine: TranscriptionEngine, events: string[]): TranscriptionEngine {
+      return {
+        id: engine.id,
+        prepare: async (): Promise<Preparation> => {
+          events.push(`${engine.id}:start`);
+          const preparation = await engine.prepare();
+          events.push(`${engine.id}:end`);
+          return preparation;
+        },
+      };
+    }
+
+    it('prepares the local engine while it waits for the server', async () => {
+      silent = createServer((socket) => sockets.push(socket));
+      await new Promise<void>((resolve) => silent?.listen(0, '127.0.0.1', resolve));
+      gateway = await startTestGateway();
+      const pairing = { ...(await gateway.addDevice()), endpoint: `ws://127.0.0.1:${(silent.address() as AddressInfo).port}` };
+      const observer = { connected: () => undefined, failed: () => undefined };
+      const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 300 });
+      const events: string[] = [];
+      const selector = new EngineSelector([timed(await localEngine(true), events), timed(new RemoteEngine({ connector, observer }), events)]);
+
+      const preparation = await selector.prepare(['server', 'local']);
+
+      expect(preparation.ready && preparation.engine.id).toBe('local');
+      expect(events.indexOf('local:start')).toBeLessThan(events.indexOf('server:end'));
     });
   });
 });
