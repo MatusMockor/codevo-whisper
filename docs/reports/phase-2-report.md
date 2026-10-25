@@ -8,8 +8,8 @@ All 10 implementation tasks are done, plus fixes for 9 security findings from th
 
 | Package | Tests |
 |---|---|
-| `packages/protocol` | 85 |
-| `apps/server` | 91 |
+| `packages/protocol` | 84 |
+| `apps/server` | 92 |
 | `apps/stt` | 17 |
 | `tools/dev-client` | 7 |
 | `packages/stt-runner` (phase 1, reused) | 14 |
