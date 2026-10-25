@@ -26,6 +26,7 @@ export type DictationSessionDeps = {
   helper: Pick<InputHelper, 'frontmost' | 'focusedElement'>;
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
+  abandon(session: DictationSession): void;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
   clock: () => number;
@@ -104,8 +105,13 @@ export class DictationSession {
   }
 
   cancel(): void {
+    const recording = this.phase === 'recording';
     this.phase = 'done';
     this.controller.abort();
+    if (!recording) {
+      return;
+    }
+    void this.stopCapture();
   }
 
   private async openMicrophone(): Promise<boolean> {
@@ -116,7 +122,7 @@ export class DictationSession {
     } catch (error) {
       this.deps.logger.error('The microphone could not be started', error);
       if (this.phase === 'recording') {
-        this.end(errorState(MESSAGES.microphone));
+        this.abandon(errorState(MESSAGES.microphone));
       }
       return false;
     }
@@ -134,8 +140,13 @@ export class DictationSession {
     if (readiness.ready || this.phase !== 'recording') {
       return;
     }
-    this.end(readinessError(readiness.reason));
+    this.abandon(readinessError(readiness.reason));
     await this.stopCapture();
+  }
+
+  private abandon(state: OverlayState): void {
+    this.end(state);
+    this.deps.abandon(this);
   }
 
   private stopCapture(): Promise<Uint8Array> {

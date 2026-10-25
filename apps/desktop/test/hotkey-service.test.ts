@@ -212,6 +212,17 @@ describe('HotkeyService', () => {
     expect(events).toEqual(['start', 'stop:max-duration']);
   });
 
+  it('cancel ends the active session so the next press starts a new one in toggle mode', async () => {
+    const { service, helper, events } = await started({ settings: { mode: 'toggle' } });
+
+    helper.pressKey('down', 63);
+    service.cancel();
+    service.cancel();
+    helper.pressKey('down', 63);
+
+    expect(events).toEqual(['start', 'stop:cancelled', 'start']);
+  });
+
   it('stops a dead helper session immediately instead of at the limit', async () => {
     const { helper, events } = await started();
 

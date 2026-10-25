@@ -71,10 +71,11 @@ export class TrayMenu {
       this.deps.logger.error('The microphones could not be listed for the tray menu', error);
       return this.devices;
     });
+    let timer: NodeJS.Timeout | undefined;
     const fallback = new Promise<AudioDevice[]>((resolve) => {
-      setTimeout(() => resolve(this.devices), DEVICE_LIST_TIMEOUT_MS);
+      timer = setTimeout(() => resolve(this.devices), DEVICE_LIST_TIMEOUT_MS);
     });
-    return Promise.race([listed, fallback]);
+    return Promise.race([listed, fallback]).finally(() => clearTimeout(timer));
   }
 
   private model(): TrayMenuModel {

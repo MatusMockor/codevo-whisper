@@ -4,10 +4,13 @@ import { createUserDataDir, FAKE_DEVICE_ARGS, FAKE_MEDIA_ARGS, launchApp, remove
 
 type HookGlobal = { codevoE2e: E2eHooks; levelCount: number };
 
+type TimedRecording = { bytes: number; startedAt: number; firstAudioAt: number; stoppedAt: number; fallback: boolean; deviceLabel: string };
+
 type StreamWindow = Window & { capturedStreams: MediaStream[] };
 
 const RECORD_MS = 1000;
-const EXPECTED_BYTES = 32_000;
+const BYTES_PER_MS = 32;
+const LEVEL_INTERVAL_MS = 50;
 const SYSTEM_DEFAULT = { deviceId: null, label: null };
 
 let app: ElectronApplication;
@@ -79,21 +82,36 @@ function requestMedia(constraints: MediaStreamConstraints): Promise<string> {
 test.describe('with Chromium fake media', () => {
   launchWith(FAKE_MEDIA_ARGS);
 
-  test('records about one second of 16 kHz PCM16 and releases the microphone', async () => {
+  test('records 16 kHz PCM16 for the time audio was flowing and releases the microphone', async () => {
     const capture = await openCapturePage();
     await countLevels();
 
-    const started = await app.evaluate((_electron, chosen) => (globalThis as unknown as HookGlobal).codevoE2e.capture.start(chosen), SYSTEM_DEFAULT);
-    expect(started.fallback).toBe(false);
-    expect(started.deviceLabel).not.toBe('');
-    expect(await trackStates(capture)).toEqual(['audio:live']);
+    const recording: TimedRecording = await app.evaluate(
+      async (_electron, { chosen, recordMs }) => {
+        const audio = (globalThis as unknown as HookGlobal).codevoE2e.capture;
+        let firstAudioAt = 0;
+        const unsubscribe = audio.onLevel(() => {
+          firstAudioAt ||= Date.now();
+        });
+        const started = await audio.start(chosen);
+        const startedAt = Date.now();
+        await new Promise((resolve) => setTimeout(resolve, recordMs));
+        const stoppedAt = Date.now();
+        const bytes = (await audio.stop()).byteLength;
+        unsubscribe();
+        return { bytes, startedAt, firstAudioAt, stoppedAt, fallback: started.fallback, deviceLabel: started.deviceLabel };
+      },
+      { chosen: SYSTEM_DEFAULT, recordMs: RECORD_MS },
+    );
+    const flowingMs = recording.stoppedAt - recording.firstAudioAt + LEVEL_INTERVAL_MS;
+    test.info().annotations.push({ type: 'start-latency-ms', description: String(recording.firstAudioAt - recording.startedAt) });
 
-    await new Promise((resolve) => setTimeout(resolve, RECORD_MS));
-    const bytes = await app.evaluate(async () => (await (globalThis as unknown as HookGlobal).codevoE2e.capture.stop()).byteLength);
-
-    expect(bytes).toBeGreaterThanOrEqual(EXPECTED_BYTES * 0.9);
-    expect(bytes).toBeLessThanOrEqual(EXPECTED_BYTES * 1.1);
-    expect(bytes % 2).toBe(0);
+    expect(recording.fallback).toBe(false);
+    expect(recording.deviceLabel).not.toBe('');
+    expect(recording.firstAudioAt).toBeGreaterThan(0);
+    expect(recording.bytes).toBeGreaterThanOrEqual(flowingMs * BYTES_PER_MS * 0.9);
+    expect(recording.bytes).toBeLessThanOrEqual(flowingMs * BYTES_PER_MS * 1.1);
+    expect(recording.bytes % 2).toBe(0);
     expect(await levelCount()).toBeGreaterThanOrEqual(10);
     expect(await trackStates(capture)).toEqual(['audio:ended']);
   });

@@ -134,6 +134,13 @@ export class SessionCoordinator {
       });
   }
 
+  private handleAbandon(session: DictationSession): void {
+    if (this.recording !== session) {
+      return;
+    }
+    this.deps.hotkey.cancel();
+  }
+
   private handleLimit(): void {
     if (this.recording === null) {
       return;
@@ -164,6 +171,7 @@ export class SessionCoordinator {
       helper: this.deps.helper,
       settings: this.deps.settings,
       overlay: this.sessionOverlay(),
+      abandon: (session) => this.handleAbandon(session),
       captureLane: this.captureLane,
       pipeline: this.pipeline,
       clock: this.deps.clock ?? Date.now,

@@ -24,7 +24,7 @@ const MODEL_BODY = 'GGUF';
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -58,7 +58,7 @@ async function prepared(setup: Setup = {}) {
   const engine = new LocalEngine({ binary: setup.binary ?? FAKE_CLI, models, settings, arch: 'arm64' });
   const helper = new FakeInputHelper({ clipboard: 'original', ...setup.helper });
   const power = new FakePowerEvents();
-  const hotkey = new HotkeyService(helper, settings, power, () => Date.now(), logger);
+  const hotkey = new HotkeyService(helper, settings, power, setup.clock ?? (() => Date.now()), logger);
   await hotkey.start();
   const capture = new InProcessCapture();
   const lastTranscript = new LastTranscript();
@@ -334,6 +334,70 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
     expect(harness.helper.pasted).toEqual([]);
     expect(harness.lastTranscript.get()).toBeNull();
+  });
+
+  it('toggle mode records until the second press and then inserts', async () => {
+    const harness = await prepared({ settings: { mode: 'toggle' } });
+
+    await pressAndSpeak(harness, 6);
+    harness.helper.pressKey('up', FN.keycode);
+    harness.capture.speak(stampedPcm(6));
+    expect(harness.capture.recording).toBe(true);
+    harness.helper.pressKey('down', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['6:64000']);
+    expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
+  });
+
+  it('the hotkey 10 minute limit stops the session with the limit notice and transcribes', async () => {
+    let now = 1_000_000;
+    const harness = await prepared({ clock: () => now });
+
+    await pressAndSpeak(harness, 5);
+    now += 600_000;
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(5)]);
+    expect(harness.states).toContainEqual({ kind: 'processing', notice: 'limit-reached' });
+  });
+
+  it('in toggle mode the next press after a readiness error starts a new session', async () => {
+    const harness = await prepared({ settings: { mode: 'toggle', localModelId: null } });
+
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    harness.helper.pressKey('up', FN.keycode);
+    await harness.settings.update({ localModelId: 'tiny' });
+    await pressAndSpeak(harness, 4);
+    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.pressKey('down', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(4)]);
+    expect(harness.capture.starts).toHaveLength(2);
+  });
+
+  it('in toggle mode the next press after a microphone failure starts a new session', async () => {
+    const harness = await prepared({ settings: { mode: 'toggle' } });
+    harness.capture.failNextStart = true;
+
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    await pressAndSpeak(harness, 2);
+    harness.helper.pressKey('down', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(2)]);
+  });
+
+  it('disposing during a recording releases the microphone', async () => {
+    const harness = await prepared();
+
+    await pressAndSpeak(harness, 3);
+    harness.coordinator.dispose();
+
+    await expect.poll(() => harness.capture.recording).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(harness.helper.pasted).toEqual([]);
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
   });
 
   it('dispose aborts a running transcription and inserts nothing', async () => {

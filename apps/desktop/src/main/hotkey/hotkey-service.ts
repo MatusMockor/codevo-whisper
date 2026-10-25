@@ -64,6 +64,10 @@ export class HotkeyService {
     this.finish('max-duration');
   }
 
+  cancel(): void {
+    this.finish('cancelled');
+  }
+
   dispose(): void {
     this.finish('cancelled');
     this.permitted = false;

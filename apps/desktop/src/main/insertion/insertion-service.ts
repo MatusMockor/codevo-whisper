@@ -109,13 +109,15 @@ export class InsertionService {
     }
     try {
       await this.helper.paste();
-      await this.sleep(RESTORE_DELAY_MS);
-      await this.helper.restoreClipboard(text);
-      return 'pasted';
     } catch (error) {
       this.logger.error('The paste failed, the transcript stays on the clipboard', error);
       return 'copied-paste-failed';
     }
+    await this.sleep(RESTORE_DELAY_MS);
+    await this.helper.restoreClipboard(text).catch((error: unknown) => {
+      this.logger.error('The clipboard could not be restored after the paste', error);
+    });
+    return 'pasted';
   }
 
   private writeClipboard(text: string): Promise<boolean> {

@@ -180,14 +180,15 @@ describe('InsertionService', () => {
     expect(String(logger.errors[0]?.error)).toContain('paste-failed:no-event-source');
   });
 
-  it('returns a copy outcome when restoring the clipboard after the paste fails', async () => {
+  it('reports pasted and logs when only the clipboard restore fails after a successful paste', async () => {
     const { channel, logger, service } = await protocolService();
     await channel.request('respond-next', { cmd: 'paste', response: { posted: true } });
     await channel.request('respond-next', { cmd: 'clipboard-restore', response: { error: 'pasteboard-busy' } });
 
     const outcome = await service.insert('dictated', PROTOCOL_TARGET);
 
-    expect(outcome).toBe('copied-paste-failed');
+    expect(outcome).toBe('pasted');
+    expect(logger.errors.map((entry) => entry.message)).toEqual(['The clipboard could not be restored after the paste']);
     expect(String(logger.errors[0]?.error)).toContain('helper-error:clipboard-restore:pasteboard-busy');
   });
 

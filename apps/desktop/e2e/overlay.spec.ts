@@ -51,8 +51,18 @@ function panelFlags(): Promise<PanelFlags> {
   }, OVERLAY_PAGE);
 }
 
+function focusMainWindow(): Promise<void> {
+  return app.evaluate(({ app: electronApp, BrowserWindow }) => {
+    electronApp.focus({ steal: true });
+    BrowserWindow.getAllWindows()
+      .find((window) => window.getTitle() === 'Codevo Whisper')
+      ?.focus();
+  });
+}
+
 test('overlay window is not focusable and shows the recording state from an injected state', async () => {
-  await main.bringToFront();
+  await focusMainWindow();
+  await expect.poll(async () => (await panelFlags()).mainFocused).toBe(true);
   await inject({ kind: 'recording', elapsedMs: 4200, level: 0.5, language: 'SK' });
   const overlay = await overlayPage();
 
@@ -61,8 +71,22 @@ test('overlay window is not focusable and shows the recording state from an inje
   await expect(pill).toContainText('0:04');
   await expect(pill).toContainText('SK');
   await expect.poll(panelFlags).toMatchObject({ focusable: false, visible: true, alwaysOnTop: true, allWorkspaces: true, focused: false });
+  await inject({ kind: 'processing' });
+  await expect(overlay.getByText('Spracúvam')).toBeVisible();
+  expect(await panelFlags()).toMatchObject({ focused: false, mainFocused: true });
 
   await inject({ kind: 'hidden' });
+  await expect.poll(async () => (await panelFlags()).visible).toBe(false);
+});
+
+test('hiding clears the rendered state so the next show never flashes the previous result', async () => {
+  await inject({ kind: 'inserted', appName: 'Notes' });
+  const overlay = await overlayPage();
+  await expect(overlay.getByRole('status')).toHaveText('VloženéNotes');
+
+  await inject({ kind: 'hidden' });
+
+  await expect(overlay.locator('.stage > *')).toHaveCount(0);
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);
 });
 

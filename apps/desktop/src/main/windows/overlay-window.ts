@@ -53,21 +53,22 @@ export class OverlayWindow {
   private ready: Promise<BrowserWindow> | null = null;
   private latest: OverlayState = HIDDEN;
   private readonly actions: Listeners<OverlayAction>;
+  private readonly actionHandler = (event: IpcMainEvent, payload: unknown): void => {
+    this.handleAction(event, payload);
+  };
 
   constructor(
     private readonly source: RendererSource,
     private readonly logger: Logger,
   ) {
     this.actions = new Listeners(logger, 'An overlay action listener failed');
-    ipcMain.on(OVERLAY_CHANNELS.action, (event, payload: unknown) => {
-      this.handleAction(event, payload);
-    });
+    ipcMain.on(OVERLAY_CHANNELS.action, this.actionHandler);
   }
 
   show(state: OverlayState): void {
     this.latest = state;
     if (state.kind === 'hidden') {
-      this.window?.hide();
+      this.clear();
       return;
     }
     this.ensure().then(
@@ -81,6 +82,7 @@ export class OverlayWindow {
   }
 
   destroy(): void {
+    ipcMain.removeListener(OVERLAY_CHANNELS.action, this.actionHandler);
     const window = this.window;
     this.forget();
     if (window === null || window.isDestroyed()) {
@@ -94,17 +96,26 @@ export class OverlayWindow {
       return;
     }
     const state = this.latest;
-    window.webContents.send(OVERLAY_CHANNELS.state, state);
     if (state.kind === 'hidden') {
-      window.hide();
+      this.clear();
       return;
     }
+    window.webContents.send(OVERLAY_CHANNELS.state, state);
     window.setIgnoreMouseEvents(!isInteractive(state));
     if (window.isVisible()) {
       return;
     }
     window.setBounds(bottomCenter(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea));
     window.showInactive();
+  }
+
+  private clear(): void {
+    const window = this.window;
+    if (window === null || window.isDestroyed()) {
+      return;
+    }
+    window.webContents.send(OVERLAY_CHANNELS.state, HIDDEN);
+    window.hide();
   }
 
   private ensure(): Promise<BrowserWindow> {
