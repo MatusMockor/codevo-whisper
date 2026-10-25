@@ -1,0 +1,94 @@
+{
+  "defaults": {
+    "darwin-arm64": {
+      "model": "parakeet-ultra-q8",
+      "backend": "metal"
+    },
+    "darwin-x64": {
+      "model": "parakeet-ultra-q4",
+      "backend": "cpu"
+    },
+    "linux-cpu": {
+      "model": "parakeet-ultra-q4",
+      "backend": "cpu"
+    },
+    "linux-vulkan": {
+      "model": "parakeet-ultra-q8",
+      "backend": "vulkan"
+    }
+  },
+  "models": [
+    {
+      "id": "parakeet-ultra-q8",
+      "name": "Parakeet Ultra",
+      "variant": "parakeet-ultra",
+      "quantization": "Q8_0",
+      "roles": [
+        "recommended",
+        "fastest",
+        "best-english"
+      ],
+      "roleLabels": [
+        "Odporúčaný",
+        "Najrýchlejší",
+        "Najpresnejší pre angličtinu"
+      ],
+      "languageHint": "ignored",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Parakeet Ultra by Moondream (M87 Labs), post-trained from NVIDIA parakeet-tdt-0.6b-v3. GGUF conversion and Q8_0 quantization by handy-computer (transcribe.cpp). Licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Changes: converted to GGUF and quantized to Q8_0.",
+      "upstream": "https://huggingface.co/moondream/parakeet-ultra"
+    },
+    {
+      "id": "canary-1b-v2-q8",
+      "name": "Canary 1B v2",
+      "variant": "canary-1b-v2",
+      "quantization": "Q8_0",
+      "roles": [
+        "best-slovak-czech"
+      ],
+      "roleLabels": [
+        "Najpresnejší pre slovenčinu a češtinu"
+      ],
+      "languageHint": "required",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Canary-1B-v2 by NVIDIA. GGUF conversion and Q8_0 quantization by handy-computer (transcribe.cpp). Licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Changes: converted to GGUF and quantized to Q8_0.",
+      "upstream": "https://huggingface.co/nvidia/canary-1b-v2"
+    },
+    {
+      "id": "parakeet-ultra-q4",
+      "name": "Parakeet Ultra (malý)",
+      "variant": "parakeet-ultra",
+      "quantization": "Q4_K_M",
+      "roles": [
+        "low-resource"
+      ],
+      "roleLabels": [
+        "Pre slabší počítač"
+      ],
+      "languageHint": "ignored",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Parakeet Ultra by Moondream (M87 Labs), post-trained from NVIDIA parakeet-tdt-0.6b-v3. GGUF conversion and Q4_K_M quantization by handy-computer (transcribe.cpp). Licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Changes: converted to GGUF and quantized to Q4_K_M.",
+      "upstream": "https://huggingface.co/moondream/parakeet-ultra"
+    },
+    {
+      "id": "tc-whisper-turbo-q8",
+      "name": "Whisper Large v3 Turbo",
+      "variant": "whisper-large-v3-turbo",
+      "quantization": "Q8_0",
+      "roles": [
+        "more-languages"
+      ],
+      "roleLabels": [
+        "Pre ďalšie jazyky (99)"
+      ],
+      "languageHint": "optional",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "attribution": "Whisper large-v3-turbo, Copyright (c) 2022 OpenAI, MIT License (https://github.com/openai/whisper/blob/main/LICENSE). GGUF conversion and Q8_0 quantization by handy-computer (transcribe.cpp).",
+      "upstream": "https://huggingface.co/openai/whisper-large-v3-turbo"
+    }
+  ]
+}
