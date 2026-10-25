@@ -1,14 +1,11 @@
 import { beginPairing, fingerprint, generateKeyPair, parsePairingToken, type KeyPair, type PairingToken, type ServerMessage } from '@codevo-whisper/protocol';
+import type { PairingFailure, PairingStep } from '../../shared/server';
 import type { PairingRepository } from './pairing-repository';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import type { SecretVault } from './secret-vault';
 import { SecureConnection } from './secure-connection';
 
-export type PairingStep =
-  | { kind: 'connecting' }
-  | { kind: 'awaiting-approval'; connectionFingerprint: string; deviceFingerprint: string; deviceName: string };
-
-export type PairingFailure = 'invalid-token' | 'unreachable' | 'pairing-closed' | 'rejected' | 'storage-insecure' | 'cancelled' | 'failed';
+export type { PairingFailure, PairingStep } from '../../shared/server';
 
 export type PairingOutcome = { kind: 'paired'; deviceId: string } | { kind: 'failed'; failure: PairingFailure };
 

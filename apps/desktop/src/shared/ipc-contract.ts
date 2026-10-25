@@ -4,6 +4,7 @@ import type { AudioDevice } from './microphones';
 import type { ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
 import type { PermissionKind, PermissionsStatus } from './permissions';
+import type { DisconnectResult, ServerView } from './server';
 import type { MicrophoneSetting, Settings } from './settings';
 import type { DayStats } from './stats';
 
@@ -29,6 +30,11 @@ export type IpcInvokeApi = {
   getMicrophones(): Promise<AudioDevice[]>;
   startMicrophoneMeter(microphone: MicrophoneSetting): Promise<void>;
   stopMicrophoneMeter(): Promise<void>;
+  getServer(): Promise<ServerView>;
+  pairServer(token: string): Promise<void>;
+  cancelServerPairing(): Promise<void>;
+  checkServer(): Promise<void>;
+  disconnectServer(): Promise<DisconnectResult>;
 };
 
 export type IpcEvents = {
@@ -40,6 +46,7 @@ export type IpcEvents = {
   'model-states-changed': ModelState[];
   'microphones-changed': AudioDevice[];
   'microphone-level': number;
+  'server-changed': ServerView;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -72,6 +79,11 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getMicrophones: 'microphones:list',
   startMicrophoneMeter: 'microphones:meter-start',
   stopMicrophoneMeter: 'microphones:meter-stop',
+  getServer: 'server:get',
+  pairServer: 'server:pair',
+  cancelServerPairing: 'server:cancel-pairing',
+  checkServer: 'server:check',
+  disconnectServer: 'server:disconnect',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -83,4 +95,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'model-states-changed': 'models:states-changed',
   'microphones-changed': 'microphones:changed',
   'microphone-level': 'microphones:level',
+  'server-changed': 'server:changed',
 });

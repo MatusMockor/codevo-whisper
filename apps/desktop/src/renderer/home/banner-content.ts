@@ -12,6 +12,7 @@ export function hotkeyVerb(mode: DictationMode): HotkeyVerb {
 export const ACTION_MESSAGES = {
   hotkey: 'Nastavte klávesovú skratku, ktorou budete diktovať.',
   model: 'Stiahnite si model na prepis reči.',
+  server: 'Spárujte server na stránke Server alebo zmeňte, kde beží prepis.',
   permissions: 'Povoľte prístup k mikrofónu, monitorovaniu vstupu a prístupnosti.',
 } as const;
 
@@ -20,7 +21,7 @@ export function bannerContent(status: AppStatus): BannerContent {
     return { kind: 'action', message: ACTION_MESSAGES.hotkey };
   }
   if (!status.modelReady) {
-    return { kind: 'action', message: ACTION_MESSAGES.model };
+    return { kind: 'action', message: status.pairingNeeded ? ACTION_MESSAGES.server : ACTION_MESSAGES.model };
   }
   if (!status.permissionsOk) {
     return { kind: 'action', message: ACTION_MESSAGES.permissions };

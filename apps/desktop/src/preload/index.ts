@@ -5,6 +5,7 @@ import type { HotkeyRecordResult } from '../shared/hotkey-record';
 import type { AudioDevice } from '../shared/microphones';
 import type { ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionsStatus } from '../shared/permissions';
+import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
 import type { DayStats } from '../shared/stats';
 
@@ -47,6 +48,11 @@ const api: IpcApi = {
   getMicrophones: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMicrophones) as Promise<AudioDevice[]>,
   startMicrophoneMeter: (microphone) => ipcRenderer.invoke(INVOKE_CHANNELS.startMicrophoneMeter, microphone) as Promise<void>,
   stopMicrophoneMeter: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMicrophoneMeter) as Promise<void>,
+  getServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.getServer) as Promise<ServerView>,
+  pairServer: (token) => ipcRenderer.invoke(INVOKE_CHANNELS.pairServer, token) as Promise<void>,
+  cancelServerPairing: () => ipcRenderer.invoke(INVOKE_CHANNELS.cancelServerPairing) as Promise<void>,
+  checkServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkServer) as Promise<void>,
+  disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
   on: subscribe,
 };
 

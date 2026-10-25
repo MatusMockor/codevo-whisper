@@ -1,4 +1,5 @@
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
+import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
 import type { MicrophoneSetting, Settings } from '../../shared/settings';
 import { isPlainRecord, isSettingsKey, isValidField, SETTINGS_FIELDS } from '../settings/settings-fields';
 
@@ -50,4 +51,11 @@ export function validateMicrophone(input: unknown): MicrophoneSetting {
     throw new IpcValidationError('Invalid microphone');
   }
   return input;
+}
+
+export function validatePairingToken(input: unknown): string {
+  if (typeof input !== 'string' || input.length > MAX_PAIRING_TOKEN_CHARS || input.trim() === '') {
+    throw new IpcValidationError('Invalid pairing token');
+  }
+  return input.trim();
 }
