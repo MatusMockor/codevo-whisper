@@ -12,3 +12,4 @@ playwright-report/
 *.tsbuildinfo
 native/macos-helper/build/
 native/transcribe/work/
+.env

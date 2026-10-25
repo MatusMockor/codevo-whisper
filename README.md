@@ -7,6 +7,11 @@ Design: `docs/specs/2026-10-25-codevo-whisper-design.md`. UI reference: `docs/de
 ## Layout
 
 - `apps/desktop` - Electron app (main process in TypeScript, React renderer built with electron-vite)
+- `apps/server` - gateway (Noise-encrypted WebSocket sessions, pairing, admin socket, `codevo-whisper` CLI)
+- `apps/stt` - transcribe.cpp HTTP sidecar
+- `packages/protocol` - Noise handshakes, secure transport, framing, messages, pairing token
+- `tools/dev-client` - command-line client for pairing and transcription against a server
+- `infrastructure/compose` - server deployment, see `docs/operations/server-setup.md`
 - `apps/*`, `packages/*`, `tools/*` - pnpm workspace members
 - `spikes/` - throwaway phase 0 prototypes, not part of the workspace
 

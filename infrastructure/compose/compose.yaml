@@ -1,0 +1,47 @@
+name: codevo-whisper
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    image: codevo-whisper-gateway:local
+    env_file: .env
+    environment:
+      CW_BIND: 0.0.0.0
+      CW_PORT: "8787"
+      CW_STT_URL: http://stt:8001
+    ports:
+      - "${CW_BIND:-127.0.0.1}:${CW_PORT:-8787}:8787"
+    volumes:
+      - cw-data:/data
+      - cw-run:/run/codevo-whisper
+    ulimits:
+      core: 0
+    depends_on:
+      - stt
+    restart: unless-stopped
+
+  stt:
+    build:
+      context: ../..
+      dockerfile: apps/stt/Dockerfile
+    image: codevo-whisper-stt:local
+    environment:
+      STT_BACKEND: ${STT_BACKEND:-vulkan}
+      STT_THREADS: ${STT_THREADS:-4}
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${VIDEO_GID:?set VIDEO_GID in .env}"
+      - "${RENDER_GID:?set RENDER_GID in .env}"
+    volumes:
+      - cw-models:/models
+    ulimits:
+      core: 0
+    restart: unless-stopped
+
+volumes:
+  cw-data:
+  cw-run:
+  cw-models:
