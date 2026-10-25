@@ -207,8 +207,29 @@ Accessibility must be granted (T0.3). Before each test, copy the marker `CLIP-BE
 
 ## Results
 
-(empty, filled in after the interactive session)
+Interactive session with the owner, 2026-10-25, macOS 26.6.2, Apple Silicon, external third-party keyboard without a right Option key.
+
+| Test | Result | Evidence |
+|---|---|---|
+| T0 permissions | Pass with friction | `CGRequestListenEventAccess` prompted once, but Electron did not appear in the Input Monitoring list; the owner had to add `Electron.app` manually (it lives in a hidden `node_modules/.pnpm` path). After "Quit & Reopen" macOS relaunched bare Electron without the app path. A relaunch of the spike was needed before `listenEvent` became true. Accessibility was granted from the prompt without issues. |
+| T1 Fn | Fail on this keyboard | No `flagsChanged` event for keycode 63 at all: the Fn key of the third-party keyboard is handled in its firmware and is invisible to macOS. |
+| T1 right Control | Pass | Down/up delivered by the Swift helper, key latency 0-1 ms, `heldMs` matches. |
+| T2 overlay | Pass (owner report) | Overlay shown with `showInactive` on display 2, focus kept by the frontmost app; owner confirmed visibility over fullscreen video and on another Space. |
+| T3 lost key-up / lock | Pass (owner report) | Owner confirmed the hotkey works normally after lock and unlock. The reset events were not visible in this run's log, so the self-test (simulated lock-screen and suspend) remains the main evidence. |
+| T4 paste into other app | Pass | T3 Code composer (`AXTextArea`, editable true) received the text; clipboard restored after 500 ms. |
+| T4 focus change during transcription | Pass | Cmd+Tab after release: nothing pasted. |
+| T4 password field | Pass | Secure input detected, nothing pasted. |
+| T4 no text field (Finder) | Fail before fix, pass after | Before: Cmd+V went into Finder and was logged as pasted. After the focused-element check: `copied-no-text-field` (`AXGroup`), transcript left on the clipboard, overlay "Skopírované - vlož cez ⌘V". |
+| T4 paste last transcript (Ctrl+Cmd+V) | Pass | Owner confirmed. |
+| Stuck Command key | Bug found and fixed | The first paste implementation posted V with the Command flag but no Command key events, which could leave Command logically held. Fixed by posting Command down, V down, V up, Command up; a self-test check guards it. |
+| VS Code, Slack, Terminal, Chrome textarea | Not run | Apps were not open; verify with the real app in phase 3. |
 
 ## Decision
 
-(empty, filled in from the results: helper technology, overlay options, paste method and restore delay, permission list)
+- **Hotkey helper:** Swift helper with a listen-only `CGEventTap` (needs Input Monitoring only). `uiohook-napi` is rejected: no Fn, cannot distinguish left/right Option release, needs Accessibility.
+- **Hotkey choice:** user-configurable through a key recorder; first run asks the user to press their key. Fn/Globe cannot be assumed on third-party keyboards. Supported modifier keys in v1: Fn (63), left/right Option (58/61), right Command (54), right Control (62).
+- **Overlay:** non-activating panel (`type: 'panel'`, `focusable: false`, `alwaysOnTop` level `screen-saver`, `visibleOnAllWorkspaces` with `visibleOnFullScreen`, `showInactive`). Default display mode is the indicator only; live text is an opt-in setting (spec 5.3).
+- **Insertion:** insertion target captured at key-down; at insertion time check same frontmost app, secure input, and the AX focused element. Editable true or unknown: paste via clipboard + Command down, V down, V up, Command up, restore the clipboard after 500 ms only if unchanged. Editable false: copy only, keep the transcript on the clipboard, show "Skopírované - vlož cez ⌘V".
+- **Paste last transcript:** Ctrl+Cmd+V and a menu bar item, same checks.
+- **Chromium/Electron targets:** set `AXManualAccessibility` once per process; the first AX query can take about 1 s, so run the check at key-down as well.
+- **Permissions:** Input Monitoring (hotkey) and Accessibility (paste, focused element). The real app is signed with a stable bundle id, so the "add manually from a hidden folder" friction of the spike does not apply; first-run screens still deep-link to both panes and verify the grant, prompting a relaunch when Input Monitoring needs it.
