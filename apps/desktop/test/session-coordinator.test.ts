@@ -12,6 +12,7 @@ import { ModelManager } from '../src/main/models/model-manager';
 import { PauseState } from '../src/main/session/pause-state';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
 import { SettingsStore } from '../src/main/settings/settings-store';
+import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
 import type { OverlayState } from '../src/shared/overlay-contract';
@@ -406,6 +407,44 @@ describe('SessionCoordinator', () => {
     expect(changes).toEqual([true, false]);
     expect(harness.coordinator.isPaused()).toBe(false);
     expect(harness.pause.isPaused()).toBe(false);
+  });
+
+  it('reports a dictation as active from the key press until the text is inserted', async () => {
+    vi.stubEnv('FAKE_CLI_DELAY_S', '0.4');
+    const harness = await prepared();
+    expect(harness.coordinator.isDictating()).toBe(false);
+
+    await pressAndSpeak(harness, 7);
+    expect(harness.coordinator.isDictating()).toBe(true);
+    harness.helper.pressKey('up', FN.keycode);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
+    expect(harness.coordinator.isDictating()).toBe(true);
+
+    await expect.poll(() => harness.helper.pasted, { timeout: 3000 }).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.coordinator.isDictating()).toBe(false);
+  });
+
+  it('the update dictation guard pauses dictation until it is released', async () => {
+    const harness = await prepared();
+    const guard = coordinatorDictationGuard(() => harness.coordinator);
+
+    const release = guard.suspend();
+    expect(harness.coordinator.isPaused()).toBe(true);
+    harness.helper.pressKey('down', FN.keycode);
+    expect(guard.isDictating()).toBe(false);
+    release();
+
+    expect(harness.coordinator.isPaused()).toBe(false);
+  });
+
+  it('the update dictation guard keeps a pause the user chose', async () => {
+    const harness = await prepared();
+    const guard = coordinatorDictationGuard(() => harness.coordinator);
+    harness.coordinator.pause();
+
+    guard.suspend()();
+
+    expect(harness.coordinator.isPaused()).toBe(true);
   });
 
   it('toggle mode records until the second press and then inserts', async () => {

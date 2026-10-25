@@ -6,6 +6,7 @@ import type { PageId } from './pages';
 import type { PermissionKind, PermissionsStatus } from './permissions';
 import type { MicrophoneSetting, Settings } from './settings';
 import type { DayStats } from './stats';
+import type { InstallOutcome, UpdateStatus } from './updates';
 
 export type IpcInvokeApi = {
   getSettings(): Promise<Settings>;
@@ -29,6 +30,10 @@ export type IpcInvokeApi = {
   getMicrophones(): Promise<AudioDevice[]>;
   startMicrophoneMeter(microphone: MicrophoneSetting): Promise<void>;
   stopMicrophoneMeter(): Promise<void>;
+  getUpdateStatus(): Promise<UpdateStatus>;
+  checkForUpdates(): Promise<UpdateStatus>;
+  installUpdate(): Promise<InstallOutcome>;
+  openUpdateDownload(): Promise<void>;
 };
 
 export type IpcEvents = {
@@ -40,6 +45,7 @@ export type IpcEvents = {
   'model-states-changed': ModelState[];
   'microphones-changed': AudioDevice[];
   'microphone-level': number;
+  'update-status-changed': UpdateStatus;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -72,6 +78,10 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getMicrophones: 'microphones:list',
   startMicrophoneMeter: 'microphones:meter-start',
   stopMicrophoneMeter: 'microphones:meter-stop',
+  getUpdateStatus: 'updates:status',
+  checkForUpdates: 'updates:check',
+  installUpdate: 'updates:install',
+  openUpdateDownload: 'updates:open-download',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -83,4 +93,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'model-states-changed': 'models:states-changed',
   'microphones-changed': 'microphones:changed',
   'microphone-level': 'microphones:level',
+  'update-status-changed': 'updates:status-changed',
 });

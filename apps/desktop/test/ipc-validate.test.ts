@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, validateMicrophone, validateModelId, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('returns a valid patch', () => {
@@ -103,5 +103,16 @@ describe('validateSettingsPatch and the overlay mode', () => {
   it('rejects Živý text in this phase and accepts the indicator', () => {
     expect(() => validateSettingsPatch({ overlay: 'live' })).toThrow(IpcValidationError);
     expect(validateSettingsPatch({ overlay: 'indicator' })).toEqual({ overlay: 'indicator' });
+  });
+});
+
+describe('rejectArguments', () => {
+  it('accepts a call without arguments', () => {
+    expect(() => rejectArguments([])).not.toThrow();
+  });
+
+  it('rejects any argument, also undefined', () => {
+    expect(() => rejectArguments(['x'])).toThrow(IpcValidationError);
+    expect(() => rejectArguments([undefined])).toThrow(IpcValidationError);
   });
 });
