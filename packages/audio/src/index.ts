@@ -17,3 +17,5 @@ export { DEFAULT_PARTIAL_CONFIG, type PartialConfig, validatePartialConfig } fro
 export { PartialGate } from './partials/partial-gate';
 export { partialIntervalMs, type PartialIntervalSource } from './partials/partial-interval';
 export { ServiceTimeEstimator } from './partials/service-time-estimator';
+export { FairJobQueue } from './scheduling/fair-job-queue';
+export type { DropReason, Dropped, JobKind, TranscriptionJob } from './scheduling/transcription-job';
