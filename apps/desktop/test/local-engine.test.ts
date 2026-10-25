@@ -1,15 +1,25 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../src/main/engines/local-engine';
+import type { CatalogEntry } from '../src/main/models/catalog-entry';
+import { loadCatalog } from '../src/main/models/model-catalog';
+import { ModelManager } from '../src/main/models/model-manager';
+import { SettingsStore } from '../src/main/settings/settings-store';
 import { PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
-import { FileActiveModel } from './file-active-model';
+import { sha256Of, testEntry } from './model-fixtures';
+
+const MODEL_BODY = 'GGUF';
+const BUNDLED_CATALOG = fileURLToPath(new URL('../resources/model-catalog.json', import.meta.url));
 
 let scratch: string;
 let argsFile: string;
+let modelsDir: string;
 let modelFile: string;
+let settings: SettingsStore;
 
 function secondStampedPcm(totalSeconds: number): Uint8Array {
   const pcm = new Uint8Array(totalSeconds * PCM_BYTES_PER_SECOND);
@@ -20,8 +30,22 @@ function secondStampedPcm(totalSeconds: number): Uint8Array {
   return pcm;
 }
 
+function models(catalog: CatalogEntry[] = [testEntry('alpha', MODEL_BODY)]): ModelManager {
+  return new ModelManager({ dir: modelsDir, catalog, settings, warmUp: () => Promise.resolve() });
+}
+
 function engine(overrides: Partial<ConstructorParameters<typeof LocalEngine>[0]> = {}): LocalEngine {
-  return new LocalEngine({ binary: FAKE_CLI, models: new FileActiveModel(modelFile), arch: 'arm64', ...overrides });
+  return new LocalEngine({ binary: FAKE_CLI, models: models(), settings, arch: 'arm64', ...overrides });
+}
+
+async function activateBundled(id: string): Promise<ModelManager> {
+  const entries = loadCatalog(BUNDLED_CATALOG)
+    .models.filter((entry) => entry.id === id)
+    .map((entry) => ({ ...entry, sizeBytes: MODEL_BODY.length, sha256: sha256Of(MODEL_BODY) }));
+  expect(entries).toHaveLength(1);
+  await writeFile(join(modelsDir, `${id}.gguf`), MODEL_BODY);
+  await settings.update({ localModelId: id });
+  return models(entries);
 }
 
 function argValue(call: string[] | undefined, flag: string): string | undefined {
@@ -31,8 +55,13 @@ function argValue(call: string[] | undefined, flag: string): string | undefined 
 beforeEach(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'cw-local-engine-'));
   argsFile = join(scratch, 'args.txt');
-  modelFile = join(scratch, 'model.gguf');
-  await writeFile(modelFile, 'GGUF');
+  modelsDir = join(scratch, 'models');
+  modelFile = join(modelsDir, 'alpha.gguf');
+  await mkdir(modelsDir);
+  await writeFile(modelFile, MODEL_BODY);
+  settings = new SettingsStore(join(scratch, 'settings.json'));
+  await settings.load();
+  await settings.update({ localModelId: 'alpha', language: 'sk' });
   vi.stubEnv('FAKE_CLI_ARGS_FILE', argsFile);
 });
 
@@ -51,7 +80,9 @@ describe('LocalEngine', () => {
   });
 
   it('reports no-model when none is active', async () => {
-    await expect(engine({ models: new FileActiveModel(null) }).isReady()).resolves.toEqual({ ready: false, reason: 'no-model' });
+    await settings.update({ localModelId: null });
+
+    await expect(engine().isReady()).resolves.toEqual({ ready: false, reason: 'no-model' });
   });
 
   it('reports a missing model', async () => {
@@ -64,6 +95,25 @@ describe('LocalEngine', () => {
     await writeFile(modelFile, '');
 
     await expect(engine().isReady()).resolves.toEqual({ ready: false, reason: 'model-broken' });
+  });
+
+  it('canary with language auto is not ready with language-required', async () => {
+    const canary = engine({ models: await activateBundled('canary-1b-v2-q8') });
+    await settings.update({ language: 'auto' });
+
+    await expect(canary.isReady()).resolves.toEqual({ ready: false, reason: 'language-required' });
+    await expect(canary.transcribe(secondStampedPcm(1), 'auto', new AbortController().signal)).rejects.toMatchObject({ reason: 'language-required' });
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+
+    await settings.update({ language: 'sk' });
+    await expect(canary.isReady()).resolves.toEqual({ ready: true });
+  });
+
+  it('allows automatic language with parakeet and whisper', async () => {
+    await settings.update({ language: 'auto' });
+
+    await expect(engine({ models: await activateBundled('parakeet-ultra-q8') }).isReady()).resolves.toEqual({ ready: true });
+    await expect(engine({ models: await activateBundled('tc-whisper-turbo-q8') }).isReady()).resolves.toEqual({ ready: true });
   });
 
   it('reports a missing or non-executable binary', async () => {
@@ -120,9 +170,9 @@ describe('LocalEngine', () => {
   });
 
   it('rejects when no model is active', async () => {
-    const noModel = engine({ models: new FileActiveModel(null) });
+    await settings.update({ localModelId: null });
 
-    await expect(noModel.transcribe(secondStampedPcm(1), 'sk', new AbortController().signal)).rejects.toMatchObject({ reason: 'no-model' });
+    await expect(engine().transcribe(secondStampedPcm(1), 'sk', new AbortController().signal)).rejects.toMatchObject({ reason: 'no-model' });
   });
 
   it('stops on abort', async () => {

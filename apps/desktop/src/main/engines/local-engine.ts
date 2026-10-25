@@ -1,22 +1,18 @@
-import { runTranscribeCli, type TranscribeBackend } from '@codevo-whisper/stt-runner';
+import { runTranscribeCli } from '@codevo-whisper/stt-runner';
 import { access, constants } from 'node:fs/promises';
-import { availableParallelism } from 'node:os';
+import type { SettingsStore } from '../settings/settings-store';
 import type { Settings } from '../../shared/settings';
 import type { ActiveModel } from './active-model';
 import { chunkPcm } from './chunk-pcm';
+import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
 import { EngineUnavailableError, type EngineReadiness, type TranscriptionEngine } from './transcription-engine';
 
-const MAX_THREADS = 4;
-
-const BACKEND_BY_ARCH: Record<LocalEngineArch, TranscribeBackend> = { arm64: 'metal', x64: 'cpu' };
-
 const VERIFICATION_REASON = { missing: 'model-missing', broken: 'model-broken' } as const;
-
-export type LocalEngineArch = 'arm64' | 'x64';
 
 export type LocalEngineDeps = {
   binary: string;
   models: ActiveModel;
+  settings: Pick<SettingsStore, 'get'>;
   arch: LocalEngineArch;
 };
 
@@ -32,7 +28,7 @@ async function isExecutable(file: string): Promise<boolean> {
 export class LocalEngine implements TranscriptionEngine {
   readonly id = 'local';
 
-  private readonly threads = Math.min(MAX_THREADS, availableParallelism());
+  private readonly threads = localThreads();
 
   constructor(private readonly deps: LocalEngineDeps) {}
 
@@ -47,6 +43,9 @@ export class LocalEngine implements TranscriptionEngine {
     if (verification !== 'ok') {
       return { ready: false, reason: VERIFICATION_REASON[verification] };
     }
+    if (this.needsLanguage(this.deps.settings.get().language)) {
+      return { ready: false, reason: 'language-required' };
+    }
     return { ready: true };
   }
 
@@ -55,6 +54,9 @@ export class LocalEngine implements TranscriptionEngine {
     const model = await this.deps.models.activeModelPath();
     if (model === null) {
       throw new EngineUnavailableError('no-model');
+    }
+    if (this.needsLanguage(language)) {
+      throw new EngineUnavailableError('language-required');
     }
     const texts: string[] = [];
     for (const chunk of chunkPcm(pcm)) {
@@ -66,11 +68,15 @@ export class LocalEngine implements TranscriptionEngine {
     return texts.join(' ');
   }
 
+  private needsLanguage(language: Settings['language']): boolean {
+    return language === 'auto' && this.deps.models.activeLanguageHint() === 'required';
+  }
+
   private transcribeChunk(pcm: Uint8Array, model: string, language: Settings['language'], signal: AbortSignal): Promise<string> {
     return runTranscribeCli({
       binary: this.deps.binary,
       model,
-      backend: BACKEND_BY_ARCH[this.deps.arch],
+      backend: localBackend(this.deps.arch),
       threads: this.threads,
       language,
       pcm,

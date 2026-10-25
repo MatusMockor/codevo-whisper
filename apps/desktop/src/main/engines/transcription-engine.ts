@@ -1,6 +1,6 @@
 import type { EngineId, Settings } from '../../shared/settings';
 
-export type EngineUnavailableReason = 'no-model' | 'model-missing' | 'model-broken' | 'binary-missing';
+export type EngineUnavailableReason = 'no-model' | 'model-missing' | 'model-broken' | 'binary-missing' | 'language-required';
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
