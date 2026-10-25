@@ -11,6 +11,9 @@ services:
       CW_BIND: 0.0.0.0
       CW_PORT: "8787"
       CW_STT_URL: http://stt:8001
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     ports:
       - "${CW_BIND:-127.0.0.1}:${CW_PORT:-8787}:8787"
     volumes:
@@ -30,6 +33,10 @@ services:
     environment:
       STT_BACKEND: ${STT_BACKEND:-vulkan}
       STT_THREADS: ${STT_THREADS:-4}
+      TMPDIR: /tmp
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     devices:
       - /dev/dri:/dev/dri
     group_add:
