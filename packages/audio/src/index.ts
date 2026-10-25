@@ -11,3 +11,5 @@ export { DEFAULT_SEGMENT_CONFIG, type SegmentConfig, validateSegmentConfig } fro
 export { Segmenter } from './segmentation/segmenter';
 export { removeBoundaryDuplicates } from './dedup/remove-boundary-duplicates';
 export { wordsMatch } from './dedup/words-match';
+export { TranscriptAssembler } from './transcript/transcript-assembler';
+export type { TranscriptEvent } from './transcript/transcript-event';
