@@ -82,7 +82,7 @@ $COMPOSE logs -f gateway
 $COMPOSE logs -f stt
 ```
 
-The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `chunks`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup and engine error status codes. Neither logs audio or text.
+The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`) and engine error status codes. Neither logs audio or text.
 
 ## Reaching the gateway from other networks
 
@@ -109,9 +109,10 @@ The per-address limit relies on the source address. Behind an SSH tunnel, Cloudf
 ```bash
 pnpm --filter dev-client start pair "<token>" --name "MacBook dev"
 pnpm --filter dev-client start transcribe sample.wav --language sk
+pnpm --filter dev-client start transcribe sample.wav --language sk --live
 ```
 
-The WAV file must be PCM16 mono 16 kHz. A relative path is resolved against the directory you run `pnpm` from. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
+Without `--live` the client sends the first 120 s of the file at once and the rest in real time (the gateway accepts at most a 180 s burst and then 1.25 x real time per device). With `--live` it asks for live partials (Živý text), sends 100 ms frames in real time and prints every partial (`~ [segment rRevision] text`) and final (`= [segment] text`) before the whole text. The WAV file must be PCM16 mono 16 kHz. A relative path is resolved against the directory you run `pnpm` from. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
 
 ## Overené
 
