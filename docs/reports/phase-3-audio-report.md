@@ -189,3 +189,20 @@ Re-review, 2026-10-25. Each fix was written test-first in one commit, `fix(audio
 - **Exactly-25 s test** now also checks that every engine job is at most 25 s of audio (400000 samples).
 
 Tests: `packages/audio` has 182 tests in 20 files; the repo has 497 passing (1 skipped, which already existed). Lint and typecheck are clean. CodeRabbit is still blocked by the free CLI allowance.
+
+## Review fixes round 4
+
+Re-review, 2026-10-25. Each fix was written test-first in one commit, `fix(audio): re-read the overlap only after a voiced hard cut, lowercase guard for overlap fragments`.
+
+- **Silent hard cuts chained into silent engine jobs (Important).**
+  - Problem: round 3 force-sent every segment after a hard cut, including after silent, skipped hard-cut segments. Silence-only 60 s sent `[800000, 80000]` bytes and speech followed by silence sent an all-silent 25 s job; Whisper-like models may hallucinate on such jobs.
+  - Fix: `Segment` now carries `followsVoicedHardCut`, set by the `Segmenter` only when the previous cut was a hard cut of a voiced segment (a word is really held back). The session sends an unvoiced segment only when `followsVoicedHardCut` is set, or when it is the only segment of the dictation. `Segmenter.finish` uses the same rule, so a silent hard cut no longer forces an end job.
+  - Tests:
+    - silence-only 55 s and 120 s make no engine call;
+    - 10 s and 25 s of speech followed by 60 s of silence send no job without speech (every job's peak amplitude is above 2000);
+    - the segmenter marks the segment after a voiced hard cut but not after a silent one;
+    - `finish` skips the silent end after a silent hard cut;
+    - the 25 s + silence carry test stays green.
+- **Lowercase guard for overlap fragments (optional, done).** A position-0 fragment match now always requires the fragment to start lowercase, also inside overlaps of two or more words. Regression tests: "Robí to stále tak." + "Ale tak to nie je." and "Bolo to stále to." + "Ale to nevadí." keep "Ale".
+
+Tests: `packages/audio` has 190 tests in 20 files; the repo has 505 passing (1 skipped, which already existed). Lint and typecheck are clean. CodeRabbit is still blocked by the free CLI allowance.
