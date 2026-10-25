@@ -108,6 +108,7 @@ describe('server messages', () => {
     { type: 'ready', serverVersion: '0.0.0' },
     { type: 'partial', segmentId: 0, revision: 2, text: 'ahoj sv' },
     { type: 'final', segmentId: 0, text: 'ahoj svet' },
+    { type: 'final', segmentId: 1, text: '' },
     { type: 'done' },
     { type: 'flow', paused: true },
     { type: 'error', code: 'stt_unavailable', message: 'STT is down' },
