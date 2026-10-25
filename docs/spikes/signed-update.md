@@ -119,7 +119,7 @@ sha512: <x64 zip sha512>
 releaseDate: '<latest of the two>'
 ```
 
-DMG entries: electron-builder 26 writes only the ZIP into `latest-mac.yml` for this config; DMGs are installer downloads, not updater input. MacUpdater needs a ZIP (`ERR_UPDATER_ZIP_FILE_NOT_FOUND`, `electron-updater/out/MacUpdater.js:80-83`).
+DMG entries: the dry-run feed was built with the `zip` target only. With the configured `dmg` + `zip` targets, dmg-builder also emits update info and a `.dmg.blockmap` by default (`dmg-builder/out/dmg.js:48-56`, `writeUpdateInfo` defaults to true), so each per-arch `latest-mac.yml` carries a ZIP and a DMG entry and the merged manifest four entries; the merge script keeps them. MacUpdater ignores them: it picks the ZIP via `findFile(files, "zip", ["pkg", "dmg"])` and fails with `ERR_UPDATER_ZIP_FILE_NOT_FOUND` without one (`electron-updater/out/MacUpdater.js:80-83`). `dmg.writeUpdateInfo: false` keeps the manifest to the two ZIPs and skips the DMG blockmaps.
 
 How MacUpdater picks the file (`MacUpdater.filterFilesForArch`, `MacUpdater.js:30-36, 52-79`): it treats the Mac as arm64 if `uname -a` contains `ARM`, `process.arch === "arm64"`, or `sysctl.proc_translated` is 1 (Rosetta). On an arm64 Mac it keeps only URLs containing `arm64` (if any exist); otherwise it drops every URL containing `arm64`. Consequences:
 - the arch must be in the file name (`${arch}` in `artifactName`), and x64 file names must never contain `arm64`;
@@ -159,7 +159,26 @@ Log excerpt (arm64, merged feed):
 
 ### Notarized run (pending)
 
-Not done yet. All four notarization submissions (first at 2026-10-25 13:49 UTC) were still `In Progress` at 16:00 UTC. First submissions from a new developer team are known to take hours. When `xcrun notarytool history` shows `Accepted`: staple, install the quarantined DMG builds into `~/Applications`, repeat the arm64 and x64 update cases and record Gatekeeper prompts here.
+Not done yet. The four submissions (the first notarizations ever for team U574W69TH6) were still `In Progress` at 2026-10-25 15:59 UTC, 2 h 10 min after the first one:
+
+| Submission | Created (UTC) | Bundle | CDHash of the app on disk |
+|---|---|---|---|
+| `8548653a-7266-4888-9ac6-8b6c55bce023` | 13:49:56 | 0.0.1 arm64 (presumed from build order) | `35aa32264280a423a7c204218841e3d76f7ddfa7` |
+| `3a649390-a010-42a2-aec8-edd9ade07a03` | 14:01:06 | 0.0.1 x64 | `776f279c927c83f2a54967917a774e5b48474f54` |
+| `27e2fe4d-ee76-4025-86f8-65c99f5b19d2` | 14:21:25 | 0.0.2 (arm64 or x64) | `0c504d031d701a669e917056cc46e4c2aaaca6ea` (arm64) |
+| `b70b52a1-a20c-466b-b083-8a2bd81f61e0` | 14:21:48 | 0.0.2 (arm64 or x64) | `a556cda2de0a5024bf802cd77bb17d08080b70e5` (x64) |
+
+The signed `.app` bundles in `release/` are the exact bundles that were submitted; they must not be rebuilt, otherwise the tickets will not match. Resume procedure once `xcrun notarytool history` shows `Accepted` for all four (`notarytool log <id>` lists the accepted cdhashes):
+
+```bash
+cd spikes/signed-update
+scripts/package-notarized.sh 0.0.1 arm64
+scripts/package-notarized.sh 0.0.1 x64
+scripts/package-notarized.sh 0.0.2 arm64
+scripts/package-notarized.sh 0.0.2 x64
+```
+
+`package-notarized.sh` staples and validates the app, checks `spctl --assess --type execute` (expect `source=Notarized Developer ID`), builds DMG + ZIP + `latest-mac.yml` from the stapled app with `--prepackaged` (no re-sign, no re-notarize), then notarizes, staples and assesses the DMG. Then merge the 0.0.2 feed as in Step 2, open the 0.0.1 DMG from a quarantined download, drag the app to `~/Applications`, launch with `env -u ELECTRON_RUN_AS_NODE open`, and record the Gatekeeper prompt (expected: only the standard "downloaded from the internet" confirmation) and the relaunch as 0.0.2 for arm64 and x64.
 
 ## Linux update verification (spec 10, open question 4)
 
