@@ -36,7 +36,14 @@ export class RemoteEngine implements TranscriptionEngine {
         ready: true,
         engine: {
           id: this.id,
-          start: (options) => new RemoteDictation(ready, { options, observer: this.deps.observer, finishIdleMs: this.options.finishIdleMs }),
+          start: (options) =>
+            new RemoteDictation(ready, {
+              options,
+              observer: this.deps.observer,
+              finishIdleMs: this.options.finishIdleMs,
+              retryBufferBytes: this.options.retryBufferBytes,
+              reconnect: () => this.deps.connector.connect(),
+            }),
           release: () => ready.connection.close(),
         },
       };
