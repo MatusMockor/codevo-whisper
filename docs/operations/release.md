@@ -135,7 +135,53 @@ With the API key available (`APPLE_API_KEY_CONTENT` for `with-api-key.sh`, or `A
 
 Not ready before phase 4: there is no Linux transcribe-cli or input helper build (`resources/bin/<arch>` is empty on Linux), and the update policy from spec 10 still applies: in-app auto-update only for the AppImage (verified by HTTPS and the sha512 from the same feed, no publisher signature), deb users get a notice with a download link.
 
+## In-app update
+
+Code: `apps/desktop/src/main/updates/` (`UpdateService`, `ElectronUpdaterAdapter`, `UpdateScheduler`, platform policy), wiring in `apps/desktop/src/main/app/update-wiring.ts`.
+
+- Feed: electron-updater with the GitHub provider from `Contents/Resources/app-update.yml` (`owner: MatusMockor`, `repo: codevo-whisper`), written by electron-builder from `publish` in `electron-builder.yml`. Only published releases are visible to clients; drafts are not. Private repositories are not supported.
+- Schedule: first check 30 s after start, then every 6 hours. "Skontrolovať aktualizácie" in Nastavenia > Systém checks on demand. A failed background check is only logged; a failed check the user asked for is shown.
+- Download starts right after a check finds a newer version (`autoDownload` stays off in electron-updater; the service starts the download). `autoInstallOnAppQuit = false`: on macOS `MacUpdater` then does not hand the file to Squirrel.Mac after the download, so quitting the app normally never installs anything.
+- Install only after the user clicks "Reštartovať a aktualizovať" (settings row or tray item "Reštartovať a aktualizovať na X"). It is refused while a dictation is recording or being transcribed and inserted; otherwise the hotkey is paused, `quitAndInstall(false, true)` runs, Squirrel.Mac fetches the ZIP from electron-updater's localhost proxy, verifies the code signature against the running app's designated requirement and restarts the app. The quit goes through `before-quit` and the `QuitGate`, so a busy microphone settles first. If the install fails, the hotkey is resumed and the row shows the error.
+- Platform policy (`update-policy.ts`): packaged macOS and Linux AppImage (`APPIMAGE` set) update in the app; every other Linux package (deb) only shows "Je dostupná verzia X" with a "Stiahnuť z GitHubu" button that opens `https://github.com/MatusMockor/codevo-whisper/releases/latest`; unpackaged builds never contact the feed.
+- electron-updater is bundled into `out/main` by electron-vite (it is a devDependency, like React), so the package needs no `node_modules`. The e2e fake (`out/main/fake-app-updater-*.js`) is excluded in `electron-builder.yml`; `apps/desktop/test/packaging-config.test.ts` checks that every dynamically imported fake is excluded.
+- After an update the first start runs the Metal warm-up again (`warm-up.json` stores the app version of the last warm-up).
+- Updater cache: `~/Library/Caches/@codevo-whisperdesktop-updater` (electron-builder derives `updaterCacheDirName` from the package name and ignores a value in `publish`).
+
+## N -> N+1 update verification (manual, release-blocking)
+
+Run once the first two real releases exist (N and N+1, both published by the pipeline with the final fuses), on Apple silicon; repeat steps 1-8 on an Intel Mac before Intel is announced as supported.
+
+Preparation:
+
+1. Make sure N+1 is a published (not draft) release whose `latest-mac.yml` lists both ZIPs with matching hashes: `gh release download vN+1 --repo MatusMockor/codevo-whisper -p latest-mac.yml -p '*.zip' -D /tmp/feed-n1 && node scripts/release/verify-feed.ts /tmp/feed-n1/latest-mac.yml N+1`.
+2. Remove any earlier copy: quit Codevo Whisper, `rm -rf ~/Applications/"Codevo Whisper.app" /Applications/"Codevo Whisper.app" ~/Library/Caches/@codevo-whisperdesktop-updater ~/Library/Caches/app.codevo.whisper.ShipIt`.
+3. Download the N DMG in a browser (so it carries the quarantine attribute, check with `xattr -p com.apple.quarantine <dmg>`), open it and drag the app to `/Applications`.
+
+Run:
+
+4. Launch from Finder (or `env -u ELECTRON_RUN_AS_NODE open "/Applications/Codevo Whisper.app"`). Expected: only the standard "downloaded from the internet" prompt, Nastavenia > Systém > Aktualizácie shows "Verzia N".
+5. Check the fuses of the installed N: `npx @electron/fuses read --app "/Applications/Codevo Whisper.app"` shows RunAsNode, EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments disabled, EnableEmbeddedAsarIntegrityValidation, OnlyLoadAppFromAsar and EnableCookieEncryption enabled.
+6. Wait 30 s (or click "Skontrolovať aktualizácie"). Expected: "Sťahujem verziu N+1… x %", then "Verzia N+1 je pripravená. Nainštaluje sa po reštarte." and the tray menu item "Reštartovať a aktualizovať na N+1". Quit the app with ⌘Q and start it again: it must still be version N (no install on quit), and the row reaches "pripravená" again after the next check.
+7. Start a dictation (hold the hotkey) and, while recording, click the tray item; then, while the text is being transcribed, click "Reštartovať a aktualizovať" in the settings row. Expected: nothing restarts; the row says "Najprv dokončite diktovanie, potom aplikáciu reštartujte." and the dictation is inserted normally.
+8. Click "Reštartovať a aktualizovať" with no dictation running. Expected: the row says "Reštartujem a inštalujem verziu N+1…", the app quits, and within about 10 s it starts again as N+1 (Aktualizácie shows "Verzia N+1"), arm64 native (`ps -o pid,command -ax | grep "Codevo Whisper"`, Activity Monitor Kind "Apple"). Record the time from the click to the relaunch.
+9. On N+1: fuses as in step 5 on the installed app, `codesign --verify --deep --strict "/Applications/Codevo Whisper.app"`, `spctl --assess --type execute -vv` (`source=Notarized Developer ID`), Accessibility, Input Monitoring and Microphone still granted (the hotkey works and a dictation inserts text without new prompts), settings and statistics kept, `~/Library/Application Support/Codevo Whisper/warm-up.json` now contains `"appVersion": "N+1"` when a local model is active, and the next check says "Verzia N+1 je najnovšia.".
+10. Log: `log show --last 15m --predicate 'process == "Codevo Whisper"' | grep -i "update\|electron-updater"` contains "An update is available", "Restarting to install an update" and no error.
+
+Negative checks (from the spike, repeat with the final app on a local test feed only, never on the public release):
+
+- A ZIP with a wrong sha512 in the manifest: the row shows "Aktualizáciu sa nepodarilo stiahnuť", the app keeps running N.
+- A ZIP signed by another identity (ad hoc): the install fails in Squirrel (`SQRLCodeSignatureErrorDomain`), the row shows "Aktualizáciu sa nepodarilo nainštalovať. Zostáva verzia N.", the hotkey works again, the app keeps running N.
+- Offline (Wi-Fi off) at the background check: nothing shown, the row keeps its previous text; "Skontrolovať aktualizácie" then shows "Aktualizácie sa nepodarilo skontrolovať".
+
+Record the results (date, versions, arch, macOS version, relaunch time, pass/fail per step) in this section's table:
+
+| Date | From -> to | Arch / macOS | Relaunch | Result |
+|---|---|---|---|---|
+
+Linux (phase 4): repeat steps 4-9 with the AppImage (in-app) and check that the deb shows "Je dostupná verzia N+1. Stiahnite ju z GitHubu a nainštalujte." with the "Stiahnuť z GitHubu" button and never downloads.
+
 ## Not covered yet
 
-- electron-updater wiring in the app and the N -> N+1 update test with the final fuses (spec 10). Release-blocking; planned as a later integration task. The packaged app already contains `app-update.yml` for the GitHub provider.
+- The N -> N+1 verification above has not run yet: it needs two published releases.
 - Linux release jobs (phase 4) and server images to GHCR (phase 2, spec 10).
