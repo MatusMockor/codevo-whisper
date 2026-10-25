@@ -7,7 +7,8 @@ import { pcmSeconds } from './support/pcm';
 import { sendAudio } from './support/send-audio';
 import { startHarness, type Harness } from './support/server-harness';
 import { createTempDir } from './support/temp-dir';
-import { connectSession, pairDevice } from './support/test-client';
+import { beginSession } from '@codevo-whisper/protocol';
+import { connectSession, pairDevice, runHandshake } from './support/test-client';
 import { waitUntil } from './support/wait-until';
 
 let dir: Awaited<ReturnType<typeof createTempDir>>;
@@ -93,14 +94,33 @@ describe('pairing', () => {
     await expect(pairDevice(server.url, window.token, generateKeyPair(), 'Tretí')).rejects.toMatchObject({ code: 'pairing_closed' });
   });
 
-  it('wrong secret fails and closes the window', async () => {
+  it('a wrong secret fails without closing the window', async () => {
     const server = await start();
     const window = await openPairingWindow(server.config.adminSocket);
     const wrong = { ...window.token, secret: new Uint8Array(16).fill(7) };
 
     await expect(pairDevice(server.url, wrong, generateKeyPair(), 'Útočník')).rejects.toMatchObject({ code: 'bad_message' });
-    expect(await window.admin.next()).toEqual({ event: 'abandoned' });
+    await waitUntil(() => server.pairing.failedAttempts('127.0.0.1') === 1);
+    expect(server.pairing.isOpen()).toBe(true);
+    const device = generateKeyPair();
+    const pairing = pairDevice(server.url, window.token, device, 'Správny');
+    expect(await window.admin.next()).toMatchObject({ event: 'request', deviceName: 'Správny' });
+    window.admin.send({ decision: 'approve' });
+
+    expect((await pairing).status).toBe('approved');
+  });
+
+  it('limits failed pairing attempts per IP', async () => {
+    const server = await start();
+    const window = await openPairingWindow(server.config.adminSocket);
+    const wrong = { ...window.token, secret: new Uint8Array(16).fill(7) };
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await expect(pairDevice(server.url, wrong, generateKeyPair(), 'Útočník')).rejects.toMatchObject({ code: 'bad_message' });
+      await waitUntil(() => server.pairing.failedAttempts('127.0.0.1') === attempt);
+    }
+
     await expect(pairDevice(server.url, window.token, generateKeyPair(), 'Správny')).rejects.toMatchObject({ code: 'pairing_closed' });
+    expect(server.pairing.isOpen()).toBe(true);
   });
 
   it('expired window rejects pairing', async () => {
@@ -161,6 +181,30 @@ describe('pairing', () => {
     await waitUntil(() => fake.aborted() === 1);
     await expect(connectSession(server.url, device, server.serverKey.publicKey)).rejects.toMatchObject({ code: 'unknown_device' });
     expect(await adminCommand(server.config.adminSocket, { cmd: 'revoke', deviceId })).toEqual({ revoked: false, closedSessions: 0 });
+  });
+
+  it('revoke racing a connecting session leaves no live session', async () => {
+    const server = await start();
+    const { device, deviceId } = await pairApproved(server);
+    const connecting = await runHandshake(server.url, beginSession(device, server.serverKey.publicKey));
+    expect(await adminCommand(server.config.adminSocket, { cmd: 'revoke', deviceId })).toEqual({ revoked: true, closedSessions: 0 });
+    connecting.send({ type: 'hello' });
+
+    expect(await connecting.next()).toMatchObject({ type: 'error', code: 'revoked' });
+    await connecting.closed;
+    await waitUntil(() => server.gateway.sessions.count() === 0);
+  });
+
+  it('rotate-key racing a connecting session leaves no live session', async () => {
+    const server = await start();
+    const { device } = await pairApproved(server);
+    const connecting = await runHandshake(server.url, beginSession(device, server.serverKey.publicKey));
+    expect(await adminCommand(server.config.adminSocket, { cmd: 'rotate-key' })).toMatchObject({ rotated: true });
+    connecting.send({ type: 'hello' });
+
+    expect(await connecting.next()).toMatchObject({ type: 'error', code: 'server_key_changed' });
+    await connecting.closed;
+    await waitUntil(() => server.gateway.sessions.count() === 0);
   });
 
   it('rotate-key forces re-pairing', async () => {

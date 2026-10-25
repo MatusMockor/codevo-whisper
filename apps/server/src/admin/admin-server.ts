@@ -1,11 +1,37 @@
 import { chmod, lstat, mkdir, unlink } from 'node:fs/promises';
-import { createServer, type Socket } from 'node:net';
+import { createServer, type Server, type Socket } from 'node:net';
 import { dirname } from 'node:path';
 import type { AdminCommands } from './admin-commands';
 import { parseAdminCommand, type AdminCommand } from './admin-protocol';
 import { LineChannel } from './line-channel';
 
 export type AdminServer = { close(): Promise<void> };
+
+async function preparePrivateDir(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  const info = await lstat(dir);
+  if (!info.isDirectory()) {
+    throw new Error(`admin socket directory ${dir} is not a directory`);
+  }
+  if (info.uid !== process.getuid?.()) {
+    throw new Error(`admin socket directory ${dir} must be owned by the gateway user (uid ${process.getuid?.() ?? '?'})`);
+  }
+  if ((info.mode & 0o077) !== 0) {
+    throw new Error(`admin socket directory ${dir} must not be accessible by group or others (chmod 700)`);
+  }
+}
+
+async function listenPrivately(server: Server, path: string): Promise<void> {
+  const previous = process.umask(0o177);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(path, () => resolve());
+    });
+  } finally {
+    process.umask(previous);
+  }
+}
 
 async function removeStaleSocket(path: string): Promise<void> {
   const info = await lstat(path).catch(() => null);
@@ -51,7 +77,7 @@ async function serve(commands: AdminCommands, channel: LineChannel): Promise<voi
 }
 
 export async function startAdminServer(path: string, commands: AdminCommands): Promise<AdminServer> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await preparePrivateDir(dirname(path));
   await removeStaleSocket(path);
   const sockets = new Set<Socket>();
   const server = createServer((socket) => {
@@ -59,10 +85,7 @@ export async function startAdminServer(path: string, commands: AdminCommands): P
     socket.on('close', () => sockets.delete(socket));
     void serve(commands, new LineChannel(socket));
   });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(path, () => resolve());
-  });
+  await listenPrivately(server, path);
   await chmod(path, 0o600);
   return {
     close: async () => {

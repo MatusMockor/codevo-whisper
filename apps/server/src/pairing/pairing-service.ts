@@ -2,8 +2,8 @@ import type { HandshakeResult } from '@codevo-whisper/protocol';
 import type { SecureChannel } from '../gateway/secure-channel';
 
 export interface PairingService {
-  currentSecret(): Uint8Array | null;
-  handle(channel: SecureChannel, handshake: HandshakeResult): Promise<void>;
+  currentSecret(ip: string): Uint8Array | null;
+  handle(channel: SecureChannel, handshake: HandshakeResult, ip: string): Promise<void>;
 }
 
 export class ClosedPairingService implements PairingService {

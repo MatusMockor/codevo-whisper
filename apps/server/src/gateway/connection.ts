@@ -36,6 +36,8 @@ export type ConnectionDeps = {
 
 const EMPTY = new Uint8Array(0);
 
+type PendingSession = { channel: WebSocketSecureChannel; deviceId: string; publicKey: Uint8Array; serverKey: KeyPair };
+
 export class GatewayConnection {
   private route: (bytes: Uint8Array) => void = (bytes) => void this.onOpening(bytes);
   private authenticated = false;
@@ -92,7 +94,8 @@ export class GatewayConnection {
   }
 
   private async acceptSession(noiseMessage: Uint8Array): Promise<void> {
-    const handshake = respondToSession(this.deps.serverKey(), noiseMessage);
+    const serverKey = this.deps.serverKey();
+    const handshake = respondToSession(serverKey, noiseMessage);
     const remoteKey = handshake.remoteStaticKey();
     const device = remoteKey === null ? null : await this.deps.devices.findByPublicKey(remoteKey);
     if (this.socket.readyState !== WebSocket.OPEN) {
@@ -103,10 +106,12 @@ export class GatewayConnection {
       return;
     }
     const channel = this.establish(handshake);
-    channel.onMessage((message) => void this.startSession(channel, device.id, message));
+    const pending: PendingSession = { channel, deviceId: device.id, publicKey: device.publicKey, serverKey };
+    channel.onMessage((message) => void this.startSession(pending, message));
   }
 
-  private async startSession(channel: WebSocketSecureChannel, deviceId: string, first: ClientMessage): Promise<void> {
+  private async startSession(pending: PendingSession, first: ClientMessage): Promise<void> {
+    const { channel, deviceId } = pending;
     if (first.type !== 'hello') {
       channel.fail('bad_message');
       return;
@@ -114,6 +119,11 @@ export class GatewayConnection {
     channel.onMessage(() => channel.fail('bad_message'));
     const unregister = this.deps.sessions.add(deviceId, (code) => channel.fail(code));
     channel.onClose(unregister);
+    const revocation = await this.revocationOf(pending);
+    if (revocation !== null) {
+      channel.fail(revocation);
+      return;
+    }
     await this.deps.devices.touch(deviceId, new Date(this.deps.clock())).catch(() => undefined);
     if (!channel.isOpen()) {
       return;
@@ -122,15 +132,26 @@ export class GatewayConnection {
     channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
   }
 
+  private async revocationOf(pending: PendingSession): Promise<ErrorCode | null> {
+    const device = await this.deps.devices.findByPublicKey(pending.publicKey);
+    if (this.deps.serverKey() !== pending.serverKey) {
+      return 'server_key_changed';
+    }
+    if (device?.id !== pending.deviceId) {
+      return 'revoked';
+    }
+    return null;
+  }
+
   private acceptPairing(noiseMessage: Uint8Array): void {
-    const secret = this.deps.pairing.currentSecret();
+    const secret = this.deps.pairing.currentSecret(this.ip);
     if (secret === null) {
       this.reject('pairing_closed');
       return;
     }
     const handshake = respondToPairing(this.deps.serverKey(), secret, noiseMessage);
     const channel = this.establish(handshake);
-    void this.deps.pairing.handle(channel, handshake.result()).catch(() => channel.fail('pairing_closed'));
+    void this.deps.pairing.handle(channel, handshake.result(), this.ip).catch(() => channel.fail('pairing_closed'));
   }
 
   private establish(handshake: HandshakeState): WebSocketSecureChannel {

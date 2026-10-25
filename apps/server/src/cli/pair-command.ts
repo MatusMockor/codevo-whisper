@@ -8,7 +8,8 @@ const OUTCOMES: Record<string, { message: (reply: Reply) => string; exitCode: nu
   paired: { message: (reply) => `Zariadenie spárované (id ${text(reply, 'deviceId')}).`, exitCode: 0 },
   rejected: { message: () => 'Párovanie zamietnuté.', exitCode: 1 },
   expired: { message: () => 'Párovacie okno vypršalo.', exitCode: 1 },
-  abandoned: { message: () => 'Zariadenie sa odpojilo alebo použilo nesprávny token. Párovacie okno je zatvorené.', exitCode: 1 },
+  abandoned: { message: () => 'Zariadenie sa odpojilo pred rozhodnutím.', exitCode: 1 },
+  failed: { message: () => 'Príliš veľa neúspešných pokusov, párovacie okno je zatvorené.', exitCode: 1 },
 };
 
 async function printToken(output: Writable, reply: Reply): Promise<void> {

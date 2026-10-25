@@ -47,7 +47,10 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     ...(options.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
   });
   const commands = new AdminCommands({ pairing, devices, sessions: gateway.sessions, queue, keys, stt });
-  const admin = await startAdminServer(config.adminSocket, commands);
+  const admin = await startAdminServer(config.adminSocket, commands).catch(async (error: unknown) => {
+    await gateway.close();
+    throw error;
+  });
   return {
     config,
     gateway,

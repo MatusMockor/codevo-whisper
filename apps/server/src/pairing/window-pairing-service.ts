@@ -13,6 +13,8 @@ import type { PairingService } from './pairing-service';
 import { TIMED_OUT, withTimeout } from './with-timeout';
 
 export const DEFAULT_PAIRING_TTL_MS = 600_000;
+export const MAX_FAILURES_PER_IP = 5;
+export const MAX_FAILURES_PER_WINDOW = 20;
 
 export type WindowPairingDeps = {
   serverKey: () => KeyPair;
@@ -21,7 +23,15 @@ export type WindowPairingDeps = {
   clock: () => number;
 };
 
-type PairingWindow = { secret: Uint8Array; expiresAt: number; ttlMs: number; operator: PairingOperator; timer: NodeJS.Timeout };
+type PairingWindow = {
+  secret: Uint8Array;
+  expiresAt: number;
+  ttlMs: number;
+  operator: PairingOperator;
+  timer: NodeJS.Timeout;
+  failures: Map<string, number>;
+  totalFailures: number;
+};
 
 export class WindowPairingService implements PairingService {
   private window: PairingWindow | null = null;
@@ -34,7 +44,7 @@ export class WindowPairingService implements PairingService {
     const expiresAt = this.deps.clock() + ttlMs;
     const timer = setTimeout(() => this.expire(window), ttlMs);
     timer.unref();
-    const window: PairingWindow = { secret, expiresAt, ttlMs, operator, timer };
+    const window: PairingWindow = { secret, expiresAt, ttlMs, operator, timer, failures: new Map(), totalFailures: 0 };
     this.window = window;
     operator.onDisconnect(() => this.discard(window));
     const token = encodePairingToken({ serverPublicKey: this.deps.serverKey().publicKey, secret, endpoint: this.deps.endpoint });
@@ -54,22 +64,34 @@ export class WindowPairingService implements PairingService {
     window.operator.notify({ event: 'expired' });
   }
 
-  currentSecret(): Uint8Array | null {
-    return this.active()?.secret ?? null;
+  currentSecret(ip: string): Uint8Array | null {
+    const window = this.active();
+    if (window === null || this.failedAttempts(ip) >= MAX_FAILURES_PER_IP) {
+      return null;
+    }
+    return window.secret;
   }
 
-  async handle(channel: SecureChannel, handshake: HandshakeResult): Promise<void> {
+  failedAttempts(ip: string): number {
+    return this.window?.failures.get(ip) ?? 0;
+  }
+
+  async handle(channel: SecureChannel, handshake: HandshakeResult, ip: string): Promise<void> {
     const window = this.active();
     if (window === null) {
       channel.fail('pairing_closed');
       return;
     }
-    this.discard(window);
     const deviceName = await nextPairRequest(channel);
     if (deviceName === null) {
-      window.operator.notify({ event: 'abandoned' });
+      this.recordFailure(window, ip);
       return;
     }
+    if (this.active() !== window) {
+      channel.fail('pairing_closed');
+      return;
+    }
+    this.discard(window);
     const decision = await withTimeout(this.ask(window, handshake, deviceName), window.ttlMs);
     if (decision === TIMED_OUT) {
       channel.fail('pairing_closed');
@@ -107,6 +129,19 @@ export class WindowPairingService implements PairingService {
     channel.send({ type: 'pair-result', status: 'approved', deviceId: added.id });
     channel.close();
     operator.notify({ event: 'paired', deviceId: added.id });
+  }
+
+  private recordFailure(window: PairingWindow, ip: string): void {
+    if (this.window !== window) {
+      return;
+    }
+    window.failures.set(ip, (window.failures.get(ip) ?? 0) + 1);
+    window.totalFailures += 1;
+    if (window.totalFailures < MAX_FAILURES_PER_WINDOW) {
+      return;
+    }
+    this.discard(window);
+    window.operator.notify({ event: 'failed' });
   }
 
   private active(): PairingWindow | null {

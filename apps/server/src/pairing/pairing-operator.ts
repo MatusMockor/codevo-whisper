@@ -2,7 +2,7 @@ export type PairingRequest = { deviceName: string; deviceFingerprint: string; ha
 
 export type PairingDecision = 'approve' | 'reject';
 
-export type PairingEvent = { event: 'paired'; deviceId: string } | { event: 'rejected' } | { event: 'expired' } | { event: 'abandoned' };
+export type PairingEvent = { event: 'paired'; deviceId: string } | { event: 'rejected' } | { event: 'expired' } | { event: 'abandoned' } | { event: 'failed' };
 
 export interface PairingOperator {
   decide(request: PairingRequest): Promise<PairingDecision>;
