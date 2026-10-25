@@ -15,6 +15,9 @@ import { ServerConnector } from '../src/main/remote/server-connector';
 import { PauseState } from '../src/main/session/pause-state';
 import { MESSAGES } from '../src/main/session/overlay-messages';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
+import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
+import { FakeCaptureHost } from './fake-capture-host';
+import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { StatsStore } from '../src/main/stats/stats-store';
 import type { OverlayState } from '../src/shared/overlay-contract';
@@ -85,7 +88,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states, opened, pairing };
+  return { helper, capture, lastTranscript, states, opened, pairing, logger };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, marker: number, seconds = 1): Promise<void> {
@@ -171,5 +174,17 @@ describe('SessionCoordinator with the server engine', () => {
     expect(harness.helper.pasted).toEqual([]);
     coordinator?.act('open-server');
     expect(harness.opened).toEqual(['server']);
+  });
+
+  it('reports a server dictation as active to the update guard until its result is inserted', async () => {
+    const harness = await prepared({ engineOrder: ['server'] }, { delayMs: 400, respond: () => ({ status: 200, body: { text: 'po aktualizácii' } }) });
+    const guard = coordinatorDictationGuard({ coordinator: () => coordinator as SessionCoordinator, microphone: new WindowAudioCapture(new FakeCaptureHost(), harness.logger), meter: { stopMeter: () => Promise.resolve() }, logger: harness.logger });
+
+    await dictate(harness, 3);
+    await expect.poll(() => gateway.stt.requests.length).toBe(1);
+
+    expect(guard.isDictating()).toBe(true);
+    await expect.poll(() => harness.helper.pasted, { timeout: 5000 }).toEqual(['po aktualizácii']);
+    await expect.poll(() => guard.isDictating()).toBe(false);
   });
 });
