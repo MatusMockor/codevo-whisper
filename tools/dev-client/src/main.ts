@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { ProtocolError } from '@codevo-whisper/protocol';
 import { parseArgs } from './args';
 import { FileIdentityStore } from './identity-store';
@@ -21,7 +21,7 @@ async function run(): Promise<number> {
     return pair(store, argument, options.get('name') ?? 'dev-client', print);
   }
   if (command === 'transcribe' && argument !== undefined) {
-    return transcribe(store, argument, options.get('language') ?? 'sk', print);
+    return transcribe(store, resolve(process.env.INIT_CWD ?? process.cwd(), argument), options.get('language') ?? 'sk', print);
   }
   print(USAGE);
   return 2;

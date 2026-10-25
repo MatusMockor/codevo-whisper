@@ -1,4 +1,5 @@
-import { stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fingerprint, generateKeyPair } from '@codevo-whisper/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminCommand, openPairingWindow } from './support/admin';
@@ -205,6 +206,19 @@ describe('pairing', () => {
     expect(await connecting.next()).toMatchObject({ type: 'error', code: 'server_key_changed' });
     await connecting.closed;
     await waitUntil(() => server.gateway.sessions.count() === 0);
+  });
+
+  it('tells the operator when the approved device cannot be stored', async () => {
+    const server = await start();
+    const window = await openPairingWindow(server.config.adminSocket);
+    const session = await runHandshake(server.url, beginPairing(generateKeyPair(), window.token));
+    session.send({ type: 'pair-request', deviceName: 'Bez registra' });
+    expect(await window.admin.next()).toMatchObject({ event: 'request' });
+    await writeFile(join(dir.path, 'devices.json'), '{ not json', { mode: 0o600 });
+    window.admin.send({ decision: 'approve' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'pairing_closed' });
+    expect(await window.admin.next()).toEqual({ event: 'failed' });
   });
 
   it('rotate-key cancels a pairing that waits for approval', async () => {

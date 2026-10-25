@@ -10,7 +10,7 @@ The gateway stores only its static key (`/data/server-key.json`, mode 0600) and 
 ## Requirements
 
 - Linux host with Docker Engine and the Compose plugin.
-- A GPU with Vulkan support exposed as `/dev/dri` (tested target: AMD RX 7800 XT with Mesa RADV). `STT_BACKEND=cpu` works without a GPU, but slower.
+- A GPU with Vulkan support exposed as `/dev/dri` (tested target: AMD RX 7800 XT with Mesa RADV). `STT_BACKEND=cpu` works without a GPU, but slower. On a host without `/dev/dri`, remove the `devices` and `group_add` entries of the `stt` service in `compose.yaml`, because the container does not start without the device.
 - About 1.3 GB of disk for the model and about 1 GB for the images.
 
 ## Install
@@ -99,7 +99,7 @@ pnpm --filter dev-client start pair "<token>" --name "MacBook dev"
 pnpm --filter dev-client start transcribe sample.wav --language sk
 ```
 
-The WAV file must be PCM16 mono 16 kHz. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
+The WAV file must be PCM16 mono 16 kHz. A relative path is resolved against the directory you run `pnpm` from. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
 
 ## Overené
 
@@ -113,4 +113,12 @@ Local, on the Mac (Docker Desktop, arm64):
 - `transcribe` without a running STT returned `stt_unavailable`; after `codevo-whisper revoke <id>` the next `transcribe` returned `unknown_device`.
 - `docker compose -f infrastructure/compose/compose.yaml config` resolves with the example `.env` (gateway published on `127.0.0.1:8787` only, `stt` without ports, `/dev/dri` and the two group IDs, `ulimits.core: 0`).
 
-Home server (`codex@192.168.1.110`): not run. The host did not answer on the LAN during this session (SSH and ping timed out while the rest of the LAN responded), so steps 1-5 of the plan's smoke test (build on the server, provision, `ss -ltn`, pairing over the SSH tunnel, the Slovak sample transcript, revoke) are still open.
+Home server (`codex@192.168.1.110`, Ubuntu x86_64, RX 7800 XT), commit `38375d1`, deployed as compose project `codevo-whisper` in `~/Developer/codevo-whisper` from a git bundle of the branch. Other containers (aivora-*, pa-*, context-review-*) were not touched and kept running.
+
+1. `.env` from the example with `VIDEO_GID=44`, `RENDER_GID=990`, `CW_PUBLIC_ENDPOINT=ws://127.0.0.1:8787`.
+2. `docker compose ... build` succeeded (gateway 335 MB, stt 794 MB). `run --rm stt node dist/provision.js` downloaded and verified the model; a second run printed `Model already present and verified`. After `up -d`, `docker compose ps` showed both services `healthy`, the stt service logged `backend: vulkan`, and `ss -ltn` showed only `127.0.0.1:8787`. `ulimit -c` is 0 in both containers. `/data` and `/run/codevo-whisper` are `drwx------ node`, and `server-key.json`, `devices.json` and `admin.sock` are mode 0600.
+3. SSH tunnel `ssh -N -L 8787:127.0.0.1:8787 codex@192.168.1.110`. `codevo-whisper pair` on the server and `dev-client pair` on the Mac showed the same device fingerprint (`E255 EA96 ...`) and connection fingerprint (`1D8F F424 ...`). After `y` the device was paired as `e255ea96`.
+4. `dev-client transcribe sample.wav --language sk` returned exactly `Ahoj, toto je skúška prepisu slovenskej reči na grafickej karte. Potrebujem skontrolovať náš editor a potom odoslať zmenu.` The gateway logged `audioSeconds 6.7, chunks 1, durationMs 587, result ok`, and the client wall time was 0.9 s including the tunnel.
+5. `codevo-whisper revoke e255ea96`, then the same `transcribe` failed with `Chyba: unknown_device`.
+
+The stack was left running on the server, with no paired devices. Stop it with `docker compose -f infrastructure/compose/compose.yaml down`. Add `-v` to also delete the key, the registry and the model.

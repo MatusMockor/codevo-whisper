@@ -9,7 +9,7 @@ const OUTCOMES: Record<string, { message: (reply: Reply) => string; exitCode: nu
   rejected: { message: () => 'Párovanie zamietnuté.', exitCode: 1 },
   expired: { message: () => 'Párovacie okno vypršalo.', exitCode: 1 },
   abandoned: { message: () => 'Zariadenie sa odpojilo pred rozhodnutím.', exitCode: 1 },
-  failed: { message: () => 'Príliš veľa neúspešných pokusov, párovacie okno je zatvorené.', exitCode: 1 },
+  failed: { message: () => 'Párovanie zlyhalo (príliš veľa neúspešných pokusov alebo chyba registra zariadení), párovacie okno je zatvorené.', exitCode: 1 },
 };
 
 async function printToken(output: Writable, reply: Reply): Promise<void> {

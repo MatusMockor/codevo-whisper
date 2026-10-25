@@ -133,7 +133,12 @@ export class WindowPairingService implements PairingService {
       operator.notify({ event: 'rejected' });
       return;
     }
-    const added = await this.deps.devices.add(device.name, device.publicKey);
+    const added = await this.deps.devices.add(device.name, device.publicKey).catch(() => null);
+    if (added === null) {
+      channel.fail('pairing_closed');
+      operator.notify({ event: 'failed' });
+      return;
+    }
     channel.send({ type: 'pair-result', status: 'approved', deviceId: added.id });
     channel.close();
     operator.notify({ event: 'paired', deviceId: added.id });
