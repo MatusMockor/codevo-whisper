@@ -20,6 +20,7 @@ Public open-source project, released as signed builds.
 - Cloud STT providers.
 - Real streaming ASR models. Live text uses rolling re-transcription (section 6).
 - Hiding traffic metadata. Network observers can still see addresses, timing and message sizes.
+- Transcript history. Nothing is stored; only the last transcript lives in memory.
 
 ## 2. Decisions already made
 
@@ -50,7 +51,7 @@ Public open-source project, released as signed builds.
 │                 TranscriptionEngine (Strategy)                              │
 │                 ├─ RemoteEngine ── SecureChannel (Noise) ── WebSocket ──────┼──► any network
 │                 └─ LocalEngine  ── engine binary child process + model file │
-│   HistoryStore   ModelManager   SettingsStore   ServerStore   UpdateService  │
+│   LastTranscript   ModelManager   SettingsStore   ServerStore   UpdateService│
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────── Server (Docker compose) ─────────────────────────┐
@@ -115,9 +116,9 @@ The two ends are the user's device and the user's own gateway. Everything betwee
 
 ### 4.6 Desktop data protection
 
-- Device private key, pinned server keys and the history encryption key are stored via Electron `safeStorage`.
-- On Linux, `safeStorage` can fall back to `basic_text` (no real protection). The app checks the backend; without a secure backend it does not persist history and asks the user for a passphrase to protect the device key (or warns clearly if they decline).
-- History retention: default 30 days, configurable, can be off.
+- No transcript history (owner decision 2026-10-25): the app never writes audio or transcripts to disk. Only the last transcript is kept in memory (for "Vložiť posledný prepis" and the tray) and is gone when the app quits.
+- Device private key and pinned server keys are stored via Electron `safeStorage`.
+- On Linux, `safeStorage` can fall back to `basic_text` (no real protection). The app checks the backend; without a secure backend it asks the user for a passphrase to protect the device key (or warns clearly if they decline).
 - Electron hardening: renderer sandbox, `contextIsolation`, no Node in renderers, strict CSP, navigation and new-window blocked, narrow validated IPC, transcripts rendered as text only, keys never cross into a renderer.
 
 ### 4.7 Implementation and review
@@ -142,7 +143,7 @@ Push-to-talk needs reliable key-down and key-up events, which Electron `globalSh
 
 - When recording starts, the app records the insertion target (frontmost app / window id where the platform allows) and warms up the accessibility query for it.
 - Before inserting it runs three checks: the target is still frontmost, secure input is off, and the accessibility focused element is editable (text field, text area, combo/search field, or text `AXValue` / `AXSelectedTextRange`). For Chromium/Electron targets it sets `AXManualAccessibility` once per process.
-- Editable true or unknown: clipboard paste. Editable false (Finder, desktop, file lists, sliders): no paste, the transcript stays on the clipboard and the overlay says "Skopírované - vlož cez ⌘V". Focus changed or secure input: no paste, text in history and the overlay offers "Kopírovať".
+- Editable true or unknown: clipboard paste. Editable false (Finder, desktop, file lists, sliders): no paste, the transcript stays on the clipboard and the overlay says "Skopírované - vlož cez ⌘V". Focus changed or secure input: no paste, the text stays as the last transcript and the overlay offers "Kopírovať".
 - Clipboard paste on macOS: save clipboard, write text, post Command down, V down, V up, Command up (posting V with only the Command flag can leave Command logically held - phase 0 bug), then restore the clipboard after 500 ms only if its content is still what the app wrote.
 - "Vložiť posledný prepis": Ctrl+Cmd+V and a tray menu item paste the last transcript with the same checks (as in Wispr Flow).
 - Platform matrix (v1):
@@ -168,7 +169,7 @@ Clipboard fallback is the only behaviour guaranteed everywhere. `ydotool` is doc
 
 ### 5.4 Session and engines
 
-- `DictationSession` state machine: `idle -> recording -> finishing -> cleaning (optional) -> inserting -> done | error`. Owns cancel, timeouts and recovery: on any failure the text recognised so far is kept in history and offered for copying.
+- `DictationSession` state machine: `idle -> recording -> finishing -> cleaning (optional) -> inserting -> done | error`. Owns cancel, timeouts and recovery: on any failure the text recognised so far is kept as the last transcript and offered for copying.
 - `TranscriptionEngine` (Strategy): `RemoteEngine` and `LocalEngine` with one interface (`start / pushAudio / finish / cancel`, events `partial` and `final` with segment ids and revisions).
 - Engine selection happens before recording starts, never mid-session. Order is configurable (e.g. server, then local). Switching from local to remote must be explicitly allowed by the user. A missing local model never triggers a download.
 - If the server drops mid-session, the client keeps a bounded audio buffer (up to 2 minutes) and can retry the whole session once on reconnect; segment ids prevent duplicate text.
@@ -205,7 +206,7 @@ The policy lives in `packages/audio` and is shared by the gateway and LocalEngin
 
 ### Optional cleanup
 
-"Uhladiť text" sends the final text to Ollama with a fixed prompt (punctuation, fillers, capitalization, no rewording), with a time limit and only that text as context. Off by default. The raw text is always kept in history and the overlay offers "Vrátiť pôvodný" after insertion. If cleanup fails or times out, the raw text is inserted. On the server the gateway reaches the host Ollama via an explicit `host.docker.internal` / host-gateway mapping documented in compose.
+"Uhladiť text" sends the final text to Ollama with a fixed prompt (punctuation, fillers, capitalization, no rewording), with a time limit and only that text as context. Off by default. The raw text is kept as the last transcript and the overlay offers "Vrátiť pôvodný" after insertion. If cleanup fails or times out, the raw text is inserted. On the server the gateway reaches the host Ollama via an explicit `host.docker.internal` / host-gateway mapping documented in compose.
 
 ## 7. Local mode and model management
 
@@ -268,7 +269,7 @@ Each phase ends with lint, typecheck, tests, CodeRabbit review and the owner's O
 Order changed 2026-10-25 (owner decision): the macOS app with local mode comes first, so there is a usable app before the server exists.
 
 0. **Risk spikes - done** (`docs/spikes/`), except the notarized-run part of the update spike (waiting for Apple) and the Linux spike (moved to phase 4).
-1. **macOS app + local mode.** Full UI per the mockup (Domov/História, Server placeholder, Nastavenia, Súkromie, tray menu, overlay with Indikátor and Živý text modes), hotkey recorder and Swift helper, audio capture with microphone selection (5.5), insertion with the checks from 5.2, paste last transcript, first-run permissions, LocalEngine with transcribe.cpp, ModelManager with the catalog (download, verify, delete, warm-up), engine setting "Kde beží prepis" (Lokálne now, Server once phase 2 lands), history, Electron hardening (4.6) and fuses. Transcription after key release, cut into chunks of at most 25 s; no partials yet.
+1. **macOS app + local mode.** Full UI per the mockup without history (Domov, Server placeholder, Nastavenia, Súkromie, tray menu, overlay with Indikátor and Živý text modes), hotkey recorder and Swift helper, audio capture with microphone selection (5.5), insertion with the checks from 5.2, paste last transcript, first-run permissions, LocalEngine with transcribe.cpp, ModelManager with the catalog (download, verify, delete, warm-up), engine setting "Kde beží prepis" (Lokálne now, Server once phase 2 lands), Electron hardening (4.6) and fuses. Transcription after key release, cut into chunks of at most 25 s; no partials yet.
 2. **Protocol + server core + RemoteEngine.** Everything in `docs/plans/2026-10-25-phase-2-protocol-server.md` plus RemoteEngine, pairing UI (token paste) and the server option in "Kde beží prepis".
 3. **Segmentation and live text.** `packages/audio` policy with the phase 0 numbers, partials for Živý text in both engines, fairness on the server.
 4. **Linux desktop.** Starts with the deferred Linux spike. Then hotkeys, insertion matrix, reduced Wayland overlay, safeStorage backend handling.

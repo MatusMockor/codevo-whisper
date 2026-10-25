@@ -21,7 +21,7 @@
 - Models: download only on explicit click, `.download` temp file, SHA-256 while streaming, atomic rename, never at startup (spec 7). Default on Apple Silicon: Parakeet Ultra F16 with Metal; Intel: CPU backend.
 - No partials in this phase. Transcription after key release, audio cut into chunks of at most 25 s, transcribed sequentially, joined with a single space. Overlay "Živý text" option is visible but disabled with the note "Príde v ďalšej verzii".
 - "Kde beží prepis": option "Lokálne" active; option "Server" visible but disabled with "Príde v ďalšej verzii".
-- Allowed test fakes (true external/OS boundaries only): `FakeInputHelper` implementing the `InputHelper` interface (keyboard, clipboard, accessibility of the OS), a fake `transcribe-cli` executable script, a local HTTP server standing in for Hugging Face, a `KeyProvider` backed by a test key instead of the OS keychain, and an in-process PCM source implementing `AudioCapture` (OS microphone) in session tests. Everything else runs for real.
+- Allowed test fakes (true external/OS boundaries only): `FakeInputHelper` implementing the `InputHelper` interface (keyboard, clipboard, accessibility of the OS), a fake `transcribe-cli` executable script, a local HTTP server standing in for Hugging Face, and an in-process PCM source implementing `AudioCapture` (OS microphone) in session tests. Everything else runs for real.
 - No code comments. Guard clauses, no `else`. Small focused files. Interfaces for swappable parts.
 - Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test` (Vitest), `pnpm --filter @codevo-whisper/desktop test:e2e` (Playwright). Native builds (Swift helper, transcribe-cli) and the packaged app in Task 12 are built because they are deliverables.
 - Commit after each task directly to `main`; no push until the owner says so.
@@ -30,7 +30,7 @@
 
 - The configured microphone disappears between two dictations (AirPods taken out): recording must still work with the default device and say so. Pinned in Task 5 Step 1 (`falls back to the default device when the chosen one is missing`).
 - The model file is deleted or corrupted on disk after download: dictation must fail with a clear message pointing to Nastavenia, never hang or crash. Pinned in Task 6 Step 1 (`reports a missing model`) and Task 7 Step 1 (`marks a model with a wrong hash as broken on verify`).
-- Hotkey pressed again while the previous transcription is still running: the new recording starts, the old result is still inserted or kept in history, nothing is lost or inserted twice. Pinned in Task 9 Step 1 (`a new session while the previous one is transcribing keeps both results`).
+- Hotkey pressed again while the previous transcription is still running: the new recording starts, the old result is still inserted or kept as the last transcript, nothing is lost or inserted twice. Pinned in Task 9 Step 1 (`a new session while the previous one is transcribing keeps both results`).
 - Download interrupted (network drop, app quit): next start shows "Pokračovať v sťahovaní" and resumes; a resumed file with a wrong hash is deleted. Pinned in Task 7 Step 1 (`resumes a partial download`, `deletes a resumed file with a wrong hash`).
 - Very long dictation (5 minutes): all chunks transcribed in order, no chunk over 25 s, text complete. Pinned in Task 6 Step 1 (`transcribes 5 minutes in ordered chunks`).
 
@@ -64,9 +64,9 @@
 
 **Interfaces:**
 - Produces:
-  - `type Settings = { hotkey: HotkeySetting; mode: 'hold' | 'toggle'; language: 'sk' | 'en' | 'cs' | 'auto'; microphone: { deviceId: string | null; label: string | null }; engineOrder: Array<'local' | 'server'>; localModelId: string | null; insertion: 'paste' | 'clipboard'; overlay: 'indicator' | 'live'; launchAtLogin: boolean; historyRetentionDays: 0 | 7 | 30 | 90 | 365; onboardingDone: boolean }`
+  - `type Settings = { hotkey: HotkeySetting; mode: 'hold' | 'toggle'; language: 'sk' | 'en' | 'cs' | 'auto'; microphone: { deviceId: string | null; label: string | null }; engineOrder: Array<'local' | 'server'>; localModelId: string | null; insertion: 'paste' | 'clipboard'; overlay: 'indicator' | 'live'; launchAtLogin: boolean; onboardingDone: boolean }`
   - `type HotkeySetting = { keycode: 54 | 58 | 61 | 62 | 63; label: string } | null` (null until the user records one)
-  - Defaults: `hotkey: null`, `mode: 'hold'`, `language: 'sk'`, `microphone: { deviceId: null, label: null }` (system default), `engineOrder: ['local']`, `localModelId: null`, `insertion: 'paste'`, `overlay: 'indicator'`, `launchAtLogin: false`, `historyRetentionDays: 30`, `onboardingDone: false`
+  - Defaults: `hotkey: null`, `mode: 'hold'`, `language: 'sk'`, `microphone: { deviceId: null, label: null }` (system default), `engineOrder: ['local']`, `localModelId: null`, `insertion: 'paste'`, `overlay: 'indicator'`, `launchAtLogin: false`, `onboardingDone: false`
   - `class SettingsStore { constructor(file: string); load(): Promise<Settings>; get(): Settings; update(patch: Partial<Settings>): Promise<Settings>; onChange(listener: (next: Settings, previous: Settings) => void): () => void }` - JSON file `settings.json` in `app.getPath('userData')`, atomic write, unknown or invalid fields replaced by defaults on load
   - `ipc-contract.ts`: one `IpcApi` type listing every renderer-callable method and every main-to-renderer event (later tasks add entries); `window.codevo` in the preload implements it
   - `validateSettingsPatch(input: unknown): Partial<Settings>` throws `IpcValidationError`
@@ -222,11 +222,11 @@
 - Consumes: Tasks 2-8.
 - Produces:
   - `type OverlayState = { kind: 'hidden' } | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string } | { kind: 'processing' } | { kind: 'inserted'; appName: string } | { kind: 'copied' } | { kind: 'blocked'; reason: 'focus' | 'secure' } | { kind: 'error'; message: string; action?: 'open-settings' }`
-  - `class SessionCoordinator { constructor(deps: { hotkey: HotkeyService; capture: AudioCapture; engine: TranscriptionEngine; insertion: InsertionService; history: HistoryStore; helper: InputHelper; settings: SettingsStore; overlay: (state: OverlayState) => void }); start(): void }` - on hotkey start: capture target via `helper.frontmost()` and warm `focusedElement()`, start capture (show fallback notice), overlay recording; on stop: stop capture, overlay processing, engine transcribe, history add, insert, overlay result for 1.2 s then hidden; engine not ready -> overlay error "Nemáte stiahnutý model" / "Model chýba alebo je poškodený" with action `open-settings`, audio discarded
+  - `class SessionCoordinator { constructor(deps: { hotkey: HotkeyService; capture: AudioCapture; engine: TranscriptionEngine; insertion: InsertionService; lastTranscript: LastTranscript; helper: InputHelper; settings: SettingsStore; overlay: (state: OverlayState) => void }); start(): void }` - on hotkey start: capture target via `helper.frontmost()` and warm `focusedElement()`, start capture (show fallback notice), overlay recording; on stop: stop capture, overlay processing, engine transcribe, set last transcript, insert, overlay result for 1.2 s then hidden; engine not ready -> overlay error "Nemáte stiahnutý model" / "Model chýba alebo je poškodený" with action `open-settings`, audio discarded
   - Overlay window per spec 5.3 / `docs/spikes/macos-input.md` Decision (panel, non-focusable, screen-saver level, all workspaces incl. fullscreen, `showInactive`, bottom-center of the display under the cursor); Indikátor mode visuals from the mockup (pill with dot and waveform, Spracúvam, Vložené, Skopírované - vlož cez ⌘V, error states)
   - Tray menu: status line, "Posledné diktovanie" (copy), "Vložiť posledný prepis ⌃⌘V", "Pozastaviť diktovanie" / "Pokračovať", submenu "Mikrofón" (devices + Systémový predvolený), submenu "Jazyk", "Otvoriť Codevo Whisper", "Nastavenia…", "Ukončiť Codevo Whisper"; template icon from the codevo mark, states idle / recording / processing / paused / error
 
-- [ ] **Step 1: Write the failing tests** (real collaborators with `FakeInputHelper`, fake transcribe binary, real `ModelManager` over a temp dir, real `HistoryStore` with test `KeyProvider`; `AudioCapture` replaced by an in-process PCM source implementing the same interface): `records, transcribes, inserts and stores history`, `shows the fallback microphone notice`, `shows no-model error and opens settings action`, `a new session while the previous one is transcribing keeps both results`, `blocked insertion keeps the text in history and as last transcript`, `paste-last shortcut inserts the last transcript`. e2e `overlay.spec.ts`: overlay window is not focusable and shows the recording state from an injected state.
+- [ ] **Step 1: Write the failing tests** (real collaborators with `FakeInputHelper`, fake transcribe binary, real `ModelManager` over a temp dir; `AudioCapture` replaced by an in-process PCM source implementing the same interface): `records, transcribes and inserts`, `shows the fallback microphone notice`, `shows no-model error and opens settings action`, `a new session while the previous one is transcribing keeps both results`, `blocked insertion keeps the text as last transcript`, `paste-last shortcut inserts the last transcript`. e2e `overlay.spec.ts`: overlay window is not focusable and shows the recording state from an injected state.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement** and wire everything in `compose.ts` (composition root; the only place that knows concrete classes).
 - [ ] **Step 4: Run.** Expected: PASS.
@@ -234,24 +234,23 @@
 
 ---
 
-### Task 10: Encrypted history and Domov page
+### Task 10: Domov page
 
 **Files:**
-- Create: `apps/desktop/src/main/history/history-store.ts`, `src/main/history/key-provider.ts`, `src/renderer/pages/Home.tsx`, `src/renderer/components/HistoryList.tsx`
-- Test: `apps/desktop/test/history-store.test.ts`, `apps/desktop/e2e/home.spec.ts`
+- Create: `apps/desktop/src/renderer/pages/Home.tsx`, `src/renderer/components/LastTranscriptCard.tsx`
+- Test: `apps/desktop/e2e/home.spec.ts`
 
 **Interfaces:**
+- Consumes: `IpcApi` (add `getStatus(): Promise<AppStatus>`, `getLastTranscript(): Promise<string | null>`, event `status-changed`).
 - Produces:
-  - `interface KeyProvider { getKey(): Promise<Buffer> }`; `SafeStorageKeyProvider` (random 32-byte key encrypted with Electron `safeStorage`, stored in `history.key`)
-  - `type HistoryEntry = { id: string; at: string; text: string; appName: string | null; language: string; durationMs: number; outcome: InsertionOutcome }`
-  - `class HistoryStore { constructor(file: string, keys: KeyProvider, clock?: () => Date); add(entry: Omit<HistoryEntry, 'id'>): Promise<HistoryEntry>; list(query?: string): Promise<HistoryEntry[]>; purge(retentionDays: number): Promise<number>; clear(): Promise<void> }` - AES-256-GCM per write of the whole file, newest first, search ignores case and diacritics, retention 0 means nothing is stored
-  - Home page: "Všetko je pripravené" banner with the recorded hotkey (or a call to action when no hotkey / no model), list grouped Dnes / Včera / date, copy button, search, retention line with link to Nastavenia
+  - `type AppStatus = { hotkeyLabel: string | null; modelReady: boolean; permissionsOk: boolean; paused: boolean }`
+  - Home page: "Všetko je pripravené. Podržte <kláves> v ľubovoľnej aplikácii a hovorte." banner, or a call to action when the hotkey, model or a permission is missing (each links to the right place); card "Posledné diktovanie" with the in-memory last transcript, copy button and the note "Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk."
 
-- [ ] **Step 1: Write the failing tests:** `round-trips entries encrypted` (file bytes do not contain the text), `search ignores diacritics` (`parovanie` finds `párovanie`), `purge removes entries older than retention`, `retention 0 stores nothing`, `wrong key fails with a clear error and does not overwrite the file`; e2e: add two entries via a test IPC hook, they appear under Dnes, search filters, copy writes the clipboard.
+- [ ] **Step 1: Write the failing tests:** e2e: with no hotkey the banner says to set one and links to Nastavenia; with everything ready the banner shows the hotkey label; after a test IPC hook sets a last transcript the card shows it and copy writes the clipboard; after an app relaunch the card is empty.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `git commit -m "feat(desktop): encrypted history and home page"`
+- [ ] **Step 5: Commit** `git commit -m "feat(desktop): home page"`
 
 ---
 
@@ -264,13 +263,13 @@
 **Interfaces:**
 - Consumes: everything above through `IpcApi` (add the needed methods/events to `ipc-contract.ts`).
 - Produces:
-  - Nastavenia sections (copy from the mockup): Diktovanie (Klávesová skratka with recorder, Režim Podrž/Prepínanie, Jazyk), Kde beží prepis (Lokálne active; Server disabled "Príde v ďalšej verzii"), Lokálny model (catalog with roles, size, license, Stiahnuť / Pozastaviť / Pokračovať / Odstrániť / Použiť, progress bar, broken state with Stiahnuť znova), Mikrofón (picker with Systémový predvolený, live meter, Bluetooth hint per spec 5.5), Vkladanie textu (Vložiť do aktívnej aplikácie / Iba skopírovať), Zobrazenie panela (Indikátor; Živý text disabled), Systém (Spustiť pri prihlásení, Uchovávanie histórie, Vymazať históriu)
+  - Nastavenia sections (copy from the mockup): Diktovanie (Klávesová skratka with recorder, Režim Podrž/Prepínanie, Jazyk), Kde beží prepis (Lokálne active; Server disabled "Príde v ďalšej verzii"), Lokálny model (catalog with roles, size, license, Stiahnuť / Pozastaviť / Pokračovať / Odstrániť / Použiť, progress bar, broken state with Stiahnuť znova), Mikrofón (picker with Systémový predvolený, live meter, Bluetooth hint per spec 5.5), Vkladanie textu (Vložiť do aktívnej aplikácie / Iba skopírovať), Zobrazenie panela (Indikátor; Živý text disabled), Systém (Spustiť pri prihlásení)
   - Server page: explanation of the coming server mode, disabled pairing area
   - Súkromie page: data flow for local mode (all on this Mac; no network except model downloads from Hugging Face and update checks), what is stored where
   - Onboarding (first run until `onboardingDone`): 1) mikrofón permission, 2) Input Monitoring and Accessibility with deep links `x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent` / `?Privacy_Accessibility`, live status, "Reštartovať" button when Input Monitoring needs a relaunch, 3) hotkey recorder, 4) model choice and download (recommended entry preselected), 5) try it ("Podržte <kláves> a povedzte niečo")
   - `class PermissionsService { status(): Promise<{ microphone: 'granted' | 'denied' | 'not-determined'; inputMonitoring: boolean; accessibility: boolean }>; request(kind: 'microphone' | 'input-monitoring' | 'accessibility'): Promise<void>; openSettings(kind: 'input-monitoring' | 'accessibility' | 'microphone'): Promise<void> }`
 
-- [ ] **Step 1: Write the failing tests:** e2e settings: changing Režim, Jazyk, Vkladanie, Uchovávanie persists across a relaunch; hotkey recorder shows the recorded label (helper fake emits keycode 62 -> `Pravý ⌃ Control`); Server option and Živý text are disabled with the note; model list shows catalog entries with sizes; e2e onboarding: shown on first run, skipped after completion, step 4 preselects the recommended model; unit: permissions mapping from helper and `systemPreferences.getMediaAccessStatus`.
+- [ ] **Step 1: Write the failing tests:** e2e settings: changing Režim, Jazyk, Vkladanie, Spustiť pri prihlásení persists across a relaunch; hotkey recorder shows the recorded label (helper fake emits keycode 62 -> `Pravý ⌃ Control`); Server option and Živý text are disabled with the note; model list shows catalog entries with sizes; e2e onboarding: shown on first run, skipped after completion, step 4 preselects the recommended model; unit: permissions mapping from helper and `systemPreferences.getMediaAccessStatus`.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement** following the mockup visuals (tokens from Task 1, Codevo logo, light and dark mode via `prefers-color-scheme`).
 - [ ] **Step 4: Run.** Expected: PASS.
@@ -289,7 +288,7 @@
 
 - [ ] **Step 1: Build** `scripts/build-mac-local.sh arm64`. Expected: `codesign --verify --deep --strict` passes, `npx @electron/fuses read --app "~/Applications/Codevo Whisper.app"` shows the fuse set, `ELECTRON_RUN_AS_NODE=1 open -W "~/Applications/Codevo Whisper.app"` does not run as Node (the app starts normally).
 - [ ] **Step 2: Smoke run** from `~/Applications` (`env -u ELECTRON_RUN_AS_NODE open`): onboarding appears; record in the log that permissions are requested for `Codevo Whisper` (not Electron).
-- [ ] **Step 3: Owner test session** using the checklist in `docs/operations/macos-local-build.md`: onboarding, hotkey recording (right Control on the owner's keyboard), model download of the recommended model, dictation into T3 Code / Notes / Slack / VS Code / Terminal / Chrome, Finder copy-only, Ctrl+Cmd+V, microphone switch and AirPods fallback, history and search, settings persistence, launch at login. Record results in the doc.
+- [ ] **Step 3: Owner test session** using the checklist in `docs/operations/macos-local-build.md`: onboarding, hotkey recording (right Control on the owner's keyboard), model download of the recommended model, dictation into T3 Code / Notes / Slack / VS Code / Terminal / Chrome, Finder copy-only, Ctrl+Cmd+V, microphone switch and AirPods fallback, settings persistence, launch at login. Record results in the doc.
 - [ ] **Step 4: Commit** `git commit -m "build(desktop): signed local macOS build and test checklist"`
 
 ---
@@ -297,6 +296,6 @@
 ### Task 13: Phase review
 
 - [ ] **Step 1:** `coderabbit review --agent --base <first commit of this phase>^`; fix valid findings, note rejected ones in `docs/reviews/phase-1.md`.
-- [ ] **Step 2:** gpt-6.1-sol review (`codex exec -m gpt-6.1-sol -s read-only`) of `apps/desktop/src/main` (security hardening, IPC validation, insertion rules, model download integrity, history encryption) against spec 4.6, 5, 7, 10.
+- [ ] **Step 2:** gpt-6.1-sol review (`codex exec -m gpt-6.1-sol -s read-only`) of `apps/desktop/src/main` (security hardening, IPC validation, insertion rules, model download integrity, no transcript written to disk) against spec 4.6, 5, 7, 10.
 - [ ] **Step 3:** `pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @codevo-whisper/desktop test:e2e`. Expected: PASS.
 - [ ] **Step 4:** Owner OK.
