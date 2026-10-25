@@ -105,7 +105,7 @@ export function composeApplication(logger: Logger): Application {
       logger,
       inputReady: input.promise,
     });
-    const server = createServerServices({ settings, window: mainWindow, e2e, logger });
+    const server = createServerServices({ settings, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
