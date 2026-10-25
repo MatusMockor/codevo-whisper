@@ -4,5 +4,5 @@
     "lib": ["es2024", "dom"],
     "types": ["node"]
   },
-  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+  "include": ["e2e/**/*.ts", "playwright.config.ts", "src/renderer/codevo.d.ts"]
 }

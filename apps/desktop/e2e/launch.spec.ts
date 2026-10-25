@@ -1,22 +1,25 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { startExternalSite, type ExternalSite } from './external-site';
-import { launchApp } from './launch-app';
+import { createUserDataDir, launchApp, removeUserDataDir } from './launch-app';
 
 const SETTLE_MS = 750;
 
 let app: ElectronApplication;
 let page: Page;
 let external: ExternalSite;
+let userDataDir: string;
 
 test.beforeEach(async () => {
   external = await startExternalSite();
-  app = await launchApp();
+  userDataDir = await createUserDataDir();
+  app = await launchApp(userDataDir);
   page = await app.firstWindow();
 });
 
 test.afterEach(async () => {
   await app.close();
   await external.close();
+  await removeUserDataDir(userDataDir);
 });
 
 test('shows a window titled Codevo Whisper with the sidebar sections', async () => {
