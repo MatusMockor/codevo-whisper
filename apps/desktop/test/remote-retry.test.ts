@@ -162,4 +162,16 @@ describe('RemoteDictation retry', () => {
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBe(2);
   });
+
+  it('waits for a restarting gateway when it reconnects', async () => {
+    const { server, relay, dictation } = await setup({ ...bySize, delayMs: 300 });
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await expect.poll(() => server.stt.requests.length).toBe(1);
+
+    await server.restart();
+
+    expect(await finished).toBe('úsek32000');
+    expect(relay.connections()).toBeGreaterThanOrEqual(2);
+  });
 });
