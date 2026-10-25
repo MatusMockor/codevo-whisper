@@ -5,3 +5,7 @@ export { AdaptiveVad } from './vad/adaptive-vad';
 export { DEFAULT_VAD_CONFIG, type VadConfig, validateVadConfig } from './vad/vad-config';
 export type { VadFrame } from './vad/vad-frame';
 export type { VoiceActivityDetector } from './vad/voice-activity-detector';
+export type { Pause } from './segmentation/pause';
+export type { CutReason, Segment } from './segmentation/segment';
+export { DEFAULT_SEGMENT_CONFIG, type SegmentConfig, validateSegmentConfig } from './segmentation/segment-config';
+export { Segmenter } from './segmentation/segmenter';
