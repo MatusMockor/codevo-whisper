@@ -129,9 +129,14 @@ export class DictationSession {
 
   private async openMicrophone(): Promise<boolean> {
     try {
-      const started = await this.deps.captureLane.run(() => {
+      const started = await this.deps.captureLane.run(async () => {
         this.unsubscribeFrames = this.deps.capture.onFrame((pcm) => this.relay.push(pcm));
-        return this.deps.capture.start(this.microphone);
+        try {
+          return await this.deps.capture.start(this.microphone);
+        } catch (error) {
+          this.unsubscribeFrames();
+          throw error;
+        }
       });
       this.noteFallback(started.fallback);
       return true;
