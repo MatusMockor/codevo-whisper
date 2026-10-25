@@ -20,8 +20,8 @@ function Introduction() {
         </div>
       </div>
       <p className="srv-text">
-        Codevo Whisper vie prepisovať aj na serveri, ktorý vlastníte, napríklad na domácom počítači s grafickou kartou. Zvuk aj text sa zašifrujú už na tomto Macu a server ich po
-        prepise hneď zabudne.
+        Codevo Whisper vie prepisovať aj na serveri, ktorý vlastníte, napríklad na domácom počítači s grafickou kartou. Zvuk sa zašifruje už na tomto Macu, prepis sa vracia
+        šifrovane a server zvuk ani text zámerne neukladá.
       </p>
       <div className="e2e">
         <span className="e2e-badge">

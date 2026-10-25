@@ -5,7 +5,7 @@ import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
-type RequestEvent = { event: 'request'; deviceName: string; handshakeFingerprint: string };
+type RequestEvent = { event: 'request'; deviceName: string; deviceFingerprint: string; handshakeFingerprint: string };
 type PairedEvent = { event: 'paired'; deviceId: string };
 
 let app: ElectronApplication;
@@ -18,7 +18,7 @@ async function start(): Promise<void> {
   page = await app.firstWindow();
 }
 
-async function openTab(name: 'Server' | 'Nastavenia'): Promise<void> {
+async function openTab(name: 'Server' | 'Nastavenia' | 'Domov'): Promise<void> {
   await page.getByRole('tab', { name }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 }
@@ -46,6 +46,7 @@ test('pairs by pasting the token, shows the same fingerprint as the server and s
 
   const request = (await window.admin.next()) as RequestEvent;
   await expect(page.locator('[data-fingerprint="connection"]')).toHaveText(request.handshakeFingerprint);
+  await expect(page.locator('[data-fingerprint="device"]')).toHaveText(request.deviceFingerprint);
   await expect(page.getByText('Čaká sa na potvrdenie na serveri')).toBeVisible();
   window.admin.send({ decision: 'approve' });
   const paired = (await window.admin.next()) as PairedEvent;
@@ -56,6 +57,7 @@ test('pairs by pasting the token, shows the same fingerprint as the server and s
   await expect(card).toContainText(`127.0.0.1:${gateway.port}`);
   await expect(card).toContainText(paired.deviceId);
   await expect(card).toContainText(request.deviceName);
+  await expect(card.locator('[data-fingerprint="device"]')).toHaveText(request.deviceFingerprint);
   await expect(page.getByText(`Server pozná tento Mac ako ${paired.deviceId}.`)).toBeVisible();
 
   await app.close();
@@ -125,9 +127,16 @@ test('shows a server that needs re-pairing after a revoke', async () => {
   window.admin.close();
   await expect(page.locator('.server-card .pill')).toHaveText('Online');
 
+  await page.getByRole('button', { name: 'Prepisovať na serveri' }).click();
+  await expect(page.getByRole('button', { name: 'Prepisovať na serveri' })).toHaveCount(0);
+
   await gateway.admin({ cmd: 'revoke', deviceId: paired.deviceId });
   await page.getByRole('button', { name: 'Otestovať spojenie' }).click();
 
   await expect(page.locator('.server-card .pill')).toHaveText('Treba znova spárovať');
   await expect(page.locator('.server-card').getByRole('alert')).toContainText('Server toto zariadenie nepozná');
+  await openTab('Domov');
+  await expect(page.locator('.banner')).toContainText('Server treba znova spárovať.');
+  await page.locator('.banner').getByRole('button', { name: 'Otvoriť Server' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Server');
 });

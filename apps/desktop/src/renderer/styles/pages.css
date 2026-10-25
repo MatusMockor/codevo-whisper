@@ -265,6 +265,21 @@
   color: var(--ink-2);
 }
 
+.fp-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fp-box.quiet {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.fp-list {
+  display: grid;
+  gap: 10px;
+}
+
 .fp-box {
   padding: 10px 14px;
   border-radius: var(--radius-lg);

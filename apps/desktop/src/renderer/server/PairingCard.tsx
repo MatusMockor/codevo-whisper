@@ -16,13 +16,19 @@ function Progress({ pairing }: { pairing: PairingView }) {
   if (pairing.kind === 'awaiting-approval') {
     return (
       <div className="pair-wait">
-        <div className="fp-box">
-          <small>Odtlačok spojenia</small>
-          <code data-fingerprint="connection">{pairing.connectionFingerprint}</code>
+        <div className="fp-pair">
+          <div className="fp-box">
+            <small>Odtlačok spojenia</small>
+            <code data-fingerprint="connection">{pairing.connectionFingerprint}</code>
+          </div>
+          <div className="fp-box quiet">
+            <small>Odtlačok zariadenia</small>
+            <code data-fingerprint="device">{pairing.deviceFingerprint}</code>
+          </div>
         </div>
         <p>
-          Čaká sa na potvrdenie na serveri. Ak terminál ukazuje rovnaký odtlačok spojenia, odpovedzte na otázku <b>Spárovať toto zariadenie?</b> písmenom y. Zariadenie
-          sa na serveri volá {pairing.deviceName}.
+          Čaká sa na potvrdenie na serveri. Ak terminál ukazuje rovnaký odtlačok spojenia aj zariadenia, odpovedzte na otázku <b>Spárovať toto zariadenie?</b> písmenom y.
+          Zariadenie sa na serveri volá {pairing.deviceName}.
         </p>
         <button type="button" className="btn ghost" onClick={() => void window.codevo.cancelServerPairing()}>
           Zrušiť párovanie

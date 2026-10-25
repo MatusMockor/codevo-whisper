@@ -81,7 +81,7 @@ export function ServerCard({ server, engineOrder, onDisconnected }: ServerCardPr
           <LockIcon />
           End-to-end šifrované
         </span>
-        <p>Zvuk aj text sa šifrujú už na tomto Macu. Domáca sieť, VPN aj tunel prenášajú iba šifrované dáta a nevedia ich prečítať.</p>
+        <p>Zvuk sa šifruje už na tomto Macu a prepis sa vracia šifrovane. Domáca sieť, VPN aj tunel prenášajú iba šifrované dáta a nevedia ich prečítať.</p>
       </div>
       <dl className="kv">
         <div>
@@ -106,9 +106,15 @@ export function ServerCard({ server, engineOrder, onDisconnected }: ServerCardPr
       <p className="note">Pripojenie je čas, za ktorý sa nadviaže šifrované spojenie so serverom.</p>
       <UseServer engineOrder={engineOrder} />
       <div className="fp">
-        <div>
-          <small>Odtlačok kľúča servera</small>
-          <code>{server.serverFingerprint}</code>
+        <div className="fp-list">
+          <div>
+            <small>Odtlačok kľúča servera</small>
+            <code>{server.serverFingerprint}</code>
+          </div>
+          <div>
+            <small>Odtlačok tohto zariadenia (ukazuje ho aj codevo-whisper devices)</small>
+            <code data-fingerprint="device">{server.deviceFingerprint}</code>
+          </div>
         </div>
         <div className="row-btns">
           <button type="button" className="btn" disabled={server.status.kind === 'checking'} onClick={() => void window.codevo.checkServer()}>

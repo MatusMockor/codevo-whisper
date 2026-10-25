@@ -60,7 +60,7 @@ The token works for one device only. The window closes when a device is paired o
 
 Open **Server** in the app, copy the pair command if you need it, paste the whole `cw1:` line into **Párovací token** and press **Spárovať**. The app shows the connection fingerprint; answer `y` on the server only if it matches. The device name is the computer name. The device key, the pinned server key and the endpoint are stored encrypted with the system key store (macOS Keychain through Electron `safeStorage`); on Linux the app refuses to pair when only the `basic_text` backend is available.
 
-Then choose the order in **Nastavenia > Kde beží prepis**: Lokálne, Server, Server potom lokálne, or Lokálne potom server. The engine is picked when a dictation starts and never changes during it. If the connection drops during a dictation, the app reconnects once and sends the whole recording again (up to 2 minutes of audio).
+Then choose the order in **Nastavenia > Kde beží prepis**: "Lokálne", "Server", "Server, potom lokálne" or "Lokálne, potom server". The engine is picked when a dictation starts and never changes during it. If the connection drops during a dictation, the app reconnects once and sends the whole recording again (up to 2 minutes of audio).
 
 ## Manage devices
 
