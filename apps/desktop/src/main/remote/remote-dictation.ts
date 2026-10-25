@@ -11,11 +11,14 @@ export type RemoteDictationDeps = {
   observer: Pick<ConnectionObserver, 'failed'>;
   finishIdleMs: number;
   retryBufferBytes: number;
-  reconnect: () => Promise<ReadyConnection>;
+  reconnect: (previous: ReadyConnection) => Promise<ReadyConnection>;
   newSessionId?: () => string;
 };
 
-type Attempt = { connection: SecureConnection; sessionId: string; segments: string[]; finishSent: boolean };
+type Attempt = { connection: SecureConnection; sessionId: string; segments: Map<number, string>; textChars: number; finishSent: boolean };
+
+export const MAX_SEGMENT_ID = 4095;
+export const MAX_TRANSCRIPT_CHARS = 200_000;
 
 const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = {
   busy: 'busy',
@@ -26,13 +29,15 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
   'connection-lost': 'connection-lost',
   offline: 'connection-lost',
   timeout: 'connection-lost',
+  'not-paired': 'connection-lost',
 };
 
 const RETRYABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline', 'timeout']);
 
-function joinSegments(segments: readonly string[]): string {
-  return segments
-    .map((text) => text.trim())
+function joinSegments(segments: ReadonlyMap<number, string>): string {
+  return [...segments.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, text]) => text.trim())
     .filter((text) => text !== '')
     .join(' ');
 }
@@ -42,6 +47,7 @@ export class RemoteDictation implements EngineDictation {
   private readonly retry: RetryBuffer;
   private readonly result = Promise.withResolvers<string>();
   private attempt: Attempt;
+  private ready: ReadyConnection;
   private bestText = '';
   private retried = false;
   private reconnecting = false;
@@ -55,7 +61,13 @@ export class RemoteDictation implements EngineDictation {
     private readonly deps: RemoteDictationDeps,
   ) {
     this.result.promise.catch(() => undefined);
+    this.ready = ready;
     this.retry = new RetryBuffer(deps.retryBufferBytes);
+    if (deps.options.signal.aborted) {
+      this.attempt = this.idle(ready.connection);
+      this.cancel();
+      return;
+    }
     this.attempt = this.begin(ready.connection);
     deps.options.signal.addEventListener('abort', () => this.cancel(), { once: true });
   }
@@ -78,8 +90,12 @@ export class RemoteDictation implements EngineDictation {
     return this.result.promise;
   }
 
+  private idle(connection: SecureConnection): Attempt {
+    return { connection, sessionId: '', segments: new Map(), textChars: 0, finishSent: false };
+  }
+
   private begin(connection: SecureConnection): Attempt {
-    const attempt: Attempt = { connection, sessionId: this.deps.newSessionId?.() ?? crypto.randomUUID(), segments: [], finishSent: false };
+    const attempt: Attempt = { ...this.idle(connection), sessionId: this.deps.newSessionId?.() ?? crypto.randomUUID() };
     connection.onMessage((message) => this.receive(attempt, message));
     connection.onClose((failure) => this.dropped(attempt, failure));
     connection.send({ type: 'start', sessionId: attempt.sessionId, language: this.deps.options.language });
@@ -122,7 +138,7 @@ export class RemoteDictation implements EngineDictation {
       return;
     }
     if (message.type === 'final') {
-      attempt.segments[message.segmentId] = message.text;
+      this.keepFinal(attempt, message.segmentId, message.text);
       return;
     }
     if (message.type === 'done') {
@@ -134,6 +150,16 @@ export class RemoteDictation implements EngineDictation {
       return;
     }
     this.fail(new RemoteFailure('protocol', `unexpected ${message.type} during a dictation`));
+  }
+
+  private keepFinal(attempt: Attempt, segmentId: number, text: string): void {
+    const textChars = attempt.textChars - (attempt.segments.get(segmentId)?.length ?? 0) + text.length;
+    if (segmentId > MAX_SEGMENT_ID || textChars > MAX_TRANSCRIPT_CHARS) {
+      this.fail(new RemoteFailure('protocol', 'the server sent more transcript than a dictation can have'));
+      return;
+    }
+    attempt.segments.set(segmentId, text);
+    attempt.textChars = textChars;
   }
 
   private dropped(attempt: Attempt, failure: RemoteFailure): void {
@@ -154,12 +180,13 @@ export class RemoteDictation implements EngineDictation {
     previous.connection.close();
     this.bestText = joinSegments(previous.segments);
     try {
-      const ready = await this.deps.reconnect();
+      const ready = await this.deps.reconnect(this.ready);
       this.reconnecting = false;
       if (this.settled) {
         ready.connection.close();
         return;
       }
+      this.ready = ready;
       this.resume(ready);
     } catch (error) {
       this.reconnecting = false;
@@ -171,6 +198,11 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private resume(ready: ReadyConnection): void {
+    if (!this.retry.canRetry()) {
+      ready.connection.close();
+      this.fail(new RemoteFailure('connection-lost', 'the recording outgrew the retry buffer during the reconnect'));
+      return;
+    }
     this.attempt = this.begin(ready.connection);
     this.paused = false;
     this.outbox.reset(this.retry.audio());
@@ -218,7 +250,9 @@ export class RemoteDictation implements EngineDictation {
     if (this.settled) {
       return;
     }
-    this.attempt.connection.send({ type: 'cancel' });
+    if (this.attempt.sessionId !== '') {
+      this.attempt.connection.send({ type: 'cancel' });
+    }
     this.settle();
     this.result.reject(new DOMException('The dictation was cancelled', 'AbortError'));
   }

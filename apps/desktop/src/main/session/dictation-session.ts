@@ -108,6 +108,9 @@ export class DictationSession {
       return;
     }
     const readiness = await this.readiness;
+    if (this.controller.signal.aborted) {
+      return;
+    }
     if (!readiness.ready) {
       this.end(readinessError(readiness.reason));
       return;

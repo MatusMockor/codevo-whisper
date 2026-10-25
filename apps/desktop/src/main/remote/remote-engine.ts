@@ -8,7 +8,7 @@ export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: numb
 export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({ finishIdleMs: 30_000, retryBufferBytes: 120 * 32_000 });
 
 export type RemoteEngineDeps = {
-  connector: Pick<ServerConnector, 'connect'>;
+  connector: Pick<ServerConnector, 'connect' | 'reconnect'>;
   observer: Pick<ConnectionObserver, 'failed'>;
   options?: Partial<RemoteEngineOptions>;
 };
@@ -42,7 +42,7 @@ export class RemoteEngine implements TranscriptionEngine {
               observer: this.deps.observer,
               finishIdleMs: this.options.finishIdleMs,
               retryBufferBytes: this.options.retryBufferBytes,
-              reconnect: () => this.deps.connector.connect(),
+              reconnect: (previous) => this.deps.connector.reconnect(previous.pairing),
             }),
           release: () => ready.connection.close(),
         },

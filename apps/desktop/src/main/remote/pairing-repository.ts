@@ -34,6 +34,7 @@ function parseSealed(text: string): Uint8Array {
 
 export class EncryptedPairingFile implements PairingRepository {
   private cached: ServerPairing | null | undefined;
+  private writes: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly file: string,
@@ -58,13 +59,23 @@ export class EncryptedPairingFile implements PairingRepository {
   async save(pairing: ServerPairing): Promise<void> {
     this.assertSecure();
     const sealed: SealedFile = { version: 1, sealed: Buffer.from(this.vault.seal(encodePairing(pairing))).toString('base64') };
-    await writeFileAtomic(this.file, `${JSON.stringify(sealed)}\n`);
-    this.cached = pairing;
+    return this.serialize(async () => {
+      await writeFileAtomic(this.file, `${JSON.stringify(sealed)}\n`);
+      this.cached = pairing;
+    });
   }
 
-  async clear(): Promise<void> {
-    await rm(this.file, { force: true });
-    this.cached = null;
+  clear(): Promise<void> {
+    return this.serialize(async () => {
+      await rm(this.file, { force: true });
+      this.cached = null;
+    });
+  }
+
+  private serialize(write: () => Promise<void>): Promise<void> {
+    const run = this.writes.then(write);
+    this.writes = run.catch(() => undefined);
+    return run;
   }
 
   private assertSecure(): void {

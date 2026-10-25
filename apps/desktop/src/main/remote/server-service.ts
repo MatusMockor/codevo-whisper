@@ -88,6 +88,7 @@ export class ServerService {
 
   async disconnect(): Promise<DisconnectResult> {
     this.pairingRun?.abort();
+    this.pairingRun = null;
     const pairing = await this.loadPairing(this.deps.vault.availability());
     await this.deps.pairings.clear();
     this.progress = IDLE;

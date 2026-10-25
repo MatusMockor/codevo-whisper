@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { EngineDictation, Preparation } from '../src/main/engines/transcription-engine';
+import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
@@ -21,16 +22,21 @@ afterEach(async () => {
   gateway = undefined;
 });
 
-async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}): Promise<{ server: TestGateway; relay: DropProxy; dictation: EngineDictation }> {
+type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource };
+
+type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
+
+async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}): Promise<Setup> {
   const proxyPort = await freePort();
   gateway = await startTestGateway({ stt, publicEndpoint: () => `ws://127.0.0.1:${proxyPort}` });
   proxy = await startDropProxy(gateway.port, proxyPort);
-  const pairing = await gateway.addDevice();
-  const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+  const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
+  const pairings = { load: () => source.gate.then(() => source.current) };
+  const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
   const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: new AbortController().signal });
-  return { server: gateway, relay: proxy, dictation };
+  return { server: gateway, relay: proxy, dictation, source };
 }
 
 function speak(dictation: EngineDictation, bytes: number): void {
@@ -103,5 +109,36 @@ describe('RemoteDictation retry', () => {
 
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'repair-needed' });
     expect(relay.connections()).toBe(1);
+  });
+
+  it('fails instead of replaying a truncated recording when the buffer overflows during the reconnect', async () => {
+    const { server, relay, dictation, source } = await setup(bySize, { retryBufferBytes: 2 * SECOND });
+    speak(dictation, SECOND);
+    await settle(50);
+    const reconnect = Promise.withResolvers<void>();
+    source.gate = reconnect.promise;
+
+    relay.dropAll();
+    await settle(50);
+    speak(dictation, 2 * SECOND);
+    reconnect.resolve();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'connection-lost' });
+    expect(server.stt.requests).toEqual([]);
+  });
+
+  it('does not replay the recording to a different server after the pairing changed', async () => {
+    const { relay, dictation, source } = await setup(bySize);
+    const other = await startTestGateway({ stt: bySize });
+    speak(dictation, SECOND);
+    await settle(50);
+    source.current = await other.addDevice();
+
+    relay.dropAll();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'connection-lost' });
+    expect(other.stt.requests).toEqual([]);
+    expect(other.server.gateway.sessions.count()).toBe(0);
+    await other.close();
   });
 });

@@ -126,4 +126,20 @@ describe('ServerService', () => {
     await expect.poll(async () => (await target.view()).pairing).toEqual({ kind: 'failed', failure: 'cancelled' });
     window.admin.close();
   });
+
+  it('a disconnect during a pending pairing leaves nothing paired', async () => {
+    const { service: target, file } = create();
+    const window = await gateway.openPairingWindow();
+    target.pair(window.token);
+    await window.admin.next();
+
+    window.admin.send({ decision: 'approve' });
+    await target.disconnect();
+    await window.admin.next();
+    window.admin.close();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'idle' } });
+  });
 });

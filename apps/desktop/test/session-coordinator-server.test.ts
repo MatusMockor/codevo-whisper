@@ -49,7 +49,7 @@ afterEach(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}) {
+async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}, gate: Promise<void> = Promise.resolve()) {
   gateway = await startTestGateway({ stt });
   const pairing: ServerPairing = await gateway.addDevice();
   const logger = new RecordingLogger();
@@ -61,7 +61,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
   const local = new LocalEngine({ binary: FAKE_CLI, models, settings, arch: 'arm64' });
-  const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
   const remote = new RemoteEngine({ connector, observer: silentObserver });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
@@ -141,6 +141,21 @@ describe('SessionCoordinator with the server engine', () => {
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
     expect(harness.lastTranscript.get()).toBe('začiatok');
+    expect(harness.helper.pasted).toEqual([]);
+  });
+
+  it('a dictation cancelled while the server connection is still opening sends nothing', async () => {
+    const opening = Promise.withResolvers<void>();
+    const harness = await prepared({ engineOrder: ['server'] }, {}, opening.promise);
+
+    await dictate(harness, 4);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    coordinator?.dispose();
+    opening.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(gateway.stt.requests).toEqual([]);
+    expect(gateway.server.gateway.sessions.count()).toBe(0);
     expect(harness.helper.pasted).toEqual([]);
   });
 });

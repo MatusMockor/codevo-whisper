@@ -101,6 +101,9 @@ export class DevicePairing {
       });
       connection.send({ type: 'pair-request', deviceName });
       const deviceId = approvedDeviceId(await Promise.race([connection.next(APPROVAL_TIMEOUT_MS), untilAborted(signal, connection)]));
+      if (signal.aborted) {
+        return failed('cancelled');
+      }
       await this.store(token, deviceKey, deviceId, deviceName);
       return { kind: 'paired', deviceId };
     } finally {

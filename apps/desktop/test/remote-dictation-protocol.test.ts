@@ -95,4 +95,43 @@ describe('RemoteDictation protocol handling', () => {
 
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'protocol' });
   });
+
+  it('rejects a segment id far beyond any real dictation', async () => {
+    const engine = await scripted((session, message) => {
+      if (message.type === 'start') {
+        session.send({ type: 'final', sessionId: message.sessionId, segmentId: 4294967294, text: 'x' });
+      }
+    });
+    const dictation = await startDictation(engine);
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'protocol' });
+  });
+
+  it('rejects a transcript that grows beyond the overall text limit', async () => {
+    const engine = await scripted((session, message) => {
+      if (message.type === 'start') {
+        for (let segmentId = 0; segmentId < 20; segmentId += 1) {
+          session.send({ type: 'final', sessionId: message.sessionId, segmentId, text: 'á'.repeat(16000) });
+        }
+      }
+    });
+    const dictation = await startDictation(engine);
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'protocol' });
+  });
+
+  it('never sends anything for a dictation whose signal is already aborted', async () => {
+    const received: string[] = [];
+    const engine = await scripted((_session, message) => received.push(message.type));
+    const preparation = await engine.prepare();
+    const controller = new AbortController();
+    controller.abort();
+
+    const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal });
+    dictation.push(new Uint8Array(3200));
+
+    await expect(dictation.finish()).rejects.toMatchObject({ name: 'AbortError' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(received).toEqual([]);
+  });
 });

@@ -81,4 +81,16 @@ describe('EncryptedPairingFile', () => {
 
     await expect(new EncryptedPairingFile(file, new InsecureTestVault('insecure')).load()).rejects.toMatchObject({ kind: 'storage-insecure' });
   });
+
+  it('applies saves and clears in the order they were requested', async () => {
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+    const saved = pairing();
+
+    await Promise.all([repository.save(saved), repository.clear()]);
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toBeNull();
+    expect(await repository.load()).toBeNull();
+
+    await Promise.all([repository.clear(), repository.save(saved)]);
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
+  });
 });
