@@ -21,6 +21,29 @@ describe('FakeInputHelper', () => {
     expect(helper.pasted).toEqual(['dictated']);
   });
 
+  it('clears the clipboard on a failed write like the helper and force restores the saved one', async () => {
+    const helper = new FakeInputHelper({ clipboard: 'original', clipboardWriteFails: true });
+
+    await helper.saveClipboard();
+    await expect(helper.writeClipboard('dictated')).rejects.toThrow('clipboard-write-failed');
+    const cleared = helper.clipboard;
+    const restored = await helper.restoreSavedClipboard();
+
+    expect(cleared).toBe('');
+    expect(restored).toBe(true);
+    expect(helper.clipboard).toBe('original');
+    expect(await helper.restoreSavedClipboard()).toBe(false);
+  });
+
+  it('answers the scripted modifier flags and counts the queries', async () => {
+    const helper = new FakeInputHelper({ modifiers: { control: true, command: false, option: false, shift: true } });
+
+    expect(await helper.modifierFlags()).toEqual({ control: true, command: false, option: false, shift: true });
+    helper.modifiers = { control: false, command: false, option: false, shift: false };
+    expect(await helper.modifierFlags()).toEqual({ control: false, command: false, option: false, shift: false });
+    expect(helper.modifierQueries).toBe(2);
+  });
+
   it('emits only the keys it listens to', async () => {
     const helper = new FakeInputHelper();
     const keys: KeyEvent[] = [];

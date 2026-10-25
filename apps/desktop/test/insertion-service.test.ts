@@ -1,0 +1,208 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
+import type { AppTarget } from '../src/main/helper/input-helper';
+import { InsertionService } from '../src/main/insertion/insertion-service';
+import { LastTranscript } from '../src/main/insertion/last-transcript';
+import { SettingsStore } from '../src/main/settings/settings-store';
+import type { Settings } from '../src/shared/settings';
+import { RecordingLogger } from './recording-logger';
+
+const TEXT_EDIT: AppTarget = { bundleId: 'com.apple.TextEdit', pid: 100, name: 'TextEdit', windowId: 1 };
+const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
+const HELD = { control: true, command: true, option: false, shift: false };
+
+type Setup = {
+  helper?: Partial<FakeInputHelperState>;
+  settings?: Partial<Settings>;
+  onSleep?: (ms: number, helper: FakeInputHelper) => void | Promise<void>;
+};
+
+let dir: string;
+
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'cw-insertion-'));
+});
+
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+
+async function prepared(setup: Setup = {}) {
+  const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
+  await settings.load();
+  await settings.update({ ...setup.settings });
+  const helper = new FakeInputHelper({ frontmost: TEXT_EDIT, clipboard: 'original', ...setup.helper });
+  const lastTranscript = new LastTranscript();
+  const sleeps: number[] = [];
+  const sleep = async (ms: number): Promise<void> => {
+    sleeps.push(ms);
+    await setup.onSleep?.(ms, helper);
+  };
+  const service = new InsertionService(helper, settings, lastTranscript, sleep);
+  return { helper, lastTranscript, sleeps, service };
+}
+
+describe('InsertionService', () => {
+  it('pastes into an editable field and restores the clipboard', async () => {
+    const clipboardDuringWait: string[] = [];
+    const { helper, sleeps, service } = await prepared({ onSleep: (_ms, fake) => void clipboardDuringWait.push(fake.clipboard) });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(sleeps).toEqual([500]);
+    expect(clipboardDuringWait).toEqual(['dictated']);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('does not restore when the clipboard changed meanwhile', async () => {
+    const { helper, service } = await prepared({
+      onSleep: (_ms, fake) => {
+        fake.clipboard = 'user copied';
+      },
+    });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('pasted');
+    expect(helper.clipboard).toBe('user copied');
+  });
+
+  it('copies only when the focused element is not editable', async () => {
+    const { helper, sleeps, service } = await prepared({ helper: { editable: false, role: 'AXList' } });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('copied-no-text-field');
+    expect(helper.pasted).toEqual([]);
+    expect(sleeps).toEqual([]);
+    expect(helper.clipboard).toBe('dictated');
+  });
+
+  it('pastes when editability is unknown', async () => {
+    const { helper, service } = await prepared({ helper: { editable: null, role: 'AXWebArea' } });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+  });
+
+  it('blocks when the frontmost app changed', async () => {
+    const { helper, service } = await prepared({ helper: { frontmost: NOTES } });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('blocked-focus-changed');
+    expect(helper.pasted).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('blocks when the target window changed or no app is frontmost', async () => {
+    const otherWindow = await prepared({ helper: { frontmost: { ...TEXT_EDIT, windowId: 2 } } });
+    const nothingFrontmost = await prepared({ helper: { frontmost: null } });
+
+    expect(await otherWindow.service.insert('dictated', TEXT_EDIT)).toBe('blocked-focus-changed');
+    expect(await nothingFrontmost.service.insert('dictated', TEXT_EDIT)).toBe('blocked-focus-changed');
+    expect([...otherWindow.helper.pasted, ...nothingFrontmost.helper.pasted]).toEqual([]);
+  });
+
+  it('blocks on secure input', async () => {
+    const { helper, service } = await prepared({ helper: { secureInput: true } });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('blocked-secure-input');
+    expect(helper.pasted).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('copies by setting', async () => {
+    const { helper, sleeps, service } = await prepared({ settings: { insertion: 'clipboard' } });
+
+    const outcome = await service.insert('dictated', TEXT_EDIT);
+
+    expect(outcome).toBe('copied-by-setting');
+    expect(helper.pasted).toEqual([]);
+    expect(sleeps).toEqual([]);
+    expect(helper.clipboard).toBe('dictated');
+  });
+
+  it('restores the saved clipboard and never pastes when the clipboard write fails', async () => {
+    const pasting = await prepared({ helper: { clipboardWriteFails: true } });
+    const copying = await prepared({ helper: { clipboardWriteFails: true, editable: false } });
+
+    expect(await pasting.service.insert('dictated', TEXT_EDIT)).toBe('failed-clipboard-write');
+    expect(await copying.service.insert('dictated', TEXT_EDIT)).toBe('failed-clipboard-write');
+    expect(pasting.helper.pasted).toEqual([]);
+    expect(pasting.helper.clipboard).toBe('original');
+    expect(copying.helper.clipboard).toBe('original');
+  });
+
+  it('runs one insertion at a time so clipboard restores do not interleave', async () => {
+    const { helper, lastTranscript, service } = await prepared();
+    lastTranscript.set('second');
+
+    const outcomes = await Promise.all([service.insert('first', TEXT_EDIT), service.pasteLast()]);
+
+    expect(outcomes).toEqual(['pasted', 'pasted']);
+    expect(helper.pasted).toEqual(['first', 'second']);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('paste last uses the last transcript and current focus', async () => {
+    const { helper, lastTranscript, service } = await prepared({ helper: { frontmost: NOTES } });
+    lastTranscript.set('previous');
+
+    const outcome = await service.pasteLast();
+
+    expect(outcome).toBe('pasted');
+    expect(helper.pasted).toEqual(['previous']);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('paste last without a transcript returns no-transcript', async () => {
+    const { helper, service } = await prepared();
+
+    const outcome = await service.pasteLast();
+
+    expect(outcome).toBe('no-transcript');
+    expect(helper.pasted).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('paste last waits until Control and Command are released', async () => {
+    const { helper, lastTranscript, service } = await prepared({
+      helper: { modifiers: HELD },
+      onSleep: (ms, fake) => {
+        if (ms === 500 || fake.modifierQueries < 3) {
+          return;
+        }
+        fake.modifiers = { control: false, command: false, option: true, shift: true };
+      },
+    });
+    lastTranscript.set('previous');
+
+    const outcome = await service.pasteLast();
+
+    expect(outcome).toBe('pasted');
+    expect(helper.modifierQueries).toBe(4);
+    expect(helper.pasted).toEqual(['previous']);
+  });
+
+  it('paste last gives up when Control or Command stays held for 1000 ms', async () => {
+    const { helper, lastTranscript, sleeps, service } = await prepared({ helper: { modifiers: { ...HELD, control: false } } });
+    lastTranscript.set('previous');
+
+    const outcome = await service.pasteLast();
+
+    expect(outcome).toBe('blocked-modifiers-held');
+    expect(sleeps.reduce((total, ms) => total + ms, 0)).toBe(1000);
+    expect(helper.pasted).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+});

@@ -27,7 +27,7 @@ final class Commands {
         case "clipboard-write":
             return pasteboard.write(text: args["text"] as? String ?? "")
         case "clipboard-restore":
-            return pasteboard.restore(expectedText: args["expectedText"] as? String)
+            return pasteboard.restore(expectedText: args["expectedText"] as? String, force: args["force"] as? Bool ?? false)
         case "paste":
             return Paste.commandV()
         case "listen-start":

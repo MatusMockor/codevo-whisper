@@ -1,5 +1,5 @@
 import { consoleLogger } from '../logging/logger';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, KeyPhase, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, KeyPhase, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 export type FakeInputHelperState = {
@@ -8,6 +8,8 @@ export type FakeInputHelperState = {
   role: string | null;
   secureInput: boolean;
   clipboard: string;
+  clipboardWriteFails: boolean;
+  modifiers: ModifierFlags;
   permissions: Permissions;
   recordedKey: number | null;
 };
@@ -18,6 +20,8 @@ const DEFAULT_STATE: FakeInputHelperState = {
   role: 'AXTextArea',
   secureInput: false,
   clipboard: '',
+  clipboardWriteFails: false,
+  modifiers: { control: false, command: false, option: false, shift: false },
   permissions: { listen: true, post: true, accessibility: true },
   recordedKey: null,
 };
@@ -28,6 +32,9 @@ export class FakeInputHelper implements InputHelper {
   role: string | null;
   secureInputEnabled: boolean;
   clipboard: string;
+  clipboardWriteFails: boolean;
+  modifiers: ModifierFlags;
+  modifierQueries = 0;
   permissionState: Permissions;
   recordedKey: number | null;
   running = false;
@@ -47,6 +54,8 @@ export class FakeInputHelper implements InputHelper {
     this.role = initial.role;
     this.secureInputEnabled = initial.secureInput;
     this.clipboard = initial.clipboard;
+    this.clipboardWriteFails = initial.clipboardWriteFails;
+    this.modifiers = { ...initial.modifiers };
     this.permissionState = { ...initial.permissions };
     this.recordedKey = initial.recordedKey;
   }
@@ -83,12 +92,21 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve({ editable: this.editable, role: this.role });
   }
 
+  modifierFlags(): Promise<ModifierFlags> {
+    this.modifierQueries += 1;
+    return Promise.resolve({ ...this.modifiers });
+  }
+
   saveClipboard(): Promise<void> {
     this.savedClipboard = this.clipboard;
     return Promise.resolve();
   }
 
   writeClipboard(text: string): Promise<void> {
+    if (this.clipboardWriteFails) {
+      this.clipboard = '';
+      return Promise.reject(new Error('clipboard-write-failed:set-string-failed'));
+    }
     this.clipboard = text;
     return Promise.resolve();
   }
@@ -97,6 +115,16 @@ export class FakeInputHelper implements InputHelper {
     const saved = this.savedClipboard;
     this.savedClipboard = null;
     if (saved === null || this.clipboard !== expectedText) {
+      return Promise.resolve(false);
+    }
+    this.clipboard = saved;
+    return Promise.resolve(true);
+  }
+
+  restoreSavedClipboard(): Promise<boolean> {
+    const saved = this.savedClipboard;
+    this.savedClipboard = null;
+    if (saved === null) {
       return Promise.resolve(false);
     }
     this.clipboard = saved;

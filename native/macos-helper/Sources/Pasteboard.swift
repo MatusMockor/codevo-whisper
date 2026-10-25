@@ -26,19 +26,30 @@ final class Pasteboard {
         return ["written": true]
     }
 
-    func restore(expectedText: String?) -> JSONObject {
+    func restore(expectedText: String?, force: Bool) -> JSONObject {
         let written = writtenChangeCount
         writtenChangeCount = nil
         guard let saved else {
             return ["restored": false, "reason": "nothing-saved"]
         }
         self.saved = nil
+        if !force, let reason = changeReason(written: written, expectedText: expectedText) {
+            return ["restored": false, "reason": reason]
+        }
+        return put(saved)
+    }
+
+    private func changeReason(written: Int?, expectedText: String?) -> String? {
         guard let written, board.changeCount == written else {
-            return ["restored": false, "reason": "clipboard-changed"]
+            return "clipboard-changed"
         }
         guard let expectedText, board.string(forType: .string) == expectedText else {
-            return ["restored": false, "reason": "text-changed"]
+            return "text-changed"
         }
+        return nil
+    }
+
+    private func put(_ saved: [[(NSPasteboard.PasteboardType, Data)]]) -> JSONObject {
         board.clearContents()
         let items = saved.map { pairs in
             let item = NSPasteboardItem()

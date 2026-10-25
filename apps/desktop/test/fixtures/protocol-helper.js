@@ -31,8 +31,10 @@ const handlers = {
   frontmost: (id) => send({ id, pid: 42, bundleId: 'com.apple.TextEdit', name: 'TextEdit', windowId: 7 }),
   'focused-element': (id) => send({ id, editable: null, role: 'AXWebArea', reason: 'chromium-no-tree' }),
   'secure-input': (id) => send({ id, enabled: false }),
+  'modifier-flags': (id) => send({ id, flags: 0x100, combinedFlags: 0x100 }),
+  'clipboard-save': (id) => send({ id, items: 1, types: ['public.utf8-plain-text'] }),
   'clipboard-write': (id) => send({ id, written: true }),
-  'clipboard-restore': (id) => send({ id, restored: true }),
+  'clipboard-restore': (id, args) => send({ id, restored: args.force === true || typeof args.expectedText === 'string' }),
   paste: (id) => send({ id, posted: false, reason: 'no-event-source' }),
 };
 

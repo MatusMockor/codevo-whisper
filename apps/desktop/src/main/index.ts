@@ -9,6 +9,9 @@ import { CaptureWindow } from './audio/capture-window';
 import { WindowAudioCapture } from './audio/window-audio-capture';
 import { electronPowerEvents } from './hotkey/electron-power-events';
 import { HotkeyService } from './hotkey/hotkey-service';
+import { InsertionService } from './insertion/insertion-service';
+import { LastTranscript } from './insertion/last-transcript';
+import { bindPasteLastShortcut } from './insertion/paste-last-shortcut';
 import { registerIpc } from './ipc/register-ipc';
 import { consoleLogger } from './logging/logger';
 import { installContentSecurityPolicy } from './security/content-security-policy';
@@ -26,6 +29,7 @@ app.enableSandbox();
 const inputHelper = createInputHelper(consoleLogger);
 const captureWindow = new CaptureWindow(rendererSource('capture'), consoleLogger);
 const capture = new WindowAudioCapture(captureWindow, consoleLogger);
+const lastTranscript = new LastTranscript();
 
 async function initialize(): Promise<void> {
   installPermissionHandlers(session.defaultSession, (contents, url) => captureWindow.isCaptureFrame(contents, url));
@@ -37,6 +41,7 @@ async function initialize(): Promise<void> {
   await settings.load();
   registerIpc({ settings, source });
   exposeE2eHooks(!app.isPackaged && process.env['CW_E2E_HOOKS'] === '1', { capture });
+  bindPasteLastShortcut(inputHelper, new InsertionService(inputHelper, settings, lastTranscript), consoleLogger);
   void startInput(inputHelper, new HotkeyService(inputHelper, settings, electronPowerEvents), consoleLogger);
 }
 

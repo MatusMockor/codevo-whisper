@@ -49,6 +49,30 @@ describe('HelperProcessInputHelper', () => {
     expect(await helper.restoreClipboard('dictated')).toBe(true);
   });
 
+  it('maps the physical modifier flags and rejects malformed ones', async () => {
+    const { channel, helper } = await started();
+    const respond = (response: Record<string, unknown>) => channel.request('respond-next', { cmd: 'modifier-flags', response });
+
+    await respond({ flags: 0x40000 | 0x100000 | 0x100, combinedFlags: 0 });
+    const shortcutHeld = await helper.modifierFlags();
+    await respond({ flags: 0x20000 | 0x80000, combinedFlags: 0x40000 });
+    const optionShift = await helper.modifierFlags();
+    await respond({ flags: 'none' });
+
+    expect(shortcutHeld).toEqual({ control: true, command: true, option: false, shift: false });
+    expect(optionShift).toEqual({ control: false, command: false, option: true, shift: true });
+    await expect(helper.modifierFlags()).rejects.toThrow('modifier-flags-invalid');
+    expect(await helper.modifierFlags()).toEqual({ control: false, command: false, option: false, shift: false });
+  });
+
+  it('force restores the saved clipboard without the expected text check', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'clipboard-restore', response: { restored: false, reason: 'nothing-saved' } });
+
+    expect(await helper.restoreSavedClipboard()).toBe(false);
+    expect(await helper.restoreSavedClipboard()).toBe(true);
+  });
+
   it('gives the focused element query longer than the default timeout', async () => {
     const { channel, helper } = await started(100);
     await channel.request('respond-next', { cmd: 'focused-element', response: { editable: true, role: 'AXTextArea' }, delayMs: 250 });

@@ -1,5 +1,10 @@
 import type { HelperMessage } from './helper-channel';
-import type { AppTarget, FocusedElement, InputLostReason, KeyEvent, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputLostReason, KeyEvent, ModifierFlags, Permissions, ShortcutName } from './input-helper';
+
+const SHIFT_MASK = 0x20000;
+const CONTROL_MASK = 0x40000;
+const OPTION_MASK = 0x80000;
+const COMMAND_MASK = 0x100000;
 
 function nullableBoolean(message: HelperMessage, key: string): boolean | null {
   const value = message[key];
@@ -51,6 +56,19 @@ export function parseFrontmost(message: HelperMessage): AppTarget | null {
 
 export function parseFocusedElement(message: HelperMessage): FocusedElement {
   return { editable: nullableBoolean(message, 'editable'), role: nullableString(message, 'role') };
+}
+
+export function parseModifierFlags(message: HelperMessage): ModifierFlags {
+  const flags = nullableInteger(message, 'flags');
+  if (flags === null || flags < 0) {
+    throw new Error('modifier-flags-invalid');
+  }
+  return {
+    control: (flags & CONTROL_MASK) !== 0,
+    command: (flags & COMMAND_MASK) !== 0,
+    option: (flags & OPTION_MASK) !== 0,
+    shift: (flags & SHIFT_MASK) !== 0,
+  };
 }
 
 export function parseKeyEvent(message: HelperMessage): KeyEvent | null {

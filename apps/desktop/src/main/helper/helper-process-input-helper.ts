@@ -7,12 +7,13 @@ import {
   parseFrontmost,
   parseInputLost,
   parseKeyEvent,
+  parseModifierFlags,
   parsePermissions,
   parseRecordedKey,
   parseShortcut,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
@@ -65,6 +66,10 @@ export class HelperProcessInputHelper implements InputHelper {
     return parseFocusedElement(await this.channel.request('focused-element', {}, FOCUSED_ELEMENT_TIMEOUT_MS));
   }
 
+  async modifierFlags(): Promise<ModifierFlags> {
+    return parseModifierFlags(await this.channel.request('modifier-flags'));
+  }
+
   async saveClipboard(): Promise<void> {
     await this.channel.request('clipboard-save');
   }
@@ -75,6 +80,10 @@ export class HelperProcessInputHelper implements InputHelper {
 
   async restoreClipboard(expectedText: string): Promise<boolean> {
     return requireBoolean(await this.channel.request('clipboard-restore', { expectedText }), 'restored', 'clipboard-restore-invalid');
+  }
+
+  async restoreSavedClipboard(): Promise<boolean> {
+    return requireBoolean(await this.channel.request('clipboard-restore', { force: true }), 'restored', 'clipboard-restore-invalid');
   }
 
   async paste(): Promise<void> {
