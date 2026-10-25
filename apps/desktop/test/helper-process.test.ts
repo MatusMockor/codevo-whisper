@@ -1,0 +1,74 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import type { HelperMessage } from '../src/main/helper/helper-channel';
+import type { HelperProcess } from '../src/main/helper/helper-process';
+import { protocolHelper } from './protocol-helper';
+
+let helper: HelperProcess | null = null;
+
+afterEach(async () => {
+  await helper?.stop();
+  helper = null;
+});
+
+async function started(timeoutMs?: number): Promise<HelperProcess> {
+  helper = protocolHelper(timeoutMs);
+  await helper.start();
+  return helper;
+}
+
+describe('HelperProcess', () => {
+  it('matches responses by id', async () => {
+    const process = await started();
+    const events: HelperMessage[] = [];
+    process.onEvent((event) => events.push(event));
+
+    const [slow, fast] = await Promise.all([
+      process.request('echo', { value: 'slow', delayMs: 80 }),
+      process.request('echo', { value: 'fast', delayMs: 0 }),
+      process.request('emit', { event: { event: 'shortcut', name: 'paste-last' } }),
+    ]);
+
+    expect(slow.value).toBe('slow');
+    expect(fast.value).toBe('fast');
+    expect(events).toEqual([{ event: 'shortcut', name: 'paste-last' }]);
+  });
+
+  it('times out a silent command', async () => {
+    const process = await started(100);
+
+    await expect(process.request('silent')).rejects.toThrow('helper-timeout:silent');
+    expect((await process.request('ping')).pong).toBe(true);
+  });
+
+  it('rejects an error response', async () => {
+    const process = await started();
+
+    await expect(process.request('nonsense')).rejects.toThrow('helper-error:nonsense:unknown-command');
+  });
+
+  it('restarts once after a crash and then reports failure', async () => {
+    const process = await started();
+    const restarts: number[] = [];
+    process.onRestart(() => restarts.push(1));
+    const first = (await process.request('ping')).pid;
+
+    await expect(process.request('crash')).rejects.toThrow('helper-exited');
+    const second = (await process.request('ping')).pid;
+    await expect(process.request('crash')).rejects.toThrow('helper-exited');
+
+    expect(second).not.toBe(first);
+    expect(restarts).toEqual([1]);
+    await expect(process.request('ping')).rejects.toThrow('helper-unavailable');
+  });
+
+  it('rejects requests after stop without restarting', async () => {
+    const process = await started();
+    const restarts: number[] = [];
+    process.onRestart(() => restarts.push(1));
+
+    await process.stop();
+
+    await expect(process.request('ping')).rejects.toThrow('helper-unavailable');
+    expect(restarts).toEqual([]);
+  });
+});

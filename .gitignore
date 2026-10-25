@@ -10,3 +10,4 @@ apps/desktop/resources/bin/
 test-results/
 playwright-report/
 *.tsbuildinfo
+native/macos-helper/build/

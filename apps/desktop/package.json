@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
     "build": "electron-vite build",
+    "build:helper": "../../native/macos-helper/build.sh",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:e2e": "electron-vite build && env -u ELECTRON_RUN_AS_NODE playwright test"
