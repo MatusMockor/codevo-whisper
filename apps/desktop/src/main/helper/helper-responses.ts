@@ -1,5 +1,5 @@
 import type { HelperMessage } from './helper-channel';
-import type { AppTarget, FocusedElement, KeyEvent, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputLostReason, KeyEvent, Permissions, ShortcutName } from './input-helper';
 
 function nullableBoolean(message: HelperMessage, key: string): boolean | null {
   const value = message[key];
@@ -64,6 +64,11 @@ export function parseKeyEvent(message: HelperMessage): KeyEvent | null {
 
 export function parseShortcut(message: HelperMessage): ShortcutName | null {
   return message['event'] === 'shortcut' && message['name'] === 'paste-last' ? 'paste-last' : null;
+}
+
+export function parseInputLost(message: HelperMessage): InputLostReason | null {
+  const event = message['event'];
+  return event === 'tap-reenabled' || event === 'tap-error' ? event : null;
 }
 
 export function parseRecordedKey(message: HelperMessage): number | null {

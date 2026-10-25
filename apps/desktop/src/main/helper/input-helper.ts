@@ -12,6 +12,8 @@ export type FocusedElement = { editable: boolean | null; role: string | null };
 
 export type ShortcutName = 'paste-last';
 
+export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted';
+
 export interface InputHelper {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -28,4 +30,5 @@ export interface InputHelper {
   recordKey(timeoutMs: number): Promise<number | null>;
   onKey(listener: (event: KeyEvent) => void): () => void;
   onShortcut(listener: (name: ShortcutName) => void): () => void;
+  onInputLost(listener: (reason: InputLostReason) => void): () => void;
 }

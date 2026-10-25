@@ -1,5 +1,5 @@
 import { consoleLogger } from '../logging/logger';
-import type { AppTarget, FocusedElement, InputHelper, KeyEvent, KeyPhase, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, KeyPhase, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 export type FakeInputHelperState = {
@@ -38,6 +38,7 @@ export class FakeInputHelper implements InputHelper {
   private savedClipboard: string | null = null;
   private readonly keys = new Listeners<KeyEvent>(consoleLogger, 'Fake key listener failed');
   private readonly shortcuts = new Listeners<ShortcutName>(consoleLogger, 'Fake shortcut listener failed');
+  private readonly inputLosses = new Listeners<InputLostReason>(consoleLogger, 'Fake input lost listener failed');
 
   constructor(state: Partial<FakeInputHelperState> = {}) {
     const initial = { ...DEFAULT_STATE, ...state };
@@ -125,6 +126,10 @@ export class FakeInputHelper implements InputHelper {
     return this.shortcuts.add(listener);
   }
 
+  onInputLost(listener: (reason: InputLostReason) => void): () => void {
+    return this.inputLosses.add(listener);
+  }
+
   pressKey(phase: KeyPhase, keycode: number, ts = Date.now()): void {
     if (!this.listening.includes(keycode)) {
       return;
@@ -134,5 +139,9 @@ export class FakeInputHelper implements InputHelper {
 
   pressPasteLast(): void {
     this.shortcuts.emit('paste-last');
+  }
+
+  loseInput(reason: InputLostReason): void {
+    this.inputLosses.emit(reason);
   }
 }

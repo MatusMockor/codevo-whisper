@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HelperProcess } from '../src/main/helper/helper-process';
 import { HelperProcessInputHelper } from '../src/main/helper/helper-process-input-helper';
-import type { KeyEvent } from '../src/main/helper/input-helper';
+import type { InputLostReason, KeyEvent } from '../src/main/helper/input-helper';
 import { protocolHelper } from './protocol-helper';
 
 let channel: HelperProcess | null = null;
@@ -83,6 +83,19 @@ describe('HelperProcessInputHelper', () => {
     expect(await recorded).toBe(62);
     expect(await unsupported).toBe(0);
     expect(await helper.recordKey(50)).toBeNull();
+  });
+
+  it('reports lost input on tap events and after a helper restart', async () => {
+    const { channel, helper } = await started();
+    const reasons: InputLostReason[] = [];
+    helper.onInputLost((reason) => reasons.push(reason));
+
+    await channel.request('emit', { event: { event: 'tap-reenabled', reason: 'timeout' } });
+    await channel.request('emit', { event: { event: 'tap-error', reason: 'tap-create-failed' } });
+    await channel.request('emit', { event: { event: 'key', phase: 'down', keycode: 61, ts: 5 } });
+    await expect(channel.request('crash')).rejects.toThrow('helper-exited');
+
+    await expect.poll(() => reasons).toEqual(['tap-reenabled', 'tap-error', 'helper-restarted']);
   });
 
   it('listens again after the helper restarts', async () => {

@@ -1,7 +1,11 @@
 import { app, BrowserWindow, dialog, session } from 'electron';
 import { join } from 'node:path';
 import { configureAppIdentity } from './app/app-identity';
+import { createInputHelper } from './app/input-helper-factory';
+import { startInput } from './app/start-input';
 import { createStartup } from './app/startup';
+import { electronPowerEvents } from './hotkey/electron-power-events';
+import { HotkeyService } from './hotkey/hotkey-service';
 import { registerIpc } from './ipc/register-ipc';
 import { consoleLogger } from './logging/logger';
 import { installContentSecurityPolicy } from './security/content-security-policy';
@@ -15,6 +19,8 @@ const SETTINGS_FILE = 'settings.json';
 configureAppIdentity();
 app.enableSandbox();
 
+const inputHelper = createInputHelper(consoleLogger);
+
 async function initialize(): Promise<void> {
   const source = rendererSource();
   if (source.kind === 'file') {
@@ -23,6 +29,7 @@ async function initialize(): Promise<void> {
   const settings = new SettingsStore(join(app.getPath('userData'), SETTINGS_FILE), consoleLogger);
   await settings.load();
   registerIpc({ settings, source });
+  void startInput(inputHelper, new HotkeyService(inputHelper, settings, electronPowerEvents), consoleLogger);
 }
 
 function failStartup(error: unknown): void {
@@ -49,6 +56,10 @@ app.on('window-all-closed', () => {
     return;
   }
   app.quit();
+});
+
+app.on('will-quit', () => {
+  void inputHelper.stop();
 });
 
 app.on('activate', () => {

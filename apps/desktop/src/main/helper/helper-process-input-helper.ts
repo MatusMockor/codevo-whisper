@@ -5,13 +5,14 @@ import {
   isTrue,
   parseFocusedElement,
   parseFrontmost,
+  parseInputLost,
   parseKeyEvent,
   parsePermissions,
   parseRecordedKey,
   parseShortcut,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, FocusedElement, InputHelper, KeyEvent, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, PermissionKind, Permissions, ShortcutName } from './input-helper';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
@@ -114,6 +115,21 @@ export class HelperProcessInputHelper implements InputHelper {
       }
       listener(name);
     });
+  }
+
+  onInputLost(listener: (reason: InputLostReason) => void): () => void {
+    const unsubscribeEvents = this.channel.onEvent((message) => {
+      const reason = parseInputLost(message);
+      if (!reason) {
+        return;
+      }
+      listener(reason);
+    });
+    const unsubscribeRestarts = this.channel.onRestart(() => listener('helper-restarted'));
+    return () => {
+      unsubscribeEvents();
+      unsubscribeRestarts();
+    };
   }
 
   private nextRecordedKey(timeoutMs: number): { result: Promise<number | null>; cancel: () => void } {
