@@ -22,7 +22,7 @@
   - revoke closes the session and aborts its in-flight STT call;
   - `MAX_TEXT_CHARS` is applied to every outgoing text.
 - The ingestion limit is per device and shared by its sessions:
-  - burst 150 s of audio, which is more than the 2-minute client retry buffer from spec 5.4;
+  - burst 180 s of audio, which covers the 2-minute client retry buffer from spec 5.4 with 60 s to spare;
   - refill at 1.25 x real time;
   - `flow paused` when less than 30 s is left, `flow resumed` once 60 s is available again;
   - when the bucket runs out the session fails with `bad_message` "audio rate exceeded".
@@ -67,7 +67,7 @@
 - `class IngestionLimiter { constructor(clock: () => number, limits: IngestionLimits); take(deviceId: string, bytes: number): boolean; availableSeconds(deviceId: string): number }`
 
 - [ ] Tests:
-  - a frozen clock allows exactly 150 s and rejects the next byte;
+  - a frozen clock allows exactly 180 s and rejects the next byte;
   - after 10 s of clock time, 12.5 s more is allowed;
   - two device ids are independent;
   - the bucket never grows above the burst.
@@ -95,7 +95,7 @@
   - revoke during a live partial aborts the call;
   - the second segment fails with 500: final 0 is sent, then `error stt_unavailable` with the sessionId, and no `done`.
 - [ ] Ingestion tests:
-  - a frozen clock with 121 s sent gives `flow paused: true`; sending past 150 s gives `error bad_message`;
+  - a frozen clock with 151 s sent gives `flow paused: true`; sending past 180 s gives `error bad_message`;
   - with a paused bucket, advancing the clock 60 s gives `flow paused: false`;
   - 120 s at once followed by 60 x 1 s paced stays healthy;
   - two sessions of one device share the bucket.

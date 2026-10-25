@@ -6,11 +6,12 @@ import type { ServerConfig } from '../config';
 import type { DeviceRepository } from '../devices/device-repository';
 import { silentLogger, type Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
-import type { TranscriptionQueue } from '../stt/transcription-queue';
+import type { GatewayDispatcher } from '../stt/gateway-context';
 import { GatewayConnection } from './connection';
 import { ClientAdmission } from './client-admission';
-import { HANDSHAKE_TIMEOUT_MS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS, PROXIED_TCP_LIMITS } from './limits';
-import { BYTES_PER_SECOND } from '../stt/chunk-audio';
+import { HANDSHAKE_TIMEOUT_MS, INGESTION_LIMITS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS, PROXIED_TCP_LIMITS } from './limits';
+import { BYTES_PER_SECOND } from './pcm';
+import { IngestionLimiter } from './ingestion-limiter';
 import { DeviceAudioBudget } from './device-audio-budget';
 import { PreAuthLimiter } from './pre-auth-limiter';
 import { TcpAdmission } from './tcp-admission';
@@ -21,7 +22,7 @@ export type GatewayDeps = {
   config: ServerConfig;
   serverKey: KeyPair | (() => KeyPair);
   devices: DeviceRepository;
-  queue: TranscriptionQueue;
+  dispatcher: GatewayDispatcher;
   pairing: PairingService;
   clock?: () => number;
   handshakeTimeoutMs?: number;
@@ -46,6 +47,7 @@ function keyProvider(serverKey: GatewayDeps['serverKey']): () => KeyPair {
 
 export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
   const sessions = new SessionRegistry();
+  const clock = deps.clock ?? Date.now;
   const trustedHeader = deps.config.trustedProxyHeader;
   const limiter = new PreAuthLimiter(trustedHeader === null ? PRE_AUTH_LIMITS : PROXIED_TCP_LIMITS);
   const clientLimiter = trustedHeader === null ? null : new PreAuthLimiter(PRE_AUTH_LIMITS);
@@ -68,12 +70,13 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
   const connectionDeps = {
     serverKey: keyProvider(deps.serverKey),
     devices: deps.devices,
-    queue: deps.queue,
+    dispatcher: deps.dispatcher,
     pairing: deps.pairing,
     sessions,
-    clock: deps.clock ?? Date.now,
+    clock,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),
     budget: new DeviceAudioBudget(MAX_AUDIO_SECONDS * BYTES_PER_SECOND),
+    ingestion: new IngestionLimiter(clock, INGESTION_LIMITS),
     logger: deps.logger ?? silentLogger,
   };
   sockets.on('error', () => undefined);

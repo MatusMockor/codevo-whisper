@@ -4,16 +4,19 @@ import type { SessionRegistry } from '../gateway/session-registry';
 import type { ServerKeyHolder } from '../keys/server-key-holder';
 import type { WindowPairingService } from '../pairing/window-pairing-service';
 import type { SttHealthCheck } from '../stt/stt-client';
-import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { SERVER_VERSION } from '../version';
 import { AdminPairingOperator } from './admin-pairing-operator';
 import type { LineChannel } from './line-channel';
+
+export interface PendingJobs {
+  pendingJobs(): number;
+}
 
 export type AdminDeps = {
   pairing: WindowPairingService;
   devices: DeviceRepository;
   sessions: SessionRegistry;
-  queue: TranscriptionQueue;
+  jobs: PendingJobs;
   keys: ServerKeyHolder;
   stt: SttHealthCheck;
 };
@@ -44,7 +47,6 @@ export class AdminCommands {
   async revoke(deviceId: string): Promise<object> {
     const revoked = await this.deps.devices.remove(deviceId);
     const closedSessions = this.deps.sessions.closeDevice(deviceId, 'revoked');
-    this.deps.queue.cancelDevice(deviceId);
     return { revoked, closedSessions };
   }
 
@@ -66,7 +68,7 @@ export class AdminCommands {
       version: SERVER_VERSION,
       devices: devices.length,
       activeSessions: this.deps.sessions.count(),
-      queue: this.deps.queue.size(),
+      queue: this.deps.jobs.pendingJobs(),
       stt: await this.deps.stt.health(),
     };
   }

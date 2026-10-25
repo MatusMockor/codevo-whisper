@@ -13,11 +13,12 @@ import WebSocket from 'ws';
 import type { DeviceRepository } from '../devices/device-repository';
 import type { Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
-import type { TranscriptionQueue } from '../stt/transcription-queue';
+import type { GatewayDispatcher } from '../stt/gateway-context';
 import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
 import { closeSocket } from './close-socket';
 import type { DeviceAudioBudget } from './device-audio-budget';
+import type { IngestionLimiter } from './ingestion-limiter';
 import { CLOSE_INTERNAL_ERROR, CLOSE_UNSUPPORTED_DATA, MAX_SESSIONS_PER_DEVICE } from './limits';
 import { WebSocketSecureChannel } from './secure-channel';
 import { SessionHandler } from './session-handler';
@@ -26,13 +27,14 @@ import type { SessionRegistry } from './session-registry';
 export type ConnectionDeps = {
   serverKey: () => KeyPair;
   devices: DeviceRepository;
-  queue: TranscriptionQueue;
+  dispatcher: GatewayDispatcher;
   pairing: PairingService;
   sessions: SessionRegistry;
   clock: () => number;
   beforeReady: (deviceId: string) => Promise<void>;
   logger: Logger;
   budget: DeviceAudioBudget;
+  ingestion: IngestionLimiter;
 };
 
 const EMPTY = new Uint8Array(0);
@@ -127,10 +129,11 @@ export class GatewayConnection {
       return;
     }
     new SessionHandler(channel, deviceId, {
-      queue: this.deps.queue,
+      dispatcher: this.deps.dispatcher,
       clock: this.deps.clock,
       logger: this.deps.logger,
       budget: this.deps.budget,
+      ingestion: this.deps.ingestion,
     });
     channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
   }
