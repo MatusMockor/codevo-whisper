@@ -60,17 +60,22 @@ describe('RemoteDictation protocol handling', () => {
     expect(await dictation.finish()).toBe('prvý druhý');
   });
 
-  it('holds audio while the server pauses the flow and sends it all on finish', async () => {
+  it('holds audio and the finish while the server pauses the flow, also after the key was released', async () => {
     let sessionId = '';
-    let audioBeforeFinish = -1;
+    let held: string[] = [];
+    let audioFrames = 0;
     const engine = await scripted((session, message) => {
       if (message.type === 'start') {
         sessionId = message.sessionId;
         session.send({ type: 'flow', paused: true });
+        setTimeout(() => {
+          held = session.received.map((received) => received.type);
+          session.send({ type: 'flow', paused: false });
+        }, 150);
         return;
       }
       if (message.type === 'finish') {
-        audioBeforeFinish = session.received.filter((received) => received.type === 'audio').length;
+        audioFrames = session.received.filter((received) => received.type === 'audio').length;
         session.send({ type: 'done', sessionId });
       }
     });
@@ -80,9 +85,45 @@ describe('RemoteDictation protocol handling', () => {
     for (let index = 0; index < 30; index += 1) {
       dictation.push(new Uint8Array(3200));
     }
+    const finished = dictation.finish();
 
-    expect(await dictation.finish()).toBe('');
-    expect(audioBeforeFinish).toBe(3);
+    expect(await finished).toBe('');
+    expect(held).toEqual(['hello', 'start']);
+    expect(audioFrames).toBe(3);
+  });
+
+  it('asks for partials only in Živý text mode and never sends false', async () => {
+    const starts: string[] = [];
+    const engine = await scripted((session, message) => {
+      if (message.type !== 'start') {
+        return;
+      }
+      starts.push(new TextDecoder().decode(session.plaintexts.at(-1)?.subarray(1)));
+      session.send({ type: 'done', sessionId: message.sessionId });
+    });
+
+    for (const partials of [true, false, undefined]) {
+      const preparation = await engine.prepare();
+      const options = partials === undefined ? { language: 'sk' as const, signal: new AbortController().signal } : { language: 'sk' as const, signal: new AbortController().signal, partials };
+      const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start(options);
+      await dictation.finish();
+    }
+
+    expect(starts.map((json) => (JSON.parse(json) as { partials?: unknown }).partials)).toEqual([true, undefined, undefined]);
+    expect(starts.slice(1).every((json) => !json.includes('partials'))).toBe(true);
+  });
+
+  it('reports a failed segment that arrives as an empty final and an error, keeping the earlier text', async () => {
+    const engine = await scripted((session, message) => {
+      if (message.type === 'start') {
+        session.send({ type: 'final', sessionId: message.sessionId, segmentId: 0, text: 'prvý' });
+        session.send({ type: 'final', sessionId: message.sessionId, segmentId: 1, text: '' });
+        session.send({ type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: message.sessionId });
+      }
+    });
+    const dictation = await startDictation(engine);
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: 'prvý' });
   });
 
   it('fails with a protocol error on an unexpected message', async () => {

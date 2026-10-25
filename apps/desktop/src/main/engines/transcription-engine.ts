@@ -14,7 +14,7 @@ export type EngineUnavailableReason =
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
-export type DictationOptions = { language: Language; signal: AbortSignal };
+export type DictationOptions = { language: Language; signal: AbortSignal; partials?: boolean };
 
 export interface EngineDictation {
   push(pcm: Uint8Array): void;

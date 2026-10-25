@@ -46,6 +46,7 @@ export class DictationSession {
   private phase: Phase = 'recording';
   private readonly startedAt: number;
   private readonly language: Language;
+  private readonly partials: boolean;
   private readonly microphone: MicrophoneSetting;
   private readonly controller = new AbortController();
   private fallbackDevice: string | null = null;
@@ -59,8 +60,9 @@ export class DictationSession {
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
-    const { language, microphone } = deps.settings.get();
+    const { language, microphone, overlay } = deps.settings.get();
     this.language = language;
+    this.partials = overlay === 'live';
     this.microphone = microphone;
   }
 
@@ -185,7 +187,7 @@ export class DictationSession {
       return this.dictation;
     }
     this.prepared = engine;
-    const dictation = engine.start({ language: this.language, signal: this.controller.signal });
+    const dictation = engine.start({ language: this.language, signal: this.controller.signal, partials: this.partials });
     this.dictation = dictation;
     this.relay.attach(dictation);
     return dictation;

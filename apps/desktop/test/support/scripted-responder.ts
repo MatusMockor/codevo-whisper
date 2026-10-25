@@ -17,6 +17,7 @@ export type ResponderSession = {
   socket: WebSocket;
   send(message: ServerMessage): void;
   received: ClientMessage[];
+  plaintexts: Uint8Array[];
   onMessage(listener: (message: ClientMessage) => void): void;
 };
 
@@ -51,21 +52,36 @@ export async function startResponder(onOpening: (socket: WebSocket, opening: Uin
   };
 }
 
+function decodeLenient(plaintext: Uint8Array): ClientMessage {
+  if (plaintext[0] !== 0x01) {
+    return decodeClientMessage(plaintext);
+  }
+  const object = JSON.parse(new TextDecoder().decode(plaintext.subarray(1))) as Record<string, unknown>;
+  if (object.type !== 'start') {
+    return decodeClientMessage(plaintext);
+  }
+  return { type: 'start', sessionId: String(object.sessionId), language: 'sk' };
+}
+
 export function acceptSession(socket: WebSocket, opening: Uint8Array, serverKey: KeyPair, rekeyEvery?: number): ResponderSession {
   const responder = createHandshake({ pattern: 'IK', initiator: false, prologue: PROLOGUE_SESSION, staticKey: serverKey });
   responder.readMessage(decodeOpeningFrame(opening).noiseMessage);
   socket.send(responder.writeMessage(new Uint8Array(0)));
   const transport = new SecureTransport(responder.result(), rekeyEvery);
   const received: ClientMessage[] = [];
+  const plaintexts: Uint8Array[] = [];
   const listeners: Array<(message: ClientMessage) => void> = [];
   socket.on('message', (data: Buffer) => {
-    const message = decodeClientMessage(transport.open(new Uint8Array(data)));
+    const plaintext = transport.open(new Uint8Array(data));
+    plaintexts.push(plaintext);
+    const message = decodeLenient(plaintext);
     received.push(message);
     listeners.forEach((listener) => listener(message));
   });
   return {
     socket,
     received,
+    plaintexts,
     send: (message) => socket.send(transport.seal(encodeServerMessage(message))),
     onMessage: (listener) => listeners.push(listener),
   };

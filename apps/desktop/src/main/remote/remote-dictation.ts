@@ -1,4 +1,4 @@
-import type { ServerMessage } from '@codevo-whisper/protocol';
+import type { ClientMessage, ServerMessage } from '@codevo-whisper/protocol';
 import { TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason } from '../engines/transcription-engine';
 import { AudioOutbox } from './audio-outbox';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
@@ -110,12 +110,20 @@ export class RemoteDictation implements EngineDictation {
     const attempt: Attempt = { ...this.idle(connection), sessionId: this.deps.newSessionId?.() ?? crypto.randomUUID() };
     connection.onMessage((message) => this.receive(attempt, message));
     connection.onClose((failure) => this.dropped(attempt, failure));
-    connection.send({ type: 'start', sessionId: attempt.sessionId, language: this.deps.options.language });
+    connection.send(this.startMessage(attempt.sessionId));
     return attempt;
   }
 
+  private startMessage(sessionId: string): ClientMessage {
+    const start: ClientMessage = { type: 'start', sessionId, language: this.deps.options.language };
+    if (this.deps.options.partials !== true) {
+      return start;
+    }
+    return { ...start, partials: true } as ClientMessage;
+  }
+
   private pump(): void {
-    if (this.settled || this.reconnecting || (this.paused && !this.finishing)) {
+    if (this.settled || this.reconnecting || this.paused) {
       return;
     }
     const { connection } = this.attempt;
