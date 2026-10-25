@@ -19,7 +19,7 @@ export type HomeWiringDeps = {
   permissions: Pick<PermissionsService, 'status'>;
   pause: PauseState;
   lastTranscript: Pick<LastTranscript, 'onChange'>;
-  server: Pick<ServerService, 'isPaired' | 'onChange'>;
+  server: Pick<ServerService, 'isPaired' | 'needsRepair' | 'onChange'>;
   window: MainWindowEvents;
   logger: Logger;
 };
@@ -28,7 +28,7 @@ export type HomeServices = { stats: StatsStore; status: AppStatusService; dispos
 
 export function createHomeServices({ settings, models, permissions, pause, lastTranscript, server, window, logger }: HomeWiringDeps): HomeServices {
   const stats = new StatsStore(join(app.getPath('userData'), STATS_FILE), undefined, logger);
-  const pairing = { isPaired: () => server.isPaired(), onChange: (listener: () => void) => server.onChange(() => listener()) };
+  const pairing = { isPaired: () => server.isPaired(), needsRepair: () => server.needsRepair(), onChange: (listener: () => void) => server.onChange(() => listener()) };
   const status = new AppStatusService({ settings, models, permissions, pause, server: pairing, logger });
   status.start();
   const unsubscribers = [

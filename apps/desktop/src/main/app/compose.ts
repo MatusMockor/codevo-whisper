@@ -142,6 +142,7 @@ export function composeApplication(logger: Logger): Application {
       pause,
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
+      openServer: () => mainWindow.open('server'),
       logger,
     });
     const tray = new TrayMenu({

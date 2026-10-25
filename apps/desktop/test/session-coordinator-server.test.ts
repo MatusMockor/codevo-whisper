@@ -69,6 +69,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   const capture = new InProcessCapture();
   const lastTranscript = new LastTranscript();
   const states: OverlayState[] = [];
+  const opened: string[] = [];
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
@@ -80,10 +81,11 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     stats: new StatsStore(join(scratch, 'stats.json'), undefined, logger),
     pause: new PauseState(logger),
     overlay: (state) => states.push(state),
+    openServer: () => opened.push('server'),
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states };
+  return { helper, capture, lastTranscript, states, opened, pairing };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, marker: number, seconds = 1): Promise<void> {
@@ -157,5 +159,17 @@ describe('SessionCoordinator with the server engine', () => {
     expect(gateway.stt.requests).toEqual([]);
     expect(gateway.server.gateway.sessions.count()).toBe(0);
     expect(harness.helper.pasted).toEqual([]);
+  });
+
+  it('shows a hard re-pair error with Server, potom lokálne after a revoke and never transcribes locally', async () => {
+    const harness = await prepared({ engineOrder: ['server', 'local'] });
+    await gateway.admin({ cmd: 'revoke', deviceId: harness.pairing.deviceId });
+
+    await dictate(harness, 4);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverRepair, action: 'open-server' });
+    expect(harness.helper.pasted).toEqual([]);
+    coordinator?.act('open-server');
+    expect(harness.opened).toEqual(['server']);
   });
 });

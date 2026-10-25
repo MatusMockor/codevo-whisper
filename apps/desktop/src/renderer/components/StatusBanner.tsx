@@ -3,9 +3,9 @@ import { bannerContent } from '../home/banner-content';
 import type { Live } from '../home/live-value';
 import { CheckIcon, PauseIcon, WarnIcon } from './Icons';
 
-type StatusBannerProps = { status: Live<AppStatus>; onOpenSettings: () => void };
+type StatusBannerProps = { status: Live<AppStatus>; onOpenSettings: () => void; onOpenServer: () => void };
 
-export function StatusBanner({ status, onOpenSettings }: StatusBannerProps) {
+export function StatusBanner({ status, onOpenSettings, onOpenServer }: StatusBannerProps) {
   if (status.kind === 'loading') {
     return null;
   }
@@ -48,8 +48,8 @@ export function StatusBanner({ status, onOpenSettings }: StatusBannerProps) {
         <WarnIcon />
       </span>
       <span>{content.message}</span>
-      <button type="button" className="btn primary" onClick={onOpenSettings}>
-        Otvoriť nastavenia
+      <button type="button" className="btn primary" onClick={content.target === 'server' ? onOpenServer : onOpenSettings}>
+        {content.target === 'server' ? 'Otvoriť Server' : 'Otvoriť nastavenia'}
       </button>
     </div>
   );

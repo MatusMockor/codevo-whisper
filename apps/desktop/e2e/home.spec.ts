@@ -10,7 +10,7 @@ import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './la
 type HookGlobal = { codevoE2e: E2eHooks };
 
 const RIGHT_CONTROL = { keycode: 62, label: 'Pravý ⌃ Control' } as const;
-const READY: AppStatus = { hotkeyLabel: RIGHT_CONTROL.label, mode: 'hold', modelReady: true, pairingNeeded: false, permissionsOk: true, paused: false };
+const READY: AppStatus = { hotkeyLabel: RIGHT_CONTROL.label, mode: 'hold', modelReady: true, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false };
 const TRANSCRIPT = 'Ahoj Peter, pozrel som si ten pull request.';
 
 let app: ElectronApplication;

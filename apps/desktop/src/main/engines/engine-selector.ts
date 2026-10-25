@@ -1,7 +1,13 @@
 import type { EngineId } from '../../shared/settings';
-import type { Preparation, TranscriptionEngine } from './transcription-engine';
+import type { EngineUnavailableReason, Preparation, TranscriptionEngine } from './transcription-engine';
 
 const NOT_READY: Preparation = { ready: false };
+
+const TERMINAL_REASONS: ReadonlySet<EngineUnavailableReason> = new Set(['server-repair-needed']);
+
+function isTerminal(preparation: Preparation): boolean {
+  return !preparation.ready && preparation.reason !== undefined && TERMINAL_REASONS.has(preparation.reason);
+}
 
 export class EngineSelector {
   constructor(private readonly engines: readonly TranscriptionEngine[]) {}
@@ -14,7 +20,7 @@ export class EngineSelector {
         continue;
       }
       const preparation = await engine.prepare();
-      if (preparation.ready) {
+      if (preparation.ready || isTerminal(preparation)) {
         return preparation;
       }
       primary ??= preparation;

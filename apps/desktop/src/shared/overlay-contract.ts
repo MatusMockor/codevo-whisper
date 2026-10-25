@@ -1,4 +1,4 @@
-export const OVERLAY_ACTIONS = ['open-settings', 'copy-last'] as const;
+export const OVERLAY_ACTIONS = ['open-settings', 'copy-last', 'open-server'] as const;
 
 export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 

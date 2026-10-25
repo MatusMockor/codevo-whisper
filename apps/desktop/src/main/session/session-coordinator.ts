@@ -29,6 +29,7 @@ export type SessionCoordinatorDeps = {
   pause: PauseState;
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
+  openServer?: () => void;
   clock?: () => number;
   logger?: Logger;
 };
@@ -97,6 +98,10 @@ export class SessionCoordinator {
   act(action: OverlayAction): void {
     if (action === 'open-settings') {
       this.deps.openSettings?.();
+      return;
+    }
+    if (action === 'open-server') {
+      this.deps.openServer?.();
       return;
     }
     this.copyLast().catch((error: unknown) => {

@@ -17,9 +17,9 @@ export type AppStatusDeps = {
   logger: Logger;
 };
 
-export type ServerPairingState = { isPaired(): Promise<boolean>; onChange(listener: () => void): () => void };
+export type ServerPairingState = { isPaired(): Promise<boolean>; needsRepair(): boolean; onChange(listener: () => void): () => void };
 
-const STATUS_KEYS = ['hotkeyLabel', 'mode', 'modelReady', 'pairingNeeded', 'permissionsOk', 'paused'] as const satisfies ReadonlyArray<keyof AppStatus>;
+const STATUS_KEYS = ['hotkeyLabel', 'mode', 'modelReady', 'pairingNeeded', 'serverRepairNeeded', 'permissionsOk', 'paused'] as const satisfies ReadonlyArray<keyof AppStatus>;
 
 function sameStatus(a: AppStatus | null, b: AppStatus): boolean {
   return a !== null && STATUS_KEYS.every((key) => a[key] === b[key]);
@@ -55,13 +55,15 @@ export class AppStatusService {
     const permissions = await this.deps.permissions.status();
     const localReady = isReady(this.deps.models.states(), localModelId);
     const paired = (await this.deps.server?.isPaired()) ?? false;
+    const repair = paired && (this.deps.server?.needsRepair() ?? false);
     this.localReady = localReady;
-    const usable = engineOrder.some((engine) => (engine === 'local' ? localReady : paired));
+    const usable = engineOrder.some((engine) => (engine === 'local' ? localReady : paired && !repair));
     return {
       hotkeyLabel: hotkey?.label ?? null,
       mode,
       modelReady: usable,
-      pairingNeeded: !usable && engineOrder[0] === 'server',
+      pairingNeeded: !usable && !repair && engineOrder[0] === 'server',
+      serverRepairNeeded: repair && engineOrder.includes('server'),
       permissionsOk: allPermissionsGranted(permissions),
       paused: this.deps.pause.isPaused(),
     };

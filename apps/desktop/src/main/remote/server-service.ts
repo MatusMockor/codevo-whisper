@@ -57,6 +57,10 @@ export class ServerService {
     return (await this.loadPairing(this.deps.vault.availability())) !== null;
   }
 
+  needsRepair(): boolean {
+    return this.deps.status.status().kind === 'repair-needed';
+  }
+
   onChange(listener: (view: ServerView) => void): () => void {
     return this.listeners.add(listener);
   }

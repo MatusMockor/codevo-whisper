@@ -37,15 +37,19 @@ function settingsError(message: string): ErrorState {
   return { kind: 'error', message, action: 'open-settings' };
 }
 
+function serverError(message: string): ErrorState {
+  return { kind: 'error', message, action: 'open-server' };
+}
+
 const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, ErrorState>> = Object.freeze({
   'no-model': settingsError(MESSAGES.noModel),
   'model-missing': settingsError(MESSAGES.brokenModel),
   'model-broken': settingsError(MESSAGES.brokenModel),
   'language-required': settingsError(MESSAGES.languageRequired),
   'binary-missing': errorState(MESSAGES.binaryMissing),
-  'server-not-paired': settingsError(MESSAGES.serverNotPaired),
+  'server-not-paired': serverError(MESSAGES.serverNotPaired),
   'server-offline': errorState(MESSAGES.serverOffline),
-  'server-repair-needed': settingsError(MESSAGES.serverRepair),
+  'server-repair-needed': serverError(MESSAGES.serverRepair),
   'server-busy': errorState(MESSAGES.serverBusy),
   'server-storage': errorState(MESSAGES.serverStorage),
 });
@@ -64,7 +68,7 @@ export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean)
     return { kind: 'error', message: FAILURE_MESSAGES[reason], action: 'copy-last' };
   }
   if (reason === 'repair-needed') {
-    return settingsError(FAILURE_MESSAGES[reason]);
+    return serverError(FAILURE_MESSAGES[reason]);
   }
   return errorState(FAILURE_MESSAGES[reason]);
 }
