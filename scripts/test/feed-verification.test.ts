@@ -80,6 +80,13 @@ describe('verifyFeed', () => {
     expect(report.archs).toEqual(['arm64']);
   });
 
+  it('reports a manifest version other than the release version', async () => {
+    const x64 = asset(X64_ZIP, 'x64 zip');
+    const report = await verifyFeed(writeManifest([asset(ARM64_ZIP, 'arm64 zip'), x64], x64), '1.3.0');
+
+    expect(report.problems).toEqual(['manifest version 1.2.0 != release version 1.3.0']);
+  });
+
   it('rejects a url that leaves the feed directory', async () => {
     const x64 = asset(X64_ZIP, 'x64 zip');
     const report = await verifyFeed(writeManifest([asset(ARM64_ZIP, 'arm64 zip'), x64, { url: '../secret.zip', sha512: sha512('x'), size: 1 }], x64));

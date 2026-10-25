@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -69,5 +69,45 @@ describe('verify-feed.ts', () => {
     expect(valid.stdout).toContain('feed 1.2.0 valid');
     expect(tampered.status).toBe(1);
     expect(tampered.stderr).toContain('sha512 mismatch');
+  });
+});
+
+describe('verify-release-assets.ts', () => {
+  it('passes for identical directories and fails for a tampered asset', () => {
+    const local = join(workDir, 'local');
+    const remote = join(workDir, 'remote');
+    mkdirSync(local);
+    mkdirSync(remote);
+    writeFileSync(join(local, 'latest-mac.yml'), 'version: 1.2.0');
+    writeFileSync(join(remote, 'latest-mac.yml'), 'version: 1.2.0');
+
+    const same = run('verify-release-assets.ts', [local, remote]);
+    writeFileSync(join(remote, 'latest-mac.yml'), 'version: 6.6.6');
+    const tampered = run('verify-release-assets.ts', [local, remote]);
+
+    expect(same.status).toBe(0);
+    expect(tampered.status).toBe(1);
+    expect(tampered.stderr).toContain('latest-mac.yml: sha256 differs');
+  });
+});
+
+describe('notary-state-cli.ts', () => {
+  it('records a submission and reports the phase and id', () => {
+    writeFileSync(join(workDir, 'app.zip'), 'signed app');
+
+    expect(run('notary-state-cli.ts', ['phase', workDir]).stdout.trim()).toBe('none');
+    expect(run('notary-state-cli.ts', ['record', workDir, 'app', 'abc-123', 'app.zip']).status).toBe(0);
+    expect(run('notary-state-cli.ts', ['phase', workDir]).stdout.trim()).toBe('app-submitted');
+    expect(run('notary-state-cli.ts', ['submission', workDir, 'app']).stdout.trim()).toBe('abc-123');
+  });
+
+  it('fails when the saved app no longer matches', () => {
+    writeFileSync(join(workDir, 'app.zip'), 'signed app');
+    run('notary-state-cli.ts', ['record', workDir, 'app', 'abc-123', 'app.zip']);
+    writeFileSync(join(workDir, 'app.zip'), 'rebuilt app');
+    const result = run('notary-state-cli.ts', ['phase', workDir]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('refusing to resume');
   });
 });

@@ -5,9 +5,9 @@ arch="${1:?usage: scripts/release/package-distributables.sh <arm64|x64> <version
 version="${2:?usage: scripts/release/package-distributables.sh <arm64|x64> <version>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 desktop="$(cd "$here/../../apps/desktop" && pwd)"
-output="$desktop/release/dist/$arch"
 source "$here/mac-app-path.sh"
-app="$(mac_app_path "$desktop/release/stage/$arch" "$arch")"
+output="$(mac_release_dir dist "$arch")"
+app="$(mac_app_path "$(mac_release_dir stage "$arch")" "$arch")"
 
 [ -d "$app" ] || { echo "missing $app, run scripts/release/package-app.sh first" >&2; exit 1; }
 

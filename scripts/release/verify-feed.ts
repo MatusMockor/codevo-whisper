@@ -1,12 +1,12 @@
 import { FeedError } from './feed-error.ts';
 import { verifyFeed } from './feed-verification.ts';
 
-async function main(manifestFile: string | undefined): Promise<number> {
+async function main(manifestFile: string | undefined, expectedVersion: string | undefined): Promise<number> {
   if (manifestFile === undefined) {
-    console.error('usage: node scripts/release/verify-feed.ts <feed/latest-mac.yml>');
+    console.error('usage: node scripts/release/verify-feed.ts <feed/latest-mac.yml> [expected-version]');
     return 2;
   }
-  const report = await verifyFeed(manifestFile);
+  const report = await verifyFeed(manifestFile, expectedVersion);
   if (report.problems.length > 0) {
     report.problems.forEach((problem) => console.error(problem));
     return 1;
@@ -18,7 +18,7 @@ async function main(manifestFile: string | undefined): Promise<number> {
 
 async function run(): Promise<number> {
   try {
-    return await main(process.argv[2]);
+    return await main(process.argv[2], process.argv[3]);
   } catch (error) {
     if (error instanceof FeedError) {
       console.error(error.message);

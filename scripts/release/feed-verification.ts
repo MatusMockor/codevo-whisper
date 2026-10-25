@@ -1,19 +1,12 @@
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { fileHash } from './file-hash.ts';
 import { parseMacManifest, type FeedFile, type MacManifest } from './mac-manifest.ts';
+import { zipArch } from './zip-arch.ts';
 
 export const REQUIRED_ARCHS = ['arm64', 'x64'] as const;
 
 export type FeedReport = { manifest: MacManifest; archs: string[]; problems: string[] };
-
-async function sha512Of(file: string): Promise<string> {
-  const hash = createHash('sha512');
-  await pipeline(createReadStream(file), hash);
-  return hash.digest('base64');
-}
 
 async function sizeOf(file: string): Promise<number | null> {
   return stat(file).then(
@@ -23,7 +16,7 @@ async function sizeOf(file: string): Promise<number | null> {
 }
 
 async function checkEntry(feedDir: string, entry: FeedFile): Promise<string | null> {
-  if (basename(entry.url) !== entry.url || entry.url === '..') {
+  if (basename(entry.url) !== entry.url || entry.url === '..' || entry.url === '.') {
     return `${entry.url}: not a plain file name`;
   }
   const file = join(feedDir, entry.url);
@@ -34,21 +27,8 @@ async function checkEntry(feedDir: string, entry: FeedFile): Promise<string | nu
   if (size !== entry.size) {
     return `${entry.url}: size ${size} != ${entry.size}`;
   }
-  if ((await sha512Of(file)) !== entry.sha512) {
+  if ((await fileHash(file, 'sha512', 'base64')) !== entry.sha512) {
     return `${entry.url}: sha512 mismatch`;
-  }
-  return null;
-}
-
-function zipArch(url: string): string | null {
-  if (!url.endsWith('.zip')) {
-    return null;
-  }
-  if (url.includes('-arm64-')) {
-    return 'arm64';
-  }
-  if (url.includes('-x64-') && !url.includes('arm64')) {
-    return 'x64';
   }
   return null;
 }
@@ -66,11 +46,18 @@ function primaryProblem(manifest: MacManifest): string | null {
   return listed ? null : `path ${manifest.path} does not match a listed file with the same sha512`;
 }
 
-export async function verifyFeed(manifestFile: string): Promise<FeedReport> {
+function versionProblem(manifest: MacManifest, expectedVersion: string | undefined): string | null {
+  if (expectedVersion === undefined || manifest.version === expectedVersion) {
+    return null;
+  }
+  return `manifest version ${manifest.version} != release version ${expectedVersion}`;
+}
+
+export async function verifyFeed(manifestFile: string, expectedVersion?: string): Promise<FeedReport> {
   const manifest = parseMacManifest(await readFile(manifestFile, 'utf8'), manifestFile);
   const entryProblems = await Promise.all(manifest.files.map((entry) => checkEntry(dirname(manifestFile), entry)));
   const archs = coveredArchs(manifest);
   const archProblem = archs.length === REQUIRED_ARCHS.length ? null : `expected zip entries for ${REQUIRED_ARCHS.join(' and ')}, found: ${archs.join(', ') || 'none'}`;
-  const problems = [...entryProblems, archProblem, primaryProblem(manifest)].filter((problem): problem is string => problem !== null);
+  const problems = [versionProblem(manifest, expectedVersion), ...entryProblems, archProblem, primaryProblem(manifest)].filter((problem): problem is string => problem !== null);
   return { manifest, archs, problems };
 }

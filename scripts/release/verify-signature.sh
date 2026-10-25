@@ -12,7 +12,7 @@ expect_signature() {
   details="$(codesign --display --verbose=4 "$file" 2>&1)" || { echo "$details" >&2; echo "$file: no readable signature" >&2; exit 1; }
   grep -q "^Identifier=$identifier$" <<<"$details" || { echo "$file: identifier is not $identifier" >&2; exit 1; }
   grep -q "^TeamIdentifier=$team$" <<<"$details" || { echo "$file: team is not $team" >&2; exit 1; }
-  grep -q "flags=0x10000(runtime)" <<<"$details" || { echo "$file: hardened runtime is off" >&2; exit 1; }
+  grep -Eq "flags=0x[0-9a-f]+\([^)]*runtime" <<<"$details" || { echo "$file: hardened runtime is off" >&2; exit 1; }
   grep -q "^Timestamp=" <<<"$details" || { echo "$file: no secure timestamp" >&2; exit 1; }
   echo "ok $identifier"
 }

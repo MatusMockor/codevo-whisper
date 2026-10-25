@@ -35,7 +35,7 @@ export function expectedFusesFromBuilderConfig(text: string): ExpectedFuses {
   if (invalid.length > 0) {
     throw new FeedError(`electronFuses entries are not booleans: ${invalid.join(', ')}`);
   }
-  return Object.fromEntries(entries) as ExpectedFuses;
+  return Object.fromEntries(entries.flatMap(([name, value]) => (typeof value === 'boolean' ? [[name, value] as const] : [])));
 }
 
 function fuseProblem(name: string, expected: boolean, wire: FuseWire): string | null {
@@ -57,6 +57,6 @@ export function fuseProblems(expected: ExpectedFuses, wire: FuseWire): string[] 
 export async function readFuseWire(appPath: string): Promise<FuseWire> {
   const config = (await fuses.getCurrentFuseWire(appPath)) as unknown as Record<string, unknown>;
   return Object.fromEntries(
-    Object.entries(config).flatMap(([key, value]) => (/^\d+$/.test(key) && typeof value === 'number' ? [[Number(key), value]] : [])),
-  ) as FuseWire;
+    Object.entries(config).flatMap(([key, value]) => (/^\d+$/.test(key) && typeof value === 'number' ? [[Number(key), value] as const] : [])),
+  );
 }

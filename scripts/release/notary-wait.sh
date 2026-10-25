@@ -8,15 +8,22 @@ submission="${1:?usage: scripts/release/notary-wait.sh <submission-id>}"
 timeout="${NOTARY_TIMEOUT:-150m}"
 auth=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
 
-if ! xcrun notarytool wait "$submission" "${auth[@]}" --timeout "$timeout"; then
-  echo "notarization $submission did not finish within $timeout, resume with: scripts/release/notary-wait.sh $submission" >&2
-  exit 1
+xcrun notarytool wait "$submission" "${auth[@]}" --timeout "$timeout" || true
+
+info="$(xcrun notarytool info "$submission" "${auth[@]}" --output-format json)"
+status="$(plutil -extract status raw -o - - <<<"$info")"
+
+if [ "$status" = "Accepted" ]; then
+  echo "notarization $submission accepted"
+  exit 0
 fi
 
-status="$(xcrun notarytool info "$submission" "${auth[@]}" --output-format json | plutil -extract status raw -o - -)"
-if [ "$status" != "Accepted" ]; then
-  xcrun notarytool log "$submission" "${auth[@]}" >&2 || true
-  echo "notarization $submission ended with status $status" >&2
-  exit 1
+if [ "$status" = "In Progress" ]; then
+  echo "notarization $submission still In Progress after $timeout; re-run the failed job to resume waiting on the same submission" >&2
+  exit 75
 fi
-echo "notarization $submission accepted"
+
+echo "$info" >&2
+xcrun notarytool log "$submission" "${auth[@]}" >&2 || true
+echo "notarization $submission ended with status $status" >&2
+exit 1

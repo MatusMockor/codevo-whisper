@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-artifacts="${1:?usage: scripts/release/assemble-mac-feed.sh <artifacts-dir> <feed-dir>}"
-feed="${2:?usage: scripts/release/assemble-mac-feed.sh <artifacts-dir> <feed-dir>}"
+artifacts="${1:?usage: scripts/release/assemble-mac-feed.sh <artifacts-dir> <feed-dir> <version>}"
+feed="${2:?usage: scripts/release/assemble-mac-feed.sh <artifacts-dir> <feed-dir> <version>}"
+version="${3:?usage: scripts/release/assemble-mac-feed.sh <artifacts-dir> <feed-dir> <version>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 manifests=()
 
@@ -15,4 +16,4 @@ done
 mkdir -p "$feed"
 find "$artifacts" -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.blockmap' \) -exec cp {} "$feed/" \;
 node "$here/merge-latest-mac.ts" "$feed/latest-mac.yml" "${manifests[@]}"
-node "$here/verify-feed.ts" "$feed/latest-mac.yml"
+node "$here/verify-feed.ts" "$feed/latest-mac.yml" "$version"

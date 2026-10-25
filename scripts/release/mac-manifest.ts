@@ -1,5 +1,6 @@
 import { dump, load } from 'js-yaml';
 import { FeedError } from './feed-error.ts';
+import { zipArch } from './zip-arch.ts';
 
 export type FeedFile = { url: string; sha512: string; size: number; [extra: string]: unknown };
 
@@ -74,7 +75,7 @@ export function mergeMacManifests(manifests: readonly MacManifest[]): MacManifes
   }
   const files = uniqueByUrl(manifests.flatMap((manifest) => manifest.files));
   const zips = files.filter((file) => file.url.endsWith('.zip'));
-  const primary = zips.find((file) => !file.url.includes('arm64')) ?? zips[0];
+  const primary = zips.find((file) => zipArch(file.url) === 'x64') ?? zips[0];
   if (primary === undefined) {
     throw new FeedError('no zip entries, MacUpdater needs a zip');
   }

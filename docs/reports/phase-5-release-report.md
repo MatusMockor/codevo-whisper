@@ -13,8 +13,8 @@ Packaging (Task 12):
 
 Release pipeline (phase 5):
 
-- `.github/workflows/release.yml`: tag `v*.*.*` or `workflow_dispatch` (`version`, `publish` default false); `version` -> `checks` (lint, typecheck, test on `macos-15`) -> `build-mac` matrix (arm64 on `macos-15`, x64 on `macos-15-intel`) -> `publish`.
-- `scripts/release/`: certificate import into a temporary keychain, API key file, native build and signing, `package-app.sh` (stage app), `notarize-app.sh`, `package-distributables.sh` (`--prepackaged` DMG + ZIP from the stapled app), `notarize-dmg.sh`, `notary-submit.sh` / `notary-wait.sh` (`--no-wait`, submission ID in the job summary, explicit `--timeout`, status must be `Accepted`), gates (`verify-signature.sh`, `verify-notarization.sh`, `verify-fuses.ts`), `assemble-mac-feed.sh`, `merge-latest-mac.ts`, `verify-feed.ts`, `publish-github-release.sh` (draft, re-download and re-verify, publish).
+- `.github/workflows/release.yml` (as first built; see Review fixes for the current shape): tag `v*.*.*` or `workflow_dispatch`; `version` -> `checks` (lint, typecheck, test on `macos-15`) -> `build-mac` matrix (arm64 on `macos-15`, x64 on `macos-15-intel`) -> `publish`.
+- `scripts/release/` (as first built; see Review fixes): certificate import into a temporary keychain, API key file, native build and signing, `package-app.sh` (stage app), `notarize-app.sh`, `package-distributables.sh` (`--prepackaged` DMG + ZIP from the stapled app), `notarize-dmg.sh`, `notary-submit.sh` / `notary-wait.sh` (`--no-wait`, submission ID in the job summary, explicit `--timeout`, status must be `Accepted`), gates (`verify-signature.sh`, `verify-notarization.sh`, `verify-fuses.ts`), `assemble-mac-feed.sh`, `merge-latest-mac.ts`, `verify-feed.ts`, `publish-github-release.sh` (draft, re-download and re-verify, publish).
 - Workflow hardening (after an automated security finding): every `uses:` pinned to a full commit SHA with a `# vX.Y.Z` comment (checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2, download-artifact v8.0.2), `pnpm/action-setup` replaced by `corepack enable`, `.github/dependabot.yml` (github-actions, weekly), `contents: read` by default and `contents: write` only for `publish`, `persist-credentials: false`, secrets only as step-level `env` of the steps that use them.
 - `.github/workflows/release-linux.yml`: manual only, job guarded by the `enabled` input (default false).
 - `docs/operations/release.md`: jobs, `gh secret set` commands, cutting a release, feed merge, notarization latency, Linux.
@@ -54,3 +54,31 @@ Release pipeline (phase 5):
 - electron-updater wiring, N -> N+1 update test with the hardened fuses, GHCR server images (spec 10).
 - Linux packaging is a placeholder until phase 4 (no Linux native binaries).
 - `updaterCacheDirName` in `app-update.yml` is derived from the package name (`@codevo-whisperdesktop-updater`); cosmetic, can be set when the updater is wired.
+
+## Review fixes
+
+Two independent reviews (Claude and gpt-6.1-sol) of the branch. All items fixed except the ones deferred by the coordinator.
+
+1. transcribe-cli targeted macOS 26 (`vtool -show-build` minos 26.0, the build host's SDK default) while the app declares 13.0. `native/transcribe/build.sh` now passes `-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0`; both archs rebuilt, minos 13.0, no availability warnings from ggml Metal, so `minimumSystemVersion` stays 13.0 (a run on a real macOS 13 machine is still untested). New gate `scripts/release/verify-binaries.sh` (every Mach-O in `Contents/Resources/bin/<arch>`: `lipo -verify_arch`, minos <= 13.0, both binaries present), wired into `package-app.sh`, `verify-shipped.sh` and `build-mac-local.sh`. It caught the old minos 26.0 binary in the previous dry-run DMG.
+2. Signing protection: `build-mac` and `publish` run in environment `release`; manual runs only from `main` (the `version` job is skipped otherwise) and never publish; `verify-build-ref.sh` (tag commit == build SHA for tag runs, ref `main` for manual runs, build commit on `main` for both) runs in `version` and at the start of `build-mac`. `docs/operations/release.md` documents the owner's one-time setup: environment `release` with the owner as required reviewer, deployment rules `main` and `v*`, environment secrets, tag ruleset for `v*` restricting create/update/delete.
+3. ESLint ignored `**/release/**`, which hid `scripts/release`; narrowed to `apps/*/release/**`, the two `no-unnecessary-type-assertion` errors in `fuse-verification.ts` fixed.
+4. Gates run on what ships: `verify-shipped.sh` extracts the dist ZIP and mounts the DMG read-only, and runs signature, binaries, fuses and staple checks on both copies, then the `spctl` checks.
+5. `publish-github-release.sh`: tag commit (via the API) must equal the build SHA, `latest-mac.yml` version must equal the release version (`verify-feed.ts <manifest> <version>`), `gh release create --verify-tag`; concurrency group keyed on the target tag (`release-v<version>`).
+6. Draft re-verification: `verify-release-assets.ts` compares the exact file list and sha256 of every downloaded asset with the local feed, then `verify-feed.ts` runs on the downloaded copy.
+7. Secrets isolation: native and desktop builds run before the certificate import; the `.p8` exists only inside a notarization step (`with-api-key.sh`, private temp dir, deleted on exit, never in `$GITHUB_ENV`); keychain deleted with `if: always()`; `write-api-key.sh` removed.
+8. Notarization resume: `submit-app.sh` / `submit-dmg.sh` save the exact submitted app ZIP / dist set with the submission ID and sha256 of every file in the artifact `notary-state-<arch>` before waiting; a re-run of the failed job restores it (`notary-state-restore.sh`, refuses on a hash mismatch) and resumes waiting and stapling without rebuilding or re-signing. `notary-wait.sh` distinguishes `Accepted`, still `In Progress` (exit 75, "re-run to resume") and rejection (prints `notarytool info` and the log). Logic in `notary-state.ts` with tests; the restore was dry-run locally for both phases (restored app still passes `codesign --verify --deep --strict`).
+9. `import-certificate.sh`: umask 077, `.p12` decoded into a private `mktemp -d` dir, checks that the imported identity is the codevo Developer ID.
+10. `verify-signature.sh`: hardened runtime matched with `flags=0x[0-9a-f]+\([^)]*runtime`.
+11. `build-mac-local.sh`: arch mapping from `mac-app-path.sh`, signing identity checked before the build, install through a verified temp copy and `mv` (the old app is removed only after the move).
+12. One `zipArch` helper (`zip-arch.ts`, suffix `-<arch>-mac.zip`, x64 never when the name contains `arm64`) used by the merge and the feed verification.
+13. Removed the nonexistent "Rýchlejší štart" mention from `docs/operations/macos-local-build.md`.
+14. Tests for `resolve-version.sh` (tag, input, invalid, missing event), `verify-build-ref.sh` (real temp git repos) and `verify-binaries.sh` (real Mach-O binaries compiled with clang for both archs and minos values).
+15. `electron-builder.yml` `files` excludes `out/main/fake-input-helper-*.js`; checked by planting such a file before packaging: it is not in `app.asar`.
+
+Verification after the fixes:
+
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`: green (58 files, 388 passed, 1 skipped). `actionlint`: 0 errors. `shellcheck -e SC1091`: clean.
+- `scripts/build-mac-local.sh arm64`: rebuilt and reinstalled `~/Applications/Codevo Whisper.app` (both binaries minos 13.0, signature, fuses OK). Not launched again.
+- CI dry run without notarization for arm64 and x64 at version 0.0.2: `package-app.sh`, `package-distributables.sh`, `REQUIRE_NOTARIZATION=0 verify-shipped.sh` pass on the extracted ZIP and the mounted DMG; `assemble-mac-feed.sh` passes for 0.0.2 and rejects 0.0.3; `verify-release-assets.ts` accepts an identical copy and reports removed blockmaps.
+
+Deferred (documented in `docs/operations/release.md`, no code now): electron-updater wiring and the N -> N+1 update test with the final fuses (release-blocking, later integration task); Linux release jobs (phase 4) and GHCR server images (phase 2).

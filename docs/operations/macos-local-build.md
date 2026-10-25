@@ -16,14 +16,15 @@ scripts/build-mac-local.sh arm64
 
 Steps, in order:
 
-1. `scripts/release/build-native.sh arm64` builds the Swift input helper (`native/macos-helper/build.sh`) and transcribe-cli (`native/transcribe/build.sh`, pinned transcribe.cpp commit, Metal) and stages both in `apps/desktop/resources/bin/arm64/`.
+0. Checks that the signing identity is in the keychain and that the installed app is not running, before the long build.
+1. `scripts/release/build-native.sh arm64` builds the Swift input helper (`native/macos-helper/build.sh`) and transcribe-cli (`native/transcribe/build.sh`, pinned transcribe.cpp commit, Metal, deployment target macOS 13.0) and stages both in `apps/desktop/resources/bin/arm64/`.
 2. `scripts/release/sign-native.sh arm64` signs both with hardened runtime, a secure timestamp and the identifiers `app.codevo.whisper.input-helper` and `app.codevo.whisper.transcribe-cli`.
 3. `pnpm --filter @codevo-whisper/desktop build` (electron-vite bundle in `apps/desktop/out/`).
 4. `electron-builder --mac dir --arm64 --publish never` with `apps/desktop/electron-builder.yml`: flips the Electron fuses, copies `model-catalog.json` and `bin/arm64/*` into `Contents/Resources/` (the paths `resolveModelCatalog`, `resolveTranscribeBinary` and `resolveHelperBinary` use when packaged), signs the app with the entitlements in `apps/desktop/build/entitlements.mac.plist` and skips the already signed binaries in `Contents/Resources/bin/` (`mac.signIgnore`), so their identifiers survive.
-5. `scripts/release/verify-signature.sh` (deep strict verify, identifier, team, hardened runtime and timestamp of the app and both binaries) and `scripts/release/verify-fuses.ts` (fuse wire against `electronFuses` in `electron-builder.yml`).
-6. Copies the app to `~/Applications/Codevo Whisper.app` with `ditto` and verifies it again. The script refuses to run while the installed app is running.
+5. `scripts/release/verify-signature.sh` (deep strict verify, identifier, team, hardened runtime and timestamp of the app and both binaries), `scripts/release/verify-binaries.sh` (arch slice and minos <= 13.0 of every binary in `Contents/Resources/bin/<arch>`) and `scripts/release/verify-fuses.ts` (fuse wire against `electronFuses` in `electron-builder.yml`).
+6. Copies the app with `ditto` into a temp dir inside `~/Applications`, verifies the copy, and only then moves it into place as `~/Applications/Codevo Whisper.app` (the previous install is removed after the move).
 
-The script must run with Codevo Whisper quit. `x64` works the same way (`scripts/build-mac-local.sh x64`, app built under `apps/desktop/release/mac/`).
+The packaged app excludes the test-only `out/main/fake-input-helper-*.js` chunk (`files` in `electron-builder.yml`). The script must run with Codevo Whisper quit. `x64` works the same way (`scripts/build-mac-local.sh x64`, app built under `apps/desktop/release/mac/`).
 
 ## Launch
 
@@ -67,7 +68,7 @@ Run from `~/Applications` with `env -u ELECTRON_RUN_AS_NODE open`. Record each r
 8. Microphone switch from the tray and from Nastavenia; take the AirPods out between two dictations: recording still works with the default device and the overlay says so.
 9. Settings persist after quitting and starting again (hotkey, mode, language, microphone, model, insertion, overlay).
 10. Launch at login: enable, log out and in, the app starts in the tray.
-11. First-word cut: right after launching the app, press the hotkey and start speaking immediately ("Jedna dva tri štyri"). The first word must be in the transcript. Repeat for a second (warm) recording. Measured microphone start latency is about 455 ms on the first recording and 170 ms afterwards; if the first word is lost, note it and whether "Rýchlejší štart" helps.
+11. First-word cut: right after launching the app, press the hotkey and start speaking immediately ("Jedna dva tri štyri"). The first word must be in the transcript. Repeat for a second (warm) recording. Measured microphone start latency is about 455 ms on the first recording and 170 ms afterwards; if the first word is lost, note it for both recordings.
 12. Overlay stale frame: finish a dictation so the overlay shows "Vložené", then start the next dictation as soon as the overlay hides. The overlay must open directly in the recording state, never flashing the previous "Vložené" or "Spracúvam" frame. Repeat after an error state (for example dictation without a model) and after a copy-only result.
 
 ## Results
