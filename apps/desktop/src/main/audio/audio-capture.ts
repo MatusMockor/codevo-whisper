@@ -8,6 +8,7 @@ export interface AudioCapture {
   onDevicesChanged(listener: (devices: AudioDevice[]) => void): () => void;
   start(chosen: MicrophoneSetting): Promise<CaptureStart>;
   stop(): Promise<Uint8Array>;
+  onFrame(listener: (pcm: Uint8Array) => void): () => void;
   onLevel(listener: (rms: number) => void): () => void;
   onLimitReached(listener: () => void): () => void;
   startMeter(chosen: MicrophoneSetting): Promise<void>;

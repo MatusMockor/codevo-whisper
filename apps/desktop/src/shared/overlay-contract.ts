@@ -11,7 +11,7 @@ export type OverlayState =
   | { kind: 'inserted'; appName: string }
   | { kind: 'copied' }
   | { kind: 'blocked'; reason: BlockedReason }
-  | { kind: 'error'; message: string; action?: 'open-settings' };
+  | { kind: 'error'; message: string; action?: OverlayAction };
 
 export type OverlayBridge = {
   onState(listener: (state: OverlayState) => void): () => void;

@@ -43,6 +43,25 @@ describe('WindowAudioCapture', () => {
     expect(await audio.stop()).toHaveLength(1600);
   });
 
+  it('streams each kept recording frame to frame listeners, never meter frames or audio past the limit', async () => {
+    const { host, capture: audio } = capture(250);
+    const frames: number[] = [];
+    audio.onFrame((pcm) => frames.push(pcm.byteLength));
+
+    await audio.startMeter(SYSTEM_DEFAULT);
+    host.emitFrame(3200);
+    await audio.stopMeter();
+    await audio.start(SYSTEM_DEFAULT);
+    host.emitFrame(3200);
+    host.emitFrame(3200);
+    host.emitFrame(3200);
+    host.emitFrame(3200);
+    await audio.stop();
+    host.emitFrame(3200);
+
+    expect(frames).toEqual([3200, 3200, 1600]);
+  });
+
   it('defaults to a 10 minute recording limit', async () => {
     const host = new FakeCaptureHost();
     const audio = new WindowAudioCapture(host, new RecordingLogger());

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
 import type { AppTarget } from '../src/main/helper/input-helper';
@@ -73,7 +74,7 @@ async function prepared(setup: Setup = {}) {
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
-    engine,
+    engines: new EngineSelector([engine]),
     insertion,
     lastTranscript,
     helper,

@@ -1,13 +1,37 @@
-import type { EngineId, Settings } from '../../shared/settings';
+import type { EngineId, Language } from '../../shared/settings';
 
-export type EngineUnavailableReason = 'no-model' | 'model-missing' | 'model-broken' | 'binary-missing' | 'language-required';
+export type EngineUnavailableReason =
+  | 'no-model'
+  | 'model-missing'
+  | 'model-broken'
+  | 'binary-missing'
+  | 'language-required'
+  | 'server-not-paired'
+  | 'server-offline'
+  | 'server-repair-needed'
+  | 'server-busy'
+  | 'server-storage';
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
+export type DictationOptions = { language: Language; signal: AbortSignal };
+
+export interface EngineDictation {
+  push(pcm: Uint8Array): void;
+  finish(): Promise<string>;
+}
+
+export type PreparedEngine = {
+  readonly id: EngineId;
+  start(options: DictationOptions): EngineDictation;
+  release(): void;
+};
+
+export type Preparation = { ready: true; engine: PreparedEngine } | { ready: false; reason?: EngineUnavailableReason };
+
 export interface TranscriptionEngine {
   readonly id: EngineId;
-  isReady(): Promise<EngineReadiness>;
-  transcribe(pcm: Uint8Array, language: Settings['language'], signal: AbortSignal): Promise<string>;
+  prepare(): Promise<Preparation>;
 }
 
 export class EngineUnavailableError extends Error {
@@ -16,4 +40,25 @@ export class EngineUnavailableError extends Error {
   constructor(readonly reason: EngineUnavailableReason) {
     super(`Transcription engine is not ready: ${reason}`);
   }
+}
+
+export type EngineFailureReason = 'busy' | 'stt-unavailable' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol';
+
+export class TranscriptionFailedError extends Error {
+  override readonly name = 'TranscriptionFailedError';
+
+  constructor(
+    readonly reason: EngineFailureReason,
+    readonly textSoFar = '',
+    options?: ErrorOptions,
+  ) {
+    super(`Transcription failed: ${reason}`, options);
+  }
+}
+
+export function notReady(reason: EngineUnavailableReason | undefined): Preparation {
+  if (reason === undefined) {
+    return { ready: false };
+  }
+  return { ready: false, reason };
 }

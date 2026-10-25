@@ -124,6 +124,9 @@ function Content({ state, levels, onAction }: OverlayProps) {
   if (state.kind === 'error' && state.action === 'open-settings') {
     return <Message title={state.message} button="Otvoriť nastavenia" onClick={() => onAction('open-settings')} />;
   }
+  if (state.kind === 'error' && state.action === 'copy-last') {
+    return <Message title={state.message} button="Kopírovať doterajší text" onClick={() => onAction('copy-last')} />;
+  }
   if (state.kind === 'error') {
     return <Message title={state.message} />;
   }

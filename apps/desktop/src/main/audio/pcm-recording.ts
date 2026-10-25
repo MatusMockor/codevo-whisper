@@ -19,6 +19,10 @@ export class PcmRecording {
     return this.bytes >= this.maxBytes ? 'limit-reached' : 'kept';
   }
 
+  size(): number {
+    return this.bytes;
+  }
+
   take(): Uint8Array {
     const pcm = concatPcm(this.frames);
     this.clear();

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
 import type { InputHelper } from '../helper/input-helper';
+import { EngineSelector } from '../engines/engine-selector';
 import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
 import { HotkeyService } from '../hotkey/hotkey-service';
@@ -129,7 +130,7 @@ export function composeApplication(logger: Logger): Application {
     const coordinator = new SessionCoordinator({
       hotkey,
       capture,
-      engine: models.engine,
+      engines: new EngineSelector([models.engine]),
       insertion,
       lastTranscript,
       helper,

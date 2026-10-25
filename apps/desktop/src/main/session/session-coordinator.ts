@@ -1,5 +1,5 @@
 import type { AudioCapture } from '../audio/audio-capture';
-import type { TranscriptionEngine } from '../engines/transcription-engine';
+import type { EngineSelector } from '../engines/engine-selector';
 import type { InputHelper } from '../helper/input-helper';
 import type { HotkeyService, StopReason } from '../hotkey/hotkey-service';
 import type { CopyLastOutcome, InsertionService, PasteLastOutcome } from '../insertion/insertion-service';
@@ -20,7 +20,7 @@ import type { PauseState } from './pause-state';
 export type SessionCoordinatorDeps = {
   hotkey: HotkeyService;
   capture: AudioCapture;
-  engine: TranscriptionEngine;
+  engines: Pick<EngineSelector, 'prepare'>;
   insertion: InsertionService;
   lastTranscript: LastTranscript;
   helper: InputHelper;
@@ -180,7 +180,7 @@ export class SessionCoordinator {
   private sessionDeps(): DictationSessionDeps {
     return {
       capture: this.deps.capture,
-      engine: this.deps.engine,
+      engines: this.deps.engines,
       insertion: this.deps.insertion,
       lastTranscript: this.deps.lastTranscript,
       helper: this.deps.helper,

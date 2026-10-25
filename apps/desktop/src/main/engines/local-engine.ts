@@ -5,7 +5,8 @@ import type { Settings } from '../../shared/settings';
 import type { ActiveModel } from './active-model';
 import { chunkPcm } from './chunk-pcm';
 import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
-import { EngineUnavailableError, type EngineReadiness, type TranscriptionEngine } from './transcription-engine';
+import { BufferedDictation } from './buffered-dictation';
+import { EngineUnavailableError, notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
 
 const VERIFICATION_REASON = { missing: 'model-missing', broken: 'model-broken' } as const;
 
@@ -26,7 +27,7 @@ async function isExecutable(file: string): Promise<boolean> {
 }
 
 export class LocalEngine implements TranscriptionEngine {
-  readonly id = 'local';
+  readonly id = 'local' as const;
 
   private readonly threads = localThreads();
 
@@ -47,6 +48,21 @@ export class LocalEngine implements TranscriptionEngine {
       return { ready: false, reason: 'language-required' };
     }
     return { ready: true };
+  }
+
+  async prepare(): Promise<Preparation> {
+    const readiness = await this.isReady();
+    if (!readiness.ready) {
+      return notReady(readiness.reason);
+    }
+    return {
+      ready: true,
+      engine: {
+        id: this.id,
+        start: ({ language, signal }) => new BufferedDictation((pcm) => this.transcribe(pcm, language, signal)),
+        release: () => undefined,
+      },
+    };
   }
 
   async transcribe(pcm: Uint8Array, language: Settings['language'], signal: AbortSignal): Promise<string> {
