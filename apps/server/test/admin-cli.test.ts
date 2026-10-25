@@ -134,6 +134,18 @@ describe('codevo-whisper CLI', () => {
     fake = await startFakeSttServer();
   });
 
+  it('reports a lost admin connection with a non-zero exit', async () => {
+    const term = terminal();
+    const exit = cli(['rotate-key'], term);
+    await waitUntil(() => term.text().includes('[y/N]'));
+    await harness.close();
+    harness = await startHarness(dir.path, fake.url);
+    term.input.write('y\n');
+
+    expect(await exit).toBe(1);
+    expect(term.text()).toContain('Spojenie so serverom sa prerušilo.');
+  });
+
   it('prints usage for unknown commands', async () => {
     const term = terminal();
 

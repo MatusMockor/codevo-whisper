@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Noise suite `25519_ChaChaPoly_BLAKE2s`, Noise spec revision 34. Pairing `Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s` with prologue `cw1/pair`; sessions `Noise_IK_25519_ChaChaPoly_BLAKE2s` with prologue `cw1/session` (UTF-8 bytes).
-- Pairing token: `cw1:<server static public key>:<128-bit secret>:<endpoint>`; key and secret base64url without padding; endpoint `encodeURIComponent` of a `ws://` or `wss://` URL.
+- Pairing token: `cw1:<server static public key>:<256-bit secret>:<endpoint>`; the 32-byte secret is the `IKpsk2` psk as is; key and secret base64url without padding; endpoint `encodeURIComponent` of a `ws://` or `wss://` URL.
 - No audio or side effects in handshake payloads. Audio accepted only after the server sent `ready`.
 - Binary WebSocket messages only, `perMessageDeflate: false`, `maxPayload: 65536`. One WebSocket message = one Noise message, at most 65,535 bytes including the 16-byte tag.
 - Never reset nonces. Rekey each direction every 10,000 messages. New handshake per connection.
@@ -123,11 +123,11 @@ git commit -m "chore: monorepo scaffold"
 **Interfaces:**
 - Produces:
   - `type PairingToken = { serverPublicKey: Uint8Array; secret: Uint8Array; endpoint: string }`
-  - `createPairingSecret(): Uint8Array` (16 random bytes from `crypto.getRandomValues`)
+  - `createPairingSecret(): Uint8Array` (32 random bytes from `crypto.getRandomValues`, used directly as the Noise psk)
   - `encodePairingToken(token: PairingToken): string`, `parsePairingToken(text: string): PairingToken` (throws `ProtocolError` `bad_message`)
   - `fingerprint(bytes: Uint8Array): string` - first 16 bytes of BLAKE2s(bytes) as uppercase hex in 8 groups of 4 separated by spaces, e.g. `7F3A 92C1 0B4E D8A6 51F0 3C9D 6E27 A4B8`
 
-- [ ] **Step 1: Write the failing tests:** `round-trips a token`; `trims surrounding whitespace when parsing`; `rejects wrong prefix`, `wrong key length (not 32 bytes)`, `wrong secret length (not 16 bytes)`, `endpoint that is not ws:// or wss://`; `fingerprint has 8 groups of 4 hex chars`; `fingerprint is stable for the same input`.
+- [ ] **Step 1: Write the failing tests:** `round-trips a token`; `trims surrounding whitespace when parsing`; `rejects wrong prefix`, `wrong key length (not 32 bytes)`, `wrong secret length (not 32 bytes)`, `endpoint that is not ws:// or wss://`; `fingerprint has 8 groups of 4 hex chars`; `fingerprint is stable for the same input`.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement** with `Buffer.from(..., 'base64url')` style helpers kept in this file.
 - [ ] **Step 4: Run.** Expected: PASS.

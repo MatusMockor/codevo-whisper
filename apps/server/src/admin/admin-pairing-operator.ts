@@ -5,6 +5,7 @@ import type { LineChannel } from './line-channel';
 export class AdminPairingOperator implements PairingOperator {
   readonly finished: Promise<void>;
   private finish: () => void = () => undefined;
+  private readonly decisions = new AbortController();
 
   constructor(private readonly channel: LineChannel) {
     this.finished = new Promise((resolve) => {
@@ -16,7 +17,7 @@ export class AdminPairingOperator implements PairingOperator {
   async decide(request: PairingRequest): Promise<PairingDecision> {
     this.channel.send({ event: 'request', ...request });
     for (;;) {
-      const line = await this.channel.nextLine();
+      const line = await this.channel.nextLine(this.decisions.signal);
       if (line === null) {
         throw new Error('the admin connection closed before a decision');
       }
@@ -29,6 +30,7 @@ export class AdminPairingOperator implements PairingOperator {
   }
 
   notify(event: PairingEvent): void {
+    this.decisions.abort();
     this.channel.send(event);
     this.finish();
   }

@@ -10,12 +10,19 @@ type Command = (admin: AdminConnection, io: CliIo, prompt: Prompt, args: string[
 
 const USAGE = 'Použitie: codevo-whisper <pair|devices|revoke <id>|rotate-key|status>\n';
 
-async function request(admin: AdminConnection, command: object): Promise<Reply> {
+const LOST_CONNECTION = Symbol('lost connection');
+
+async function request(admin: AdminConnection, command: object): Promise<Reply | typeof LOST_CONNECTION> {
   admin.send(command);
-  return asReply(await admin.next());
+  const value = await admin.next();
+  return value === null ? LOST_CONNECTION : asReply(value);
 }
 
-function failed(reply: Reply, output: Writable): boolean {
+function failed(reply: Reply | typeof LOST_CONNECTION, output: Writable): reply is typeof LOST_CONNECTION {
+  if (reply === LOST_CONNECTION) {
+    output.write('Spojenie so serverom sa prerušilo.\n');
+    return true;
+  }
   if (reply.error === undefined) {
     return false;
   }

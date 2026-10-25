@@ -12,6 +12,10 @@ type Reply = { status: number; body: unknown };
 
 let server: SttServer;
 
+function isBusy(reply: Reply): boolean {
+  return typeof reply.body === 'object' && reply.body !== null && (reply.body as { busy?: unknown }).busy === true;
+}
+
 function send(path: string, options: { method?: string; contentType?: string; body?: Uint8Array } = {}): Promise<Reply> {
   const { port } = server.address() as AddressInfo;
   return new Promise((resolve, reject) => {
@@ -69,7 +73,9 @@ describe('STT sidecar', () => {
   it('answers 503 to a concurrent request and reports busy on /health', async () => {
     vi.stubEnv('FAKE_CLI_DELAY_S', '0.5');
     const first = send('/transcribe?language=sk', { body: new Uint8Array(32_000) });
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    for (let health = await send('/health', { method: 'GET' }); !isBusy(health); health = await send('/health', { method: 'GET' })) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     expect(await send('/health', { method: 'GET' })).toEqual({ status: 200, body: { status: 'UP', busy: true } });
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(503);
@@ -95,10 +101,9 @@ describe('STT sidecar', () => {
       socket.on('error', () => undefined);
       await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
       socket.write('POST /transcribe?language=sk HTTP/1.1\r\nHost: stt\r\nContent-Type: application/octet-stream\r\nContent-Length: 32000\r\n\r\n');
-      socket.write(Buffer.alloc(1000));
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => socket.write(Buffer.alloc(1000), resolve));
       socket.resetAndDestroy();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => socket.once('close', resolve));
     }
 
     expect(await send('/health', { method: 'GET' })).toEqual({ status: 200, body: { status: 'UP', busy: false } });

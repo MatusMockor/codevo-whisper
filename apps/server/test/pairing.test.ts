@@ -221,6 +221,18 @@ describe('pairing', () => {
     expect(await window.admin.next()).toEqual({ event: 'failed' });
   });
 
+  it('does not swallow the next admin command after an unanswered request expires', async () => {
+    const server = await start();
+    const window = await openPairingWindow(server.config.adminSocket, 300);
+    const session = await runHandshake(server.url, beginPairing(generateKeyPair(), window.token));
+    session.send({ type: 'pair-request', deviceName: 'Bez odpovede' });
+    expect(await window.admin.next()).toMatchObject({ event: 'request' });
+
+    expect(await window.admin.next()).toEqual({ event: 'expired' });
+    window.admin.send({ cmd: 'devices' });
+    expect(await window.admin.next()).toEqual({ devices: [] });
+  });
+
   it('rotate-key cancels a pairing that waits for approval', async () => {
     const server = await start();
     const window = await openPairingWindow(server.config.adminSocket);

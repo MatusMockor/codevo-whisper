@@ -20,15 +20,26 @@ export class LineChannel {
     this.socket.write(`${JSON.stringify(value)}\n`);
   }
 
-  nextLine(): Promise<string | null> {
+  nextLine(signal?: AbortSignal): Promise<string | null> {
     const line = this.lines.shift();
     if (line !== undefined) {
       return Promise.resolve(line);
     }
-    if (this.ended) {
+    if (this.ended || signal?.aborted === true) {
       return Promise.resolve(null);
     }
-    return new Promise((resolve) => this.waiters.push(resolve));
+    return new Promise((resolve) => {
+      const waiter = (value: string | null): void => {
+        signal?.removeEventListener('abort', cancel);
+        resolve(value);
+      };
+      const cancel = (): void => {
+        this.waiters.splice(this.waiters.indexOf(waiter), 1);
+        resolve(null);
+      };
+      signal?.addEventListener('abort', cancel, { once: true });
+      this.waiters.push(waiter);
+    });
   }
 
   onClose(listener: () => void): void {

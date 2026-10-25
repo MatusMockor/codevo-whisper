@@ -222,7 +222,8 @@ describe('gateway sessions', () => {
   it('rejects audio while finishing', async () => {
     await fake.close();
     fake = await startFakeSttServer({ delayMs: 200 });
-    const server = await start();
+    const lines: string[] = [];
+    const server = await start({ logger: streamLogger((line) => lines.push(line)) });
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
     sendAudio(session, pcmSeconds(1));
@@ -230,8 +231,20 @@ describe('gateway sessions', () => {
     session.send({ type: 'audio', pcm: pcmSeconds(1) });
 
     await expectBadMessageClose(session);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(fake.aborted()).toBe(fake.requests.length);
+    await waitUntil(() => lines.some((line) => line.includes('"result":"cancelled"')));
+  });
+
+  it('caps outbound transcript text at the protocol limit', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text: 'á'.repeat(20_000) } }) });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    const [final] = await collectUntilDone(session);
+    expect(final?.type === 'final' ? [...final.text].length : 0).toBe(16_000);
   });
 
   it('reports stt_unavailable', async () => {
@@ -451,7 +464,25 @@ describe('gateway sessions', () => {
     expect((await session.closed).code).toBe(1001);
   });
 
-  it('limits concurrent connections per IP', async () => {
+  it('terminates clients that ignore the close handshake when the gateway closes', async () => {
+    const server = await start();
+    const raw = connect(server.gateway.port, '127.0.0.1');
+    raw.on('error', () => undefined);
+    const upgraded = new Promise<void>((resolve) => raw.once('data', () => resolve()));
+    const closed = new Promise<void>((resolve) => raw.once('close', () => resolve()));
+    raw.write(
+      'GET / HTTP/1.1\r\nHost: gateway\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n',
+    );
+    await upgraded;
+    const started = Date.now();
+    await server.close();
+    harness = undefined;
+    await closed;
+
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('limits pending connections per IP', async () => {
     const server = await start();
     const sockets = await Promise.all(Array.from({ length: 4 }, () => openSocket(server.url)));
 
@@ -515,9 +546,8 @@ describe('gateway sessions', () => {
     const session = await readySession(server);
     const [device] = await server.devices.list();
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
-    sendAudio(session, pcmSeconds(1));
-    await waitUntil(() => server.gateway.sessions.count() === 1);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    sendAudio(session, pcmSeconds(301));
+    expect(await session.next()).toEqual({ type: 'flow', paused: true });
     server.gateway.sessions.closeDevice(device?.id ?? '', 'revoked');
     session.send({ type: 'finish' });
 
