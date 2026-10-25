@@ -1,0 +1,28 @@
+{
+  "name": "codevo-whisper-signed-update-spike",
+  "productName": "Codevo Whisper Spike",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Phase 0 spike: signed, notarized Electron app with auto-update",
+  "author": "codevo s.r.o.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:arm64": "electron-builder --mac --arm64 --publish never",
+    "dist:x64": "electron-builder --mac --x64 --publish never",
+    "merge": "node scripts/merge-latest-mac.mjs",
+    "serve": "http-server feed -p 8099 -a 127.0.0.1 -c-1"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "http-server": "14.1.1",
+    "js-yaml": "4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron"]
+  }
+}

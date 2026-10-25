@@ -1,0 +1,26 @@
+appId: app.codevo.whisper
+productName: Codevo Whisper Spike
+artifactName: codevo-whisper-spike-${version}-${arch}-mac.${ext}
+directories:
+  output: release/${version}-${arch}
+files:
+  - src/**
+  - package.json
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  identity: "codevo s.r.o. (U574W69TH6)"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
+  extendInfo:
+    NSMicrophoneUsageDescription: Codevo Whisper Spike needs the microphone for dictation.
+dmg:
+  sign: true
+publish:
+  provider: generic
+  url: http://127.0.0.1:8099/
