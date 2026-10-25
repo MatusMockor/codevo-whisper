@@ -65,6 +65,10 @@ export class TranscriptionDispatcher<TContext = TranscriptionContext> implements
     this.queue.releaseSession(sessionId);
   }
 
+  pendingJobs(): number {
+    return this.queue.size + this.running.size;
+  }
+
   queueStats(): QueueStats {
     return this.queue.stats();
   }

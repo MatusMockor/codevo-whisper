@@ -20,6 +20,21 @@ function markers(engine: ControllableTranscriber): number[] {
 }
 
 describe('TranscriptionDispatcher', () => {
+  it('counts queued and running jobs as pending', async () => {
+    const { dispatcher, engine } = setup();
+    expect(dispatcher.pendingJobs()).toBe(0);
+    void dispatcher.submit(job('a', 'final', 1));
+    void dispatcher.submit(job('b', 'final', 2));
+
+    expect(dispatcher.pendingJobs()).toBe(2);
+    engine.call(0).resolve('');
+    await flush();
+    expect(dispatcher.pendingJobs()).toBe(1);
+    engine.call(1).resolve('');
+    await dispatcher.whenIdle();
+    expect(dispatcher.pendingJobs()).toBe(0);
+  });
+
   it('runs one call at a time', async () => {
     const { dispatcher, engine } = setup();
     const first = dispatcher.submit(job('a', 'final', 1));
