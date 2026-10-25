@@ -36,7 +36,7 @@ import { createSettingsServices } from './settings-wiring';
 import { QuitGate, type QuitEvent } from './quit-gate';
 import { startInput } from './start-input';
 import { isE2eMode } from './test-mode';
-import { createUpdates } from './update-wiring';
+import { createUpdates, loadAutoUpdater } from './update-wiring';
 
 const SETTINGS_FILE = 'settings.json';
 
@@ -177,7 +177,7 @@ export function composeApplication(logger: Logger): Application {
       () => settingsServices.dispose(),
       () => updates.dispose(),
     );
-    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake });
+    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake, loadUpdater: loadAutoUpdater });
     void startInput(helper, hotkey, logger).then(() => {
       input.resolve();
       home.status.refresh();

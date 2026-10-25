@@ -7,14 +7,17 @@ import type { Settings } from '../src/shared/settings';
 
 const mainEntry = fileURLToPath(new URL('../out/main/index.js', import.meta.url));
 
-export type LaunchOptions = { fakeHelper?: boolean };
+export type LaunchOptions = { fakeHelper?: boolean; updateMode?: 'manual' };
+
+const OVERRIDDEN_ENV: ReadonlySet<string> = new Set(['ELECTRON_RUN_AS_NODE', 'CW_E2E_FAKE_HELPER', 'CW_E2E_UPDATE_MODE']);
 
 function electronEnv(userDataDir: string, options: LaunchOptions): Record<string, string> {
   const entries = Object.entries(process.env).filter(
-    (entry): entry is [string, string] => entry[0] !== 'ELECTRON_RUN_AS_NODE' && entry[0] !== 'CW_E2E_FAKE_HELPER' && entry[1] !== undefined,
+    (entry): entry is [string, string] => !OVERRIDDEN_ENV.has(entry[0]) && entry[1] !== undefined,
   );
   const fake: Record<string, string> = options.fakeHelper === true ? { CW_E2E_FAKE_HELPER: '1' } : {};
-  return { ...Object.fromEntries(entries), CW_USER_DATA_DIR: userDataDir, CW_E2E_HOOKS: '1', ...fake };
+  const updates: Record<string, string> = options.updateMode === undefined ? {} : { CW_E2E_UPDATE_MODE: options.updateMode };
+  return { ...Object.fromEntries(entries), CW_USER_DATA_DIR: userDataDir, CW_E2E_HOOKS: '1', ...fake, ...updates };
 }
 
 export async function createUserDataDir(settings?: Partial<Settings>): Promise<string> {

@@ -2,7 +2,7 @@ import { app } from 'electron';
 import type { Logger } from '../logging/logger';
 import type { AppUpdater } from '../updates/app-updater';
 import type { DictationGuard } from '../updates/dictation-guard';
-import { ElectronUpdaterAdapter } from '../updates/electron-updater-adapter';
+import { ElectronUpdaterAdapter, type UpdaterLike } from '../updates/electron-updater-adapter';
 import { resolveUpdateMode } from '../updates/update-policy';
 import { UpdateScheduler } from '../updates/update-scheduler';
 import { UpdateService } from '../updates/update-service';
@@ -18,6 +18,11 @@ const unavailable = (): Promise<never> => Promise.reject(new Error('Updates are 
 
 const UNAVAILABLE_UPDATER: AppUpdater = Object.freeze({ check: unavailable, download: unavailable, install: unavailable });
 
+export async function loadAutoUpdater(): Promise<UpdaterLike> {
+  const { autoUpdater } = await import('electron-updater');
+  return autoUpdater;
+}
+
 async function fakeUpdater(): Promise<UpdaterChoice> {
   const { FakeAppUpdater } = await import('../updates/fake-app-updater');
   const fake = new FakeAppUpdater();
@@ -29,8 +34,7 @@ async function electronUpdater(logger: Logger): Promise<UpdaterChoice> {
   if (mode === 'unsupported') {
     return { updater: UNAVAILABLE_UPDATER, mode, fake: null };
   }
-  const { autoUpdater } = await import('electron-updater');
-  return { updater: new ElectronUpdaterAdapter(autoUpdater, logger), mode, fake: null };
+  return { updater: new ElectronUpdaterAdapter(await loadAutoUpdater(), logger), mode, fake: null };
 }
 
 export async function createUpdates({ e2e, dictation, send, logger }: UpdateWiringDeps): Promise<Updates> {
