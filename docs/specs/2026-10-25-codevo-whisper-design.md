@@ -116,7 +116,7 @@ The two ends are the user's device and the user's own gateway. Everything betwee
 
 ### 4.6 Desktop data protection
 
-- No transcript history (owner decision 2026-10-25): the app never writes audio or transcripts to disk. Only the last transcript is kept in memory (for "Vložiť posledný prepis" and the tray) and is gone when the app quits.
+- No transcript history (owner decision 2026-10-25): the app never writes audio or transcripts to disk; only settings and aggregated statistics (5.6) are stored. Only the last transcript is kept in memory (for "Vložiť posledný prepis" and the tray) and is gone when the app quits.
 - Device private key and pinned server keys are stored via Electron `safeStorage`.
 - On Linux, `safeStorage` can fall back to `basic_text` (no real protection). The app checks the backend; without a secure backend it asks the user for a passphrase to protect the device key (or warns clearly if they decline).
 - Electron hardening: renderer sandbox, `contextIsolation`, no Node in renderers, strict CSP, navigation and new-window blocked, narrow validated IPC, transcripts rendered as text only, keys never cross into a renderer.
@@ -185,7 +185,15 @@ Owner decision 2026-10-25: the user chooses the input device, because many users
 - The microphone is opened only while recording (push-to-talk), never kept open in the background, so the macOS orange microphone indicator appears only during dictation. An optional "Rýchlejší štart" setting may keep the stream warm to avoid the first-word cut on slow devices; off by default.
 - The level meter in settings and the overlay waveform use the same capture path, so "Povedzte niečo a sledujte úroveň" tests exactly what dictation will use.
 
-### 5.6 Permissions and first run
+### 5.6 Statistics on Domov
+
+Owner decision 2026-10-25. Domov shows a status banner, statistics and the last transcript (memory only).
+
+- Statistics are aggregated counters only: per local calendar day the number of words, the number of dictations and the recorded seconds. No text, no app names, no timestamps of individual dictations.
+- Views: Dnes / Tento týždeň / Celkom with tiles Nadiktované slová, Počet diktovaní, Čas diktovania, Priemerná rýchlosť (slov/min from recorded time), Ušetrený čas (estimate against typing at 40 slov/min, assumption shown), Séria (consecutive days with at least one dictation), plus a bar chart of words for the last 7 days.
+- Stored in `stats.json` in userData; "Vynulovať štatistiky" in Nastavenia > Systém deletes it. Counted only for dictations that produced text.
+
+### 5.7 Permissions and first run
 
 - macOS: microphone (`NSMicrophoneUsageDescription`, `com.apple.security.device.audio-input`), Accessibility (paste), Input Monitoring (hotkey helper). First-run screens explain each and deep-link to System Settings.
 - Linux: detect session type, available tools and portals; show what works and what falls back.
@@ -213,7 +221,7 @@ The policy lives in `packages/audio` and is shared by the gateway and LocalEngin
 - Engines bundled per platform: transcribe.cpp (and whisper.cpp if the catalog needs it) at pinned commits, built in CI for macOS arm64/x64 and Linux x64/arm64 (Vulkan with CPU fallback). macOS build flags: `-DTRANSCRIBE_METAL=ON -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DTRANSCRIBE_BUILD_TESTS=OFF -DGGML_NATIVE=OFF`, `CMAKE_OSX_ARCHITECTURES` per arch (Metal must be set explicitly for x64). Signed with hardened runtime and an explicit identifier (`app.codevo.whisper.transcribe-cli`); no entitlements needed.
 - Phase 0 result: Parakeet Ultra F16 with Metal on Apple Silicon is a go (exact Slovak transcript, 0.16 s warm). Intel Macs default to the CPU backend (1.8 s for 6.7 s under Rosetta) with Metal opt-in until verified on real Intel hardware.
 - The first Metal run after install or update compiles shaders (about 3 s); the app runs a silent warm-up after each install or update.
-- Catalog: JSON manifest bundled with the app: id, name, engine, languages, size, license, attribution, source (Hugging Face repo + pinned revision + file), SHA-256, roles (e.g. Odporúčaný, Najrýchlejší, Pre slabší počítač), minimum RAM. Entries come from the model research (`docs/research/stt-models.md`, `docs/research/model-catalog.draft.json`); Parakeet Ultra F16 is the expected default on Apple Silicon.
+- Catalog: JSON manifest bundled with the app: id, name, engine, languages, size, license, attribution, source (Hugging Face repo + pinned revision + file), SHA-256, roles (e.g. Odporúčaný, Najrýchlejší, Pre slabší počítač), minimum RAM. Owner-approved entries (2026-10-25, from `docs/research/stt-models.md`): Parakeet Ultra Q8_0 (Odporúčaný, default on Apple Silicon and Linux Vulkan), Canary 1B v2 Q8_0 (Najpresnejší pre slovenčinu a češtinu), Parakeet Ultra Q4_K_M (Pre slabší počítač, default on Intel Macs and Linux CPU), Whisper Large v3 Turbo Q8_0 via transcribe.cpp (Pre ďalšie jazyky). whisper.cpp is not bundled. Each entry carries `languageHint`: `ignored` (Parakeet), `required` (Canary: translates instead of transcribing when the language is wrong or missing, so the app does not allow "Automaticky" with it), `optional` (Whisper).
 - Download only after the user clicks "Stiahnuť". Never at startup. Progress, cancel, resume. Written to a `.download` temp file, hashed while streaming, atomically renamed only when SHA-256 matches; mismatch deletes the file and reports an error.
 - Models live in the app data directory; settings show size and allow deletion.
 - Licenses and attributions of models and native binaries are listed in the app's "O aplikácii" screen and in the repo.
@@ -243,7 +251,7 @@ The policy lives in `packages/audio` and is shared by the gateway and LocalEngin
 - GitHub Actions, triggered by a `vX.Y.Z` tag or manual dispatch. Lint, typecheck and tests gate publishing.
 - Build jobs per target on native runners: macOS arm64, macOS x64, Linux x64, Linux arm64. One publish job runs only after the whole matrix succeeded.
 - Unambiguous artifact names per architecture. ZIPs for both macOS architectures (needed by the updater) next to the DMGs.
-- macOS: hardened runtime, entitlements from 5.6, every native helper and engine binary signed, notarized with the App Store Connect API key, stapled.
+- macOS: hardened runtime, entitlements from 5.7, every native helper and engine binary signed, notarized with the App Store Connect API key, stapled.
 - Linux: AppImage + deb, `SHA256SUMS`. Phase 0 finding: electron-updater verifies only the sha512 from the same feed on Linux (no publisher signature), and the deb updater installs as root via `dpkg`/`apt --allow-unauthenticated`. Decision: in-app auto-update on Linux only for the AppImage; deb users get an in-app notice with a download link (a signed apt repository is a later option). The README states that Linux AppImage updates are verified by HTTPS and checksums only.
 - Auto-update via electron-updater (GitHub provider). Verified in phase 0 (`docs/spikes/signed-update.md`): N -> N+1 works on arm64 and x64; Squirrel.Mac rejects an update not signed by Team ID U574W69TH6 with bundle ID `app.codevo.whisper`, so both must never change. Build jobs run with `--publish never`; one publish job merges the two `latest-mac.yml` files (both ZIPs listed), verifies the feed, uploads everything to a draft release, re-verifies and then publishes the draft. Artifact names `codevo-whisper-${version}-${arch}-${os}.${ext}`. Linux writes `latest-linux.yml` and `latest-linux-arm64.yml` itself.
 - DMGs are notarized and stapled separately from the app (electron-builder only notarizes the `.app`). Notarization latency is unbounded (the first submissions of this team took more than 2 hours): jobs use explicit timeouts and keep the submission ID for `notarytool wait`.

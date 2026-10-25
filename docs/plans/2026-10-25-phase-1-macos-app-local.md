@@ -172,7 +172,7 @@
 ### Task 7: Model catalog and model manager
 
 **Files:**
-- Create: `apps/desktop/resources/model-catalog.json` (from `docs/research/model-catalog.draft.json`, owner-approved entries only), `apps/desktop/src/main/models/model-catalog.ts`, `src/main/models/model-manager.ts`, `src/main/models/downloader.ts`, `src/main/models/warm-up.ts`
+- Create: `apps/desktop/resources/model-catalog.json` (from `docs/research/model-catalog.draft.json`; all four entries are owner-approved: parakeet-ultra-q8, canary-1b-v2-q8, parakeet-ultra-q4, tc-whisper-turbo-q8; keep `languageHint` and the per-platform defaults), `apps/desktop/src/main/models/model-catalog.ts`, `src/main/models/model-manager.ts`, `src/main/models/downloader.ts`, `src/main/models/warm-up.ts`
 - Test: `apps/desktop/test/model-catalog.test.ts`, `test/model-manager.test.ts`
 
 **Interfaces:**
@@ -183,7 +183,9 @@
   - `class ModelManager implements ActiveModel { constructor(deps: { dir: string; catalog: CatalogEntry[]; settings: SettingsStore; fetchImpl?: typeof fetch; warmUp: (path: string) => Promise<void> }); states(): ModelState[]; download(id: string): Promise<void>; pause(id: string): void; delete(id: string): Promise<void>; activate(id: string): Promise<void>; verify(id: string): Promise<'ok' | 'missing' | 'broken'>; activeModelPath(): Promise<string | null>; verifyActive(): Promise<'ok' | 'missing' | 'broken'>; onChange(listener: (states: ModelState[]) => void): () => void }` - resume with HTTP `Range` from `<file>.download`, hash computed over the whole file after resume, atomic rename, only one download at a time, `activate` requires `ready` and runs `warmUp` once
   - `warmUp(path)` runs one transcription of 1 s of silence with the active backend (shader compile, spec 7)
 
-- [ ] **Step 1: Write the failing tests** (real local HTTP server with Range support): `downloads, verifies and renames`, `deletes on hash mismatch and reports broken`, `resumes a partial download`, `deletes a resumed file with a wrong hash`, `pause keeps the partial file`, `never downloads without a call` (constructing the manager and reading states makes no HTTP request), `activate requires a ready model and runs warm-up once`, `marks a model with a wrong hash as broken on verify`, `delete of the active model clears localModelId`; catalog: `rejects an entry without sha256`, `builds the Hugging Face URL`.
+- Also produces: `defaultModelId(platform: { os: 'darwin' | 'linux'; arch: 'arm64' | 'x64'; gpu: boolean }): string` from the catalog defaults; `languageHint(id): 'ignored' | 'required' | 'optional'`; LocalEngine readiness reason `language-required` when the active model's hint is `required` and the language setting is `auto` (Canary translates otherwise).
+
+- [ ] **Step 1: Write the failing tests** (real local HTTP server with Range support; also `default model is parakeet-ultra-q8 on arm64 and parakeet-ultra-q4 on x64`, `canary with language auto is not ready with language-required`): `downloads, verifies and renames`, `deletes on hash mismatch and reports broken`, `resumes a partial download`, `deletes a resumed file with a wrong hash`, `pause keeps the partial file`, `never downloads without a call` (constructing the manager and reading states makes no HTTP request), `activate requires a ready model and runs warm-up once`, `marks a model with a wrong hash as broken on verify`, `delete of the active model clears localModelId`; catalog: `rejects an entry without sha256`, `builds the Hugging Face URL`.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
@@ -234,23 +236,28 @@
 
 ---
 
-### Task 10: Domov page
+### Task 10: Statistics and Domov page
 
 **Files:**
-- Create: `apps/desktop/src/renderer/pages/Home.tsx`, `src/renderer/components/LastTranscriptCard.tsx`
-- Test: `apps/desktop/e2e/home.spec.ts`
+- Create: `apps/desktop/src/main/stats/stats-store.ts`, `src/main/stats/stats-summary.ts`, `src/renderer/pages/Home.tsx`, `src/renderer/components/{StatTiles,WordsChart,LastTranscriptCard}.tsx`
+- Modify: `src/main/session/session-coordinator.ts` (record a dictation after a successful transcription)
+- Test: `apps/desktop/test/stats-store.test.ts`, `test/stats-summary.test.ts`, `apps/desktop/e2e/home.spec.ts`
 
 **Interfaces:**
-- Consumes: `IpcApi` (add `getStatus(): Promise<AppStatus>`, `getLastTranscript(): Promise<string | null>`, event `status-changed`).
 - Produces:
-  - `type AppStatus = { hotkeyLabel: string | null; modelReady: boolean; permissionsOk: boolean; paused: boolean }`
-  - Home page: "Všetko je pripravené. Podržte <kláves> v ľubovoľnej aplikácii a hovorte." banner, or a call to action when the hotkey, model or a permission is missing (each links to the right place); card "Posledné diktovanie" with the in-memory last transcript, copy button and the note "Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk."
+  - `type DayStats = { date: string; words: number; dictations: number; seconds: number }` (date `YYYY-MM-DD` in local time)
+  - `class StatsStore { constructor(file: string, clock?: () => Date); record(entry: { words: number; seconds: number }): Promise<void>; days(): Promise<DayStats[]>; reset(): Promise<void> }` - `stats.json` in userData, atomic write, only counters (spec 5.6), corrupt file -> start empty and log
+  - `summarize(days: DayStats[], period: 'today' | 'week' | 'total', today: string): { words: number; dictations: number; seconds: number; wordsPerMinute: number; savedSeconds: number; streakDays: number; last7: Array<{ date: string; words: number }> }` - savedSeconds = words / 40 * 60 - seconds (never below 0), week = Monday to today, streak counts back from today (or yesterday if today has none)
+  - Word count: split on whitespace, count tokens containing a letter or digit
+  - IPC: `getStats(): Promise<DayStats[]>`, `resetStats(): Promise<void>`, `getStatus(): Promise<AppStatus>`, `getLastTranscript(): Promise<string | null>`, events `stats-changed`, `status-changed`
+  - `type AppStatus = { hotkeyLabel: string | null; modelReady: boolean; permissionsOk: boolean; paused: boolean }` (permissionsOk from a minimal `PermissionsService.status()`, ruling R3)
+  - Home page per the mockup (`docs/design/mockup.html`, Domov tab): status banner or call to action when hotkey, model or a permission is missing; Štatistiky with Dnes / Tento týždeň / Celkom switch, six tiles, 7-day chart, the line "Štatistiky sú len súčty čísel na tomto Macu, bez textu."; card "Posledné diktovanie" with copy and the note "Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk."
 
-- [ ] **Step 1: Write the failing tests:** e2e: with no hotkey the banner says to set one and links to Nastavenia; with everything ready the banner shows the hotkey label; after a test IPC hook sets a last transcript the card shows it and copy writes the clipboard; after an app relaunch the card is empty.
+- [ ] **Step 1: Write the failing tests:** store: `records into today's counters`, `starts a new day after midnight`, `file contains only numbers and dates` (no text), `reset deletes the counters`, `corrupt file starts empty`; summary: `today, week from Monday, total`, `words per minute from recorded seconds`, `saved time uses 40 words per minute and never goes negative`, `streak counts consecutive days and tolerates no dictation yet today`, `last7 fills missing days with 0`; coordinator: `records stats after a successful dictation and not after an empty or failed one`; e2e: banner shows the hotkey label or the call to action, tiles show values from seeded stats and switch periods, copy writes the clipboard, last transcript is empty after relaunch.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `git commit -m "feat(desktop): home page"`
+- [ ] **Step 5: Commit** `git commit -m "feat(desktop): statistics and home page"`
 
 ---
 
@@ -263,7 +270,7 @@
 **Interfaces:**
 - Consumes: everything above through `IpcApi` (add the needed methods/events to `ipc-contract.ts`).
 - Produces:
-  - Nastavenia sections (copy from the mockup): Diktovanie (Klávesová skratka with recorder, Režim Podrž/Prepínanie, Jazyk), Kde beží prepis (Lokálne active; Server disabled "Príde v ďalšej verzii"), Lokálny model (catalog with roles, size, license, Stiahnuť / Pozastaviť / Pokračovať / Odstrániť / Použiť, progress bar, broken state with Stiahnuť znova), Mikrofón (picker with Systémový predvolený, live meter, Bluetooth hint per spec 5.5), Vkladanie textu (Vložiť do aktívnej aplikácie / Iba skopírovať), Zobrazenie panela (Indikátor; Živý text disabled), Systém (Spustiť pri prihlásení)
+  - Nastavenia sections (copy from the mockup): Diktovanie (Klávesová skratka with recorder, Režim Podrž/Prepínanie, Jazyk; "Automaticky" disabled with a note when the active model requires a language), Zobrazenie panela (Indikátor active; Živý text disabled "Príde v ďalšej verzii"), Kde beží prepis (Lokálne active; Server disabled "Príde v ďalšej verzii"), Lokálny model (catalog with roles, size, license, Stiahnuť / Pozastaviť / Pokračovať / Odstrániť / Použiť, progress bar, broken state with Stiahnuť znova), Mikrofón (picker with Systémový predvolený, live meter, Bluetooth hint per spec 5.5), Vkladanie textu (Vložiť do aktívnej aplikácie / Iba skopírovať), Zobrazenie panela (Indikátor; Živý text disabled), Systém (Spustiť pri prihlásení, Vynulovať štatistiky)
   - Server page: explanation of the coming server mode, disabled pairing area
   - Súkromie page: data flow for local mode (all on this Mac; no network except model downloads from Hugging Face and update checks), what is stored where
   - Onboarding (first run until `onboardingDone`): 1) mikrofón permission, 2) Input Monitoring and Accessibility with deep links `x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent` / `?Privacy_Accessibility`, live status, "Reštartovať" button when Input Monitoring needs a relaunch, 3) hotkey recorder, 4) model choice and download (recommended entry preselected), 5) try it ("Podržte <kláves> a povedzte niečo")
