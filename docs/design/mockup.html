@@ -44,6 +44,8 @@
   --menu-bg:rgba(242,243,246,.84);
   --menu-ink:#1C222C;
   --shadow-win:0 0 0 .5px rgba(0,0,0,.2),0 26px 60px -22px rgba(20,28,40,.42),0 8px 20px -10px rgba(20,28,40,.2);
+  --bar:#F2BE78;
+  --bar-now:#C46F12;
   color-scheme:light;
 }
 [data-theme=dark]{
@@ -73,6 +75,8 @@
   --menu-bg:rgba(44,48,58,.86);
   --menu-ink:#ECEEF2;
   --shadow-win:0 0 0 .5px rgba(0,0,0,.7),inset 0 0 0 .5px rgba(255,255,255,.08),0 30px 70px -22px rgba(0,0,0,.75);
+  --bar:#7A5A33;
+  --bar-now:#F0A23A;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -256,6 +260,16 @@ section.block:first-of-type{margin-top:56px}
 .ov.dyn[data-s=idle] .ov-bar{height:12px;padding:0}
 .ov.dyn[data-s=idle] .orb{display:none}
 .ov.dyn[data-s=idle] .dots{display:flex}
+.ov.ind{width:var(--pill-w,300px);border-radius:999px}
+.tile-stage .ov.ind{width:min(100% - 36px,var(--pill-w,300px))}
+.gnome .ov.ind{width:var(--pill-w,300px)}
+.ov.ind .ov-bar,.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc],[data-s=smooth]) .ov-bar{height:40px;gap:9px;padding:0 14px 0 8px}
+.ov.ind .orb,.ov.dyn[data-view=ind] .orb{width:24px;height:24px}
+.ov.ind .wave,.ov.dyn[data-view=ind] .wave{height:20px}
+.ov.dyn[data-view=ind] .ov-body{display:none}
+.ov.dyn[data-view=ind] .x-wave i:nth-child(even){display:none}
+.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc],[data-s=smooth]){width:310px;border-radius:999px}
+.ov.dyn[data-view=ind][data-mode=toggle][data-s=rec]{width:340px}
 
 .demo-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:32px;align-items:center;margin-top:18px}
 .keywrap{display:flex;align-items:center;gap:18px;min-width:0}
@@ -331,30 +345,43 @@ section.block:first-of-type{margin-top:56px}
 .mw-bar h3{margin:0;font-size:15px;font-weight:700}
 .panel{flex:1;min-height:0;overflow:auto;padding:22px 28px 28px}
 .panel[hidden]{display:none}
-.search{display:flex;align-items:center;gap:8px;height:30px;width:280px;padding:0 10px;border-radius:8px;background:var(--seg-bg);color:var(--ink-3)}
-.search input{flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:13px;color:var(--ink)}
-.search:focus-within{box-shadow:0 0 0 2px var(--focus)}
 .banner{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--lamp-soft);font-size:13.5px;margin-bottom:22px}
 .banner kbd{font-family:inherit;padding:1px 6px;border-radius:5px;background:var(--surface-2);box-shadow:0 0 0 1px var(--line);font-size:12.5px}
 .banner .orb{width:22px;height:22px}
-.hgroup{margin:0 0 18px}
-.hgroup h4{margin:0 0 6px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
-.hlist{list-style:none;margin:0;padding:0;border-radius:10px;border:1px solid var(--line-2);overflow:hidden}
-.hrow{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:14px;padding:12px 12px 12px 14px;align-items:start;border-top:1px solid var(--line-2);transition:background .15s}
-.hrow:first-child{border-top:0}
-.hrow:hover{background:var(--hover)}
-.hrow time{font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink-3);padding-top:1px}
-.hrow p{margin:0;font-size:14px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.hmeta{display:flex;align-items:center;gap:12px;margin-top:5px;font-size:12.5px;color:var(--ink-3)}
-.hmeta .app{display:inline-flex;align-items:center;gap:6px}
-.hmeta .app i{width:14px;height:14px;border-radius:4px;display:inline-grid;place-items:center;font-style:normal;font-size:9px;font-weight:800;color:#fff}
-.lang{font-size:11px;font-weight:650;letter-spacing:.03em;padding:1px 6px;border-radius:5px;background:var(--seg-bg);color:var(--ink-2)}
-.copy{width:30px;height:30px;border-radius:7px;border:0;background:transparent;display:grid;place-items:center;color:var(--ink-3)}
-.copy:hover{background:var(--seg-bg);color:var(--ink)}
-.copy.ok{color:var(--ok-ink)}
-.empty{padding:36px 20px;text-align:center;color:var(--ink-2);border:1px dashed var(--line);border-radius:10px;font-size:14px}
-.retention{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:13px;color:var(--ink-3)}
-.retention .ic{color:var(--lamp-ink)}
+.stats-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 10px}
+.stats-head h4{margin:0;font-size:15px;font-weight:700}
+.stats{display:grid;grid-template-columns:minmax(0,1fr) 280px;border-radius:12px;background:var(--group);border:1px solid var(--line-2);overflow:hidden}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line-2);margin:0;border-right:1px solid var(--line-2)}
+.tiles>div{background:var(--group);padding:14px 16px 13px;min-width:0;display:flex;flex-direction:column}
+.tiles dt{font-size:12.5px;color:var(--ink-3)}
+.tiles dd{margin:0;display:contents}
+.tiles .v{font-family:var(--font-display);font-size:26px;line-height:1.15;font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px;white-space:nowrap}
+.tiles .v small{font-family:var(--font-ui);font-size:13px;font-weight:500;letter-spacing:0;color:var(--ink-3);margin-left:4px}
+.tiles .h{font-size:12px;color:var(--ink-3);margin-top:3px}
+.week{padding:14px 16px 10px;display:flex;flex-direction:column;min-width:0}
+.week-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.week-top b{font-size:12.5px;font-weight:500;color:var(--ink-3)}
+.week-top span{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.week svg{display:block;width:100%;max-width:340px;height:auto;margin:auto auto 0;overflow:visible}
+.week .bar .col{fill:var(--bar)}
+.week .bar.now .col{fill:var(--bar-now)}
+.week .mask{fill:var(--group)}
+.week .bar .val{fill:var(--ink-2);font:600 11.5px var(--font-ui);font-variant-numeric:tabular-nums;opacity:0;transition:opacity .15s}
+.week .bar.now .val,.week .bar:hover .val{opacity:1}
+.week .bar .hit{fill:transparent}
+.week .day{fill:var(--ink-3);font:500 11.5px var(--font-ui)}
+.week .day.now{fill:var(--ink);font-weight:700}
+.week .base{stroke:var(--line);stroke-width:1}
+.privline{display:flex;align-items:center;gap:10px;margin:10px 0 0;font-size:13px;color:var(--ink-3)}
+.privline .ic{color:var(--lamp-ink)}
+.last{margin-top:22px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface-2);padding:16px 18px}
+.last-top{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.last-top h4{margin:0;font-size:15px;font-weight:700}
+.last-top time{font-size:12.5px;color:var(--ink-3);font-weight:400;margin-left:10px;font-variant-numeric:tabular-nums}
+.last p{margin:10px 0 0;font-size:14.5px;line-height:1.55;max-width:72ch}
+.last .note{display:flex;align-items:center;gap:8px;margin-top:12px}
+.last .note .ic{width:14px;height:14px;color:var(--ink-3)}
+.btn.ok{color:var(--ok-ink)}
 .linkbtn{border:0;background:none;padding:0;color:var(--lamp-ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
 
 .card{border-radius:12px;background:var(--group);border:1px solid var(--line-2);padding:20px}
@@ -455,6 +482,10 @@ section.block:first-of-type{margin-top:56px}
 .never li{display:flex;gap:10px;align-items:flex-start}
 .never .ic{color:var(--bad-ink);margin-top:3px}
 .crypto{margin:18px 0 0;font-size:12.5px;color:var(--ink-3)}
+.kept{margin:0;font-size:14px;color:var(--ink-2)}
+.kept-list{margin:8px 0 12px;padding-left:20px;display:grid;gap:4px;font-size:14px;color:var(--ink-2)}
+.kept-list li::marker{color:var(--lamp-ink)}
+.linkbtn{font-size:13.5px}
 
 .tray-wrap{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px;align-items:start}
 .mcrop{position:relative;height:440px;border-radius:16px;overflow:hidden;isolation:isolate;box-shadow:0 0 0 .5px rgba(0,0,0,.3),0 30px 60px -36px rgba(10,16,30,.5)}
@@ -514,6 +545,8 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   .tile.wide{grid-column:span 2}
   .tray-wrap{grid-template-columns:1fr}
   .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stats{grid-template-columns:1fr}
+  .tiles{border-right:0;border-bottom:1px solid var(--line-2)}
   .demo-foot{grid-template-columns:1fr}
 }
 @media (max-width:820px){
@@ -534,7 +567,9 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   .priv-cols{grid-template-columns:1fr}
   .phases{flex-wrap:wrap;row-gap:8px}
   .menu{right:12px}
-  .search{width:100%}
+  .stats{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));border-right:0;border-bottom:1px solid var(--line-2)}
+  .stats-head{flex-wrap:wrap}
   .mw-bar{flex-wrap:wrap;height:auto;padding:12px 18px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -622,7 +657,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
 <section class="block" id="diktovanie" aria-labelledby="h-dikt">
   <div class="s-head">
     <h2 id="h-dikt">Diktovanie</h2>
-    <p>Celý priebeh od stlačenia klávesu po vložený text. Slová pribúdajú zhruba každú sekundu, svetlejšie slová si model ešte môže rozmyslieť.</p>
+    <p>Celý priebeh od stlačenia klávesu po vložený text. Predvolene panel ukazuje len, že sa nahráva. V režime Živý text pribúdajú slová zhruba každú sekundu a svetlejšie si model ešte môže rozmyslieť.</p>
   </div>
   <div class="demo-tools">
     <div class="grp">
@@ -630,12 +665,13 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
         <button type="button" data-mode="hold" aria-pressed="true">Podrž klávesu</button>
         <button type="button" data-mode="toggle" aria-pressed="false">Prepínací režim</button>
       </div>
+      <span class="lbl-switch"><span id="demoViewLbl">Zobrazenie</span><span class="seg" role="group" aria-labelledby="demoViewLbl"><button type="button" data-view="ind" aria-pressed="true">Indikátor</button><button type="button" data-view="live" aria-pressed="false">Živý text</button></span></span>
       <span class="lbl-switch"><button type="button" class="switch" role="switch" aria-checked="true" id="demoSmooth" aria-labelledby="demoSmoothLbl"></button><span id="demoSmoothLbl">Uhladiť text</span></span>
     </div>
     <button type="button" class="btn" id="replay"><svg class="ic"><use href="#i-replay"/></svg>Prehrať znova</button>
   </div>
 
-  <div class="stage" role="img" aria-label="Animovaná ukážka: používateľ drží kláves, hovorí, overlay zobrazuje živý prepis a po pustení klávesu sa text vloží do okna chatu.">
+  <div class="stage" role="img" aria-label="Animovaná ukážka: používateľ drží kláves a hovorí, panel ukazuje nahrávanie a po pustení klávesu sa text vloží do okna chatu.">
     <svg class="wall" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
@@ -701,7 +737,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       </div>
     </div>
 
-    <div class="ov dyn" id="demoOv" data-s="idle" data-mode="hold" aria-hidden="true">
+    <div class="ov dyn" id="demoOv" data-s="idle" data-mode="hold" data-view="ind" aria-hidden="true">
       <div class="ov-body" id="demoBody"><div class="ov-text"><div class="lines" id="demoWords"></div></div></div>
       <div class="ov-bar">
         <span class="dots"><i></i><i></i><i></i><i></i><i></i></span>
@@ -729,9 +765,9 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
 
   <div class="demo-foot">
     <div class="keywrap">
-      <div class="keycap" id="keycap" aria-hidden="true"><b>⌥</b><span>option</span></div>
+      <div class="keycap" id="keycap" aria-hidden="true"><b>⌃</b><span>control</span></div>
       <div class="keyhint">
-        <small id="keyLabel">Pravý Option, podržte počas hovorenia</small>
+        <small id="keyLabel">Pravý Control, podržte počas hovorenia</small>
         <p id="keyHint" aria-live="polite">Kurzor je v okne chatu. Codevo Whisper čaká.</p>
       </div>
     </div>
@@ -755,25 +791,24 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       <div class="tile-stage bg-doc">
         <div class="idle-pair">
           <div class="ov idle-tiny"><div class="ov-bar"><span class="dots"><i></i><i></i><i></i><i></i><i></i></span></div></div>
-          <div class="ov idle-hover"><div class="ov-bar"><span class="orb"><svg class="ic"><use href="#i-mic"/></svg></span><span>Podržte <kbd>pravý ⌥</kbd> a hovorte</span></div></div>
+          <div class="ov idle-hover"><div class="ov-bar"><span class="orb"><svg class="ic"><use href="#i-mic"/></svg></span><span>Podržte <kbd>pravý ⌃</kbd> a hovorte</span></div></div>
         </div>
       </div>
       <figcaption><b>Pripravené</b><span>Nenápadná kapsula pri spodnom okraji. Po prejdení myšou ukáže skratku.</span></figcaption>
     </figure>
 
-    <figure class="tile wide">
+    <figure class="tile">
       <div class="tile-stage bg-code">
-        <div class="ov">
-          <div class="ov-text"><div class="lines"><span class="w">ahoj Peter pozrel som si ten pull request vyzerá to </span><span class="w t">dobre len by</span></div></div>
+        <div class="ov ind">
           <div class="ov-bar">
             <span class="orb rec" style="--lvl:.6"><svg class="ic"><use href="#i-mic"/></svg></span>
-            <div class="wave" data-wave="speech" data-seed="1"></div>
+            <div class="wave" data-wave="speech" data-seed="1" data-bars="26"></div>
             <span class="ov-time">0:04</span><span class="chip">SK</span>
             <span class="ov-lock" title="Šifrované"><svg class="ic"><use href="#i-lock"/></svg></span>
           </div>
         </div>
       </div>
-      <figcaption><b>Nahrávam</b><span>Potvrdené slová sú plné, posledné dve či tri sú svetlejšie, kým ich model nepotvrdí. Zámok pripomína, že zvuk odchádza šifrovaný.</span></figcaption>
+      <figcaption><b>Nahrávam</b><span>Malý panel bez textu: úroveň hlasu, čas, jazyk a zámok, ktorý pripomína, že zvuk odchádza šifrovaný. Text uvidíte až vložený v aplikácii.</span></figcaption>
     </figure>
 
     <figure class="tile">
@@ -828,19 +863,34 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       <figcaption><b>Bez mikrofónu alebo povolení</b><span>Jedno tlačidlo otvorí správne miesto v nastaveniach systému.</span></figcaption>
     </figure>
 
-    <figure class="tile wide">
+    <figure class="tile">
       <div class="tile-stage bg-figma">
-        <div class="ov">
-          <div class="ov-text"><div class="lines"><span class="w">takže párovací kód by mal platiť kratšie ako päť minút lebo v kancelárii ho uvidí každý kto ide okolo monitora a potom ešte </span><span class="w t">skontrolovať či</span></div></div>
+        <div class="ov ind" style="--pill-w:360px">
           <div class="ov-bar">
             <span class="orb rec" style="--lvl:.5"><svg class="ic"><use href="#i-mic"/></svg></span>
-            <div class="wave" data-wave="speech" data-seed="3"></div>
+            <div class="wave" data-wave="speech" data-seed="3" data-bars="18"></div>
             <span class="chunks" title="Nahrávka sa posiela po častiach"><i></i><i></i><i></i><i class="cur"></i><span>časť 4</span></span>
             <span class="ov-time">1:42</span><span class="chip">SK</span>
+            <span class="ov-lock" title="Šifrované"><svg class="ic"><use href="#i-lock"/></svg></span>
           </div>
         </div>
       </div>
-      <figcaption><b>Dlhé diktovanie</b><span>Po 30 sekundách sa nahrávka posiela po častiach. Pre vás sa nič nemení, hovoríte ďalej a starší text plynulo odchádza hore.</span></figcaption>
+      <figcaption><b>Dlhé diktovanie</b><span>Po 30 sekundách sa nahrávka posiela po častiach. Pre vás sa nič nemení, hovoríte ďalej.</span></figcaption>
+    </figure>
+
+    <figure class="tile wide">
+      <div class="tile-stage bg-code">
+        <div class="ov">
+          <div class="ov-text"><div class="lines"><span class="w">ahoj Peter pozrel som si ten pull request vyzerá to </span><span class="w t">dobre len by</span></div></div>
+          <div class="ov-bar">
+            <span class="orb rec" style="--lvl:.6"><svg class="ic"><use href="#i-mic"/></svg></span>
+            <div class="wave" data-wave="speech" data-seed="1"></div>
+            <span class="ov-time">0:04</span><span class="chip">SK</span>
+            <span class="ov-lock" title="Šifrované"><svg class="ic"><use href="#i-lock"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Nahrávam - živý text (voliteľné)</b><span>Zapína sa v Nastaveniach. Prepis pribúda už počas hovorenia. Potvrdené slová sú plné, posledné dve či tri sú svetlejšie, kým ich model nepotvrdí.</span></figcaption>
     </figure>
   </div>
 </section>
@@ -848,7 +898,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
 <section class="block" id="okno" aria-labelledby="h-okno">
   <div class="s-head">
     <h2 id="h-okno">Hlavné okno</h2>
-    <p>Otvára sa z lišty. História, server, nastavenia a vysvetlenie súkromia na jednom mieste. Sekcie prepínajte v bočnom paneli.</p>
+    <p>Otvára sa z lišty. Štatistiky, server, nastavenia a vysvetlenie súkromia na jednom mieste. Sekcie prepínajte v bočnom paneli.</p>
   </div>
 
   <div class="mw">
@@ -869,32 +919,36 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
 
     <div class="mw-main">
       <div role="tabpanel" id="p-home" aria-labelledby="tab-home" class="mw-main" style="flex:1">
-        <div class="mw-bar">
-          <h3>História</h3>
-          <label class="search"><svg class="ic"><use href="#i-search"/></svg><span class="sr-only">Hľadať v diktovaniach</span><input type="search" id="hSearch" placeholder="Hľadať v diktovaniach" autocomplete="off"></label>
-        </div>
+        <div class="mw-bar"><h3>Domov</h3></div>
         <div class="panel">
-          <div class="banner"><span class="orb done"><svg class="ic"><use href="#i-check"/></svg></span><span>Všetko je pripravené. Podržte <kbd>pravý ⌥</kbd> v ľubovoľnej aplikácii a hovorte.</span></div>
-          <div id="hGroups">
-            <div class="hgroup">
-              <h4>Dnes</h4>
-              <ul class="hlist">
-                <li class="hrow"><time>14:32</time><div><p>Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.</p><div class="hmeta"><span class="app"><i style="background:#5C3A7E">S</i>Slack</span><span class="lang">SK</span><span>0:07</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-                <li class="hrow"><time>13:05</time><div><p>Dobrý deň, posielam aktualizovaný odhad migrácie. Backend vychádza na tri dni, frontend na dva a testy s nasadením na ďalší deň. Ak by ste potrebovali skorší termín, dajte vedieť do piatku.</p><div class="hmeta"><span class="app"><i style="background:#2A84E8">M</i>Mail</span><span class="lang">SK</span><span>0:21</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-                <li class="hrow"><time>11:48</time><div><p>Refactor the pairing handshake so the server key is pinned after the first successful exchange.</p><div class="hmeta"><span class="app"><i style="background:#174F8E">C</i>VS Code</span><span class="lang">EN</span><span>0:05</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-                <li class="hrow"><time>10:12</time><div><p>Oprava timeoutu pri opätovnom pripojení cez tunel.</p><div class="hmeta"><span class="app"><i style="background:#2A2D33">T</i>Terminál</span><span class="lang">SK</span><span>0:03</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-              </ul>
-            </div>
-            <div class="hgroup">
-              <h4>Včera</h4>
-              <ul class="hlist">
-                <li class="hrow"><time>17:40</time><div><p>Na zítřejší schůzku připravím přehled latence z domácí sítě a přes tunel, ať víme, jestli WireGuard stojí za to.</p><div class="hmeta"><span class="app"><i style="background:#3A3A3A">N</i>Notion</span><span class="lang">CS</span><span>0:14</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-                <li class="hrow"><time>16:02</time><div><p>Server beží, model je načítaný a odozva je okolo štyridsať milisekúnd aj cez tunel.</p><div class="hmeta"><span class="app"><i style="background:#5C3A7E">S</i>Slack</span><span class="lang">SK</span><span>0:09</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-              </ul>
+          <div class="banner"><span class="orb done"><svg class="ic"><use href="#i-check"/></svg></span><span>Všetko je pripravené. Podržte <kbd>pravý ⌃ Control</kbd> v ľubovoľnej aplikácii a hovorte.</span></div>
+          <div class="stats-head">
+            <h4 id="h-stats">Štatistiky</h4>
+            <div class="seg" role="group" aria-label="Obdobie štatistík"><button type="button" data-period="today" aria-pressed="true">Dnes</button><button type="button" data-period="week" aria-pressed="false">Tento týždeň</button><button type="button" data-period="all" aria-pressed="false">Celkom</button></div>
+          </div>
+          <div class="stats" role="group" aria-labelledby="h-stats">
+            <dl class="tiles" id="tiles" aria-live="polite">
+              <div><dt>Nadiktované slová</dt><dd><span class="v" data-stat="words"></span><span class="h" data-stat="perSession"></span></dd></div>
+              <div><dt>Počet diktovaní</dt><dd><span class="v" data-stat="sessions"></span><span class="h" data-stat="avgLen"></span></dd></div>
+              <div><dt>Čas diktovania</dt><dd><span class="v" data-stat="time"></span><span class="h">čistý čas nahrávania</span></dd></div>
+              <div><dt>Priemerná rýchlosť</dt><dd><span class="v"><span data-stat="speed"></span><small>slov/min</small></span><span class="h">počítané z času nahrávania</span></dd></div>
+              <div><dt>Ušetrený čas</dt><dd><span class="v" data-stat="saved"></span><span class="h">odhad pri písaní 40 slov/min</span></dd></div>
+              <div><dt>Séria</dt><dd><span class="v"><span data-stat="streak"></span><small data-stat="streakUnit"></small></span><span class="h" data-stat="streakHint"></span></dd></div>
+            </dl>
+            <div class="week">
+              <div class="week-top"><b id="h-week">Slová za posledných 7 dní</b><span id="weekSum"></span></div>
+              <svg id="weekChart" viewBox="0 0 268 150" role="img" aria-labelledby="h-week weekDesc"><desc id="weekDesc"></desc></svg>
             </div>
           </div>
-          <div class="empty" id="hEmpty" hidden>Pre „<span id="hQ"></span>“ sa nič nenašlo. Skúste iné slovo, história je dostupná za posledných 30 dní.</div>
-          <p class="retention"><svg class="ic"><use href="#i-lock"/></svg><span>Diktovania sú uložené iba na tomto Macu, šifrované kľúčom v Kľúčenke, a mažú sa po 30 dňoch. Server si nepamätá nič. <button type="button" class="linkbtn" data-goto="tab-settings">Zmeniť uchovávanie</button></span></p>
+          <p class="privline"><svg class="ic"><use href="#i-lock"/></svg><span>Štatistiky sú len súčty čísel na tomto Macu, bez textu.</span></p>
+          <div class="last">
+            <div class="last-top">
+              <h4>Posledné diktovanie<time datetime="2026-10-25T14:32">dnes 14:32</time></h4>
+              <button type="button" class="btn" id="copyLast"><svg class="ic"><use href="#i-copy"/></svg>Kopírovať</button>
+            </div>
+            <p id="lastText">Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.</p>
+            <p class="note"><svg class="ic"><use href="#i-lock"/></svg>Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.</p>
+          </div>
         </div>
       </div>
 
@@ -958,8 +1012,9 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
             <div class="sgroup">
               <h4>Diktovanie</h4>
               <div class="sbox">
-                <div class="srow"><div class="t"><b>Klávesová skratka</b><span>Odporúčame pravý ⌥ alebo Fn, nekolidujú s inými skratkami.</span></div><button type="button" class="hk" id="hk" data-rec="false"><span id="hkLabel">Pravý ⌥ Option</span><small>Zmeniť</small></button></div>
+                <div class="srow"><div class="t"><b>Klávesová skratka</b><span>Odporúčame pravý ⌃ Control alebo Fn, nekolidujú s inými skratkami.</span></div><button type="button" class="hk" id="hk" data-rec="false"><span id="hkLabel">Pravý ⌃ Control</span><small>Zmeniť</small></button></div>
                 <div class="srow"><div class="t"><b>Režim</b><span id="modeDesc">Nahráva sa, kým kláves držíte.</span></div><div class="seg" role="group" aria-label="Režim klávesu"><button type="button" data-set-mode="hold" aria-pressed="true">Podrž klávesu</button><button type="button" data-set-mode="toggle" aria-pressed="false">Prepínanie</button></div></div>
+                <div class="srow"><div class="t"><b>Zobrazenie panela</b><span>Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.</span></div><div class="seg" role="group" aria-label="Zobrazenie panela"><button type="button" data-set-view="ind" aria-pressed="true">Indikátor</button><button type="button" data-set-view="live" aria-pressed="false">Živý text</button></div></div>
                 <div class="srow"><div class="t"><b>Jazyk</b><span>Automatické rozpoznanie pridá k prvému slovu asi 0,1 s.</span></div><select class="select" aria-label="Jazyk"><option>Slovenčina</option><option>Čeština</option><option>Angličtina</option><option>Rozpoznať automaticky</option></select></div>
               </div>
             </div>
@@ -983,7 +1038,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
               <h4>Systém</h4>
               <div class="sbox">
                 <div class="srow"><div class="t"><b>Spustiť po prihlásení</b><span>Codevo Whisper sa potichu usadí v lište.</span></div><button type="button" class="switch" role="switch" aria-checked="true" aria-label="Spustiť po prihlásení"></button></div>
-                <div class="srow"><div class="t"><b>Uchovávať históriu</b><span>Ukladá sa iba na tomto Macu, šifrovaná.</span></div><select class="select" aria-label="Uchovávať históriu"><option>7 dní</option><option selected>30 dní</option><option>90 dní</option><option>Neukladať</option></select></div>
+                <div class="srow"><div class="t"><b>Štatistiky</b><span>Súčty slov, diktovaní a času za každý deň. Bez textu a bez názvov aplikácií.</span></div><button type="button" class="btn danger" id="resetStats">Vynulovať štatistiky</button></div>
               </div>
             </div>
           </div>
@@ -1030,7 +1085,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
                 <li>Zvuk sa zašifruje ešte na tomto Macu kľúčom, ktorý vznikol pri párovaní.</li>
                 <li>Prejde cez vašu sieť, VPN alebo Cloudflare tunel. Po ceste sa nedá prečítať.</li>
                 <li>Server ho prepíše na text, pošle späť a nahrávku hneď zahodí.</li>
-                <li>Text sa vloží do aplikácie. Históriu má iba tento Mac, šifrovanú.</li>
+                <li>Text sa vloží do aplikácie. Posledné diktovanie ostane iba v pamäti, kým aplikáciu nezatvoríte.</li>
               </ol>
             </div>
             <div>
@@ -1038,9 +1093,16 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
               <ul class="never">
                 <li><svg class="ic"><use href="#i-x"/></svg>Neposiela zvuk ani text žiadnej cloudovej službe.</li>
                 <li><svg class="ic"><use href="#i-x"/></svg>Nezbiera analytiku ani telemetriu.</li>
+                <li><svg class="ic"><use href="#i-x"/></svg>Neukladá prepísaný text na disk.</li>
                 <li><svg class="ic"><use href="#i-x"/></svg>Nepotrebuje účet, e-mail ani predplatné.</li>
               </ul>
-              <div class="row-btns" style="margin-top:18px"><button type="button" class="btn">Exportovať históriu</button><button type="button" class="btn danger">Vymazať celú históriu</button></div>
+              <h4 style="margin-top:22px">Čo zostáva na tomto Macu</h4>
+              <p class="kept">Na disk sa neukladá nič okrem nastavení a súhrnných štatistík nižšie. Posledné diktovanie je iba v pamäti, kým aplikáciu nezatvoríte.</p>
+              <ul class="kept-list">
+                <li>Počet nadiktovaných slov za každý deň</li>
+                <li>Počet diktovaní a ich celkový čas</li>
+              </ul>
+              <button type="button" class="linkbtn" data-goto="tab-settings">Vynulovať štatistiky v Nastaveniach</button>
             </div>
           </div>
           <p class="crypto">Technicky: výmena kľúčov X25519, dáta šifruje ChaCha20-Poly1305. Kľúč servera sa pripne pri prvom spárovaní, takže podvrhnutý server sa neprihlási.</p>
@@ -1109,11 +1171,10 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       <div class="hd">Poznámky<span><i></i><i></i><i></i></span></div>
       <div class="bd">Plán na pondelok<br><span class="caret"></span></div>
     </div>
-    <div class="ov" aria-hidden="true">
-      <div class="ov-text"><div class="lines"><span class="w">zajtra ráno nasadím novú verziu servera a pošlem vám odtlačok kľúča </span><span class="w t">na kontrolu</span></div></div>
+    <div class="ov ind" aria-hidden="true">
       <div class="ov-bar">
         <span class="orb rec" style="--lvl:.5"><svg class="ic"><use href="#i-mic"/></svg></span>
-        <div class="wave" data-wave="speech" data-seed="5"></div>
+        <div class="wave" data-wave="speech" data-seed="5" data-bars="26"></div>
         <span class="ov-time">0:06</span><span class="chip">SK</span>
         <span class="ov-lock"><svg class="ic"><use href="#i-lock"/></svg></span>
       </div>
@@ -1170,11 +1231,11 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     waves.push({ bars, source });
   };
 
-  const demo = { tok: 0, mode: 'hold', smooth: true, level: 0, speaking: false, timer: null };
+  const demo = { tok: 0, mode: 'hold', view: 'ind', smooth: true, level: 0, speaking: false, timer: null };
   mountWave($('#demoWave'), 38, () => demo.level);
   $$('[data-wave="speech"]').forEach(el => {
     const seed = Number(el.dataset.seed || 0);
-    mountWave(el, 34, t => speech(t, seed));
+    mountWave(el, Number(el.dataset.bars || 34), t => speech(t, seed));
   });
 
   const meter = $('#micMeter');
@@ -1336,6 +1397,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     body.classList.remove('smoothing');
     setOv('idle');
     ov.dataset.mode = demo.mode;
+    ov.dataset.view = demo.view;
     composeText.textContent = '';
     composeText.classList.remove('flash');
     composePh.hidden = false;
@@ -1344,7 +1406,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     key(false);
     setTray('');
     setPhase('idle');
-    keyLabel.textContent = demo.mode === 'hold' ? 'Pravý Option, podržte počas hovorenia' : 'Pravý Option, stlačte raz na začiatok a raz na koniec';
+    keyLabel.textContent = demo.mode === 'hold' ? 'Pravý Control, podržte počas hovorenia' : 'Pravý Control, stlačte raz na začiatok a raz na koniec';
     hint('Kurzor je v okne chatu. Codevo Whisper čaká.');
   };
 
@@ -1396,11 +1458,11 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     await wait(1500, tok);
     if (demo.mode === 'hold') {
       key(true);
-      hint('Držíte pravý ⌥ a hovoríte');
+      hint('Držíte pravý ⌃ a hovoríte');
     }
     if (demo.mode === 'toggle') {
       await tap(tok);
-      hint('Stlačili ste pravý ⌥ raz. Nahrávanie beží, ruky máte voľné.');
+      hint('Stlačili ste pravý ⌃ raz. Nahrávanie beží, ruky máte voľné.');
     }
     await wait(160, tok);
     setOv('rec');
@@ -1434,7 +1496,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       setOv('smooth', 'Uhladzujem text');
       setPhase('smooth');
       hint('Ollama na serveri dopĺňa interpunkciu a vyhadzuje vatové slová');
-      await smoothText(tok);
+      await (demo.view === 'live' ? smoothText(tok) : wait(900, tok));
     }
     insertText();
     setOv('done', 'Vložené do #backend');
@@ -1461,6 +1523,11 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   $$('[data-mode]').forEach(b => b.addEventListener('click', () => {
     demo.mode = b.dataset.mode;
     $$('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    restart();
+  }));
+  $$('button[data-view]').forEach(b => b.addEventListener('click', () => {
+    demo.view = b.dataset.view;
+    $$('button[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     restart();
   }));
   const smoothSw = $('#demoSmooth');
@@ -1517,24 +1584,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     if (first) setTimeout(() => first.focus({ preventScroll: true }), reduced ? 0 : 400);
   }));
 
-  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const hSearch = $('#hSearch');
-  hSearch.addEventListener('input', () => {
-    const q = fold(hSearch.value.trim());
-    let any = 0;
-    $$('.hgroup').forEach(g => {
-      let shown = 0;
-      $$('.hrow', g).forEach(r => {
-        const hit = !q || fold(r.textContent).includes(q);
-        r.hidden = !hit;
-        shown += hit ? 1 : 0;
-      });
-      g.hidden = shown === 0;
-      any += shown;
-    });
-    $('#hEmpty').hidden = any > 0;
-    $('#hQ').textContent = hSearch.value.trim();
-  });
 
   const copyText = (txt, btn, restore) => {
     if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
@@ -1544,7 +1593,117 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     announce('Skopírované do schránky');
     setTimeout(() => { btn.innerHTML = old; btn.classList.remove('ok'); }, 1400);
   };
-  $$('.copy').forEach(b => b.addEventListener('click', () => copyText($('p', b.parentElement).textContent, b)));
+  $('#copyLast').addEventListener('click', e => copyText($('#lastText').textContent, e.currentTarget, '<svg class="ic"><use href="#i-check"/></svg>Skopírované'));
+
+  const TYPING_WPM = 40;
+  const DAYS = [
+    { short: 'Po', long: 'pondelok 19. októbra', words: 1840, sessions: 84, seconds: 800 },
+    { short: 'Ut', long: 'utorok 20. októbra', words: 2310, sessions: 103, seconds: 975 },
+    { short: 'St', long: 'streda 21. októbra', words: 1620, sessions: 76, seconds: 705 },
+    { short: 'Št', long: 'štvrtok 22. októbra', words: 2760, sessions: 121, seconds: 1170 },
+    { short: 'Pi', long: 'piatok 23. októbra', words: 1980, sessions: 90, seconds: 850 },
+    { short: 'So', long: 'sobota 24. októbra', words: 420, sessions: 21, seconds: 185 },
+    { short: 'Ne', long: 'dnes, nedeľa 25. októbra', words: 1120, sessions: 52, seconds: 475 }
+  ];
+  const EARLIER = { words: 11510, sessions: 524, seconds: 4960 };
+  const STREAK = { days: 14, since: '12. októbra' };
+  const sum = list => list.reduce((a, d) => ({ words: a.words + d.words, sessions: a.sessions + d.sessions, seconds: a.seconds + d.seconds }), { words: 0, sessions: 0, seconds: 0 });
+  const PERIODS = {
+    today: DAYS[DAYS.length - 1],
+    week: sum(DAYS),
+    all: sum([...DAYS, EARLIER])
+  };
+  const nf = new Intl.NumberFormat('sk-SK');
+  const num = n => nf.format(n);
+  const duration = seconds => {
+    const total = Math.round(seconds / 60);
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    if (!h) return m + ' min';
+    if (!m) return h + ' h';
+    return h + ' h ' + m + ' min';
+  };
+  const dayWord = n => {
+    if (n === 1) return 'deň';
+    if (n >= 2 && n <= 4) return 'dni';
+    return 'dní';
+  };
+  const statFields = {};
+  $$('[data-stat]').forEach(el => { statFields[el.dataset.stat] = el; });
+  const renderStats = c => {
+    const empty = c.words === 0;
+    const speed = empty ? 0 : Math.round(c.words / (c.seconds / 60));
+    const saved = Math.max(0, c.words / TYPING_WPM * 60 - c.seconds);
+    const streak = empty ? 0 : STREAK.days;
+    statFields.words.textContent = num(c.words);
+    statFields.perSession.textContent = empty ? 'zatiaľ nič' : 'priemerne ' + num(Math.round(c.words / c.sessions)) + ' slov naraz';
+    statFields.sessions.textContent = num(c.sessions);
+    statFields.avgLen.textContent = empty ? 'zatiaľ nič' : 'jedno trvá v priemere ' + Math.round(c.seconds / c.sessions) + ' s';
+    statFields.time.textContent = duration(c.seconds);
+    statFields.speed.textContent = num(speed);
+    statFields.saved.textContent = duration(saved);
+    statFields.streak.textContent = num(streak);
+    statFields.streakUnit.textContent = dayWord(streak) + ' po sebe';
+    statFields.streakHint.textContent = empty ? 'začne prvým diktovaním' : 'každý deň od ' + STREAK.since;
+  };
+  const renderWeek = days => {
+    const svg = $('#weekChart');
+    const desc = $('#weekDesc');
+    const W = 268, base = 122, top = 22, slot = W / days.length, bw = 22;
+    const max = Math.max(1, ...days.map(d => d.words));
+    const ns = 'http://www.w3.org/2000/svg';
+    const el = (tag, attrs) => {
+      const n = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+      return n;
+    };
+    $$('g, line', svg).forEach(n => n.remove());
+    days.forEach((d, i) => {
+      const now = i === days.length - 1;
+      const h = d.words ? Math.max(4, (base - top) * d.words / max) : 0;
+      const cx = slot * i + slot / 2;
+      const g = el('g', { class: now ? 'bar now' : 'bar' });
+      const title = el('title', {});
+      title.textContent = d.long + ': ' + num(d.words) + ' slov';
+      g.append(title);
+      g.append(el('rect', { class: 'hit', x: cx - slot / 2, y: 0, width: slot, height: base + 22 }));
+      g.append(el('rect', { class: 'col', x: cx - bw / 2, y: base - h, width: bw, height: h + 4, rx: 4 }));
+      const val = el('text', { class: 'val', x: cx, y: base - h - 6, 'text-anchor': 'middle' });
+      val.textContent = num(d.words);
+      g.append(val);
+      const day = el('text', { class: now ? 'day now' : 'day', x: cx, y: base + 20, 'text-anchor': 'middle' });
+      day.textContent = d.short;
+      g.append(day);
+      svg.append(g);
+    });
+    const clip = el('g', {});
+    clip.append(el('rect', { class: 'mask', x: 0, y: base + 1, width: W, height: 4 }));
+    clip.append(el('line', { class: 'base', x1: 0, x2: W, y1: base + .5, y2: base + .5 }));
+    svg.append(clip);
+    desc.textContent = days.map(d => d.long + ' ' + num(d.words) + ' slov').join(', ');
+    $('#weekSum').textContent = 'spolu ' + num(sum(days).words);
+  };
+  const periodBtns = $$('[data-period]');
+  let activePeriod = 'today';
+  periodBtns.forEach(b => b.addEventListener('click', () => {
+    activePeriod = b.dataset.period;
+    periodBtns.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderStats(PERIODS[activePeriod]);
+  }));
+  renderStats(PERIODS[activePeriod]);
+  renderWeek(DAYS);
+
+  const resetBtn = $('#resetStats');
+  resetBtn.addEventListener('click', () => {
+    const zero = { words: 0, sessions: 0, seconds: 0 };
+    Object.keys(PERIODS).forEach(k => { PERIODS[k] = zero; });
+    DAYS.forEach(d => Object.assign(d, zero));
+    renderStats(PERIODS[activePeriod]);
+    renderWeek(DAYS);
+    resetBtn.disabled = true;
+    resetBtn.textContent = 'Štatistiky sú vynulované';
+    announce('Štatistiky sú vynulované');
+  });
   $('#copyCmd').addEventListener('click', e => copyText('dictate pair', e.currentTarget, '<svg class="ic"><use href="#i-check"/></svg>Skopírované'));
 
   const testBtn = $('#testBtn');
@@ -1635,6 +1794,9 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   $$('[data-set-mode]').forEach(b => b.addEventListener('click', () => {
     $$('[data-set-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     modeDesc.textContent = b.dataset.setMode === 'hold' ? 'Nahráva sa, kým kláves držíte.' : 'Prvé stlačenie začne nahrávať, druhé ukončí.';
+  }));
+  $$('[data-set-view]').forEach(b => b.addEventListener('click', () => {
+    $$('[data-set-view]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   }));
 })();
 </script>
