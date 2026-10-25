@@ -73,6 +73,10 @@ export class SessionCoordinator {
     return this.deps.pause.isPaused();
   }
 
+  isDictating(): boolean {
+    return this.sessions.size > 0;
+  }
+
   async pasteLast(): Promise<PasteLastOutcome> {
     try {
       const outcome = await this.deps.insertion.pasteLast();

@@ -120,4 +120,15 @@ describe('WindowAudioCapture', () => {
     await audio.stop();
     expect(ended).toBe(2);
   });
+
+  it('refuses new recordings and meters while blocked for an update and accepts them again after unblocking', async () => {
+    const { capture: audio } = capture(1000);
+
+    const unblock = audio.block();
+    await expect(audio.start(SYSTEM_DEFAULT)).rejects.toThrow('The microphone is closed for an app update');
+    await expect(audio.startMeter(SYSTEM_DEFAULT)).rejects.toThrow('The microphone is closed for an app update');
+    unblock();
+
+    await expect(audio.start(SYSTEM_DEFAULT)).resolves.toEqual({ fallback: false, deviceLabel: 'MacBook Pro Microphone' });
+  });
 });

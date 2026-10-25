@@ -6,7 +6,7 @@ export type SettlingWork = { isBusy(): boolean; settled(): Promise<void> };
 
 const DEFAULT_TIMEOUT_MS = 2000;
 
-function settleWithin(work: SettlingWork, timeoutMs: number): Promise<boolean> {
+export function settleWithin(work: SettlingWork, timeoutMs: number): Promise<boolean> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => resolve(false), timeoutMs);

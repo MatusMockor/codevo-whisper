@@ -8,6 +8,7 @@ import type { PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
 import type { DayStats } from '../shared/stats';
+import type { InstallOutcome, UpdateStatus } from '../shared/updates';
 
 function subscribe<E extends IpcEventName>(event: E, listener: IpcEventListener<E>): () => void {
   if (!Object.hasOwn(EVENT_CHANNELS, event)) {
@@ -53,6 +54,10 @@ const api: IpcApi = {
   cancelServerPairing: () => ipcRenderer.invoke(INVOKE_CHANNELS.cancelServerPairing) as Promise<void>,
   checkServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkServer) as Promise<void>,
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
+  getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,
+  checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,
+  installUpdate: () => ipcRenderer.invoke(INVOKE_CHANNELS.installUpdate) as Promise<InstallOutcome>,
+  openUpdateDownload: () => ipcRenderer.invoke(INVOKE_CHANNELS.openUpdateDownload) as Promise<void>,
   on: subscribe,
 };
 

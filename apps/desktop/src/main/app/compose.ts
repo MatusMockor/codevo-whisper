@@ -22,6 +22,7 @@ import { installPermissionHandlers } from '../security/permissions';
 import { PauseState } from '../session/pause-state';
 import { SessionCoordinator } from '../session/session-coordinator';
 import { SettingsStore } from '../settings/settings-store';
+import { coordinatorDictationGuard } from '../updates/coordinator-dictation-guard';
 import { TrayMenu } from '../tray/tray-menu';
 import { MainWindowController } from '../windows/main-window-controller';
 import { OverlayWindow } from '../windows/overlay-window';
@@ -37,6 +38,7 @@ import { createSettingsServices } from './settings-wiring';
 import { QuitGate, type QuitEvent } from './quit-gate';
 import { startInput } from './start-input';
 import { isE2eMode } from './test-mode';
+import { createUpdates, loadAutoUpdater } from './update-wiring';
 
 const SETTINGS_FILE = 'settings.json';
 
@@ -110,6 +112,12 @@ export function composeApplication(logger: Logger): Application {
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
     const rearm = new HotkeyRearm(permissions, hotkey, logger);
+    const updates = createUpdates({
+      e2e,
+      dictation: coordinatorDictationGuard({ coordinator: () => coordinator, microphone: capture, meter: settingsServices.microphones, logger }),
+      send: (status) => mainWindow.send('update-status-changed', status),
+      logger,
+    });
     registerIpc({
       settings,
       stats: home.stats,
@@ -125,6 +133,8 @@ export function composeApplication(logger: Logger): Application {
       microphones: settingsServices.microphones,
       server: server.service,
       source: rendererSource(),
+      updates: updates.service,
+      openUpdateUrl: (url) => shell.openExternal(url),
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
     const overlay = new OverlayWindow(rendererSource('overlay'), logger);
@@ -151,6 +161,7 @@ export function composeApplication(logger: Logger): Application {
       settings,
       lastTranscript,
       models: models.manager,
+      updates: updates.service,
       openApp: () => mainWindow.open(),
       openSettings: () => mainWindow.open('settings'),
       quit: () => app.quit(),
@@ -160,6 +171,7 @@ export function composeApplication(logger: Logger): Application {
     overlay.onAction((action) => coordinator.act(action));
     coordinator.start();
     tray.create();
+    updates.start();
     disposers.push(
       () => rearm.dispose(),
       () => coordinator.dispose(),
@@ -169,8 +181,9 @@ export function composeApplication(logger: Logger): Application {
       () => home.dispose(),
       () => settingsServices.dispose(),
       () => server.dispose(),
+      () => updates.dispose(),
     );
-    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper });
+    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake, loadUpdater: loadAutoUpdater });
     void startInput(helper, hotkey, logger).then(() => {
       input.resolve();
       home.status.refresh();

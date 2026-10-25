@@ -89,4 +89,14 @@ describe('warmUpAfterUpdate', () => {
 
     expect(warmed).toHaveLength(1);
   });
+
+  it('warms up on the first start after an in-app update from the stamp the previous release wrote', async () => {
+    await writeFile(stampFile, `${JSON.stringify({ appVersion: '1.1.0' })}\n`);
+
+    await warmUpWith(models(), '1.2.0');
+    await warmUpWith(models(), '1.2.0');
+
+    expect(warmed).toEqual([join(modelsDir, 'alpha.gguf')]);
+    expect(JSON.parse(await readFile(stampFile, 'utf8'))).toEqual({ appVersion: '1.2.0' });
+  });
 });

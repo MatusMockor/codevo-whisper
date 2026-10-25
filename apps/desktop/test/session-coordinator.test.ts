@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
 import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
@@ -13,11 +14,13 @@ import { ModelManager } from '../src/main/models/model-manager';
 import { PauseState } from '../src/main/session/pause-state';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
 import { SettingsStore } from '../src/main/settings/settings-store';
+import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FakeCaptureHost } from './fake-capture-host';
 import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
@@ -417,6 +420,53 @@ describe('SessionCoordinator', () => {
     expect(changes).toEqual([true, false]);
     expect(harness.coordinator.isPaused()).toBe(false);
     expect(harness.pause.isPaused()).toBe(false);
+  });
+
+  it('reports a dictation as active from the key press until the text is inserted', async () => {
+    vi.stubEnv('FAKE_CLI_DELAY_S', '0.4');
+    const harness = await prepared();
+    expect(harness.coordinator.isDictating()).toBe(false);
+
+    await pressAndSpeak(harness, 7);
+    expect(harness.coordinator.isDictating()).toBe(true);
+    harness.helper.pressKey('up', FN.keycode);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
+    expect(harness.coordinator.isDictating()).toBe(true);
+
+    await expect.poll(() => harness.helper.pasted, { timeout: 3000 }).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.coordinator.isDictating()).toBe(false);
+  });
+
+  it('the update guard pauses dictation, stops the meter and lets the microphone settle before the install', async () => {
+    const harness = await prepared();
+    const host = new FakeCaptureHost();
+    const microphone = new WindowAudioCapture(host, harness.logger);
+    await microphone.startMeter({ deviceId: null, label: null });
+    const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
+
+    const release = await guard.suspend();
+
+    expect(harness.coordinator.isPaused()).toBe(true);
+    expect(host.requests.at(-1)).toEqual({ type: 'stop' });
+    expect(microphone.isBusy()).toBe(false);
+    await expect(microphone.startMeter({ deviceId: null, label: null })).rejects.toThrow('The microphone is closed for an app update');
+    harness.helper.pressKey('down', FN.keycode);
+    expect(guard.isDictating()).toBe(false);
+    release();
+
+    expect(harness.coordinator.isPaused()).toBe(false);
+    await expect(microphone.startMeter({ deviceId: null, label: null })).resolves.toBeUndefined();
+  });
+
+  it('the update guard keeps a pause the user chose', async () => {
+    const harness = await prepared();
+    const microphone = new WindowAudioCapture(new FakeCaptureHost(), harness.logger);
+    const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
+    harness.coordinator.pause();
+
+    (await guard.suspend())();
+
+    expect(harness.coordinator.isPaused()).toBe(true);
   });
 
   it('toggle mode records until the second press and then inserts', async () => {

@@ -7,6 +7,7 @@ import type { PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
 import type { MicrophoneSetting, Settings } from './settings';
 import type { DayStats } from './stats';
+import type { InstallOutcome, UpdateStatus } from './updates';
 
 export type IpcInvokeApi = {
   getSettings(): Promise<Settings>;
@@ -35,6 +36,10 @@ export type IpcInvokeApi = {
   cancelServerPairing(): Promise<void>;
   checkServer(): Promise<void>;
   disconnectServer(): Promise<DisconnectResult>;
+  getUpdateStatus(): Promise<UpdateStatus>;
+  checkForUpdates(): Promise<UpdateStatus>;
+  installUpdate(): Promise<InstallOutcome>;
+  openUpdateDownload(): Promise<void>;
 };
 
 export type IpcEvents = {
@@ -47,6 +52,7 @@ export type IpcEvents = {
   'microphones-changed': AudioDevice[];
   'microphone-level': number;
   'server-changed': ServerView;
+  'update-status-changed': UpdateStatus;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -84,6 +90,10 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   cancelServerPairing: 'server:cancel-pairing',
   checkServer: 'server:check',
   disconnectServer: 'server:disconnect',
+  getUpdateStatus: 'updates:status',
+  checkForUpdates: 'updates:check',
+  installUpdate: 'updates:install',
+  openUpdateDownload: 'updates:open-download',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -96,4 +106,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'microphones-changed': 'microphones:changed',
   'microphone-level': 'microphones:level',
   'server-changed': 'server:changed',
+  'update-status-changed': 'updates:status-changed',
 });

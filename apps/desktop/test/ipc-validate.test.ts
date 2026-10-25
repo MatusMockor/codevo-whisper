@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('returns a valid patch', () => {
@@ -121,5 +121,16 @@ describe('validatePairingToken', () => {
     for (const input of [null, 42, {}, '', '   ', 'x'.repeat(1025)]) {
       expect(() => validatePairingToken(input)).toThrow(IpcValidationError);
     }
+  });
+});
+
+describe('rejectArguments', () => {
+  it('accepts a call without arguments', () => {
+    expect(() => rejectArguments([])).not.toThrow();
+  });
+
+  it('rejects any argument, also undefined', () => {
+    expect(() => rejectArguments(['x'])).toThrow(IpcValidationError);
+    expect(() => rejectArguments([undefined])).toThrow(IpcValidationError);
   });
 });

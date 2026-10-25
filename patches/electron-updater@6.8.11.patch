@@ -1,0 +1,27 @@
+diff --git a/out/electronHttpExecutor.js b/out/electronHttpExecutor.js
+index 0ae9e1126e1dc136977914ef1bfd46709fc9db1b..f06ca8ca43c4b1f6f93b85884e8d41f8be1370bd 100644
+--- a/out/electronHttpExecutor.js
++++ b/out/electronHttpExecutor.js
+@@ -66,12 +66,19 @@ class ElectronHttpExecutor extends builder_util_runtime_1.HttpExecutor {
+             // no way to modify request options, abort old and make a new one
+             // https://github.com/electron/electron/issues/11505
+             request.abort();
+-            if (redirectCount > this.maxRedirects) {
++            if (redirectCount >= this.maxRedirects) {
+                 reject(this.createMaxRedirectError());
++                return;
+             }
+-            else {
+-                handler(builder_util_runtime_1.HttpExecutor.prepareRedirectUrlOptions(redirectUrl, options));
++            let redirectOptions;
++            try {
++                redirectOptions = builder_util_runtime_1.HttpExecutor.prepareRedirectUrlOptions(redirectUrl, options);
+             }
++            catch (error) {
++                reject(error);
++                return;
++            }
++            handler(redirectOptions);
+         });
+     }
+ }
