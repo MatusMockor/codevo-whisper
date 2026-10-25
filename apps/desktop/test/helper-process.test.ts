@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HelperMessage } from '../src/main/helper/helper-channel';
 import type { HelperProcess } from '../src/main/helper/helper-process';
@@ -9,6 +12,15 @@ afterEach(async () => {
   await helper?.stop();
   helper = null;
 });
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function started(timeoutMs?: number): Promise<HelperProcess> {
   helper = protocolHelper(timeoutMs);
@@ -59,6 +71,32 @@ describe('HelperProcess', () => {
     expect(second).not.toBe(first);
     expect(restarts).toEqual([1]);
     await expect(process.request('ping')).rejects.toThrow('helper-unavailable');
+  });
+
+  it('rejects start when the helper dies before ready and does not restart it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cw-helper-'));
+    helper = protocolHelper(2000, [`--exit-before-ready-once=${join(dir, 'launched')}`]);
+    const restarts: number[] = [];
+    helper.onRestart(() => restarts.push(1));
+
+    await expect(helper.start()).rejects.toThrow('helper-exited');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(restarts).toEqual([]);
+    await expect(helper.request('ping')).rejects.toThrow('helper-unavailable');
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reuses the running helper on a second start instead of leaking it', async () => {
+    const helperProcess = await started();
+    const first = (await helperProcess.request('ping')).pid as number;
+
+    await helperProcess.start();
+    const second = (await helperProcess.request('ping')).pid as number;
+    await helperProcess.stop();
+
+    expect(second).toBe(first);
+    await expect.poll(() => isAlive(first)).toBe(false);
   });
 
   it('rejects requests after stop without restarting', async () => {

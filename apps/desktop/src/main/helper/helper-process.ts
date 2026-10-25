@@ -61,10 +61,15 @@ export class HelperProcess implements HelperChannel {
   }
 
   async start(): Promise<void> {
+    if (!this.stopping && isRunning(this.child)) {
+      await this.live;
+      return;
+    }
     this.stopping = false;
-    this.restartsLeft = MAX_RESTARTS;
+    this.restartsLeft = 0;
     this.live = this.spawnChild();
     await this.live;
+    this.restartsLeft = MAX_RESTARTS;
   }
 
   async stop(): Promise<void> {
@@ -185,7 +190,7 @@ export class HelperProcess implements HelperChannel {
       return;
     }
     if (this.restartsLeft <= 0) {
-      this.logger.error('Input helper crashed again and stays stopped', exit);
+      this.logger.error('Input helper exited and stays stopped', exit);
       this.live = unavailable();
       return;
     }

@@ -4,6 +4,6 @@ import { RecordingLogger } from './recording-logger';
 
 const SCRIPT = fileURLToPath(new URL('./fixtures/protocol-helper.js', import.meta.url));
 
-export function protocolHelper(timeoutMs = 2000): HelperProcess {
-  return new HelperProcess({ file: process.execPath, args: [SCRIPT] }, { logger: new RecordingLogger(), timeoutMs });
+export function protocolHelper(timeoutMs = 2000, flags: string[] = []): HelperProcess {
+  return new HelperProcess({ file: process.execPath, args: [SCRIPT, ...flags] }, { logger: new RecordingLogger(), timeoutMs });
 }

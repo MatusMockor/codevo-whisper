@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expect } from 'vitest';
 import { resolveHelperBinary } from '../src/main/helper/helper-binary';
 
 const DESKTOP_DIR = fileURLToPath(new URL('..', import.meta.url));
@@ -22,6 +23,7 @@ export function ensureBuiltHelper(): string {
   if (isFresh(binary)) {
     return binary;
   }
-  execFileSync(BUILD_SCRIPT, [process.arch], { stdio: 'inherit' });
+  const build = spawnSync(BUILD_SCRIPT, [process.arch], { encoding: 'utf8', stdio: 'pipe' });
+  expect(build.status, `${build.error?.message ?? ''}${build.stdout}${build.stderr}`).toBe(0);
   return binary;
 }

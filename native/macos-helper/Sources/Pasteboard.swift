@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class Pasteboard {
     private var saved: [[(NSPasteboard.PasteboardType, Data)]]?
+    private var writtenChangeCount: Int?
     private let board = NSPasteboard.general
 
     func save() -> JSONObject {
@@ -10,20 +11,31 @@ final class Pasteboard {
         saved = items.map { item in
             item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
         }
+        writtenChangeCount = nil
         let types = Set(items.flatMap { $0.types.map(\.rawValue) }).sorted()
         return ["items": items.count, "types": types]
     }
 
     func write(text: String) -> JSONObject {
         board.clearContents()
-        return ["written": board.setString(text, forType: .string)]
+        guard board.setString(text, forType: .string) else {
+            writtenChangeCount = nil
+            return ["written": false, "reason": "set-string-failed"]
+        }
+        writtenChangeCount = board.changeCount
+        return ["written": true]
     }
 
     func restore(expectedText: String?) -> JSONObject {
+        let written = writtenChangeCount
+        writtenChangeCount = nil
         guard let saved else {
             return ["restored": false, "reason": "nothing-saved"]
         }
         self.saved = nil
+        guard let written, board.changeCount == written else {
+            return ["restored": false, "reason": "clipboard-changed"]
+        }
         guard let expectedText, board.string(forType: .string) == expectedText else {
             return ["restored": false, "reason": "text-changed"]
         }

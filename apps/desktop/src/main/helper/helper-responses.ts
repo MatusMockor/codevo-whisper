@@ -16,6 +16,14 @@ function nullableInteger(message: HelperMessage, key: string): number | null {
   return Number.isInteger(value) ? (value as number) : null;
 }
 
+export function requireBoolean(message: HelperMessage, key: string, failure: string): boolean {
+  const value = nullableBoolean(message, key);
+  if (value === null) {
+    throw new Error(failure);
+  }
+  return value;
+}
+
 export function isTrue(message: HelperMessage, key: string): boolean {
   return message[key] === true;
 }

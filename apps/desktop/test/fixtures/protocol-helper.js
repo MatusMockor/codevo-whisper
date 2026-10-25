@@ -1,6 +1,8 @@
+import { existsSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 let keycodes = [];
+const overrides = new Map();
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -15,6 +17,10 @@ const handlers = {
     send(args.event);
     send({ id });
   },
+  'respond-next': (id, args) => {
+    overrides.set(args.cmd, { response: args.response, delayMs: args.delayMs ?? 0 });
+    send({ id });
+  },
   'listen-start': (id, args) => {
     keycodes = args.keycodes;
     send({ id, running: true, keycodes });
@@ -24,19 +30,35 @@ const handlers = {
   permissions: (id) => send({ id, listenEvent: true, postEvent: false, accessibility: true }),
   frontmost: (id) => send({ id, pid: 42, bundleId: 'com.apple.TextEdit', name: 'TextEdit', windowId: 7 }),
   'focused-element': (id) => send({ id, editable: null, role: 'AXWebArea', reason: 'chromium-no-tree' }),
+  'secure-input': (id) => send({ id, enabled: false }),
+  'clipboard-write': (id) => send({ id, written: true }),
+  'clipboard-restore': (id) => send({ id, restored: true }),
   paste: (id) => send({ id, posted: false, reason: 'no-event-source' }),
 };
 
+function respond(request) {
+  const override = overrides.get(request.cmd);
+  if (override) {
+    overrides.delete(request.cmd);
+    setTimeout(() => send({ ...override.response, id: request.id }), override.delayMs);
+    return;
+  }
+  const handler = handlers[request.cmd];
+  if (!handler) {
+    send({ id: request.id, error: 'unknown-command' });
+    return;
+  }
+  handler(request.id, request.args ?? {});
+}
+
+const firstRunMarker = process.argv.find((arg) => arg.startsWith('--exit-before-ready-once='))?.split('=')[1];
+if (firstRunMarker && !existsSync(firstRunMarker)) {
+  writeFileSync(firstRunMarker, '');
+  process.exit(3);
+}
+
 createInterface({ input: process.stdin })
-  .on('line', (line) => {
-    const request = JSON.parse(line);
-    const handler = handlers[request.cmd];
-    if (!handler) {
-      send({ id: request.id, error: 'unknown-command' });
-      return;
-    }
-    handler(request.id, request.args ?? {});
-  })
+  .on('line', (line) => respond(JSON.parse(line)))
   .on('close', () => process.exit(0));
 
 send({ event: 'ready', pid: process.pid });

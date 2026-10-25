@@ -9,10 +9,12 @@ import {
   parsePermissions,
   parseRecordedKey,
   parseShortcut,
+  requireBoolean,
 } from './helper-responses';
 import type { AppTarget, FocusedElement, InputHelper, KeyEvent, PermissionKind, Permissions, ShortcutName } from './input-helper';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
+const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
 
 function ensure(message: HelperMessage, key: string, failure: string): void {
   if (isTrue(message, key)) {
@@ -55,11 +57,11 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async secureInput(): Promise<boolean> {
-    return isTrue(await this.channel.request('secure-input'), 'enabled');
+    return requireBoolean(await this.channel.request('secure-input'), 'enabled', 'secure-input-invalid');
   }
 
   async focusedElement(): Promise<FocusedElement> {
-    return parseFocusedElement(await this.channel.request('focused-element'));
+    return parseFocusedElement(await this.channel.request('focused-element', {}, FOCUSED_ELEMENT_TIMEOUT_MS));
   }
 
   async saveClipboard(): Promise<void> {
@@ -67,11 +69,11 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async writeClipboard(text: string): Promise<void> {
-    await this.channel.request('clipboard-write', { text });
+    ensure(await this.channel.request('clipboard-write', { text }), 'written', 'clipboard-write-failed');
   }
 
   async restoreClipboard(expectedText: string): Promise<boolean> {
-    return isTrue(await this.channel.request('clipboard-restore', { expectedText }), 'restored');
+    return requireBoolean(await this.channel.request('clipboard-restore', { expectedText }), 'restored', 'clipboard-restore-invalid');
   }
 
   async paste(): Promise<void> {

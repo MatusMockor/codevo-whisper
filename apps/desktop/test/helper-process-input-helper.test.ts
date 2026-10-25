@@ -13,8 +13,8 @@ afterEach(async () => {
   channel = null;
 });
 
-async function started(): Promise<{ channel: HelperProcess; helper: HelperProcessInputHelper }> {
-  channel = protocolHelper();
+async function started(timeoutMs?: number): Promise<{ channel: HelperProcess; helper: HelperProcessInputHelper }> {
+  channel = protocolHelper(timeoutMs);
   helper = new HelperProcessInputHelper(channel);
   await helper.start();
   return { channel, helper };
@@ -28,6 +28,32 @@ describe('HelperProcessInputHelper', () => {
     expect(await helper.frontmost()).toEqual({ bundleId: 'com.apple.TextEdit', pid: 42, name: 'TextEdit', windowId: 7 });
     expect(await helper.focusedElement()).toEqual({ editable: null, role: 'AXWebArea' });
     await expect(helper.paste()).rejects.toThrow('paste-failed:no-event-source');
+  });
+
+  it('rejects a clipboard write the helper could not perform', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'clipboard-write', response: { written: false, reason: 'set-string-failed' } });
+
+    await expect(helper.writeClipboard('dictated')).rejects.toThrow('clipboard-write-failed:set-string-failed');
+    await expect(helper.writeClipboard('dictated')).resolves.toBeUndefined();
+  });
+
+  it('rejects malformed secure-input and restore results instead of assuming them', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'secure-input', response: {} });
+    await channel.request('respond-next', { cmd: 'clipboard-restore', response: { restored: 'true' } });
+
+    await expect(helper.secureInput()).rejects.toThrow('secure-input-invalid');
+    await expect(helper.restoreClipboard('dictated')).rejects.toThrow('clipboard-restore-invalid');
+    expect(await helper.secureInput()).toBe(false);
+    expect(await helper.restoreClipboard('dictated')).toBe(true);
+  });
+
+  it('gives the focused element query longer than the default timeout', async () => {
+    const { channel, helper } = await started(100);
+    await channel.request('respond-next', { cmd: 'focused-element', response: { editable: true, role: 'AXTextArea' }, delayMs: 250 });
+
+    expect(await helper.focusedElement()).toEqual({ editable: true, role: 'AXTextArea' });
   });
 
   it('forwards key events and the paste-last shortcut', async () => {
