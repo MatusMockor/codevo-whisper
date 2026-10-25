@@ -7,7 +7,7 @@ import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
 import { HotkeyService } from '../hotkey/hotkey-service';
 import { KeyRecorder } from '../hotkey/key-recorder';
-import { rearmHotkeyOnGrant } from '../hotkey/rearm-on-grant';
+import { HotkeyRearm } from '../hotkey/rearm-on-grant';
 import { InsertionService } from '../insertion/insertion-service';
 import { LastTranscript } from '../insertion/last-transcript';
 import { registerIpc } from '../ipc/register-ipc';
@@ -106,6 +106,7 @@ export function composeApplication(logger: Logger): Application {
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
+    const rearm = new HotkeyRearm(permissions, hotkey, logger);
     registerIpc({
       settings,
       stats: home.stats,
@@ -113,7 +114,7 @@ export function composeApplication(logger: Logger): Application {
       lastTranscript,
       permissions,
       recorder: new KeyRecorder(helper),
-      hotkey,
+      hotkey: { isArmed: () => rearm.settled().then(() => hotkey.isArmed()) },
       relaunch,
       catalog: models.catalog,
       models: models.manager,
@@ -155,7 +156,7 @@ export function composeApplication(logger: Logger): Application {
     coordinator.start();
     tray.create();
     disposers.push(
-      rearmHotkeyOnGrant(permissions, hotkey, logger),
+      () => rearm.dispose(),
       () => coordinator.dispose(),
       () => hotkey.dispose(),
       () => tray.destroy(),

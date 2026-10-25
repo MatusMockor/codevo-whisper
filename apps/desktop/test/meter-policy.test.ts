@@ -9,6 +9,7 @@ const AIRPODS = { deviceId: 'airpods', label: 'AirPods Pro' };
 
 class MainWindowActivity implements MeterWindow {
   private readonly changes = new Listeners<boolean>(new RecordingLogger(), 'Window activity listener failed');
+  private readonly closes = new Listeners<void>(new RecordingLogger(), 'Window close listener failed');
 
   constructor(private active: boolean) {}
 
@@ -18,6 +19,16 @@ class MainWindowActivity implements MeterWindow {
 
   onActivityChange(listener: (active: boolean) => void): () => void {
     return this.changes.add(listener);
+  }
+
+  onClose(listener: () => void): () => void {
+    return this.closes.add(listener);
+  }
+
+  close(): void {
+    this.active = false;
+    this.changes.emit(false);
+    this.closes.emit(undefined);
   }
 
   set(active: boolean): void {
@@ -95,5 +106,17 @@ describe('MeterPolicy', () => {
     await policy.request({ deviceId: null, label: null });
 
     expect(capture.metering).toEqual({ deviceId: null, label: null });
+  });
+
+  it('forgets the request when the main window closes so a reopened window on Domov keeps the mic closed', async () => {
+    const { capture, window, policy } = harness();
+    await policy.request(AIRPODS);
+
+    window.close();
+    await settle();
+    window.set(true);
+    await settle();
+
+    expect(capture.metering).toBeNull();
   });
 });

@@ -120,7 +120,12 @@ export class WindowAudioCapture implements AudioCapture {
     }
     await this.stopMetering();
     this.recording.clear();
-    return this.open(chosen, 'record');
+    try {
+      return await this.open(chosen, 'record');
+    } catch (error) {
+      this.recordingStops.emit(undefined);
+      throw error;
+    }
   }
 
   private async stopRecording(): Promise<Uint8Array> {

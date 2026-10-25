@@ -270,4 +270,27 @@ describe('HotkeyService', () => {
     expect(events).toEqual([]);
     expect(logger.errors.map((entry) => entry.message)).toEqual(['Input Monitoring is not granted, the hotkey stays idle']);
   });
+
+  it('is not armed when listening to a changed hotkey fails', async () => {
+    const { settings, helper, service, logger } = await started();
+    expect(service.isArmed()).toBe(true);
+
+    helper.listenFails = true;
+    await settings.update({ hotkey: RIGHT_CONTROL });
+
+    await vi.waitFor(() => expect(logger.errors.length).toBeGreaterThan(0));
+    expect(service.isArmed()).toBe(false);
+  });
+
+  it('is not armed when the first listen fails', async () => {
+    const helper = new FakeInputHelper();
+    helper.listenFails = true;
+    const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
+    await settings.load();
+    await settings.update({ hotkey: FN });
+    const service = new HotkeyService(helper, settings, new FakePowerEvents(), undefined, new RecordingLogger());
+
+    await expect(service.start()).rejects.toThrow('tap-create-failed');
+    expect(service.isArmed()).toBe(false);
+  });
 });

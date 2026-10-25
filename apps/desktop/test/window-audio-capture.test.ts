@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
+import type { CaptureRequest } from '../src/shared/capture-contract';
 import { FakeCaptureHost } from './fake-capture-host';
 import { RecordingLogger } from './recording-logger';
 
@@ -70,5 +71,34 @@ describe('WindowAudioCapture', () => {
 
     expect(started).toEqual({ fallback: true, deviceLabel: 'MacBook Pro Microphone' });
     expect(host.requests).toContainEqual({ type: 'start', deviceId: 'built-in-id', mode: 'record' });
+  });
+
+  it('reports the end of a recording both after a stop and after a failed start', async () => {
+    const host = new (class extends FakeCaptureHost {
+      failStart = false;
+
+      override request(request: CaptureRequest): Promise<unknown> {
+        if (request.type === 'start' && this.failStart) {
+          return Promise.reject(new Error('NotAllowedError'));
+        }
+        return super.request(request);
+      }
+    })();
+    const audio = new WindowAudioCapture(host, new RecordingLogger());
+    let ended = 0;
+    audio.onRecordingStopped(() => {
+      ended += 1;
+    });
+
+    await audio.start(SYSTEM_DEFAULT);
+    await audio.stop();
+    expect(ended).toBe(1);
+
+    host.failStart = true;
+    await expect(audio.start(SYSTEM_DEFAULT)).rejects.toThrow('NotAllowedError');
+    expect(ended).toBe(2);
+
+    await audio.stop();
+    expect(ended).toBe(2);
   });
 });

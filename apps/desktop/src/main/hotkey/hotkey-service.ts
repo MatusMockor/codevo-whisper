@@ -40,12 +40,7 @@ export class HotkeyService {
       return;
     }
     this.permitted = true;
-    try {
-      await this.listen();
-    } catch (error) {
-      this.permitted = false;
-      throw error;
-    }
+    await this.listen();
   }
 
   isArmed(): boolean {
@@ -152,6 +147,11 @@ export class HotkeyService {
       return;
     }
     const hotkey = this.settings.get().hotkey;
-    await this.helper.listen(hotkey ? [hotkey.keycode] : []);
+    try {
+      await this.helper.listen(hotkey ? [hotkey.keycode] : []);
+    } catch (error) {
+      this.permitted = false;
+      throw error;
+    }
   }
 }

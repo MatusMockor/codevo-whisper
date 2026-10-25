@@ -140,10 +140,16 @@ describe('SettingsStore', () => {
     const store = new SettingsStore(file);
 
     expect(await store.load()).toEqual({ ...DEFAULT_SETTINGS, language: 'en' });
-    await store.update({ overlay: 'live' });
+    await store.update({ mode: 'toggle' });
 
     const onDisk = JSON.parse(await readFile(file, 'utf8')) as unknown;
-    expect(onDisk).toEqual({ ...DEFAULT_SETTINGS, language: 'en', overlay: 'live' });
+    expect(onDisk).toEqual({ ...DEFAULT_SETTINGS, language: 'en', mode: 'toggle' });
+  });
+
+  it('loads a stored Živý text overlay as the indicator in this phase', async () => {
+    await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, overlay: 'live', mode: 'toggle' }));
+
+    expect(await new SettingsStore(file).load()).toEqual({ ...DEFAULT_SETTINGS, overlay: 'indicator', mode: 'toggle' });
   });
 
   it('does not let callers mutate the stored settings', async () => {

@@ -5,6 +5,7 @@ import type { MicrophoneMeter } from './microphone-meter';
 export type MeterWindow = {
   isActive(): boolean;
   onActivityChange(listener: (active: boolean) => void): () => void;
+  onClose(listener: () => void): () => void;
 };
 
 export type RecordingStops = { onRecordingStopped(listener: () => void): () => void };
@@ -24,6 +25,10 @@ export class MeterPolicy {
   constructor(private readonly deps: MeterPolicyDeps) {
     this.unsubscribers = [
       deps.window.onActivityChange(() => this.resync()),
+      deps.window.onClose(() => {
+        this.wanted = null;
+        this.resync();
+      }),
       deps.recordings.onRecordingStopped(() => {
         this.running = false;
         this.resync();

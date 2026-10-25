@@ -1,4 +1,3 @@
-import type { HotkeyService } from '../hotkey/hotkey-service';
 import type { KeyRecorder } from '../hotkey/key-recorder';
 import type { PermissionsService } from '../permissions/permissions-service';
 import type { HandlerGroup } from './invoke-handlers';
@@ -7,7 +6,7 @@ import { validatePermissionKind } from './validate';
 export type PermissionHandlerDeps = {
   permissions: Pick<PermissionsService, 'status' | 'request' | 'openSettings'>;
   recorder: Pick<KeyRecorder, 'record'>;
-  hotkey: Pick<HotkeyService, 'isArmed'>;
+  hotkey: { isArmed(): Promise<boolean> };
   relaunch: () => Promise<void>;
 };
 
@@ -23,6 +22,6 @@ export function permissionHandlers({
     openPermissionSettings: (kind) => permissions.openSettings(validatePermissionKind(kind)),
     relaunch: () => relaunch(),
     recordHotkey: () => recorder.record(),
-    isHotkeyArmed: () => Promise.resolve(hotkey.isArmed()),
+    isHotkeyArmed: () => hotkey.isArmed(),
   };
 }

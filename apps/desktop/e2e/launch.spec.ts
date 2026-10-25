@@ -77,8 +77,24 @@ test('closing the main window keeps the app running in the tray and it opens aga
   await app.evaluate(({ app: electronApp }) => {
     electronApp.emit('activate');
   });
-  const window = await reopened;
+  const reopenedPage = await reopened;
 
-  await expect(window.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
+  await expect(reopenedPage.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
+  await expect(reopenedPage.getByRole('tab', { name: 'Domov' })).toHaveAttribute('aria-selected', 'true');
   expect(await app.evaluate(({ app: electronApp }) => electronApp.isReady())).toBe(true);
+  const heardAfterReopen = await reopenedPage.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+          stop();
+          resolve(false);
+        }, 1500);
+        const stop = window.codevo.on('microphone-level', () => {
+          clearTimeout(timer);
+          stop();
+          resolve(true);
+        });
+      }),
+  );
+  expect(heardAfterReopen).toBe(false);
 });

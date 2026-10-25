@@ -8,12 +8,6 @@ export class IpcValidationError extends Error {
 
 const MAIN_OWNED_KEYS: ReadonlySet<keyof Settings> = new Set(['localModelId']);
 
-const PHASE_ONE_UNAVAILABLE: ReadonlyArray<{ key: keyof Settings; value: unknown }> = [{ key: 'overlay', value: 'live' }];
-
-function isUnavailable(key: keyof Settings, value: unknown): boolean {
-  return PHASE_ONE_UNAVAILABLE.some((option) => option.key === key && option.value === value);
-}
-
 const MODEL_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
 
 export function validateSettingsPatch(input: unknown): Partial<Settings> {
@@ -28,7 +22,7 @@ export function validateSettingsPatch(input: unknown): Partial<Settings> {
     if (MAIN_OWNED_KEYS.has(key)) {
       throw new IpcValidationError(`Settings key ${key} cannot be set directly`);
     }
-    if (!isValidField(key, value) || isUnavailable(key, value)) {
+    if (!isValidField(key, value)) {
       throw new IpcValidationError(`Invalid value for settings key: ${key}`);
     }
     patch[key] = value;

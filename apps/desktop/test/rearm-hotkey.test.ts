@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
-import { rearmHotkeyOnGrant } from '../src/main/hotkey/rearm-on-grant';
+import { HotkeyRearm } from '../src/main/hotkey/rearm-on-grant';
 import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
 import { PermissionsService } from '../src/main/permissions/permissions-service';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -42,10 +42,10 @@ async function harness() {
   return { helper, hotkey, permissions, logger, starts };
 }
 
-describe('rearmHotkeyOnGrant', () => {
+describe('HotkeyRearm', () => {
   it('starts the idle hotkey once Input Monitoring is granted without a relaunch', async () => {
     const { helper, hotkey, permissions } = await harness();
-    rearmHotkeyOnGrant(permissions, hotkey, new RecordingLogger());
+    new HotkeyRearm(permissions, hotkey, new RecordingLogger());
     await hotkey.start();
     await permissions.status();
     expect(hotkey.isArmed()).toBe(false);
@@ -60,7 +60,7 @@ describe('rearmHotkeyOnGrant', () => {
 
   it('arms the hotkey when the first read already reports the grant', async () => {
     const { helper, hotkey, permissions, starts } = await harness();
-    rearmHotkeyOnGrant(permissions, hotkey, new RecordingLogger());
+    new HotkeyRearm(permissions, hotkey, new RecordingLogger());
     await hotkey.start();
     helper.permissionState = { listen: true, post: true, accessibility: true };
 
@@ -77,12 +77,12 @@ describe('rearmHotkeyOnGrant', () => {
     await hotkey.start();
     let starts = 0;
     const counted = { start: () => ((starts += 1), hotkey.start()), isArmed: () => hotkey.isArmed() };
-    const stop = rearmHotkeyOnGrant(permissions, counted, new RecordingLogger());
+    const rearm = new HotkeyRearm(permissions, counted, new RecordingLogger());
 
     await permissions.status();
     helper.permissionState = { listen: false, post: true, accessibility: true };
     await permissions.status();
-    stop();
+    rearm.dispose();
     helper.permissionState = { listen: true, post: true, accessibility: true };
     await permissions.status();
 
@@ -92,19 +92,63 @@ describe('rearmHotkeyOnGrant', () => {
   it('stays unarmed when listening fails after the grant and retries on the next permission read', async () => {
     const { helper, hotkey, permissions } = await harness();
     const logger = new RecordingLogger();
-    rearmHotkeyOnGrant(permissions, hotkey, logger);
+    let now = 0;
+    const rearm = new HotkeyRearm(permissions, hotkey, logger, () => now);
     await hotkey.start();
     helper.permissionState = { listen: true, post: true, accessibility: true };
     helper.listenFails = true;
 
     await permissions.status();
-    await expect.poll(() => logger.errors.length).toBe(1);
+    await rearm.settled();
+    expect(logger.errors).toHaveLength(1);
     expect(hotkey.isArmed()).toBe(false);
 
     helper.listenFails = false;
+    now = 10_000;
     await permissions.status();
+    await rearm.settled();
 
     await expect.poll(() => hotkey.isArmed()).toBe(true);
     expect(helper.listening).toEqual([62]);
+  });
+
+  it('backs off between failed attempts and logs once per failure streak', async () => {
+    const { helper, hotkey, permissions } = await harness();
+    await hotkey.start();
+    helper.permissionState = { listen: true, post: true, accessibility: true };
+    helper.listenFails = true;
+    let now = 0;
+    let attempts = 0;
+    const counted = { start: () => ((attempts += 1), hotkey.start()), isArmed: () => hotkey.isArmed() };
+    const logger = new RecordingLogger();
+    const rearm = new HotkeyRearm(permissions, counted, logger, () => now);
+    const readAt = async (time: number): Promise<void> => {
+      now = time;
+      await permissions.status();
+      await rearm.settled();
+    };
+
+    for (const time of [0, 500, 1000, 2500, 3000, 6000]) {
+      await readAt(time);
+    }
+    expect(attempts).toBe(3);
+    expect(logger.errors).toHaveLength(1);
+
+    helper.listenFails = false;
+    await readAt(7000);
+    expect(attempts).toBe(4);
+    expect(hotkey.isArmed()).toBe(true);
+  });
+
+  it('settles after the start that a permission read triggered', async () => {
+    const { helper, hotkey, permissions } = await harness();
+    const rearm = new HotkeyRearm(permissions, hotkey, new RecordingLogger());
+    await hotkey.start();
+    helper.permissionState = { listen: true, post: true, accessibility: true };
+
+    await permissions.status();
+    await rearm.settled();
+
+    expect(hotkey.isArmed()).toBe(true);
   });
 });

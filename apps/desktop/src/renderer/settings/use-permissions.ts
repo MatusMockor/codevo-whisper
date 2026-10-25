@@ -6,8 +6,10 @@ const POLL_MS = 1000;
 
 export type PermissionsView = PermissionsStatus & { hotkeyArmed: boolean };
 
-function loadPermissions(): Promise<PermissionsView> {
-  return Promise.all([window.codevo.getPermissions(), window.codevo.isHotkeyArmed()]).then(([status, hotkeyArmed]) => ({ ...status, hotkeyArmed }));
+async function loadPermissions(): Promise<PermissionsView> {
+  const status = await window.codevo.getPermissions();
+  const hotkeyArmed = await window.codevo.isHotkeyArmed();
+  return { ...status, hotkeyArmed };
 }
 
 export function usePermissions(): { permissions: Live<PermissionsView>; refresh: () => void } {
