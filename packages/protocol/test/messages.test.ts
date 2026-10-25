@@ -106,12 +106,13 @@ describe('client messages', () => {
 describe('server messages', () => {
   const messages: ServerMessage[] = [
     { type: 'ready', serverVersion: '0.0.0' },
-    { type: 'partial', segmentId: 0, revision: 2, text: 'ahoj sv' },
-    { type: 'final', segmentId: 0, text: 'ahoj svet' },
-    { type: 'final', segmentId: 1, text: '' },
-    { type: 'done' },
+    { type: 'partial', sessionId: 's1', segmentId: 0, revision: 2, text: 'ahoj sv' },
+    { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj svet' },
+    { type: 'final', sessionId: 's1', segmentId: 1, text: '' },
+    { type: 'done', sessionId: 's1' },
     { type: 'flow', paused: true },
     { type: 'error', code: 'stt_unavailable', message: 'STT is down' },
+    { type: 'error', code: 'stt_unavailable', message: 'STT is down', sessionId: 's1' },
     { type: 'pair-result', status: 'approved', deviceId: '7f3a92c1' },
     { type: 'pair-result', status: 'rejected' },
   ];
@@ -121,12 +122,17 @@ describe('server messages', () => {
   });
 
   it('rejects malformed server messages', () => {
-    expectBadMessage(() => decodeServerMessage(json({ type: 'final', segmentId: -1, text: 'x' })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'final', segmentId: 1.5, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'final', sessionId: 's1', segmentId: -1, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'final', sessionId: 's1', segmentId: 1.5, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'final', segmentId: 0, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'final', sessionId: 'a b', segmentId: 0, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'done' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'error', code: 'busy', message: 'x', sessionId: '' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'flow', paused: 'yes' })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, text: 'x' })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, revision: -1, text: 'x' })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, revision: 1, text: 'x', final: true })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', sessionId: 's1', segmentId: 0, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', sessionId: 's1', segmentId: 0, revision: -1, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', sessionId: 's1', segmentId: 0, revision: 1, text: 'x', final: true })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, revision: 1, text: 'x' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'error', code: 'nope', message: 'x' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'pair-result', status: 'approved' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'pair-result', status: 'rejected', deviceId: 'abc' })));

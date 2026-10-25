@@ -25,9 +25,9 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
-  | { type: 'partial'; segmentId: number; revision: number; text: string }
-  | { type: 'final'; segmentId: number; text: string }
-  | { type: 'done' }
+  | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string }
+  | { type: 'final'; sessionId: string; segmentId: number; text: string }
+  | { type: 'done'; sessionId: string }
   | { type: 'flow'; paused: boolean }
-  | { type: 'error'; code: ErrorCode; message: string }
+  | { type: 'error'; code: ErrorCode; message: string; sessionId?: string }
   | { type: 'pair-result'; status: 'approved' | 'rejected'; deviceId?: string };

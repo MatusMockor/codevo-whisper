@@ -3,7 +3,7 @@ import { chunkAudio } from '../stt/chunk-audio';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import type { SecureChannel } from './secure-channel';
 
-export type DictationRequest = { deviceId: string; pcm: Uint8Array; language: Language; signal: AbortSignal };
+export type DictationRequest = { deviceId: string; sessionId: string; pcm: Uint8Array; language: Language; signal: AbortSignal };
 
 export type DictationOutcome = { chunks: number; result: 'ok' | 'cancelled' | ErrorCode };
 
@@ -23,16 +23,16 @@ export async function transcribeDictation(
   try {
     for (const [segmentId, chunk] of chunks.entries()) {
       const text = await queue.enqueue(request.deviceId, chunk, request.language, request.signal);
-      channel.send({ type: 'final', segmentId, text });
+      channel.send({ type: 'final', sessionId: request.sessionId, segmentId, text });
     }
-    channel.send({ type: 'done' });
+    channel.send({ type: 'done', sessionId: request.sessionId });
     return { chunks: chunks.length, result: 'ok' };
   } catch (error) {
     if (request.signal.aborted) {
       return { chunks: chunks.length, result: 'cancelled' };
     }
     const code = errorCodeOf(error);
-    channel.send({ type: 'error', code, message: code });
+    channel.send({ type: 'error', code, message: code, sessionId: request.sessionId });
     return { chunks: chunks.length, result: code };
   }
 }

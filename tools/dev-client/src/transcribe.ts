@@ -14,10 +14,13 @@ function languageOf(value: string): Language {
   return language;
 }
 
-async function collect(socket: SecureSocket, print: (line: string) => void): Promise<number> {
+async function collect(socket: SecureSocket, sessionId: string, print: (line: string) => void): Promise<number> {
   const segments: string[] = [];
   for (;;) {
     const message = await socket.next();
+    if ('sessionId' in message && message.sessionId !== sessionId) {
+      continue;
+    }
     if (message.type === 'final') {
       segments[message.segmentId] = message.text;
       continue;
@@ -49,12 +52,13 @@ export async function transcribe(store: IdentityStore, file: string, languageTex
     socket.close();
     return 1;
   }
-  socket.send({ type: 'start', sessionId: crypto.randomUUID(), language });
+  const sessionId = crypto.randomUUID();
+  socket.send({ type: 'start', sessionId, language });
   for (let offset = 0; offset < pcm.length; offset += FRAME_BYTES) {
     socket.send({ type: 'audio', pcm: pcm.subarray(offset, offset + FRAME_BYTES) });
   }
   socket.send({ type: 'finish' });
-  const exitCode = await collect(socket, print);
+  const exitCode = await collect(socket, sessionId, print);
   socket.close();
   return exitCode;
 }

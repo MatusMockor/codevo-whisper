@@ -64,7 +64,10 @@ describe('gateway sessions', () => {
     sendAudio(session, pcmSeconds(2));
     session.send({ type: 'finish' });
 
-    expect(await collectUntilDone(session)).toEqual([{ type: 'final', segmentId: 0, text: 'ahoj svet' }, { type: 'done' }]);
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 's1' },
+    ]);
     expect(fake.requests).toEqual([{ language: 'sk', bytes: 64_000 }]);
     expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
   });
@@ -88,7 +91,7 @@ describe('gateway sessions', () => {
       session.send({ type: 'start', sessionId: id, language: 'sk' });
       sendAudio(session, pcmSeconds(1));
       session.send({ type: 'finish' });
-      expect((await collectUntilDone(session)).at(-1)).toEqual({ type: 'done' });
+      expect((await collectUntilDone(session)).at(-1)).toEqual({ type: 'done', sessionId: id });
     }
     expect(fake.requests).toHaveLength(2);
   });
@@ -204,7 +207,7 @@ describe('gateway sessions', () => {
     const audioAfterFinish = await readySession(server);
     audioAfterFinish.send({ type: 'start', sessionId: 's1', language: 'sk' });
     audioAfterFinish.send({ type: 'finish' });
-    expect(await audioAfterFinish.next()).toEqual({ type: 'done' });
+    expect(await audioAfterFinish.next()).toEqual({ type: 'done', sessionId: 's1' });
     audioAfterFinish.send({ type: 'audio', pcm: pcmSeconds(1) });
     await expectBadMessageClose(audioAfterFinish);
 
@@ -240,7 +243,7 @@ describe('gateway sessions', () => {
     sendAudio(session, pcmSeconds(1));
     session.send({ type: 'finish' });
 
-    expect(await session.next()).toMatchObject({ type: 'error', code: 'stt_unavailable' });
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'stt_unavailable', sessionId: 's1' });
   });
 
   it('cancel drops buffered audio', async () => {
@@ -251,8 +254,30 @@ describe('gateway sessions', () => {
     session.send({ type: 'cancel' });
     session.send({ type: 'finish' });
 
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 's1' });
     await expectBadMessageClose(session);
     expect(fake.requests).toHaveLength(0);
+  });
+
+  it('acknowledges a cancel during finishing and never mixes its results into the next dictation', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ delayMs: 100, respond: (_pcm, language) => ({ status: 200, body: { text: `text-${language}` } }) });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 'first', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+    await waitUntil(() => fake.requests.length === 1);
+    session.send({ type: 'cancel' });
+    session.send({ type: 'start', sessionId: 'second', language: 'en' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 'first' });
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 'second', segmentId: 0, text: 'text-en' },
+      { type: 'done', sessionId: 'second' },
+    ]);
   });
 
   it('reconnects after gateway restart', async () => {
@@ -309,6 +334,7 @@ describe('gateway sessions', () => {
 
     expect(await session.next()).toEqual({ type: 'flow', paused: true });
     session.send({ type: 'cancel' });
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 's1' });
     expect(await session.next()).toEqual({ type: 'flow', paused: false });
   });
 

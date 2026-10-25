@@ -11,8 +11,8 @@ export type SessionDeps = { queue: TranscriptionQueue; clock: () => number; logg
 
 type State =
   | { kind: 'idle' }
-  | { kind: 'recording'; language: Language; startedAt: number }
-  | { kind: 'finishing'; controller: AbortController };
+  | { kind: 'recording'; sessionId: string; language: Language; startedAt: number }
+  | { kind: 'finishing'; sessionId: string; controller: AbortController };
 
 type Handlers = { [K in ClientMessage['type']]: (message: Extract<ClientMessage, { type: K }>) => void };
 
@@ -24,7 +24,7 @@ export class SessionHandler {
   private readonly expiry: NodeJS.Timeout;
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
-    start: (message) => this.onStart(message.language),
+    start: (message) => this.onStart(message.sessionId, message.language),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),
     cancel: () => this.onCancel(),
@@ -52,12 +52,12 @@ export class SessionHandler {
     handler(message);
   }
 
-  private onStart(language: Language): void {
+  private onStart(sessionId: string, language: Language): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
       return;
     }
-    this.state = { kind: 'recording', language, startedAt: this.deps.clock() };
+    this.state = { kind: 'recording', sessionId, language, startedAt: this.deps.clock() };
   }
 
   private onAudio(pcm: Uint8Array): void {
@@ -81,12 +81,12 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    const { language, startedAt } = this.state;
+    const { sessionId, language, startedAt } = this.state;
     const audioSeconds = this.audio.seconds();
     const controller = new AbortController();
-    const finishing: State = { kind: 'finishing', controller };
+    const finishing: State = { kind: 'finishing', sessionId, controller };
     this.state = finishing;
-    const request = { deviceId: this.deviceId, pcm: this.audio.take(), language, signal: controller.signal };
+    const request = { deviceId: this.deviceId, sessionId, pcm: this.audio.take(), language, signal: controller.signal };
     const transcription = transcribeDictation(this.deps.queue, this.channel, request).then((outcome) => {
       logDictation(this.deps.logger, {
         deviceId: this.deviceId,
@@ -103,9 +103,13 @@ export class SessionHandler {
   }
 
   private onCancel(): void {
+    if (this.state.kind === 'idle') {
+      return;
+    }
     if (this.state.kind === 'finishing') {
       this.state.controller.abort();
     }
+    this.channel.send({ type: 'done', sessionId: this.state.sessionId });
     this.becomeIdle();
   }
 

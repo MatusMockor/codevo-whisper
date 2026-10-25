@@ -56,8 +56,8 @@ describe('ciphertext on the wire', () => {
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
     sendAudio(session, pcm);
     session.send({ type: 'finish' });
-    expect(await session.next()).toEqual({ type: 'final', segmentId: 0, text: SECRET_TEXT });
-    expect(await session.next()).toEqual({ type: 'done' });
+    expect(await session.next()).toEqual({ type: 'final', sessionId: 's1', segmentId: 0, text: SECRET_TEXT });
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 's1' });
 
     const wire = proxy.bytes();
     const wireWindows = windows(wire);
