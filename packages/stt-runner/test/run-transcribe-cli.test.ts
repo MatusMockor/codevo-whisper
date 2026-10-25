@@ -154,6 +154,13 @@ describe('runTranscribeCli', () => {
     expect(existsSync(argsFile)).toBe(false);
   });
 
+  it('writes its transient audio under TMPDIR', async () => {
+    vi.stubEnv('TMPDIR', scratch);
+    await runTranscribeCli(options());
+
+    expect((await recordedTempDir()).startsWith(scratch)).toBe(true);
+  });
+
   it('removes the temp dir after success and failure', async () => {
     await runTranscribeCli(options());
     const successDir = await recordedTempDir();

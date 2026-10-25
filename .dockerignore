@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/out
+**/release
+.git
+apps/desktop/resources/bin
+native/transcribe/work
+native/macos-helper/build
+spikes
+docs
+infrastructure/compose/.env
+**/*.p8
+**/*.p12
