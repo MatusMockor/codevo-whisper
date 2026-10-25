@@ -1,0 +1,66 @@
+appId: app.codevo.whisper
+productName: Codevo Whisper
+copyright: Copyright © 2026 codevo s.r.o.
+artifactName: codevo-whisper-${version}-${arch}-${os}.${ext}
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - '!out/main/fake-input-helper-*.js'
+  - package.json
+extraResources:
+  - from: resources/model-catalog.json
+    to: model-catalog.json
+  - from: resources/bin/${arch}
+    to: bin/${arch}
+    filter:
+      - transcribe-cli
+      - codevo-input-helper
+asar: true
+npmRebuild: false
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  minimumSystemVersion: '13.0'
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  identity: codevo s.r.o. (U574W69TH6)
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  signIgnore:
+    - /Contents/Resources/bin/
+  notarize: false
+  extendInfo:
+    NSMicrophoneUsageDescription: Codevo Whisper potrebuje mikrofón na diktovanie. Mikrofón je zapnutý iba počas diktovania.
+dmg:
+  sign: true
+  writeUpdateInfo: false
+linux:
+  category: Utility
+  maintainer: codevo s.r.o.
+  synopsis: Diktovanie do ľubovoľnej aplikácie
+  target:
+    - AppImage
+    - deb
+publish:
+  provider: github
+  owner: MatusMockor
+  repo: codevo-whisper
+  releaseType: draft

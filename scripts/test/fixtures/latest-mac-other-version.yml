@@ -1,0 +1,8 @@
+version: 1.3.0
+files:
+  - url: codevo-whisper-1.3.0-x64-mac.zip
+    sha512: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc==
+    size: 103
+path: codevo-whisper-1.3.0-x64-mac.zip
+sha512: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc==
+releaseDate: '2026-10-25T12:00:00.000Z'

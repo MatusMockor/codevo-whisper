@@ -1,0 +1,224 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, sign, notarize and verify without publishing, for example 1.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || format('v{0}', inputs.version) }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify the build commit
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_SHA: ${{ github.sha }}
+        run: scripts/release/verify-build-ref.sh
+      - id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: scripts/release/resolve-version.sh
+
+  checks:
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build-mac:
+    needs: [version, checks]
+    environment: release
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    env:
+      ARCH: ${{ matrix.arch }}
+      VERSION: ${{ needs.version.outputs.version }}
+      NOTARY_TIMEOUT: 150m
+      NOTARY_STATE: ${{ github.workspace }}/notary-state
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify the build commit
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_SHA: ${{ github.sha }}
+        run: scripts/release/verify-build-ref.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Restore notary state from an earlier attempt
+        id: saved
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notary-state-${{ matrix.arch }}
+          path: ${{ env.NOTARY_STATE }}
+      - name: Resume point
+        id: state
+        run: scripts/release/notary-state-restore.sh "$ARCH" "$NOTARY_STATE"
+      - name: Install build tools
+        if: steps.state.outputs.phase == 'none'
+        run: command -v ninja || brew install ninja
+      - name: Build native binaries
+        if: steps.state.outputs.phase == 'none'
+        run: scripts/release/build-native.sh "$ARCH"
+      - name: Build the desktop bundle
+        if: steps.state.outputs.phase == 'none'
+        run: pnpm --filter @codevo-whisper/desktop build
+      - name: Import the Developer ID certificate
+        if: steps.state.outputs.phase != 'dmg-submitted'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: scripts/release/import-certificate.sh
+      - name: Sign native binaries
+        if: steps.state.outputs.phase == 'none'
+        run: scripts/release/sign-native.sh "$ARCH"
+      - name: Package and sign the app
+        if: steps.state.outputs.phase == 'none'
+        run: scripts/release/package-app.sh "$ARCH" "$VERSION"
+      - name: Submit the app for notarization
+        if: steps.state.outputs.phase == 'none'
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: scripts/release/with-api-key.sh scripts/release/submit-app.sh "$ARCH" "$NOTARY_STATE"
+      - name: Save the submitted app
+        if: steps.state.outputs.phase == 'none'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notary-state-${{ matrix.arch }}
+          path: ${{ env.NOTARY_STATE }}
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Wait for the app notarization and staple
+        if: steps.state.outputs.phase != 'dmg-submitted'
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: scripts/release/with-api-key.sh scripts/release/staple-app.sh "$ARCH" "$NOTARY_STATE"
+      - name: Build DMG and ZIP from the stapled app
+        if: steps.state.outputs.phase != 'dmg-submitted'
+        run: scripts/release/package-distributables.sh "$ARCH" "$VERSION"
+      - name: Submit the DMG for notarization
+        if: steps.state.outputs.phase != 'dmg-submitted'
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: scripts/release/with-api-key.sh scripts/release/submit-dmg.sh "$ARCH" "$VERSION" "$NOTARY_STATE"
+      - name: Save the submitted DMG
+        if: steps.state.outputs.phase != 'dmg-submitted'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notary-state-${{ matrix.arch }}
+          path: ${{ env.NOTARY_STATE }}
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Wait for the DMG notarization and staple
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: scripts/release/with-api-key.sh scripts/release/staple-dmg.sh "$ARCH" "$VERSION" "$NOTARY_STATE"
+      - name: Release gates on the shipped ZIP and DMG
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: scripts/release/verify-shipped.sh "$ARCH" "$VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-${{ matrix.arch }}
+          path: apps/desktop/release/dist/${{ matrix.arch }}
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/codevo-signing.keychain-db" || true
+
+  publish:
+    needs: [version, build-mac]
+    if: github.event_name == 'push'
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile --filter @codevo-whisper/scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mac-*
+          path: artifacts
+      - name: Merge and verify the update feed
+        run: scripts/release/assemble-mac-feed.sh artifacts feed "$VERSION"
+      - name: Draft, re-verify and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/publish-github-release.sh "$VERSION" feed

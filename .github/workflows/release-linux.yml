@@ -1,0 +1,72 @@
+name: Release Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: Build the Linux packages (Linux support lands in phase 4, keep off until then)
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: Version without the v prefix, for example 1.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    if: inputs.enabled
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      ARCH: ${{ matrix.arch }}
+      DIST_DIR: apps/desktop/release/linux/${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: scripts/release/resolve-version.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Build the desktop bundle
+        run: pnpm --filter @codevo-whisper/desktop build
+      - name: Package AppImage and deb
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        working-directory: apps/desktop
+        run: pnpm exec electron-builder --linux AppImage deb "--$ARCH" --publish never -c.extraMetadata.version="$VERSION" -c.directories.output="release/linux/$ARCH"
+      - name: Write checksums
+        working-directory: ${{ env.DIST_DIR }}
+        run: sha256sum ./*.AppImage ./*.deb > "SHA256SUMS-linux-$ARCH"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            ${{ env.DIST_DIR }}/*.AppImage
+            ${{ env.DIST_DIR }}/*.deb
+            ${{ env.DIST_DIR }}/latest-linux*.yml
+            ${{ env.DIST_DIR }}/SHA256SUMS-linux-*
+          if-no-files-found: error
+          retention-days: 14
