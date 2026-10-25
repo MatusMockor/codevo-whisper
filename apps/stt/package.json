@@ -1,0 +1,19 @@
+{
+  "name": "@codevo-whisper/stt",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "build": "node ../../scripts/bundle.js main=src/main.ts provision=src/provision-cli.ts"
+  },
+  "dependencies": {
+    "@codevo-whisper/stt-runner": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}
