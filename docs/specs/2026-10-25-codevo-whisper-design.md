@@ -173,7 +173,18 @@ Clipboard fallback is the only behaviour guaranteed everywhere. `ydotool` is doc
 - Engine selection happens before recording starts, never mid-session. Order is configurable (e.g. server, then local). Switching from local to remote must be explicitly allowed by the user. A missing local model never triggers a download.
 - If the server drops mid-session, the client keeps a bounded audio buffer (up to 2 minutes) and can retry the whole session once on reconnect; segment ids prevent duplicate text.
 
-### 5.5 Permissions and first run
+### 5.5 Microphone selection
+
+Owner decision 2026-10-25: the user chooses the input device, because many users have several (built-in, AirPods, iPhone via Continuity, USB or XLR interfaces, webcams).
+
+- Settings > Mikrofón lists all inputs from `navigator.mediaDevices.enumerateDevices()` with a live level meter, plus "Systémový predvolený" (follows the macOS / PipeWire default). The tray menu has the same list as a submenu ("Mikrofón").
+- The choice is stored by `deviceId` and label. If the device is missing at recording time (unplugged AirPods, iPhone out of range), the app records with the system default and the overlay shows a short notice ("Mikrofón X nie je pripojený, používam predvolený"). When the device comes back it is used again automatically.
+- The list refreshes on `devicechange` (hot-plug) without restarting the app.
+- Bluetooth headsets switch to a low-quality call profile while their microphone is in use, which also degrades music playback. The settings show a hint for Bluetooth inputs and suggest the built-in microphone while listening with AirPods (Wispr Flow gives the same advice).
+- The microphone is opened only while recording (push-to-talk), never kept open in the background, so the macOS orange microphone indicator appears only during dictation. An optional "Rýchlejší štart" setting may keep the stream warm to avoid the first-word cut on slow devices; off by default.
+- The level meter in settings and the overlay waveform use the same capture path, so "Povedzte niečo a sledujte úroveň" tests exactly what dictation will use.
+
+### 5.6 Permissions and first run
 
 - macOS: microphone (`NSMicrophoneUsageDescription`, `com.apple.security.device.audio-input`), Accessibility (paste), Input Monitoring (hotkey helper). First-run screens explain each and deep-link to System Settings.
 - Linux: detect session type, available tools and portals; show what works and what falls back.
@@ -231,7 +242,7 @@ The policy lives in `packages/audio` and is shared by the gateway and LocalEngin
 - GitHub Actions, triggered by a `vX.Y.Z` tag or manual dispatch. Lint, typecheck and tests gate publishing.
 - Build jobs per target on native runners: macOS arm64, macOS x64, Linux x64, Linux arm64. One publish job runs only after the whole matrix succeeded.
 - Unambiguous artifact names per architecture. ZIPs for both macOS architectures (needed by the updater) next to the DMGs.
-- macOS: hardened runtime, entitlements from 5.5, every native helper and engine binary signed, notarized with the App Store Connect API key, stapled.
+- macOS: hardened runtime, entitlements from 5.6, every native helper and engine binary signed, notarized with the App Store Connect API key, stapled.
 - Linux: AppImage + deb, `SHA256SUMS`. Phase 0 finding: electron-updater verifies only the sha512 from the same feed on Linux (no publisher signature), and the deb updater installs as root via `dpkg`/`apt --allow-unauthenticated`. Decision: in-app auto-update on Linux only for the AppImage; deb users get an in-app notice with a download link (a signed apt repository is a later option). The README states that Linux AppImage updates are verified by HTTPS and checksums only.
 - Auto-update via electron-updater (GitHub provider). Verified in phase 0 (`docs/spikes/signed-update.md`): N -> N+1 works on arm64 and x64; Squirrel.Mac rejects an update not signed by Team ID U574W69TH6 with bundle ID `app.codevo.whisper`, so both must never change. Build jobs run with `--publish never`; one publish job merges the two `latest-mac.yml` files (both ZIPs listed), verifies the feed, uploads everything to a draft release, re-verifies and then publishes the draft. Artifact names `codevo-whisper-${version}-${arch}-${os}.${ext}`. Linux writes `latest-linux.yml` and `latest-linux-arm64.yml` itself.
 - DMGs are notarized and stapled separately from the app (electron-builder only notarizes the `.app`). Notarization latency is unbounded (the first submissions of this team took more than 2 hours): jobs use explicit timeouts and keep the submission ID for `notarytool wait`.
@@ -257,7 +268,7 @@ Each phase ends with lint, typecheck, tests, CodeRabbit review and the owner's O
 Order changed 2026-10-25 (owner decision): the macOS app with local mode comes first, so there is a usable app before the server exists.
 
 0. **Risk spikes - done** (`docs/spikes/`), except the notarized-run part of the update spike (waiting for Apple) and the Linux spike (moved to phase 4).
-1. **macOS app + local mode.** Full UI per the mockup (Domov/História, Server placeholder, Nastavenia, Súkromie, tray menu, overlay with Indikátor and Živý text modes), hotkey recorder and Swift helper, audio capture, insertion with the checks from 5.2, paste last transcript, first-run permissions, LocalEngine with transcribe.cpp, ModelManager with the catalog (download, verify, delete, warm-up), engine setting "Kde beží prepis" (Lokálne now, Server once phase 2 lands), history, Electron hardening (4.6) and fuses. Transcription after key release, cut into chunks of at most 25 s; no partials yet.
+1. **macOS app + local mode.** Full UI per the mockup (Domov/História, Server placeholder, Nastavenia, Súkromie, tray menu, overlay with Indikátor and Živý text modes), hotkey recorder and Swift helper, audio capture with microphone selection (5.5), insertion with the checks from 5.2, paste last transcript, first-run permissions, LocalEngine with transcribe.cpp, ModelManager with the catalog (download, verify, delete, warm-up), engine setting "Kde beží prepis" (Lokálne now, Server once phase 2 lands), history, Electron hardening (4.6) and fuses. Transcription after key release, cut into chunks of at most 25 s; no partials yet.
 2. **Protocol + server core + RemoteEngine.** Everything in `docs/plans/2026-10-25-phase-2-protocol-server.md` plus RemoteEngine, pairing UI (token paste) and the server option in "Kde beží prepis".
 3. **Segmentation and live text.** `packages/audio` policy with the phase 0 numbers, partials for Živý text in both engines, fairness on the server.
 4. **Linux desktop.** Starts with the deferred Linux spike. Then hotkeys, insertion matrix, reduced Wayland overlay, safeStorage backend handling.
