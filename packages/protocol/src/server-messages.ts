@@ -19,7 +19,7 @@ import {
 } from './message-types';
 import { jsonFrame, splitTag } from './tagged-frame';
 
-const TYPES = ['ready', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
+const TYPES = ['ready', 'partial', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
 const PAIR_STATUSES = ['approved', 'rejected'] as const;
 const IDENTIFIER = { maxChars: MAX_IDENTIFIER_CHARS, pattern: IDENTIFIER_PATTERN };
 
@@ -42,6 +42,15 @@ function decodeJson(object: JsonObject): ServerMessage {
   if (type === 'ready') {
     assertOnlyKeys(object, ['type', 'serverVersion']);
     return { type, serverVersion: readString(object, 'serverVersion', { maxChars: MAX_IDENTIFIER_CHARS, printable: true }) };
+  }
+  if (type === 'partial') {
+    assertOnlyKeys(object, ['type', 'segmentId', 'revision', 'text']);
+    return {
+      type,
+      segmentId: readIndex(object, 'segmentId'),
+      revision: readIndex(object, 'revision'),
+      text: readText(object, 'text', MAX_TEXT_CHARS),
+    };
   }
   if (type === 'final') {
     assertOnlyKeys(object, ['type', 'segmentId', 'text']);

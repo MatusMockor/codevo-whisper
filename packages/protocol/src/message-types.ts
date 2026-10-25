@@ -25,6 +25,7 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
+  | { type: 'partial'; segmentId: number; revision: number; text: string }
   | { type: 'final'; segmentId: number; text: string }
   | { type: 'done' }
   | { type: 'flow'; paused: boolean }

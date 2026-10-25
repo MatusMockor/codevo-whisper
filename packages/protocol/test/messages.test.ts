@@ -106,6 +106,7 @@ describe('client messages', () => {
 describe('server messages', () => {
   const messages: ServerMessage[] = [
     { type: 'ready', serverVersion: '0.0.0' },
+    { type: 'partial', segmentId: 0, revision: 2, text: 'ahoj sv' },
     { type: 'final', segmentId: 0, text: 'ahoj svet' },
     { type: 'done' },
     { type: 'flow', paused: true },
@@ -122,6 +123,9 @@ describe('server messages', () => {
     expectBadMessage(() => decodeServerMessage(json({ type: 'final', segmentId: -1, text: 'x' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'final', segmentId: 1.5, text: 'x' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'flow', paused: 'yes' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, revision: -1, text: 'x' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'partial', segmentId: 0, revision: 1, text: 'x', final: true })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'error', code: 'nope', message: 'x' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'pair-result', status: 'approved' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'pair-result', status: 'rejected', deviceId: 'abc' })));
