@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PreAuthLimiter } from '../src/gateway/pre-auth-limiter';
 
-const LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4, maxConnectionsPerIp: 8 } as const;
+const LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4 } as const;
 
 describe('PreAuthLimiter', () => {
   it('enforces the per-IP pending limit', () => {
@@ -31,16 +31,16 @@ describe('PreAuthLimiter', () => {
     expect(limiter.tryAcquire('10.0.0.1')).toBe(false);
   });
 
-  it('enforces the per-IP connection limit including authenticated connections', () => {
+  it('does not count authenticated connections against the per-IP limit', () => {
     const limiter = new PreAuthLimiter(LIMITS);
-    Array.from({ length: 8 }, () => {
+    Array.from({ length: 20 }, () => {
       expect(limiter.tryAcquire('10.0.0.1')).toBe(true);
       limiter.promote('10.0.0.1');
     });
 
-    expect(limiter.tryAcquire('10.0.0.1')).toBe(false);
+    expect(limiter.pending()).toBe(0);
     limiter.release('10.0.0.1', true);
-    expect(limiter.tryAcquire('10.0.0.1')).toBe(true);
+    expect(limiter.pending()).toBe(0);
   });
 
   it('release frees slots', () => {

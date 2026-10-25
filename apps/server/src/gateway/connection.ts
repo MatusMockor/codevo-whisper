@@ -18,7 +18,7 @@ import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
 import { closeSocket } from './close-socket';
 import type { DeviceAudioBudget } from './device-audio-budget';
-import { CLOSE_INTERNAL_ERROR, CLOSE_UNSUPPORTED_DATA } from './limits';
+import { CLOSE_INTERNAL_ERROR, CLOSE_UNSUPPORTED_DATA, MAX_SESSIONS_PER_DEVICE } from './limits';
 import { WebSocketSecureChannel } from './secure-channel';
 import { SessionHandler } from './session-handler';
 import type { SessionRegistry } from './session-registry';
@@ -110,6 +110,10 @@ export class GatewayConnection {
       return;
     }
     channel.onMessage(() => channel.fail('bad_message'));
+    if (this.deps.sessions.countDevice(deviceId) >= MAX_SESSIONS_PER_DEVICE) {
+      channel.fail('busy', 'too many sessions for this device');
+      return;
+    }
     const unregister = this.deps.sessions.add(deviceId, (code) => channel.fail(code));
     channel.onClose(unregister);
     const revocation = await this.revocationOf(pending);

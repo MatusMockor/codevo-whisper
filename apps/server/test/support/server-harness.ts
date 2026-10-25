@@ -13,11 +13,17 @@ export function testConfig(dataDir: string, sttUrl: string): ServerConfig {
     adminSocket: join(dataDir, 'admin.sock'),
     sttUrl,
     publicEndpoint: 'ws://127.0.0.1:8787',
+    trustedProxyHeader: null,
   };
 }
 
-export async function startHarness(dataDir: string, sttUrl: string, options: ServerOptions = {}): Promise<Harness> {
-  const server = await startServer(testConfig(dataDir, sttUrl), options);
+export async function startHarness(
+  dataDir: string,
+  sttUrl: string,
+  options: ServerOptions = {},
+  overrides: Partial<ServerConfig> = {},
+): Promise<Harness> {
+  const server = await startServer({ ...testConfig(dataDir, sttUrl), ...overrides }, options);
   return Object.assign(server, {
     url: `ws://127.0.0.1:${server.gateway.port}`,
     addDevice: async (name = 'Test device') => {

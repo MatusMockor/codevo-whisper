@@ -31,6 +31,7 @@ Set in `infrastructure/compose/.env`:
 | `CW_PUBLIC_ENDPOINT` | The `ws://` or `wss://` URL devices use; it is written into pairing tokens. |
 | `VIDEO_GID`, `RENDER_GID` | Numeric GIDs of the host `video` and `render` groups (from `getent group video render`), so the non-root `stt` user can open `/dev/dri`. |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
+| `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
 
 ## Build, provision, start
 
@@ -89,6 +90,16 @@ The application layer is end-to-end encrypted (Noise IK with the pinned server k
 - **SSH tunnel** (testing): `ssh -N -L 8787:127.0.0.1:8787 user@server`, `CW_PUBLIC_ENDPOINT=ws://127.0.0.1:8787`.
 - **WireGuard / Tailscale**: `CW_BIND=<VPN address of the server>`, `CW_PUBLIC_ENDPOINT=ws://<VPN address>:8787`. Only VPN peers can reach the port.
 - **Cloudflare Tunnel**: keep `CW_BIND=127.0.0.1`, point a tunnel ingress rule at `http://127.0.0.1:8787` (WebSockets are forwarded), `CW_PUBLIC_ENDPOINT=wss://whisper.example.com`. Cloudflare sees only ciphertext plus metadata (addresses, timing, sizes).
+
+### Limits behind tunnels and proxies
+
+Before authentication the gateway allows 4 pending connections per client address and 64 in total. Each must finish the handshake within 5 seconds. After `hello` a device may hold 4 sessions.
+
+The per-address limit relies on the source address. Behind an SSH tunnel, Cloudflare Tunnel or Docker's loopback port proxy, every connection appears to come from the same address, so the per-address limit becomes a global one. In that case anyone who can reach the tunnel can hold the pending slots and briefly lock out real devices. They still cannot authenticate, and every slot is released after 5 seconds.
+
+- **WireGuard or Tailscale (recommended):** only your peers can reach the port, and the source addresses are real.
+- **Cloudflare Tunnel:** put Cloudflare Access in front of the hostname, so unauthenticated visitors never reach the gateway. Then set `CW_TRUSTED_PROXY_HEADER=CF-Connecting-IP`. The per-address limits then apply to the address Cloudflare reports, and the TCP-level limit falls back to the global 64.
+- **Direct exposure:** only set `CW_TRUSTED_PROXY_HEADER` when clients cannot bypass the proxy, otherwise anyone can forge the header.
 
 ## Dev client
 

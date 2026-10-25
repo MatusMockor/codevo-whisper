@@ -27,8 +27,8 @@ const zeroMask = (mask: Buffer): void => {
   mask.fill(0);
 };
 
-export async function openSocket(url: string): Promise<{ socket: WebSocket; inbox: Inbox }> {
-  const socket = new WebSocket(url, { perMessageDeflate: false, generateMask: zeroMask });
+export async function openSocket(url: string, headers: Record<string, string> = {}): Promise<{ socket: WebSocket; inbox: Inbox }> {
+  const socket = new WebSocket(url, { perMessageDeflate: false, generateMask: zeroMask, headers });
   const inbox = new Inbox(socket);
   socket.on('error', () => undefined);
   await new Promise<void>((resolve, reject) => {

@@ -10,6 +10,7 @@ describe('loadConfig', () => {
       adminSocket: '/run/codevo-whisper/admin.sock',
       sttUrl: 'http://stt:8001',
       publicEndpoint: 'ws://127.0.0.1:8787',
+      trustedProxyHeader: null,
     });
   });
 
@@ -22,6 +23,7 @@ describe('loadConfig', () => {
         CW_ADMIN_SOCKET: '/tmp/cw.sock',
         CW_STT_URL: 'http://127.0.0.1:8001',
         CW_PUBLIC_ENDPOINT: 'wss://whisper.example.com',
+        CW_TRUSTED_PROXY_HEADER: 'CF-Connecting-IP',
       }),
     ).toEqual({
       bind: '10.8.0.1',
@@ -30,7 +32,12 @@ describe('loadConfig', () => {
       adminSocket: '/tmp/cw.sock',
       sttUrl: 'http://127.0.0.1:8001',
       publicEndpoint: 'wss://whisper.example.com',
+      trustedProxyHeader: 'cf-connecting-ip',
     });
+  });
+
+  it('rejects an invalid trusted proxy header name', () => {
+    expect(() => loadConfig({ CW_TRUSTED_PROXY_HEADER: 'bad header' })).toThrow(/CW_TRUSTED_PROXY_HEADER/);
   });
 
   it('rejects a non-numeric port', () => {

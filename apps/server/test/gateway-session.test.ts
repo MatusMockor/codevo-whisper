@@ -459,6 +459,32 @@ describe('gateway sessions', () => {
     sockets.forEach(({ socket }) => socket.close());
   });
 
+  it('applies per-IP limits to the trusted proxy header when it is configured', async () => {
+    harness = await startHarness(dir.path, fake.url, {}, { trustedProxyHeader: 'x-client-ip' });
+    const server = harness;
+    const fromA = await Promise.all(Array.from({ length: 4 }, () => openSocket(server.url, { 'x-client-ip': '203.0.113.7' })));
+
+    await expect(openSocket(server.url, { 'x-client-ip': '203.0.113.7' })).rejects.toBeInstanceOf(Error);
+    const fromB = await openSocket(server.url, { 'x-client-ip': '198.51.100.9' });
+    expect(server.gateway.clientLimiter?.pending()).toBe(5);
+    [...fromA, fromB].forEach(({ socket }) => socket.close());
+  });
+
+  it('limits sessions per device instead of authenticated connections per IP', async () => {
+    const server = await start();
+    const first = await server.addDevice('A');
+    const second = await server.addDevice('B');
+    for (const device of [first, first, first, first, second, second, second, second]) {
+      const session = await connectSession(server.url, device, server.serverKey.publicKey);
+      expect(await session.next()).toMatchObject({ type: 'ready' });
+    }
+    const third = await connectSession(server.url, await server.addDevice('C'), server.serverKey.publicKey);
+    expect(await third.next()).toMatchObject({ type: 'ready' });
+
+    const extra = await connectSession(server.url, first, server.serverKey.publicKey);
+    expect(await extra.next()).toMatchObject({ type: 'error', code: 'busy' });
+  });
+
   it('counts raw TCP connections before the upgrade and drops them at the deadline', async () => {
     const server = await start({ handshakeTimeoutMs: 200 });
     const raw = await Promise.all(

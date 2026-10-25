@@ -5,6 +5,7 @@ export type ServerConfig = {
   adminSocket: string;
   sttUrl: string;
   publicEndpoint: string;
+  trustedProxyHeader: string | null;
 };
 
 const DEFAULTS = {
@@ -41,6 +42,19 @@ function parseUrl(key: ConfigKey, value: string, protocols: string[]): string {
   return value;
 }
 
+const HEADER_NAME = /^[A-Za-z0-9-]+$/;
+
+function parseHeaderName(env: NodeJS.ProcessEnv): string | null {
+  const value = env.CW_TRUSTED_PROXY_HEADER?.trim();
+  if (value === undefined || value === '') {
+    return null;
+  }
+  if (!HEADER_NAME.test(value)) {
+    throw new Error('CW_TRUSTED_PROXY_HEADER must be an HTTP header name such as CF-Connecting-IP');
+  }
+  return value.toLowerCase();
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
   return {
     bind: read(env, 'CW_BIND'),
@@ -49,5 +63,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
     adminSocket: read(env, 'CW_ADMIN_SOCKET'),
     sttUrl: parseUrl('CW_STT_URL', read(env, 'CW_STT_URL'), ['http:', 'https:']),
     publicEndpoint: parseUrl('CW_PUBLIC_ENDPOINT', read(env, 'CW_PUBLIC_ENDPOINT'), ['ws:', 'wss:']),
+    trustedProxyHeader: parseHeaderName(env),
   };
 }

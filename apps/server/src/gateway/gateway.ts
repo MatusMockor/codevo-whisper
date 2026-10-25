@@ -8,12 +8,14 @@ import { silentLogger, type Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { GatewayConnection } from './connection';
-import { CLOSE_GOING_AWAY, HANDSHAKE_TIMEOUT_MS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS } from './limits';
+import { ClientAdmission } from './client-admission';
+import { HANDSHAKE_TIMEOUT_MS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS, PROXIED_TCP_LIMITS } from './limits';
 import { BYTES_PER_SECOND } from '../stt/chunk-audio';
 import { DeviceAudioBudget } from './device-audio-budget';
 import { PreAuthLimiter } from './pre-auth-limiter';
 import { TcpAdmission } from './tcp-admission';
 import { SessionRegistry } from './session-registry';
+import { closeClients } from './shutdown';
 
 export type GatewayDeps = {
   config: ServerConfig;
@@ -27,7 +29,13 @@ export type GatewayDeps = {
   beforeReady?: (deviceId: string) => Promise<void>;
 };
 
-export type Gateway = { port: number; close(): Promise<void>; sessions: SessionRegistry; limiter: PreAuthLimiter };
+export type Gateway = {
+  port: number;
+  close(): Promise<void>;
+  sessions: SessionRegistry;
+  limiter: PreAuthLimiter;
+  clientLimiter: PreAuthLimiter | null;
+};
 
 function keyProvider(serverKey: GatewayDeps['serverKey']): () => KeyPair {
   if (typeof serverKey === 'function') {
@@ -38,7 +46,9 @@ function keyProvider(serverKey: GatewayDeps['serverKey']): () => KeyPair {
 
 export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
   const sessions = new SessionRegistry();
-  const limiter = new PreAuthLimiter(PRE_AUTH_LIMITS);
+  const trustedHeader = deps.config.trustedProxyHeader;
+  const limiter = new PreAuthLimiter(trustedHeader === null ? PRE_AUTH_LIMITS : PROXIED_TCP_LIMITS);
+  const clientLimiter = trustedHeader === null ? null : new PreAuthLimiter(PRE_AUTH_LIMITS);
   const server = createServer((_request, response) => {
     response.writeHead(426, { 'content-type': 'text/plain' });
     response.end('WebSocket upgrade required\n');
@@ -47,7 +57,14 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
   server.headersTimeout = deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
   server.requestTimeout = deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
   server.on('connection', (socket) => admission.admit(socket));
-  const sockets = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: MAX_WS_PAYLOAD, maxFragments: 1 });
+  const clients = new ClientAdmission(trustedHeader, clientLimiter);
+  const sockets = new WebSocketServer({
+    server,
+    perMessageDeflate: false,
+    maxPayload: MAX_WS_PAYLOAD,
+    maxFragments: 1,
+    verifyClient: (info, done) => done(clients.admit(info.req), 503),
+  });
   const connectionDeps = {
     serverKey: keyProvider(deps.serverKey),
     devices: deps.devices,
@@ -61,8 +78,12 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
   };
   sockets.on('error', () => undefined);
   sockets.on('connection', (socket, request) => {
+    const ip = clients.addressOf(request);
     admission.attach(request.socket, socket);
-    new GatewayConnection(socket, request.socket.remoteAddress ?? 'unknown', connectionDeps, () => admission.confirm(request.socket));
+    new GatewayConnection(socket, ip, connectionDeps, () => {
+      admission.confirm(request.socket);
+      clients.confirm(request);
+    });
   });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -73,8 +94,9 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     port,
     sessions,
     limiter,
+    clientLimiter,
     close: async () => {
-      sockets.clients.forEach((socket) => socket.close(CLOSE_GOING_AWAY));
+      await closeClients(sockets.clients);
       await new Promise<void>((resolve) => sockets.close(() => resolve()));
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

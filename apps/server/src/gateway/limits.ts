@@ -7,7 +7,9 @@ export const MIN_AUDIO_FRAME_BYTES = 640;
 export const MESSAGE_RATE = { burst: 1000, perSecond: 200 } as const;
 export const MAX_WS_PAYLOAD = 65_536;
 
-export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4, maxConnectionsPerIp: 8 } as const;
+export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4 } as const;
+export const PROXIED_TCP_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 64 } as const;
+export const MAX_SESSIONS_PER_DEVICE = 4;
 
 export const CLOSE_NORMAL = 1000;
 export const CLOSE_GOING_AWAY = 1001;

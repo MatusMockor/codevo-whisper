@@ -21,6 +21,10 @@ export class SessionRegistry {
     return this.closeMatching(() => true, code);
   }
 
+  countDevice(deviceId: string): number {
+    return [...this.entries].filter((entry) => entry.deviceId === deviceId).length;
+  }
+
   count(): number {
     return this.entries.size;
   }
