@@ -105,3 +105,16 @@ Claude review of the branch: approved except one Important; the Important and th
 | 11 | No-argument IPC handler wrapper | - | Skipped: no `rejectArguments`/`withoutArguments` helper exists on this branch (it arrives with stream H). | - |
 
 Full desktop e2e after the fixes: the first run right after a fresh `electron-vite build` again failed only `capture.spec.ts` "records 16 kHz PCM16 ..." on its level count (the first Electron launch after a build is slow; the test is not touched by this branch). An immediate rerun of the whole suite passed 46 of 46. All runs used the accessory e2e mode without stealing focus.
+
+## Merge with main
+
+`main` at `a4589f7` (stream H, auto-update) was merged in `99ac932`. Conflicts were only additive and both sides were kept: `compose.ts` dispose list, `register-ipc.ts` dependency type and handler spread, `validate.ts` (`validatePairingToken` next to `rejectArguments`), `preload/index.ts`, `ipc-contract.ts`, `test/ipc-validate.test.ts`, `test/session-coordinator.test.ts` imports. `pnpm install --frozen-lockfile` succeeded without regenerating the lockfile; `patchedDependencies` (`builder-util-runtime@9.7.0`, `electron-updater@6.8.11`) are unchanged in `pnpm-workspace.yaml` and `pnpm-lock.yaml`.
+
+Follow-ups after the merge, each test-first:
+
+- `1894a6f` (item 11): H's `withoutArguments` moved to `ipc/without-arguments.ts` and now wraps `getServer`, `cancelServerPairing`, `checkServer` and `disconnectServer`; `pairServer` rejects an invalid token as a rejected promise. Test: `server-handlers.test.ts`.
+- `b2e512b`: while `check()` runs, a repair-needed status is kept (no `checking` state), so the Home repair banner neither disappears nor flashes "ready". Test: `keeps the re-pair state while it checks the server again`.
+- `2f417ef`: the update install guard (`isDictating`) already covers server dictations, because a session stays in the coordinator until its remote `finish` (including a reconnect) settles. Test: `reports a server dictation as active to the update guard until its result is inserted`.
+- `b482cfc`: writing that test showed that the single reconnect gave up immediately when the gateway was restarting. The one session retry now tries to reconnect for a few seconds (250, 500, 1000, 2000 and 4000 ms backoff, only for offline, timeout and connection-lost; it stops when the dictation is cancelled). Test: `waits for a restarting gateway when it reconnects`.
+
+Checks after the merge: lint and typecheck clean, 1053 tests passed and 1 skipped. One full `pnpm test` run had a flaky `apps/stt` test from main (`survives a client that resets the socket mid-body`, `busy: true` instead of `false`); 3 of 3 reruns passed. Full desktop e2e: the first run right after a fresh build again failed only `capture.spec.ts` "records 16 kHz PCM16 ..." (level count 1 instead of 10, machine load average about 5); the test passes alone right after a build (2 of 2), and the rerun of the whole suite passed 50 of 50. No focus was stolen.
