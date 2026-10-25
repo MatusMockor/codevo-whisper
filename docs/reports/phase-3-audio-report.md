@@ -164,3 +164,28 @@ Second reviewer (gpt-6.1-sol, `codex exec -s read-only`, on `baa217e..b2a7431`):
 Tests after these fixes: `packages/audio` has 20 files and 168 tests; the repo has 483 passing (1 skipped, which already existed).
 
 CodeRabbit after the fixes: blocked by the free CLI allowance (`rate_limit`: "You've used all 3 included reviews"); retries at the advertised reset kept hitting the limit. The repository has no Git remote, so an organization plan cannot apply. The gpt-6.1-sol review above stands in until CodeRabbit can run again.
+
+## Review fixes round 3
+
+Re-review, 2026-10-25. Each fix was written test-first in one commit, `fix(audio): guard pre-roll fragment rule, keep punctuation after carried word, re-read overlap after hard cut`.
+
+- **Pre-roll fragment rule lost words (Important).**
+  - Problem: the round-2 rule dropped any first word of the next segment (3 or more letters) that was a suffix of the previous segment's last word. Pause cuts fall at sentence boundaries, so normal speech lost words, for example "Toto je riešenie." + "Nie je iné." became "Toto je riešenie. je iné.".
+  - Rule now:
+    - A fragment match at overlap position 0 counts only inside a longer overlap, where the following aligned words also match.
+    - A one-word fragment match counts only after a hard cut (a held-back word is present) and only if the fragment starts lowercase in the raw text.
+    - After a pause cut a lone suffix-like first word is never dropped.
+  - Regression tests run both after a pause cut and after a hard cut with the carried last word, for:
+    - "Toto je riešenie." / "Nie je iné."
+    - "Bol tam stále." / "Ale potom odišiel."
+    - "Prišiel niekto?" / "Kto to bol?"
+    - "Máme stretnutie." / "Tie veci počkajú."
+    - "Nebolo to tak doteraz" / "Teraz je to iné"
+    - and the carry-path example "riešenie." + "Nie je to tak".
+  - Existing truncation and fragment unit tests and all end-to-end fixture tests stay green. The fixture fragments sit at the start of a 2+ word overlap.
+  - One test changed meaning: `drops a pre-roll fragment of the last word` (pause cut, lone fragment) is now `keeps a lone suffix-like first word after a pause cut`.
+- **Carried word emitted truncated after silence.** A segment directly after a hard cut is no longer skipped when it is unvoiced. It re-reads the 1 s overlap, so the held-back word is resolved from a full reading. Test: speech ends exactly at the 25 s cut, the engine's word spans the cut, then 25 s of silence; the text has the complete word (fails without the fix).
+- **Punctuation after the kept word.** When the next segment's version of the held-back word wins, its punctuation-only tokens are kept (`pokračujeme , ďalej`).
+- **Exactly-25 s test** now also checks that every engine job is at most 25 s of audio (400000 samples).
+
+Tests: `packages/audio` has 182 tests in 20 files; the repo has 497 passing (1 skipped, which already existed). Lint and typecheck are clean. CodeRabbit is still blocked by the free CLI allowance.
