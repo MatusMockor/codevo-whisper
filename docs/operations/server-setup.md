@@ -134,4 +134,6 @@ Home server (`codex@192.168.1.110`, Ubuntu x86_64, RX 7800 XT), commit `38375d1`
 
 Redeployed at commit `63162f0`, after the pairing secret was changed to 32 bytes used directly as the Noise psk. The 43-character secret token paired (connection fingerprints matched), the sample transcript was again exact, and after `revoke` the device list was empty and `transcribe` returned `unknown_device`.
 
+Redeployed at commit `8d5a779` after the final review fixes. Both services `healthy`, both containers have a read-only root filesystem with a size-limited `/tmp` tmpfs (stt 64 MB, gateway 16 MB), and only `127.0.0.1:8787` is published. Pairing (connection fingerprints matched), the exact Slovak transcript (gateway 604 ms for 6.7 s of audio) and `unknown_device` after `revoke` were repeated.
+
 The stack was left running on the server, with no paired devices. Stop it with `docker compose -f infrastructure/compose/compose.yaml down`. Add `-v` to also delete the key, the registry and the model.
