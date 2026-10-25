@@ -133,3 +133,44 @@ The pinned transcribe.cpp has a stable C API (`transcribe_open`, `transcribe_run
 - [ ] Optionally redeploy on `codex@192.168.1.110` (compose project `~/Developer/codevo-whisper`, touch only its containers). Pair the dev client, run `--live` on the Slovak sample, then revoke the device.
 - [ ] Run `coderabbit review --agent --base main` and fix the valid findings.
 - [ ] Write `docs/reports/2026-10-26-gateway-partials-report.md` and commit it.
+
+---
+
+## Hardening round (after review)
+
+Each task is TDD and gets its own commit. `pnpm lint`, `pnpm typecheck` and `pnpm test` stay green.
+
+- **H1 Audio: completion drops only queued jobs.**
+  - New `JobSubmitter.dropQueued(sessionId)`, backed by `FairJobQueue.removeQueued(sessionId)`, which keeps the accounting for running entries.
+  - `RollingSession.complete` uses `dropQueued` instead of `cancelSession`, so a running partial finishes and is ignored.
+  - After the first failed final, the session's remaining queued finals are dropped, later commits are not submitted and partials stop. Every segment still gets its empty final, and `finish` rejects once.
+- **H2 stt-runner: worker restart policy.**
+  - Abort rejects the caller at once. The worker gets a 2 s grace (`abortGraceMs`) to answer and is killed only after that.
+  - Per-call timeout is 30 s (`timeoutMs`). The time waiting for `ready` counts against `startupTimeoutMs` (120 s).
+  - Respawn is lazy: on the next call, after `terminated`, with an exponential backoff (`500 ms x 2^(n-1)`, at most 30 s, reset on success).
+  - `ready()` reports whether the last worker answered `ready`.
+  - `warmUp()` uses the startup deadline and kills a worker that misses it.
+- **H3 Gateway: per-device inference guard.** `DeviceGuardedTranscriber`, a `SegmentTranscriber` decorator, applies two token buckets per device:
+  - started inferences, burst 30 at 4/s; above that the call fails with `busy`;
+  - forwarded aborts of running calls, burst 5 at 1 per 60 s; above that an abort is not forwarded and the call runs to the end and is ignored.
+  - `SttSegmentTranscriber` retries a 503 once after 250 ms.
+- **H4 Gateway HTTP client.**
+  - The response body is read with a 128 KiB cap, whether or not `Content-Length` is present, and then parsed.
+  - Text longer than `MAX_TEXT_CHARS` is rejected with `stt_unavailable`.
+  - The default timeout is 40 s, above the sidecar's 30 s call timeout.
+- **H5 Sidecar health.** `/health` answers 503 `DOWN` until the transcriber is ready.
+- **H6 C worker.**
+  - The request parser moves to `stt-worker-request.c` (header parse plus sample decode over a buffer).
+  - Language whitelist (`''`, `sk`, `en`, `cs`) with exact length, so an embedded NUL is rejected.
+  - `MAX_SAMPLES` overflow and truncated frames reply `failed` and exit 3.
+  - `--threads` must be in 1..256; `stdout` goes through `dup2` to `stderr` and replies use a private fd.
+  - The output limit of 16000 bytes is enforced in C.
+  - Hardened flags for the worker and every transcribe.cpp object. The image build checks the result with `readelf`.
+  - Node side: the language is validated before encoding and replies are decoded as fatal UTF-8.
+- **H7 Fuzzing.** A libFuzzer target with ASan and UBSan over the parser, a seed corpus, and `native/stt-worker/fuzz/run-fuzz.sh` (Docker, 10 minutes). Plus a C unit test for the parser.
+- **H8 Compose.**
+  - `mem_limit`, `cpus`, `pids_limit`, `ulimits.nofile`, `cap_drop: [ALL]` and `no-new-privileges` for both services;
+  - only the render node (`STT_RENDER_DEVICE`), not all of `/dev/dri`;
+  - `cw-models` read-only for `stt`, plus an `stt-provision` service (profile `provision`) with read-write access;
+  - documentation updated.
+- **H9 Hygiene.** `native/stt-worker/build-macos.sh`, precise wording in the report, redeploy and smoke test.
