@@ -9,6 +9,7 @@ const api: ControlApi = {
   openPane: (kind) => ipcRenderer.invoke('control:open-pane', kind),
   showOverlayTest: () => ipcRenderer.invoke('control:overlay-test'),
   restartHelper: () => ipcRenderer.invoke('control:restart-helper'),
+  pasteLast: () => ipcRenderer.invoke('control:paste-last'),
   revealLog: () => ipcRenderer.invoke('control:reveal-log'),
   onStatus: (listener) => {
     ipcRenderer.on('control:status', (_event, status: ControlStatus) => listener(status))

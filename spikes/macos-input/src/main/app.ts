@@ -6,11 +6,16 @@ import { ProcessInputHelper, type InputHelper } from './helper/InputHelper.js'
 import type { RawKeyEvent } from './hotkey/HotkeySource.js'
 import { HotkeyRouter } from './hotkey/HotkeyRouter.js'
 import { keyCodes } from './hotkey/keys.js'
+import { ShortcutListener } from './hotkey/ShortcutListener.js'
 import { SwiftTapSource } from './hotkey/SwiftTapSource.js'
 import { UiohookSource } from './hotkey/UiohookSource.js'
 import type { EventLog } from './logger.js'
 import { ClipboardRestorer } from './paste/ClipboardRestorer.js'
+import { LastTranscript } from './paste/LastTranscript.js'
+import { ModifierGate } from './paste/ModifierGate.js'
 import { PasteFlow } from './paste/PasteFlow.js'
+import { PasteLastAction, type PasteLastTrigger } from './paste/PasteLastAction.js'
+import { HelperTextFieldProbe } from './paste/TextFieldProbe.js'
 import { DictationSession } from './session/DictationSession.js'
 import { FakeTranscript } from './session/FakeTranscript.js'
 import { OverlayFocusAudit } from './session/OverlayFocusAudit.js'
@@ -34,6 +39,9 @@ export class App {
   readonly status: StatusService
   readonly audit: OverlayFocusAudit
   readonly guard: ResetGuard
+  readonly memory = new LastTranscript()
+  readonly pasteLastAction: PasteLastAction
+  readonly shortcuts: ShortcutListener
 
   constructor(
     paths: AppPaths,
@@ -47,19 +55,34 @@ export class App {
     this.control = new ControlWindow(join(dist, 'renderer/control.html'), join(dist, 'preload/control.js'))
     this.audit = new OverlayFocusAudit(this.helper, this.overlay, log)
     this.guard = new ResetGuard(powerMonitor, log)
+    const textField = new HelperTextFieldProbe(this.helper)
+    const inserter = new PasteFlow(this.helper, new ClipboardRestorer(this.helper, log), textField, settings, log)
     this.session = new DictationSession({
       overlay: this.overlay,
       audit: this.audit,
-      inserter: new PasteFlow(this.helper, new ClipboardRestorer(this.helper, log), settings, log),
+      inserter,
       probe: this.helper,
       copier: this.helper,
       transcript: new FakeTranscript(),
+      memory: this.memory,
+      fieldWarmup: textField,
       guard: this.guard,
       settings,
       log,
     })
+    this.pasteLastAction = new PasteLastAction({
+      inserter,
+      probe: this.helper,
+      memory: this.memory,
+      gate: new ModifierGate(this.helper),
+      overlay: this.overlay,
+      session: this.session,
+      settings,
+      log,
+    })
+    this.shortcuts = new ShortcutListener(this.helper, this.pasteLastAction, log)
     this.router = new HotkeyRouter({ swift: new SwiftTapSource(this.helper), uiohook: new UiohookSource() }, this.session, log)
-    this.status = new StatusService(this.helper, this.router, this.session, settings, log)
+    this.status = new StatusService(this.helper, this.router, this.session, this.memory, settings, log)
     this.wire()
   }
 
@@ -111,6 +134,10 @@ export class App {
     this.overlay.hide()
   }
 
+  pasteLast(trigger: PasteLastTrigger): Promise<void> {
+    return this.pasteLastAction.run(trigger)
+  }
+
   async restartHelper(): Promise<void> {
     this.helperProcess.stop()
     await this.helperProcess.start()
@@ -155,7 +182,7 @@ export class App {
   }
 
   private logHelperEvent(message: Record<string, unknown>): void {
-    if (message.event === 'down' || message.event === 'up') {
+    if (message.event === 'down' || message.event === 'up' || message.event === 'shortcut') {
       return
     }
     this.log.write('helper-event', message)

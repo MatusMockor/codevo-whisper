@@ -5,11 +5,12 @@ import { promisify } from 'node:util'
 import type { LogEntry } from '../../shared/types.js'
 import type { App } from '../app.js'
 import type { FrontmostApp } from '../helper/InputHelper.js'
+import { focusedElementChecks, noTextFieldChecks } from './FocusedElementChecks.js'
 import { LogWaiter } from './LogWaiter.js'
 
 const run = promisify(execFile)
 
-interface Check {
+export interface Check {
   name: string
   pass: boolean
   info?: boolean
@@ -29,6 +30,8 @@ export async function runSelfTest(spike: App): Promise<boolean> {
   await focusChangeCheck(spike, waiter, checks)
   await sameFocusPasteCheck(spike, waiter, checks)
   await resetChecks(spike, waiter, checks)
+  await focusedElementChecks(spike, checks)
+  await noTextFieldChecks(spike, waiter, checks)
   spike.settings.update({ transcriptionMs: 1000, restoreDelayMs: 500, maxSessionMs: 120000 })
   await reactivate(original.bundleId)
   const failed = checks.filter((check) => !check.pass && !check.info)

@@ -24,7 +24,7 @@ final class KeyTap {
         guard port == nil else {
             return ["running": true, "keycodes": keycodes.sorted()]
         }
-        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -59,9 +59,13 @@ final class KeyTap {
         return ["running": false]
     }
 
-    func handle(type: CGEventType, keycode: Int64, flags: UInt64) {
+    func handle(type: CGEventType, keycode: Int64, flags: UInt64, autorepeat: Bool) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             reenable(reason: type == .tapDisabledByTimeout ? "timeout" : "user-input")
+            return
+        }
+        if type == .keyDown {
+            Shortcut.handleKeyDown(keycode: keycode, flags: flags, autorepeat: autorepeat)
             return
         }
         guard type == .flagsChanged, keycodes.contains(keycode), let mask = KeyTap.flagMasks[keycode] else {
@@ -85,8 +89,9 @@ final class KeyTap {
 private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, userInfo: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
     let keycode = event.getIntegerValueField(.keyboardEventKeycode)
     let flags = event.flags.rawValue
+    let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
     MainActor.assumeIsolated {
-        KeyTap.shared.handle(type: type, keycode: keycode, flags: flags)
+        KeyTap.shared.handle(type: type, keycode: keycode, flags: flags, autorepeat: autorepeat)
     }
     return Unmanaged.passUnretained(event)
 }

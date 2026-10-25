@@ -13,6 +13,19 @@ export interface SecureInputState {
   pid?: number
 }
 
+export interface ModifierFlags {
+  hid: number
+  combined: number
+}
+
+export interface FocusedElementInfo {
+  editable: boolean | null
+  role: string | null
+  subrole: string | null
+  reason: string
+  [key: string]: unknown
+}
+
 export interface InputHelper {
   readonly pid: number | null
   onEvent(listener: HelperEventListener): void
@@ -22,8 +35,12 @@ export interface InputHelper {
   requestPermission(kind: PermissionKind): Promise<HelperMessage>
   clipboardSave(): Promise<HelperMessage>
   clipboardWrite(text: string, transient: boolean): Promise<number>
+  clipboardChangeCount(): Promise<number>
   clipboardRestore(options: { expectedChangeCount?: number; expectedText?: string; force?: boolean }): Promise<HelperMessage>
   paste(): Promise<HelperMessage>
+  focusedElement(): Promise<FocusedElementInfo>
+  modifierFlags(): Promise<ModifierFlags>
+  focusFinderDesktopForTest(): Promise<HelperMessage>
   listenStart(keycodes: number[]): Promise<HelperMessage>
   listenStop(): Promise<HelperMessage>
 }
@@ -69,12 +86,32 @@ export class ProcessInputHelper implements InputHelper {
     return Number(response.changeCount)
   }
 
+  async clipboardChangeCount(): Promise<number> {
+    const response = await this.process.request('clipboard-changecount')
+    return Number(response.changeCount)
+  }
+
   clipboardRestore(options: { expectedChangeCount?: number; expectedText?: string; force?: boolean }): Promise<HelperMessage> {
     return this.process.request('clipboard-restore', { ...options })
   }
 
   paste(): Promise<HelperMessage> {
     return this.process.request('paste')
+  }
+
+  async focusedElement(): Promise<FocusedElementInfo> {
+    const response = await this.process.request('focused-element', {}, 1500)
+    const { id: _id, cmd: _cmd, ...info } = response
+    return info as FocusedElementInfo
+  }
+
+  async modifierFlags(): Promise<ModifierFlags> {
+    const response = await this.process.request('modifier-flags')
+    return { hid: Number(response.flags), combined: Number(response.combinedFlags) }
+  }
+
+  focusFinderDesktopForTest(): Promise<HelperMessage> {
+    return this.process.request('selftest-focus-desktop', {}, 3000)
   }
 
   listenStart(keycodes: number[]): Promise<HelperMessage> {

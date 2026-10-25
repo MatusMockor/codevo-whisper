@@ -3,6 +3,7 @@ import type { ControlStatus, PermissionStatus } from '../shared/types.js'
 import type { InputHelper } from './helper/InputHelper.js'
 import type { HotkeyRouter } from './hotkey/HotkeyRouter.js'
 import type { EventLog } from './logger.js'
+import type { LastTranscript } from './paste/LastTranscript.js'
 import type { DictationSession } from './session/DictationSession.js'
 import type { SettingsStore } from './settings.js'
 
@@ -16,6 +17,7 @@ export class StatusService {
     private readonly helper: InputHelper,
     private readonly router: HotkeyRouter,
     private readonly session: DictationSession,
+    private readonly memory: LastTranscript,
     private readonly settings: SettingsStore,
     private readonly log: EventLog,
   ) {}
@@ -61,6 +63,7 @@ export class StatusService {
       permissions: this.permissions,
       electronAccessibility: this.electronAccessibility,
       sources: this.router.statuses(),
+      lastTranscript: this.memory.get(),
     }
   }
 

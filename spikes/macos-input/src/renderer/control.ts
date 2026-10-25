@@ -23,8 +23,20 @@ function renderStatus(status: ControlStatus): void {
     ['Accessibility (Electron)', flag(status.electronAccessibility)],
     ['Swift source', sourceText(status.sources.swift)],
     ['uiohook source', sourceText(status.sources.uiohook)],
+    ['Posledný prepis', lastText(status.lastTranscript)],
   ]
   byId('status').innerHTML = rows.map(([label, value]) => `<div>${label}</div><div>${value}</div>`).join('')
+}
+
+function lastText(last: ControlStatus['lastTranscript']): string {
+  if (!last) {
+    return 'none'
+  }
+  return escapeHtml(`#${last.sessionId}: ${last.text}`)
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function sourceText(source: { running: boolean; error?: string }): string {
@@ -80,6 +92,7 @@ function bindActions(): void {
   byId('simulate-delayed').addEventListener('click', () => void api.simulate('delayed'))
   byId('simulate-hold').addEventListener('mousedown', () => void api.simulate('down'))
   byId('simulate-hold').addEventListener('mouseup', () => void api.simulate('up'))
+  byId('paste-last').addEventListener('click', () => void api.pasteLast())
   byId('restart-helper').addEventListener('click', () => void api.restartHelper())
   byId('reveal-log').addEventListener('click', () => void api.revealLog())
 }

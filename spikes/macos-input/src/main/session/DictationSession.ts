@@ -3,7 +3,9 @@ import type { EventLog } from '../logger.js'
 import type { FrontmostApp } from '../helper/InputHelper.js'
 import type { RawKeyEvent } from '../hotkey/HotkeySource.js'
 import type { KeyTarget } from '../hotkey/HotkeyRouter.js'
+import type { LastTranscript } from '../paste/LastTranscript.js'
 import type { Inserter, InsertOutcome } from '../paste/PasteFlow.js'
+import type { TextFieldProbe } from '../paste/TextFieldProbe.js'
 import type { SettingsStore } from '../settings.js'
 import type { FakeTranscript } from './FakeTranscript.js'
 import type { FrontmostProbe, OverlayFocusAudit } from './OverlayFocusAudit.js'
@@ -26,6 +28,8 @@ export interface SessionDeps {
   probe: FrontmostProbe
   copier: TextCopier
   transcript: FakeTranscript
+  memory: LastTranscript
+  fieldWarmup: TextFieldProbe
   guard: ResetGuard
   settings: SettingsStore
   log: EventLog
@@ -117,7 +121,13 @@ export class DictationSession implements KeyTarget {
     this.deps.guard.arm(session.id, this.deps.settings.get().maxSessionMs)
     this.deps.overlay.show(this.overlayState(session))
     this.deps.transcript.start((text) => this.deps.overlay.update({ transcript: text }))
+    void this.warmUpTextField(session)
     await this.deps.audit.check(`session-${session.id}`, session.target)
+  }
+
+  private async warmUpTextField(session: ActiveSession): Promise<void> {
+    const field = await this.deps.fieldWarmup.inspect()
+    this.deps.log.write('focused-element', { sessionId: session.id, origin: 'session', phase: 'key-down', app: session.target?.bundleId ?? null, ...field })
   }
 
   private async finish(session: ActiveSession, event: RawKeyEvent): Promise<void> {
@@ -131,8 +141,9 @@ export class DictationSession implements KeyTarget {
     if (session.cancelled) {
       return
     }
+    this.deps.memory.remember(session.id, session.text)
     this.setState('inserting')
-    const outcome = await this.deps.inserter.insert(session.text, session.target, session.id)
+    const outcome = await this.deps.inserter.insert({ text: session.text, target: session.target, sessionId: session.id, origin: 'session' })
     if (session.cancelled) {
       return
     }

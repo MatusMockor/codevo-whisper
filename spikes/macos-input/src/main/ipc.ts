@@ -23,6 +23,7 @@ export function registerIpc(app: App): void {
   })
   ipcMain.handle('control:overlay-test', () => app.overlayTest())
   ipcMain.handle('control:restart-helper', () => app.restartHelper())
+  ipcMain.handle('control:paste-last', () => app.pasteLast('button'))
   ipcMain.handle('control:reveal-log', () => shell.showItemInFolder(app.log.path))
   ipcMain.on('overlay:copy', () => void app.session.copyLast())
 }

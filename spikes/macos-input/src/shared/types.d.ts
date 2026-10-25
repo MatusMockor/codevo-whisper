@@ -37,6 +37,7 @@ export interface ControlStatus {
   permissions: PermissionStatus | null
   electronAccessibility: boolean
   sources: Record<Candidate, SourceStatus>
+  lastTranscript: { sessionId: number; text: string; at: number } | null
 }
 
 export interface OverlayState {
@@ -68,6 +69,7 @@ export interface ControlApi {
   openPane(kind: PermissionKind): Promise<void>
   showOverlayTest(): Promise<void>
   restartHelper(): Promise<void>
+  pasteLast(): Promise<void>
   revealLog(): Promise<void>
   onStatus(listener: (status: ControlStatus) => void): void
   onLog(listener: (entry: LogEntry) => void): void

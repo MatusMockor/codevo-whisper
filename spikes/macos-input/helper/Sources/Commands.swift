@@ -30,6 +30,12 @@ final class Commands {
             )
         case "paste":
             return Paste.commandV()
+        case "focused-element":
+            return FocusedElement.describe()
+        case "modifier-flags":
+            return Modifiers.describe()
+        case "selftest-focus-desktop":
+            return SelfTestFixtures.focusFinderDesktop()
         case "listen-start":
             return KeyTap.shared.start(keycodes: (args["keycodes"] as? [Int] ?? [54, 58, 61, 62, 63]).map(Int64.init))
         case "listen-stop":
