@@ -133,7 +133,7 @@ The two ends are the user's device and the user's own gateway. Everything betwee
 
 Push-to-talk needs reliable key-down and key-up events, which Electron `globalShortcut` does not provide.
 
-- macOS: Swift helper with a listen-only `CGEventTap` (Input Monitoring only), keycode + device-dependent modifier masks so left and right keys are distinguished; supported keys: Fn (63), left/right Option (58/61), right Command (54), right Control (62). Resets state on sleep, screen lock, a 120 s maximum or lost events. `uiohook-napi` rejected in phase 0 (no Fn, no left/right release distinction, needs Accessibility).
+- macOS: Swift helper with a listen-only `CGEventTap` (Input Monitoring only), keycode + device-dependent modifier masks so left and right keys are distinguished; supported keys: Fn (63), left/right Option (58/61), right Command (54), right Control (62). Resets state on sleep, screen lock, a 10 minute maximum session (owner-facing limit shown in the overlay when reached) or lost events. `uiohook-napi` rejected in phase 0 (no Fn, no left/right release distinction, needs Accessibility).
 - Linux Wayland: XDG GlobalShortcuts portal, using `Activated` / `Deactivated` signals where supported.
 - Linux X11: key grab via a small helper.
 - Toggle mode (press to start, press to stop) is always available as a fallback.
