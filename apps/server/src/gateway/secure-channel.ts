@@ -9,6 +9,7 @@ import {
   type ServerMessage,
 } from '@codevo-whisper/protocol';
 import WebSocket from 'ws';
+import { closeSocket } from './close-socket';
 import { CLOSE_NORMAL } from './limits';
 
 export interface SecureChannel {
@@ -22,15 +23,22 @@ export interface SecureChannel {
 
 export class WebSocketSecureChannel implements SecureChannel {
   private messageHandler: (message: ClientMessage) => void = () => this.fail('bad_message');
+  private readonly closeListeners: Array<() => void> = [];
   private confirmed = false;
+  private terminated = false;
 
   constructor(
     private readonly socket: WebSocket,
     private readonly transport: SecureTransport,
     private readonly onConfirmed: () => void,
-  ) {}
+  ) {
+    socket.once('close', () => this.terminate());
+  }
 
   receive(ciphertext: Uint8Array): void {
+    if (this.terminated) {
+      return;
+    }
     const message = this.decode(ciphertext);
     if (message === null) {
       return;
@@ -54,20 +62,36 @@ export class WebSocketSecureChannel implements SecureChannel {
   }
 
   onClose(handler: () => void): void {
-    this.socket.once('close', handler);
+    if (this.terminated) {
+      handler();
+      return;
+    }
+    this.closeListeners.push(handler);
   }
 
   fail(code: ErrorCode, message: string = code): void {
     this.send({ type: 'error', code, message });
-    this.socket.close(closeCodeFor(code));
+    this.close(closeCodeFor(code));
   }
 
   close(code = CLOSE_NORMAL): void {
-    this.socket.close(code);
+    if (this.terminated) {
+      return;
+    }
+    this.terminate();
+    closeSocket(this.socket, code);
   }
 
   isOpen(): boolean {
-    return this.socket.readyState === WebSocket.OPEN;
+    return !this.terminated && this.socket.readyState === WebSocket.OPEN;
+  }
+
+  private terminate(): void {
+    if (this.terminated) {
+      return;
+    }
+    this.terminated = true;
+    this.closeListeners.splice(0).forEach((listener) => listener());
   }
 
   private decode(ciphertext: Uint8Array): ClientMessage | null {

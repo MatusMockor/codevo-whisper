@@ -16,8 +16,8 @@ import type { PairingService } from '../pairing/pairing-service';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
-import { CLOSE_INTERNAL_ERROR, CLOSE_POLICY_VIOLATION, CLOSE_TRY_AGAIN_LATER, CLOSE_UNSUPPORTED_DATA } from './limits';
-import type { PreAuthLimiter } from './pre-auth-limiter';
+import { closeSocket } from './close-socket';
+import { CLOSE_INTERNAL_ERROR, CLOSE_UNSUPPORTED_DATA } from './limits';
 import { WebSocketSecureChannel } from './secure-channel';
 import { SessionHandler } from './session-handler';
 import type { SessionRegistry } from './session-registry';
@@ -28,9 +28,7 @@ export type ConnectionDeps = {
   queue: TranscriptionQueue;
   pairing: PairingService;
   sessions: SessionRegistry;
-  limiter: PreAuthLimiter;
   clock: () => number;
-  handshakeTimeoutMs: number;
   logger: Logger;
 };
 
@@ -40,45 +38,29 @@ type PendingSession = { channel: WebSocketSecureChannel; deviceId: string; publi
 
 export class GatewayConnection {
   private route: (bytes: Uint8Array) => void = (bytes) => {
-    this.onOpening(bytes).catch(() => this.socket.close(CLOSE_INTERNAL_ERROR));
+    this.onOpening(bytes).catch(() => closeSocket(this.socket, CLOSE_INTERNAL_ERROR));
   };
-  private authenticated = false;
-  private readonly deadline: NodeJS.Timeout;
 
   constructor(
     private readonly socket: WebSocket,
     private readonly ip: string,
     private readonly deps: ConnectionDeps,
+    private readonly confirmAdmission: () => void,
   ) {
-    this.deadline = setTimeout(() => socket.close(CLOSE_POLICY_VIOLATION), deps.handshakeTimeoutMs);
     socket.on('error', () => undefined);
-    socket.once('close', () => this.onClose());
     socket.on('message', (data: Buffer, isBinary: boolean) => this.onMessage(data, isBinary));
-  }
-
-  static accept(socket: WebSocket, ip: string, deps: ConnectionDeps): void {
-    if (!deps.limiter.tryAcquire(ip)) {
-      socket.close(CLOSE_TRY_AGAIN_LATER);
-      return;
-    }
-    new GatewayConnection(socket, ip, deps);
   }
 
   private onMessage(data: Buffer, isBinary: boolean): void {
     if (!isBinary) {
-      this.socket.close(CLOSE_UNSUPPORTED_DATA);
+      closeSocket(this.socket, CLOSE_UNSUPPORTED_DATA);
       return;
     }
     this.route(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
   }
 
-  private onClose(): void {
-    clearTimeout(this.deadline);
-    this.deps.limiter.release(this.ip, this.authenticated);
-  }
-
   private reject(code: ErrorCode): void {
-    this.socket.close(closeCodeFor(code), code);
+    closeSocket(this.socket, closeCodeFor(code), code);
   }
 
   private async onOpening(bytes: Uint8Array): Promise<void> {
@@ -95,7 +77,7 @@ export class GatewayConnection {
         this.reject(error.code);
         return;
       }
-      this.socket.close(CLOSE_INTERNAL_ERROR);
+      closeSocket(this.socket, CLOSE_INTERNAL_ERROR);
     }
   }
 
@@ -170,8 +152,6 @@ export class GatewayConnection {
   }
 
   private confirm(): void {
-    clearTimeout(this.deadline);
-    this.authenticated = true;
-    this.deps.limiter.promote(this.ip);
+    this.confirmAdmission();
   }
 }

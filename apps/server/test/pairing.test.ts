@@ -7,7 +7,7 @@ import { pcmSeconds } from './support/pcm';
 import { sendAudio } from './support/send-audio';
 import { startHarness, type Harness } from './support/server-harness';
 import { createTempDir } from './support/temp-dir';
-import { beginSession } from '@codevo-whisper/protocol';
+import { beginPairing, beginSession } from '@codevo-whisper/protocol';
 import { connectSession, pairDevice, runHandshake } from './support/test-client';
 import { waitUntil } from './support/wait-until';
 
@@ -205,6 +205,22 @@ describe('pairing', () => {
     expect(await connecting.next()).toMatchObject({ type: 'error', code: 'server_key_changed' });
     await connecting.closed;
     await waitUntil(() => server.gateway.sessions.count() === 0);
+  });
+
+  it('rotate-key cancels a pairing that waits for approval', async () => {
+    const server = await start();
+    const window = await openPairingWindow(server.config.adminSocket);
+    const pairing = runHandshake(server.url, beginPairing(generateKeyPair(), window.token));
+    const session = await pairing;
+    session.send({ type: 'pair-request', deviceName: 'Počas rotácie' });
+    expect(await window.admin.next()).toMatchObject({ event: 'request' });
+
+    expect(await adminCommand(server.config.adminSocket, { cmd: 'rotate-key' })).toMatchObject({ rotated: true });
+    window.admin.send({ decision: 'approve' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'pairing_closed' });
+    expect(await window.admin.next()).toEqual({ event: 'expired' });
+    expect(await server.devices.list()).toEqual([]);
   });
 
   it('rotate-key forces re-pairing', async () => {

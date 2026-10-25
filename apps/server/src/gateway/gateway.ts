@@ -10,6 +10,7 @@ import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { GatewayConnection } from './connection';
 import { CLOSE_GOING_AWAY, HANDSHAKE_TIMEOUT_MS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS } from './limits';
 import { PreAuthLimiter } from './pre-auth-limiter';
+import { TcpAdmission } from './tcp-admission';
 import { SessionRegistry } from './session-registry';
 
 export type GatewayDeps = {
@@ -39,20 +40,25 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     response.writeHead(426, { 'content-type': 'text/plain' });
     response.end('WebSocket upgrade required\n');
   });
-  const sockets = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: MAX_WS_PAYLOAD });
+  const admission = new TcpAdmission(limiter, deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS);
+  server.headersTimeout = deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
+  server.requestTimeout = deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
+  server.on('connection', (socket) => admission.admit(socket));
+  const sockets = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: MAX_WS_PAYLOAD, maxFragments: 1 });
   const connectionDeps = {
     serverKey: keyProvider(deps.serverKey),
     devices: deps.devices,
     queue: deps.queue,
     pairing: deps.pairing,
     sessions,
-    limiter,
     clock: deps.clock ?? Date.now,
-    handshakeTimeoutMs: deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS,
     logger: deps.logger ?? silentLogger,
   };
   sockets.on('error', () => undefined);
-  sockets.on('connection', (socket, request) => GatewayConnection.accept(socket, request.socket.remoteAddress ?? 'unknown', connectionDeps));
+  sockets.on('connection', (socket, request) => {
+    admission.attach(request.socket, socket);
+    new GatewayConnection(socket, request.socket.remoteAddress ?? 'unknown', connectionDeps, () => admission.confirm(request.socket));
+  });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(deps.config.port, deps.config.bind, () => resolve());

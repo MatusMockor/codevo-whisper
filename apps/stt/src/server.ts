@@ -9,11 +9,13 @@ export type SttServerOptions = { transcriber: Transcriber; port: number; host: s
 
 const LANGUAGES: readonly string[] = ['sk', 'en', 'cs', 'auto'];
 
+const REQUEST_TIMEOUT_MS = 60_000;
+
 function reply(response: ServerResponse, status: number, body: object): void {
   if (response.headersSent || response.destroyed) {
     return;
   }
-  response.writeHead(status, { 'content-type': 'application/json', connection: 'close' });
+  response.writeHead(status, { 'content-type': 'application/json' });
   response.end(JSON.stringify(body));
 }
 
@@ -86,6 +88,7 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
   const handler = new SingleFlightHandler(options);
   const server = createServer((request, response) => {
     request.on('error', () => request.destroy());
+    response.once('finish', () => request.resume());
     response.on('error', () => response.destroy());
     const url = new URL(request.url ?? '/', 'http://stt');
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -101,6 +104,7 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
     }
     reply(response, 404, { error: 'not found' });
   });
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(options.port, options.host, () => resolve());

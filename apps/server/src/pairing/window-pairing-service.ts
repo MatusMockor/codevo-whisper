@@ -35,6 +35,7 @@ type PairingWindow = {
 
 export class WindowPairingService implements PairingService {
   private window: PairingWindow | null = null;
+  private generation = 0;
 
   constructor(private readonly deps: WindowPairingDeps) {}
 
@@ -56,6 +57,7 @@ export class WindowPairingService implements PairingService {
   }
 
   close(): void {
+    this.generation += 1;
     const window = this.window;
     if (window === null) {
       return;
@@ -92,6 +94,7 @@ export class WindowPairingService implements PairingService {
       return;
     }
     this.discard(window);
+    const generation = this.generation;
     const decision = await withTimeout(this.ask(window, handshake, deviceName), window.ttlMs);
     if (decision === TIMED_OUT) {
       channel.fail('pairing_closed');
@@ -100,6 +103,11 @@ export class WindowPairingService implements PairingService {
     }
     if (!channel.isOpen()) {
       window.operator.notify({ event: 'abandoned' });
+      return;
+    }
+    if (this.generation !== generation) {
+      channel.fail('pairing_closed');
+      window.operator.notify({ event: 'expired' });
       return;
     }
     await this.conclude(channel, window.operator, decision, { name: deviceName, publicKey: handshake.remoteStaticKey });

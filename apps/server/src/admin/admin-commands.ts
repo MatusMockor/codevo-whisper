@@ -49,9 +49,9 @@ export class AdminCommands {
   }
 
   async rotateKey(): Promise<object> {
+    this.deps.pairing.close();
     const key = await this.deps.keys.rotate();
     await this.deps.devices.removeAll();
-    this.deps.pairing.close();
     this.deps.sessions.closeAll('server_key_changed');
     return { rotated: true, fingerprint: fingerprint(key.publicKey) };
   }

@@ -1,8 +1,9 @@
 import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import WebSocket from 'ws';
+import { connect, type Socket } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { streamLogger } from '../src/logging/logger';
 import { startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
 import { pcmSeconds } from './support/pcm';
 import { sendAudio } from './support/send-audio';
@@ -197,7 +198,8 @@ describe('gateway sessions', () => {
     session.send({ type: 'audio', pcm: pcmSeconds(1) });
 
     await expectBadMessageClose(session);
-    await waitUntil(() => fake.aborted() === 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fake.aborted()).toBe(fake.requests.length);
   });
 
   it('reports stt_unavailable', async () => {
@@ -314,10 +316,51 @@ describe('gateway sessions', () => {
   it('limits concurrent connections per IP', async () => {
     const server = await start();
     const sockets = await Promise.all(Array.from({ length: 4 }, () => openSocket(server.url)));
-    const extra = new WebSocket(server.url);
-    const closed = await new Promise<number>((resolve) => extra.on('close', (code) => resolve(code)));
 
-    expect(closed).toBe(1013);
+    await expect(openSocket(server.url)).rejects.toBeInstanceOf(Error);
     sockets.forEach(({ socket }) => socket.close());
+  });
+
+  it('counts raw TCP connections before the upgrade and drops them at the deadline', async () => {
+    const server = await start({ handshakeTimeoutMs: 200 });
+    const raw = await Promise.all(
+      Array.from({ length: 4 }, () => new Promise<Socket>((resolve) => {
+        const socket = connect(server.gateway.port, '127.0.0.1', () => resolve(socket));
+        socket.on('error', () => undefined);
+      })),
+    );
+    await waitUntil(() => server.gateway.limiter.pending() === 4);
+
+    await expect(openSocket(server.url)).rejects.toBeInstanceOf(Error);
+    await Promise.all(raw.map((socket) => new Promise((resolve) => socket.once('close', resolve))));
+    await waitUntil(() => server.gateway.limiter.pending() === 0);
+  });
+
+  it('rejects fragmented WebSocket messages', async () => {
+    const server = await start();
+    const fragmented = await openSocket(server.url);
+    fragmented.socket.send(new Uint8Array([0x02, 1, 2]), { fin: false });
+    fragmented.socket.send(new Uint8Array([3, 4]), { fin: true });
+
+    expect((await fragmented.inbox.closed).code).toBe(1008);
+  });
+
+  it('ignores messages that arrive after the server closed the session', async () => {
+    const lines: string[] = [];
+    const server = await start({ logger: streamLogger((line) => lines.push(line)) });
+    const session = await readySession(server);
+    const [device] = await server.devices.list();
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    await waitUntil(() => server.gateway.sessions.count() === 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    server.gateway.sessions.closeDevice(device?.id ?? '', 'revoked');
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'revoked' });
+    await session.closed;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(lines.filter((line) => line.includes('"dictation"'))).toEqual([]);
+    expect(fake.requests).toHaveLength(0);
   });
 });
