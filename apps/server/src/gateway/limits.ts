@@ -6,6 +6,7 @@ export const MAX_WS_PAYLOAD = 65_536;
 
 export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4, maxConnectionsPerIp: 8 } as const;
 
+export const CLOSE_NORMAL = 1000;
 export const CLOSE_GOING_AWAY = 1001;
 export const CLOSE_UNSUPPORTED_DATA = 1003;
 export const CLOSE_POLICY_VIOLATION = 1008;

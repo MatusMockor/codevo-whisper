@@ -9,12 +9,14 @@ import {
   type ServerMessage,
 } from '@codevo-whisper/protocol';
 import WebSocket from 'ws';
+import { CLOSE_NORMAL } from './limits';
 
 export interface SecureChannel {
   send(message: ServerMessage): void;
   onMessage(handler: (message: ClientMessage) => void): void;
   onClose(handler: () => void): void;
   fail(code: ErrorCode, message?: string): void;
+  close(): void;
   isOpen(): boolean;
 }
 
@@ -58,6 +60,10 @@ export class WebSocketSecureChannel implements SecureChannel {
   fail(code: ErrorCode, message: string = code): void {
     this.send({ type: 'error', code, message });
     this.socket.close(closeCodeFor(code));
+  }
+
+  close(): void {
+    this.socket.close(CLOSE_NORMAL);
   }
 
   isOpen(): boolean {
