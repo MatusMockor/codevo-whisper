@@ -156,4 +156,11 @@ Notes for the integration task (no code now):
 - The gateway needs an ingestion rate limit per session and device. A client pushing audio faster than real time would create commits and partial jobs faster than real time.
 - `nextInRotation` restarts from the first lane when the last-served device was removed. That gives a small bias to the first device after a removal; worth revisiting if fairness measurements show it.
 
-CodeRabbit after the fixes: see below.
+Second reviewer (gpt-6.1-sol, `codex exec -s read-only`, on `baa217e..b2a7431`): 2 P2 findings, both reproduced and fixed in `55e6ac8`:
+
+- **Carried word lost from final events.** With `overlapMs: 0, preRollMs: 0`, a dictation ending exactly at a hard cut produced no end segment, so the held-back word only appeared in `finish()`'s text. `validateSegmentConfig` now requires `max(overlapMs, preRollMs) >= 20 ms` (`MIN_HARD_CUT_LEAD_IN_MS`), so the end segment after a hard cut always exists. The exactly-25 s test also checks that the final event texts join to the `finish()` text.
+- **Finished sessions retained.** Finished sessions stayed in the queue, and lanes of cancelled devices were never removed. `detach` now calls `FairJobQueue.releaseSession`, which forgets the session once it has no queued or running jobs; empty lanes are pruned. Tests: queue `stats()` after complete/release/remove, and 50 finished plus 1 cancelled session through the dispatcher leave `{ sessions: 0, lanes: 0 }`.
+
+Tests after these fixes: `packages/audio` has 20 files and 168 tests; the repo has 483 passing (1 skipped, which already existed).
+
+CodeRabbit after the fixes: blocked by the free CLI allowance (`rate_limit`: "You've used all 3 included reviews"); retries at the advertised reset kept hitting the limit. The repository has no Git remote, so an organization plan cannot apply. The gpt-6.1-sol review above stands in until CodeRabbit can run again.
