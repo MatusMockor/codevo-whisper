@@ -83,7 +83,8 @@ export class RollingSession<TContext = TranscriptionContext> {
   private commit(segment: Segment): void {
     const revision = this.assembler.commit(segment);
     const onlySegment = segment.id === 0 && segment.reason === 'end';
-    if (!segment.voiced && !segment.followsVoicedHardCut && !onlySegment) {
+    const skippable = !segment.voiced && !segment.followsVoicedHardCut && !onlySegment;
+    if (skippable || this.failure !== undefined) {
       this.buffer.discardBefore(this.segmenter.openStartSample);
       this.emit(this.assembler.skipFinal(segment.id));
       return;
@@ -116,7 +117,7 @@ export class RollingSession<TContext = TranscriptionContext> {
   }
 
   private maybeRequestPartial(): void {
-    if (!this.options.partials) {
+    if (!this.options.partials || this.failure !== undefined) {
       return;
     }
     const now = this.options.clock.now();
@@ -155,7 +156,11 @@ export class RollingSession<TContext = TranscriptionContext> {
   }
 
   private recordFailure(segmentId: number, error: unknown): void {
-    this.failure ??= { segmentId, error };
+    if (this.failure !== undefined) {
+      return;
+    }
+    this.failure = { segmentId, error };
+    this.options.submitter.dropQueued(this.sessionId);
   }
 
   private complete(resolve: (text: string) => void, reject: (error: Error) => void): void {
@@ -163,7 +168,7 @@ export class RollingSession<TContext = TranscriptionContext> {
       return;
     }
     this.state = 'done';
-    this.options.submitter.cancelSession(this.sessionId);
+    this.options.submitter.dropQueued(this.sessionId);
     this.options.registry.detach(this.sessionId);
     if (this.failure !== undefined) {
       reject(new SegmentFailedError(this.failure.segmentId, this.assembler.text(), { cause: this.failure.error }));

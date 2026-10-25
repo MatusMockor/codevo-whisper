@@ -5,6 +5,7 @@ export type JobOutcome = { status: 'done'; text: string } | { status: 'dropped';
 export interface JobSubmitter<TContext = TranscriptionContext> {
   submit(job: TranscriptionJob<TContext>): Promise<JobOutcome>;
   cancelSession(sessionId: string): void;
+  dropQueued(sessionId: string): void;
 }
 
 export interface DeviceRegistry {

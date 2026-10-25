@@ -63,13 +63,15 @@ describe('RollingSession', () => {
     expect(events).toEqual([{ type: 'final', segmentId: 0, revision: 2, text: 'finálny text' }]);
   });
 
-  it('a partial of a silent tail that is never committed is not emitted after finish', async () => {
+  it('a partial of a silent tail is neither emitted after finish nor aborted', async () => {
     const held: Array<(text: string) => void> = [];
+    const signals: AbortSignal[] = [];
     const engine: SegmentTranscriber = {
       transcribe: (job, signal) => {
         if (job.kind === 'partial' && job.segmentId === 1) {
           return new Promise<string>((resolve, reject) => {
             held.push(resolve);
+            signals.push(signal);
             signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
           });
         }
@@ -84,11 +86,45 @@ describe('RollingSession', () => {
     await session.finish();
     const eventsAtFinish = [...events];
     await flush();
-    expect(dispatcher.pendingJobs()).toBe(0);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
     held.forEach((resolve) => resolve('neskoro'));
     await flush();
 
     expect(events).toEqual(eventsAtFinish);
+    expect(dispatcher.pendingJobs()).toBe(0);
+  });
+
+  it('after the first failed final the session skips its remaining finals and partials', async () => {
+    const finals: Array<{ reject: (error: Error) => void }> = [];
+    let partialCalls = 0;
+    const engine: SegmentTranscriber = {
+      transcribe: (job) => {
+        if (job.kind === 'partial') {
+          partialCalls += 1;
+          return Promise.resolve('priebežne');
+        }
+        return new Promise<string>((_resolve, reject) => finals.push({ reject }));
+      },
+    };
+    const { clock, open } = harness(engine);
+    const { session, events } = open('a', true, { segment: { targetMs: 3000, minSegmentMs: 2000, hardMs: 4000 } });
+
+    await feed(clock, [session], continuous, 0, 16_000 * 5);
+    expect(finals).toHaveLength(1);
+    finals[0]?.reject(new Error('engine hung'));
+    await flush();
+    const partialsAfterFailure = partialCalls;
+    await feed(clock, [session], continuous, 16_000 * 5, 16_000 * 11);
+    const finished = session.finish();
+
+    await expect(finished).rejects.toBeInstanceOf(SegmentFailedError);
+    await expect(finished).rejects.toMatchObject({ segmentId: 0 });
+    expect(finals).toHaveLength(1);
+    expect(partialCalls).toBe(partialsAfterFailure);
+    const emitted = events.filter((event) => event.type === 'final');
+    expect(emitted.map((event) => event.segmentId)).toEqual([...emitted.keys()]);
+    expect(emitted.length).toBeGreaterThanOrEqual(3);
+    expect(emitted.every((event) => event.text === '')).toBe(true);
   });
 
   it('finish resolves the joined text and final events carry ids 0..n', async () => {
@@ -122,14 +158,14 @@ describe('RollingSession', () => {
     const { session } = open('a', false);
 
     await feed(clock, [session], long);
-    engine.call(0).reject(new Error('engine crashed'));
+    engine.call(0).resolve('začiatok');
     const done = session.finish();
     await flush();
-    engine.call(1).resolve('koniec');
+    engine.call(1).reject(new Error('engine crashed'));
 
     const error: unknown = await done.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SegmentFailedError);
-    expect(error).toMatchObject({ segmentId: 0, textSoFar: 'koniec' });
+    expect(error).toMatchObject({ segmentId: 1, textSoFar: 'začiatok' });
   });
 
   it('cancel rejects finish and ignores late results', async () => {
@@ -245,6 +281,7 @@ describe('RollingSession', () => {
       submit: (job: TranscriptionJob): Promise<JobOutcome> =>
         job.kind === 'final' ? Promise.resolve({ status: 'dropped', reason: 'cancelled' }) : dispatcher.submit(job),
       cancelSession: (sessionId) => dispatcher.cancelSession(sessionId),
+      dropQueued: (sessionId) => dispatcher.dropQueued(sessionId),
     };
     const { session } = open('a', false, { submitter: dropping });
     await feed(clock, [session], speech, 0, 16000);

@@ -67,6 +67,20 @@ export class FairJobQueue<T extends { job: QueueKey }> {
 
   removeSession(sessionId: string): Dropped<T>[] {
     this.sessions.delete(sessionId);
+    return this.extractQueued(sessionId);
+  }
+
+  removeQueued(sessionId: string): Dropped<T>[] {
+    const dropped = this.extractQueued(sessionId);
+    const load = this.sessions.get(sessionId);
+    if (load !== undefined) {
+      load.queuedFinals = 0;
+      this.forgetIfIdle(sessionId, load);
+    }
+    return dropped;
+  }
+
+  private extractQueued(sessionId: string): Dropped<T>[] {
     const dropped: T[] = [];
     for (const lane of this.lanes.values()) {
       dropped.push(...lane.finals.filter((entry) => entry.job.sessionId === sessionId));

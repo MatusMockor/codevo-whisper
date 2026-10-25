@@ -53,6 +53,10 @@ export class TranscriptionDispatcher<TContext = TranscriptionContext> implements
     }
   }
 
+  dropQueued(sessionId: string): void {
+    this.settleDropped(this.queue.removeQueued(sessionId));
+  }
+
   attach(deviceId: string, partials: boolean): string {
     this.sessionCounter += 1;
     const sessionId = `${deviceId}#${this.sessionCounter}`;
