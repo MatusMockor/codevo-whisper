@@ -37,6 +37,8 @@
 
 ### Task 1: Monorepo scaffold
 
+> Phase order changed: the monorepo, lint/typecheck/test setup and `packages/stt-runner` already exist from phase 1. Do only the `packages/protocol` part of this task, and in Task 9 reuse `packages/stt-runner` instead of creating it.
+
 **Files:**
 - Create: `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `eslint.config.js`, `vitest.config.ts`, `.gitignore`, `.nvmrc`, `README.md`
 - Create: `packages/protocol/package.json`, `packages/protocol/tsconfig.json`, `packages/protocol/src/index.ts`, `packages/protocol/test/smoke.test.ts`
