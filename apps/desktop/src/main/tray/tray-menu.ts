@@ -6,6 +6,7 @@ import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
 import type { SessionCoordinator } from '../session/session-coordinator';
 import type { SettingsStore } from '../settings/settings-store';
+import type { UpdateService } from '../updates/update-service';
 import type { OverlayState } from '../../shared/overlay-contract';
 import { SPIN_FRAME_MS, TrayIcons } from './tray-icons';
 import { trayMenuTemplate, type TrayMenuActions, type TrayMenuModel } from './tray-menu-template';
@@ -19,6 +20,7 @@ export type TrayMenuDeps = {
   settings: Pick<SettingsStore, 'get' | 'update'>;
   lastTranscript: Pick<LastTranscript, 'get'>;
   models: Pick<ActiveModel, 'activeLanguageHint'>;
+  updates?: Pick<UpdateService, 'status' | 'install'>;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -89,6 +91,7 @@ export class TrayMenu {
       microphone: settings.microphone,
       language: settings.language,
       autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
+      readyUpdate: this.readyUpdate(),
     };
   }
 
@@ -104,7 +107,21 @@ export class TrayMenu {
       openApp: () => this.deps.openApp(),
       openSettings: () => this.deps.openSettings(),
       quit: () => this.deps.quit(),
+      installUpdate: () => this.installUpdate(),
     };
+  }
+
+  private readyUpdate(): string | null {
+    const phase = this.deps.updates?.status().phase;
+    return phase?.kind === 'ready' ? phase.version : null;
+  }
+
+  private installUpdate(): void {
+    const outcome = this.deps.updates?.install();
+    if (outcome === 'restarting') {
+      return;
+    }
+    this.deps.logger.info('The update was not installed from the tray', { outcome });
   }
 
   private togglePause(): void {

@@ -8,6 +8,7 @@ directories:
 files:
   - out/**
   - '!out/main/fake-input-helper-*.js'
+  - '!out/main/fake-app-updater-*.js'
   - package.json
 extraResources:
   - from: resources/model-catalog.json
@@ -64,3 +65,4 @@ publish:
   owner: MatusMockor
   repo: codevo-whisper
   releaseType: draft
+  updaterCacheDirName: codevo-whisper-updater

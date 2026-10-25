@@ -13,6 +13,7 @@ const MODEL: TrayMenuModel = {
   microphone: { deviceId: null, label: null },
   language: 'sk',
   autoLanguageAllowed: true,
+  readyUpdate: null,
 };
 
 function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
@@ -26,6 +27,7 @@ function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
     openApp: () => calls.push('open-app'),
     openSettings: () => calls.push('open-settings'),
     quit: () => calls.push('quit'),
+    installUpdate: () => calls.push('install-update'),
   };
   return { actions, calls };
 }
@@ -143,5 +145,16 @@ describe('excerpt', () => {
   it('keeps short text and shortens long text with an ellipsis', () => {
     expect(excerpt('  krátky   text ')).toBe('krátky text');
     expect(excerpt('a'.repeat(60))).toHaveLength(48);
+  });
+});
+
+describe('trayMenuTemplate with a downloaded update', () => {
+  it('offers the restart into a downloaded update right after the status', () => {
+    const { actions, calls } = recordingActions();
+    const items = trayMenuTemplate({ ...MODEL, readyUpdate: '1.2.0' }, actions);
+
+    expect(labels(items).slice(0, 4)).toEqual(['Pripravené · Pravý ⌃ Control', 'Reštartovať a aktualizovať na 1.2.0', '---', 'Posledné diktovanie']);
+    click(item(items, 'Reštartovať a aktualizovať na 1.2.0'));
+    expect(calls).toEqual(['install-update']);
   });
 });

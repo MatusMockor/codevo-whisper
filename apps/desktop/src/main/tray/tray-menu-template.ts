@@ -10,6 +10,7 @@ export type TrayMenuModel = {
   microphone: MicrophoneSetting;
   language: Language;
   autoLanguageAllowed: boolean;
+  readyUpdate: string | null;
 };
 
 export type TrayMenuActions = {
@@ -21,6 +22,7 @@ export type TrayMenuActions = {
   openApp(): void;
   openSettings(): void;
   quit(): void;
+  installUpdate(): void;
 };
 
 const EXCERPT_LENGTH = 48;
@@ -103,9 +105,17 @@ function languageMenu(model: TrayMenuModel, actions: TrayMenuActions): MenuItemC
   };
 }
 
+function updateItems(model: TrayMenuModel, actions: TrayMenuActions): MenuItemConstructorOptions[] {
+  if (model.readyUpdate === null) {
+    return [];
+  }
+  return [{ label: `Reštartovať a aktualizovať na ${model.readyUpdate}`, click: () => actions.installUpdate() }];
+}
+
 export function trayMenuTemplate(model: TrayMenuModel, actions: TrayMenuActions): MenuItemConstructorOptions[] {
   return [
     { label: model.status, enabled: false },
+    ...updateItems(model, actions),
     SEPARATOR,
     ...lastTranscriptItems(model, actions),
     SEPARATOR,

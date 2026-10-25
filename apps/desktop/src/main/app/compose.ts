@@ -156,6 +156,7 @@ export function composeApplication(logger: Logger): Application {
       settings,
       lastTranscript,
       models: models.manager,
+      updates: updates.service,
       openApp: () => mainWindow.open(),
       openSettings: () => mainWindow.open('settings'),
       quit: () => app.quit(),
