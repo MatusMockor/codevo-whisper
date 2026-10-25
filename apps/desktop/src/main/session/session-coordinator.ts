@@ -154,7 +154,11 @@ export class SessionCoordinator {
   }
 
   private recordStats(text: string, pcm: Uint8Array): void {
-    this.deps.stats.record({ words: countWords(text), seconds: pcmDurationMs(pcm) / 1000 }).catch((error: unknown) => {
+    const words = countWords(text);
+    if (words === 0) {
+      return;
+    }
+    this.deps.stats.record({ words, seconds: pcmDurationMs(pcm) / 1000 }).catch((error: unknown) => {
       this.logger.error('The dictation statistics could not be saved', error);
     });
   }

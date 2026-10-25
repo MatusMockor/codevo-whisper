@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { join } from 'node:path';
 import type { InputHelper } from '../helper/input-helper';
+import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
 import type { ModelManager } from '../models/model-manager';
 import { electronMicrophoneAccess } from '../permissions/electron-microphone-access';
@@ -19,13 +20,14 @@ export type HomeWiringDeps = {
   helper: Pick<InputHelper, 'permissions'>;
   pause: PauseState;
   inputReady: Promise<void>;
+  lastTranscript: Pick<LastTranscript, 'onChange'>;
   window: MainWindowEvents;
   logger: Logger;
 };
 
 export type HomeServices = { stats: StatsStore; status: AppStatusService; dispose(): void };
 
-export function createHomeServices({ settings, models, helper, pause, inputReady, window, logger }: HomeWiringDeps): HomeServices {
+export function createHomeServices({ settings, models, helper, pause, inputReady, lastTranscript, window, logger }: HomeWiringDeps): HomeServices {
   const stats = new StatsStore(join(app.getPath('userData'), STATS_FILE), undefined, logger);
   const permissions = new PermissionsService(helper, electronMicrophoneAccess, logger, inputReady);
   const status = new AppStatusService({ settings, models, permissions, pause, logger });
@@ -33,6 +35,7 @@ export function createHomeServices({ settings, models, helper, pause, inputReady
   const unsubscribers = [
     stats.onChange((days) => window.send('stats-changed', days)),
     status.onChange((next) => window.send('status-changed', next)),
+    lastTranscript.onChange((text) => window.send('last-transcript-changed', text)),
     window.onFocus(() => status.refresh()),
   ];
   return {

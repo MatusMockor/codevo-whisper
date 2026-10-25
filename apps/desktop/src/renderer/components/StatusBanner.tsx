@@ -1,14 +1,25 @@
 import type { AppStatus } from '../../shared/app-status';
 import { bannerContent } from '../home/banner-content';
+import type { Live } from '../home/live-value';
 import { CheckIcon, PauseIcon, WarnIcon } from './Icons';
 
-type StatusBannerProps = { status: AppStatus | null; onOpenSettings: () => void };
+type StatusBannerProps = { status: Live<AppStatus>; onOpenSettings: () => void };
 
 export function StatusBanner({ status, onOpenSettings }: StatusBannerProps) {
-  if (status === null) {
+  if (status.kind === 'loading') {
     return null;
   }
-  const content = bannerContent(status);
+  if (status.kind === 'failed') {
+    return (
+      <div className="banner" role="status">
+        <span className="orb warn">
+          <WarnIcon />
+        </span>
+        <span>Stav aplikácie sa nepodarilo zistiť.</span>
+      </div>
+    );
+  }
+  const content = bannerContent(status.value);
   if (content.kind === 'ready') {
     return (
       <div className="banner" role="status">

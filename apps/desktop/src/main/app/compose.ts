@@ -8,8 +8,8 @@ import { HotkeyService } from '../hotkey/hotkey-service';
 import { InsertionService } from '../insertion/insertion-service';
 import { LastTranscript } from '../insertion/last-transcript';
 import { registerIpc } from '../ipc/register-ipc';
-import { isTrustedSenderUrl } from '../ipc/trusted-sender';
 import type { Logger } from '../logging/logger';
+import { appFrameCheck } from '../security/app-frame';
 import { installContentSecurityPolicy } from '../security/content-security-policy';
 import { installPermissionHandlers } from '../security/permissions';
 import { PauseState } from '../session/pause-state';
@@ -35,11 +35,11 @@ export type Application = {
   dispose(): void;
 };
 
-function installSecurity(captureWindow: CaptureWindow): void {
+function installSecurity(captureWindow: CaptureWindow, mainWindow: MainWindowController): void {
   const source = rendererSource();
   installPermissionHandlers(session.defaultSession, {
     isCaptureFrame: (contents, url) => captureWindow.isCaptureFrame(contents, url),
-    isAppFrame: (contents, url) => isTrustedSenderUrl(url, source) && !captureWindow.isCaptureFrame(contents, url),
+    isAppFrame: appFrameCheck(source, (contents) => mainWindow.ownsContents(contents)),
   });
   if (source.kind !== 'file') {
     return;
@@ -51,18 +51,18 @@ export function composeApplication(logger: Logger): Application {
   const helper = createInputHelper(logger);
   const captureWindow = new CaptureWindow(rendererSource('capture'), logger);
   const capture = new WindowAudioCapture(captureWindow, logger);
-  const lastTranscript = new LastTranscript();
+  const lastTranscript = new LastTranscript(logger);
   const mainWindow = new MainWindowController(logger);
   const disposers: Array<() => void> = [];
 
   async function initialize(): Promise<void> {
-    installSecurity(captureWindow);
+    installSecurity(captureWindow, mainWindow);
     const settings = new SettingsStore(join(app.getPath('userData'), SETTINGS_FILE), logger);
     await settings.load();
     const models = createModels(settings, logger);
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();
-    const home = createHomeServices({ settings, models: models.manager, helper, pause, inputReady: input.promise, window: mainWindow, logger });
+    const home = createHomeServices({ settings, models: models.manager, helper, pause, inputReady: input.promise, lastTranscript, window: mainWindow, logger });
     registerIpc({ settings, stats: home.stats, status: home.status, lastTranscript, source: rendererSource() });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);

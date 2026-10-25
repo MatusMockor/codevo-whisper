@@ -17,6 +17,7 @@ export type IpcEvents = {
   'open-page': PageId;
   'stats-changed': DayStats[];
   'status-changed': AppStatus;
+  'last-transcript-changed': string | null;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -41,4 +42,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'open-page': 'window:open-page',
   'stats-changed': 'stats:changed',
   'status-changed': 'status:changed',
+  'last-transcript-changed': 'last-transcript:changed',
 });

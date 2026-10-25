@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { addDays, localDate, weekStart } from '../src/shared/calendar-date';
@@ -101,6 +101,12 @@ test('tiles show values from seeded stats and switch periods', async () => {
   await expect(stat(join(userDataDir, 'stats.json'))).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
+function setLastTranscript(text: string): Promise<void> {
+  return app.evaluate((_electron, value) => {
+    (globalThis as unknown as HookGlobal).codevoE2e.lastTranscript.set(value);
+  }, text);
+}
+
 test('copy writes the clipboard and the last transcript is empty after relaunch', async () => {
   await start();
   const card = page.locator('.last');
@@ -109,19 +115,65 @@ test('copy writes the clipboard and the last transcript is empty after relaunch'
   await expect(card).toContainText('Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.');
   const previousClipboard = await app.evaluate(({ clipboard }) => clipboard.readText());
 
-  await app.evaluate((_electron, text) => {
-    (globalThis as unknown as HookGlobal).codevoE2e.lastTranscript.set(text);
-  }, TRANSCRIPT);
-  await page.reload();
-  await expect(card).toContainText(TRANSCRIPT);
-  await card.getByRole('button', { name: 'Kopírovať' }).click();
+  try {
+    await setLastTranscript(TRANSCRIPT);
+    await expect(card).toContainText(TRANSCRIPT);
+    await card.getByRole('button', { name: 'Kopírovať' }).click();
 
-  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(TRANSCRIPT);
-  await expect(card.getByRole('button', { name: 'Skopírované' })).toBeVisible();
-  await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(TRANSCRIPT);
+    await expect(card.getByRole('button', { name: 'Skopírované' })).toBeVisible();
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+  }
 
   await app.close();
   await start();
   await expect(page.locator('.last')).toContainText('Zatiaľ nemáte žiadny prepis.');
   expect(await page.evaluate(() => window.codevo.getLastTranscript())).toBeNull();
+});
+
+test('the last transcript card updates even when the statistics cannot be saved', async () => {
+  await mkdir(join(userDataDir, 'stats.json'));
+  await start();
+  await expect(page.locator('.last')).toContainText('Zatiaľ nemáte žiadny prepis.');
+
+  await setLastTranscript(TRANSCRIPT);
+
+  await expect(page.locator('.last')).toContainText(TRANSCRIPT);
+});
+
+test('shows a fallback and logs when the statistics cannot be loaded', async () => {
+  await start();
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      errors.push(message.text());
+    }
+  });
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('stats:get');
+    ipcMain.handle('stats:get', () => Promise.reject(new Error('stats unavailable')));
+  });
+
+  await page.reload();
+
+  await expect(page.getByRole('alert')).toHaveText('Štatistiky sa nepodarilo načítať.');
+  await expect(tile('Nadiktované slová')).toHaveText('0');
+  await expect.poll(() => errors.some((text) => text.includes('stats unavailable'))).toBe(true);
+});
+
+test('Dnes moves to the new day at local midnight while the window stays open', async () => {
+  const days: DayStats[] = [{ date: '2026-10-25', words: 120, dictations: 4, seconds: 60 }];
+  await writeFile(join(userDataDir, 'stats.json'), JSON.stringify({ version: 1, days }));
+  await start();
+  await page.clock.install({ time: new Date('2026-10-25T23:59:50') });
+  await page.reload();
+  await expect(tile('Nadiktované slová')).toHaveText('120');
+  await expect(page.locator('.week .day.now')).toHaveText('Ne');
+
+  await page.clock.runFor(20_000);
+
+  await expect(tile('Nadiktované slová')).toHaveText('0');
+  await expect(page.locator('.week .day.now')).toHaveText('Po');
+  await expect(tile('Séria')).toHaveText('1deň po sebe');
 });

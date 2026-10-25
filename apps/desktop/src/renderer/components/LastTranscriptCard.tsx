@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Live } from '../home/live-value';
 import { CheckIcon, CopyIcon, LockIcon } from './Icons';
 
 const COPIED_MS = 1400;
@@ -25,8 +26,20 @@ function CopyLabel({ state }: { state: CopyState }) {
   );
 }
 
-export function LastTranscriptCard({ text }: { text: string | null }) {
+function transcriptText(transcript: Live<string | null>): string | null {
+  return transcript.kind === 'ready' ? transcript.value : null;
+}
+
+function placeholder(transcript: Live<string | null>): string {
+  if (transcript.kind === 'failed') {
+    return 'Posledné diktovanie sa nepodarilo načítať.';
+  }
+  return 'Zatiaľ nemáte žiadny prepis.';
+}
+
+export function LastTranscriptCard({ transcript }: { transcript: Live<string | null> }) {
   const [copy, setCopy] = useState<CopyState>('idle');
+  const text = transcriptText(transcript);
 
   useEffect(() => {
     if (copy === 'idle') {
@@ -54,7 +67,7 @@ export function LastTranscriptCard({ text }: { text: string | null }) {
           <CopyLabel state={copy} />
         </button>
       </div>
-      <p className={text === null ? 'empty' : undefined}>{text ?? 'Zatiaľ nemáte žiadny prepis.'}</p>
+      <p className={text === null ? 'empty' : undefined}>{text ?? placeholder(transcript)}</p>
       <p className="note">
         <LockIcon />
         Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.

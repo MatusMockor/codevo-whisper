@@ -368,6 +368,32 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.stats.days()).toEqual([{ date: today, words: 2, dictations: 2, seconds: 2 }]);
   });
 
+  it('does not record punctuation-only text as a dictation', async () => {
+    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    vi.stubEnv('FAKE_CLI_TEXT', '- …');
+    const harness = await prepared();
+
+    await dictate(harness, 2);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['- …']);
+    expect(harness.lastTranscript.get()).toBe('- …');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it('keeps the last transcript and inserts when the statistics cannot be saved', async () => {
+    await mkdir(join(scratch, 'stats.json'));
+    const harness = await prepared();
+    const announced: string[] = [];
+    harness.lastTranscript.onChange((text) => announced.push(text));
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(announced).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.logger.errors.map((entry) => entry.message)).toContain('The dictation statistics could not be saved');
+  });
+
   it('pausing and resuming updates the shared pause state', async () => {
     const harness = await prepared();
     const changes: boolean[] = [];

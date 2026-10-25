@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron';
+import { app, type BrowserWindow, type WebContents } from 'electron';
 import { EVENT_CHANNELS, type IpcEventName, type IpcEvents } from '../../shared/ipc-contract';
 import type { PageId } from '../../shared/pages';
 import { Listeners } from '../helper/listeners';
@@ -34,6 +34,10 @@ export class MainWindowController implements MainWindowEvents {
       return;
     }
     window.webContents.send(EVENT_CHANNELS['open-page'], page);
+  }
+
+  ownsContents(contents: WebContents): boolean {
+    return this.isOpen() && this.window?.webContents === contents;
   }
 
   send<E extends IpcEventName>(event: E, payload: IpcEvents[E]): void {
