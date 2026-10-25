@@ -59,6 +59,25 @@ describe('AdaptiveVad', () => {
     expect(unvoicedRuns(runVad(loadFixture('speech-continuous')), 200)).toEqual([]);
   });
 
+  it('digital silence before the speech does not change the decisions on the speech', () => {
+    const noisy = addWhiteNoise(loadFixture('speech-pauses'), 150, 7);
+    const plain = runVad(noisy).map((frame) => frame.voiced);
+    const prefixed = runVad(concatSamples(silence(2000), noisy))
+      .slice(100)
+      .map((frame) => frame.voiced);
+
+    expect(prefixed).toEqual(plain);
+  });
+
+  it('adapts to a noise step and finds the pauses after it', () => {
+    const speech = loadFixture('speech-pauses');
+    const stepped = concatSamples(speech.subarray(0, 48000), addWhiteNoise(speech.subarray(48000), 1000, 5));
+    const runs = unvoicedRuns(runVad(stepped), 200);
+
+    expect(covers(runs, 6950)).toBe(true);
+    expect(covers(runs, 10250)).toBe(true);
+  });
+
   it('accepts 30 ms frames', () => {
     const vad = new AdaptiveVad({ frameMs: 30 });
     expect(vad.process(tone(90, 4000)).map((frame) => frame.endSample)).toEqual([480, 960, 1440]);

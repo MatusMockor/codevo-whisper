@@ -4,6 +4,8 @@ import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 import { SegmentFailedError, SessionCancelledError } from '../../src/session/session-errors';
 import { ControllableTranscriber, flush } from '../support/controllable-transcriber';
 import { concatSamples, loadFixture, toBytes } from '../support/fixtures';
+import { addWhiteNoise, silence } from '../support/signals';
+import { TimelineTranscriber } from '../support/timeline-transcriber';
 import { ImmediateTranscriber } from '../support/immediate-transcriber';
 import { feed, harness } from '../support/session-harness';
 
@@ -227,6 +229,58 @@ describe('RollingSession', () => {
 
     expect(engine.jobs.length).toBeGreaterThan(1);
     expect(engine.jobs.every((job) => job.context.language === 'en' && job.context.model === 'canary')).toBe(true);
+  });
+
+  it('a partial dropped while the previous one is in flight is retried on the next tick', async () => {
+    const engine = new ControllableTranscriber();
+    const { clock, open } = harness(engine);
+    const { session } = open('a', true);
+    const audio = concatSamples(speech.subarray(0, 32000), addWhiteNoise(silence(2500), 30, 3));
+
+    await feed(clock, [session], audio, 0, 32000);
+    expect(engine.calls).toHaveLength(1);
+    engine.call(0).resolve('prvý');
+    await feed(clock, [session], audio, 32000);
+
+    expect(engine.calls).toHaveLength(2);
+    session.cancel();
+  });
+
+  it('a listener error while skipping a silent segment does not escape push', async () => {
+    const { clock, open } = harness(new ImmediateTranscriber());
+    const listenerError = new Error('overlay crashed');
+    const { session } = open('a', false, {
+      onEvent: () => {
+        throw listenerError;
+      },
+    });
+
+    await expect(feed(clock, [session], addWhiteNoise(silence(22000), 30, 9))).resolves.toBeUndefined();
+    await expect(session.finish()).rejects.toMatchObject({ segmentId: 0, cause: listenerError });
+  });
+
+  it('a silence-only dictation longer than 20 s makes no engine call and resolves empty', async () => {
+    const engine = new ImmediateTranscriber();
+    const { clock, open } = harness(engine);
+    const { session, events } = open('a', true);
+
+    await feed(clock, [session], addWhiteNoise(silence(22000), 30, 9));
+
+    await expect(session.finish()).resolves.toBe('');
+    expect(engine.lengths).toEqual([]);
+    expect(events.every((event) => event.type === 'final' && event.text === '')).toBe(true);
+  });
+
+  it('a dictation of exactly 25 s keeps every word and no job exceeds 25 s', async () => {
+    const audio = addWhiteNoise(long.subarray(0, 400000), 30, 17);
+    const engine = new TimelineTranscriber(audio, { truncateAtCut: true, fragmentAtStart: true });
+    const { clock, open } = harness(engine);
+    const { session, events } = open('a', false);
+
+    await feed(clock, [session], audio);
+
+    await expect(session.finish()).resolves.toBe(engine.expectedText(audio.length));
+    expect(events.map((event) => event.segmentId)).toEqual([0, 1]);
   });
 
   it('push after finish throws', async () => {

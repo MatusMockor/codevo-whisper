@@ -137,7 +137,14 @@ export class RollingSession<TContext = TranscriptionContext> {
   }
 
   private onPartial(segmentId: number, revision: number, leadInSamples: number, outcome: JobOutcome): void {
-    if (this.state === 'cancelled' || outcome.status !== 'done') {
+    if (this.state === 'cancelled') {
+      return;
+    }
+    if (outcome.status === 'dropped') {
+      this.voicedSinceRequest = true;
+      return;
+    }
+    if (outcome.status !== 'done') {
       return;
     }
     const event = this.assembler.acceptPartial(segmentId, revision, outcome.text, leadInSamples);
@@ -168,6 +175,16 @@ export class RollingSession<TContext = TranscriptionContext> {
   }
 
   private emit(events: TranscriptEvent[]): void {
-    events.forEach((event) => this.options.onEvent(event));
+    for (const event of events) {
+      this.deliver(event);
+    }
+  }
+
+  private deliver(event: TranscriptEvent): void {
+    try {
+      this.options.onEvent(event);
+    } catch (error) {
+      this.recordFailure(event.segmentId, error);
+    }
   }
 }

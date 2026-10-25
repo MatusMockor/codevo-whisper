@@ -12,6 +12,16 @@ describe('ServiceTimeEstimator', () => {
     expect(estimator.valueMs).toBe(540);
   });
 
+  it('clamps negative and huge samples from clock jumps', () => {
+    const negative = new ServiceTimeEstimator();
+    negative.record(-500);
+    const huge = new ServiceTimeEstimator();
+    huge.record(3_600_000);
+
+    expect(negative.valueMs).toBe(0);
+    expect(huge.valueMs).toBe(10_000);
+  });
+
   it('smooths with alpha 0.3', () => {
     const estimator = new ServiceTimeEstimator();
     estimator.record(1000);

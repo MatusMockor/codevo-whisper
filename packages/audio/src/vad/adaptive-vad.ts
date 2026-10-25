@@ -37,12 +37,19 @@ export class AdaptiveVad implements VoiceActivityDetector {
 
   private classify(samples: Int16Array, offset: number): VadFrame {
     const energyDb = frameEnergyDb(samples, offset, offset + this.frameSamples, this.config.silenceDb);
-    this.floor.push(energyDb);
-    this.peak.push(energyDb);
+    this.track(energyDb);
     this.voiced = energyDb >= this.threshold();
     const frame = { startSample: this.position, endSample: this.position + this.frameSamples, energyDb, voiced: this.voiced };
     this.position += this.frameSamples;
     return frame;
+  }
+
+  private track(energyDb: number): void {
+    if (energyDb <= this.config.silenceDb) {
+      return;
+    }
+    this.floor.push(energyDb);
+    this.peak.push(energyDb);
   }
 
   private threshold(): number {
