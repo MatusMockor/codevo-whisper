@@ -1,14 +1,16 @@
 import type { Clock } from '../clock';
 import type { PartialIntervalSource } from '../partials/partial-interval';
 import type { DeviceRegistry, JobSubmitter } from '../scheduling/job-outcome';
+import type { TranscriptionContext } from '../scheduling/transcription-job';
 import type { SegmentConfig } from '../segmentation/segment-config';
 import type { TranscriptEvent } from '../transcript/transcript-event';
 import type { VoiceActivityDetector } from '../vad/voice-activity-detector';
 
-export type RollingSessionOptions = {
+export type RollingSessionOptions<TContext = TranscriptionContext> = {
   deviceId: string;
   partials: boolean;
-  submitter: JobSubmitter;
+  context: TContext;
+  submitter: JobSubmitter<TContext>;
   registry: DeviceRegistry;
   interval: PartialIntervalSource;
   clock: Clock;

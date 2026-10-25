@@ -31,6 +31,7 @@ export function harness(transcriber: SegmentTranscriber): Harness {
         registry: dispatcher,
         interval: dispatcher.partialIntervalSource(),
         clock,
+        context: { language: 'sk' },
         onEvent: (event) => events.push(event),
         ...extra,
       });

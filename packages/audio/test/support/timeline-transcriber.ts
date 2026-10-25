@@ -1,5 +1,6 @@
 import { decodePcm16le } from '../../src/pcm/pcm-format';
 import type { SegmentTranscriber } from '../../src/scheduling/segment-transcriber';
+import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 
 const KEY_SAMPLES = 8;
 const LETTERS = 'bcdfghjklmnprstvzaeiou';
@@ -35,8 +36,8 @@ export class TimelineTranscriber implements SegmentTranscriber {
     }
   }
 
-  transcribe(pcm: Uint8Array): Promise<string> {
-    const samples = decodePcm16le(pcm);
+  transcribe(job: TranscriptionJob): Promise<string> {
+    const samples = decodePcm16le(job.pcm);
     const key = samples.subarray(0, KEY_SAMPLES).join(',');
     const offset = this.offsets.get(key);
     if (offset === undefined || this.ambiguous.has(key)) {

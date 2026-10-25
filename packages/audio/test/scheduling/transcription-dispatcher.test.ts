@@ -5,8 +5,8 @@ import type { JobKind, TranscriptionJob } from '../../src/scheduling/transcripti
 import { ControllableTranscriber, flush } from '../support/controllable-transcriber';
 import { ManualClock } from '../support/manual-clock';
 
-function job(deviceId: string, kind: JobKind, marker: number): TranscriptionJob {
-  return { deviceId, kind, segmentId: 0, revision: 1, pcm: new Uint8Array([marker]) };
+function job(deviceId: string, kind: JobKind, marker: number, sessionId = `${deviceId}-session`, language = 'sk'): TranscriptionJob {
+  return { sessionId, deviceId, kind, segmentId: 0, revision: 1, pcm: new Uint8Array([marker]), context: { language } };
 }
 
 function setup(): { dispatcher: TranscriptionDispatcher; engine: ControllableTranscriber; clock: ManualClock } {
@@ -76,13 +76,39 @@ describe('TranscriptionDispatcher', () => {
     await expect(outcome).resolves.toEqual({ status: 'failed', error });
   });
 
-  it('cancelDevice aborts the in-flight call and drops queued jobs', async () => {
+  it('passes the whole job with its context to the engine', async () => {
+    const { dispatcher, engine } = setup();
+    void dispatcher.submit(job('a', 'final', 1, 'a-session', 'sk'));
+    void dispatcher.submit(job('b', 'final', 2, 'b-session', 'en'));
+    engine.call(0).resolve('');
+    await flush();
+
+    expect(engine.calls.map((call) => [call.job.sessionId, call.job.context.language])).toEqual([
+      ['a-session', 'sk'],
+      ['b-session', 'en'],
+    ]);
+  });
+
+  it('cancelSession aborts only that session on a shared device', async () => {
+    const { dispatcher, engine } = setup();
+    const first = dispatcher.submit(job('local', 'final', 1, 'first'));
+    const second = dispatcher.submit(job('local', 'final', 2, 'second'));
+
+    dispatcher.cancelSession('second');
+
+    expect(engine.call(0).signal.aborted).toBe(false);
+    await expect(second).resolves.toEqual({ status: 'dropped', reason: 'cancelled' });
+    engine.call(0).resolve('prvá');
+    await expect(first).resolves.toEqual({ status: 'done', text: 'prvá' });
+  });
+
+  it('cancelSession aborts the in-flight call and drops queued jobs', async () => {
     const { dispatcher, engine } = setup();
     const running = dispatcher.submit(job('a', 'final', 1));
     const queued = dispatcher.submit(job('a', 'final', 2));
     const other = dispatcher.submit(job('b', 'final', 3));
 
-    dispatcher.cancelDevice('a');
+    dispatcher.cancelSession('a-session');
 
     expect(engine.call(0).signal.aborted).toBe(true);
     await expect(running).resolves.toEqual({ status: 'dropped', reason: 'cancelled' });
@@ -99,12 +125,26 @@ describe('TranscriptionDispatcher', () => {
     dispatcher.attach('a', true);
     expect(interval.partialIntervalMs()).toBe(1000);
 
-    dispatcher.attach('b', true);
+    const b = dispatcher.attach('b', true);
     dispatcher.attach('c', false);
     expect(interval.partialIntervalMs()).toBe(2000);
 
-    dispatcher.detach('b');
+    dispatcher.detach(b);
     expect(interval.partialIntervalMs()).toBe(1000);
+  });
+
+  it('counts a device once however many sessions it has and returns distinct session ids', () => {
+    const { dispatcher } = setup();
+    const first = dispatcher.attach('local', true);
+    const second = dispatcher.attach('local', true);
+    dispatcher.attach('remote', true);
+
+    expect(first).not.toBe(second);
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(2000);
+    dispatcher.detach(first);
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(2000);
+    dispatcher.detach(second);
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(1000);
   });
 
   it('service time feeds the interval', async () => {

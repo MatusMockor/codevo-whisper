@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { JobOutcome, JobSubmitter } from '../../src/scheduling/job-outcome';
+import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 import { SegmentFailedError, SessionCancelledError } from '../../src/session/session-errors';
 import { ControllableTranscriber, flush } from '../support/controllable-transcriber';
 import { concatSamples, loadFixture, toBytes } from '../support/fixtures';
@@ -176,6 +178,55 @@ describe('RollingSession', () => {
 
     expect(error).toBeInstanceOf(SegmentFailedError);
     expect(error).toMatchObject({ segmentId: 0, cause: listenerError });
+  });
+
+  it('two overlapping sessions on one device id stay independent', async () => {
+    const engine = new ControllableTranscriber();
+    const { clock, dispatcher, open } = harness(engine);
+    const first = open('local', true);
+    await feed(clock, [first.session], speech, 0, 8000);
+    const firstDone = first.session.finish();
+    const second = open('local', true);
+    dispatcher.attach('remote', true);
+    await feed(clock, [second.session], speech, 0, 8000);
+
+    second.session.cancel();
+    expect(engine.call(0).signal.aborted).toBe(false);
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(2000);
+    engine.call(0).resolve('prvé diktovanie');
+
+    await expect(firstDone).resolves.toBe('prvé diktovanie');
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(1000);
+    const third = open('local', true);
+    expect(dispatcher.partialIntervalSource().partialIntervalMs()).toBe(2000);
+    third.session.cancel();
+  });
+
+  it('a final dropped without the session cancelling becomes SegmentFailedError', async () => {
+    const engine = new ImmediateTranscriber();
+    const { clock, dispatcher, open } = harness(engine);
+    const dropping: JobSubmitter = {
+      submit: (job: TranscriptionJob): Promise<JobOutcome> =>
+        job.kind === 'final' ? Promise.resolve({ status: 'dropped', reason: 'cancelled' }) : dispatcher.submit(job),
+      cancelSession: (sessionId) => dispatcher.cancelSession(sessionId),
+    };
+    const { session } = open('a', false, { submitter: dropping });
+    await feed(clock, [session], speech, 0, 16000);
+
+    const error: unknown = await session.finish().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SegmentFailedError);
+    expect(error).toMatchObject({ segmentId: 0, textSoFar: '' });
+  });
+
+  it('sends the session context with every job', async () => {
+    const engine = new ImmediateTranscriber();
+    const { clock, open } = harness(engine);
+    const { session } = open('a', true, { context: { language: 'en', model: 'canary' } });
+    await feed(clock, [session], speech, 0, 32000);
+    await session.finish();
+
+    expect(engine.jobs.length).toBeGreaterThan(1);
+    expect(engine.jobs.every((job) => job.context.language === 'en' && job.context.model === 'canary')).toBe(true);
   });
 
   it('push after finish throws', async () => {

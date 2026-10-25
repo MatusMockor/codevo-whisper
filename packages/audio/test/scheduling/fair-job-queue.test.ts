@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { FairJobQueue } from '../../src/scheduling/fair-job-queue';
 import type { JobKind, TranscriptionJob } from '../../src/scheduling/transcription-job';
 
@@ -6,18 +6,26 @@ type Entry = { job: TranscriptionJob; name: string };
 
 let counter = 0;
 
-function entry(deviceId: string, kind: JobKind, segmentId = 0): Entry {
+function entry(deviceId: string, kind: JobKind, sessionId = `${deviceId}-session`): Entry {
   counter += 1;
-  return { job: { deviceId, kind, segmentId, revision: counter, pcm: new Uint8Array(0) }, name: `${deviceId}:${kind}:${counter}` };
+  return {
+    job: { sessionId, deviceId, kind, segmentId: 0, revision: counter, pcm: new Uint8Array(0), context: { language: 'sk' } },
+    name: `${sessionId}:${kind}:${counter}`,
+  };
+}
+
+function takeDefined(queue: FairJobQueue<Entry>): Entry {
+  const next = queue.take();
+  assert.isDefined(next);
+  return next;
 }
 
 function drain(queue: FairJobQueue<Entry>): Entry[] {
   const served: Entry[] = [];
-  let next = queue.take();
-  while (next !== undefined) {
+  while (queue.size > 0) {
+    const next = takeDefined(queue);
     served.push(next);
     queue.complete(next);
-    next = queue.take();
   }
   return served;
 }
@@ -35,7 +43,7 @@ describe('FairJobQueue', () => {
 
   it('keeps finals of one device in order', () => {
     const queue = new FairJobQueue<Entry>();
-    const finals = [entry('a', 'final', 0), entry('a', 'final', 1), entry('a', 'final', 2)];
+    const finals = [entry('a', 'final'), entry('a', 'final'), entry('a', 'final')];
     finals.forEach((final) => queue.offer(final));
 
     expect(drain(queue)).toEqual(finals);
@@ -43,9 +51,9 @@ describe('FairJobQueue', () => {
 
   it('serves finals round-robin across devices', () => {
     const queue = new FairJobQueue<Entry>();
-    const a0 = entry('a', 'final', 0);
-    const a1 = entry('a', 'final', 1);
-    const b0 = entry('b', 'final', 0);
+    const a0 = entry('a', 'final');
+    const a1 = entry('a', 'final');
+    const b0 = entry('b', 'final');
     [a0, a1, b0].forEach((final) => queue.offer(final));
 
     expect(drain(queue)).toEqual([a0, b0, a1]);
@@ -56,11 +64,7 @@ describe('FairJobQueue', () => {
     const served: string[] = [];
     ['a', 'b', 'c'].forEach((device) => queue.offer(entry(device, 'partial')));
     for (let round = 0; round < 6; round += 1) {
-      const next = queue.take();
-      expect(next).toBeDefined();
-      if (next === undefined) {
-        return;
-      }
+      const next = takeDefined(queue);
       served.push(next.job.deviceId);
       queue.complete(next);
       queue.offer(entry(next.job.deviceId, 'partial'));
@@ -69,7 +73,7 @@ describe('FairJobQueue', () => {
     expect(served).toEqual(['a', 'b', 'c', 'a', 'b', 'c']);
   });
 
-  it('rejects a partial while the device partial is running', () => {
+  it('rejects a partial while the session partial is running', () => {
     const queue = new FairJobQueue<Entry>();
     queue.offer(entry('a', 'partial'));
     queue.take();
@@ -79,7 +83,7 @@ describe('FairJobQueue', () => {
     expect(queue.size).toBe(0);
   });
 
-  it('rejects a partial while the device is finalizing', () => {
+  it('rejects a partial while the session is finalizing', () => {
     const queue = new FairJobQueue<Entry>();
     queue.offer(entry('a', 'final'));
     const queuedFinal = entry('a', 'partial');
@@ -88,6 +92,15 @@ describe('FairJobQueue', () => {
     queue.take();
     const runningFinal = entry('a', 'partial');
     expect(queue.offer(runningFinal)).toEqual([{ entry: runningFinal, reason: 'finalizing' }]);
+  });
+
+  it('a finishing session does not block partials of a newer session on the same device', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('local', 'final', 'first'));
+    queue.take();
+    const partial = entry('local', 'partial', 'second');
+
+    expect(queue.offer(partial)).toEqual([]);
   });
 
   it('replaces a pending partial with a newer one', () => {
@@ -100,7 +113,7 @@ describe('FairJobQueue', () => {
     expect(drain(queue)).toEqual([newer]);
   });
 
-  it('a final supersedes the pending partial of the same device', () => {
+  it('a final supersedes the pending partial of the same session', () => {
     const queue = new FairJobQueue<Entry>();
     const partial = entry('a', 'partial');
     const final = entry('a', 'final');
@@ -120,7 +133,7 @@ describe('FairJobQueue', () => {
     expect(drain(queue)).toEqual([final, partial]);
   });
 
-  it('accepts partials again after the device final completed', () => {
+  it('accepts partials again after the session final completed', () => {
     const queue = new FairJobQueue<Entry>();
     queue.offer(entry('a', 'final'));
     drain(queue);
@@ -128,30 +141,27 @@ describe('FairJobQueue', () => {
     expect(queue.offer(entry('a', 'partial'))).toEqual([]);
   });
 
-  it('completing a job of a removed device does not touch the new lane of that device', () => {
+  it('removeSession cancels only the jobs of that session', () => {
     const queue = new FairJobQueue<Entry>();
-    queue.offer(entry('a', 'final'));
-    const old = queue.take();
-    queue.removeDevice('a');
-    queue.offer(entry('a', 'final'));
-    queue.take();
-    if (old !== undefined) {
-      queue.complete(old);
-    }
-    const partial = entry('a', 'partial');
+    const cancelled = entry('local', 'final', 'first');
+    const kept = entry('local', 'final', 'second');
+    const other = entry('b', 'partial');
+    [cancelled, kept, other].forEach((job) => queue.offer(job));
 
-    expect(old).toBeDefined();
-    expect(queue.offer(partial)).toEqual([{ entry: partial, reason: 'finalizing' }]);
+    expect(queue.removeSession('first')).toEqual([{ entry: cancelled, reason: 'cancelled' }]);
+    expect(drain(queue)).toEqual([kept, other]);
   });
 
-  it('removeDevice cancels queued jobs and keeps other devices', () => {
+  it('completing a job of a removed session does not change another session', () => {
     const queue = new FairJobQueue<Entry>();
-    const final = entry('a', 'final');
-    const other = entry('b', 'partial');
-    queue.offer(final);
-    queue.offer(other);
+    queue.offer(entry('local', 'final', 'first'));
+    const old = takeDefined(queue);
+    queue.removeSession('first');
+    queue.offer(entry('local', 'final', 'second'));
+    takeDefined(queue);
+    queue.complete(old);
+    const partial = entry('local', 'partial', 'second');
 
-    expect(queue.removeDevice('a')).toEqual([{ entry: final, reason: 'cancelled' }]);
-    expect(drain(queue)).toEqual([other]);
+    expect(queue.offer(partial)).toEqual([{ entry: partial, reason: 'finalizing' }]);
   });
 });

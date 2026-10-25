@@ -1,3 +1,5 @@
-export interface SegmentTranscriber {
-  transcribe(pcm: Uint8Array, signal: AbortSignal): Promise<string>;
+import type { TranscriptionContext, TranscriptionJob } from './transcription-job';
+
+export interface SegmentTranscriber<TContext = TranscriptionContext> {
+  transcribe(job: TranscriptionJob<TContext>, signal: AbortSignal): Promise<string>;
 }

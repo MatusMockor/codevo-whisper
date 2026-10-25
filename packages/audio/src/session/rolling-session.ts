@@ -2,6 +2,7 @@ import { PartialGate } from '../partials/partial-gate';
 import { PcmBuffer } from '../pcm/pcm-buffer';
 import { samplesToMs } from '../pcm/pcm-format';
 import type { JobOutcome } from '../scheduling/job-outcome';
+import type { JobKind, TranscriptionContext, TranscriptionJob } from '../scheduling/transcription-job';
 import type { Segment } from '../segmentation/segment';
 import { Segmenter } from '../segmentation/segmenter';
 import { TranscriptAssembler } from '../transcript/transcript-assembler';
@@ -15,24 +16,25 @@ import { SegmentFailedError, SessionCancelledError } from './session-errors';
 type SessionState = 'recording' | 'finishing' | 'done' | 'cancelled';
 type Failure = { segmentId: number; error: unknown };
 
-export class RollingSession {
+export class RollingSession<TContext = TranscriptionContext> {
   private readonly buffer = new PcmBuffer();
   private readonly vad: VoiceActivityDetector;
   private readonly segmenter: Segmenter;
   private readonly assembler: TranscriptAssembler;
   private readonly gate: PartialGate;
+  private readonly sessionId: string;
   private readonly finals: Promise<void>[] = [];
   private state: SessionState = 'recording';
   private voicedSinceRequest = false;
   private failure: Failure | undefined;
   private rejectFinish: ((error: Error) => void) | undefined;
 
-  constructor(private readonly options: RollingSessionOptions) {
+  constructor(private readonly options: RollingSessionOptions<TContext>) {
     this.vad = options.vad ?? new AdaptiveVad();
     this.segmenter = new Segmenter(options.segment);
     this.assembler = new TranscriptAssembler(options.msPerOverlapWord ?? DEFAULT_MS_PER_OVERLAP_WORD);
     this.gate = new PartialGate(options.clock.now(), options.minPartialTailMs ?? DEFAULT_MIN_PARTIAL_TAIL_MS);
-    options.registry.attach(options.deviceId, options.partials);
+    this.sessionId = options.registry.attach(options.deviceId, options.partials);
   }
 
   push(pcm: Uint8Array): void {
@@ -65,8 +67,8 @@ export class RollingSession {
       return;
     }
     this.state = 'cancelled';
-    this.options.submitter.cancelDevice(this.options.deviceId);
-    this.options.registry.detach(this.options.deviceId);
+    this.options.submitter.cancelSession(this.sessionId);
+    this.options.registry.detach(this.sessionId);
     this.rejectFinish?.(new SessionCancelledError());
   }
 
@@ -87,10 +89,9 @@ export class RollingSession {
     }
     const pcm = this.buffer.slice(segment.startSample, segment.endSample);
     this.buffer.discardBefore(this.segmenter.openStartSample);
-    const job = { deviceId: this.options.deviceId, kind: 'final' as const, segmentId: segment.id, revision, pcm };
     this.finals.push(
       this.options.submitter
-        .submit(job)
+        .submit(this.job('final', segment.id, revision, pcm))
         .then((outcome) => this.onFinal(segment.id, outcome))
         .catch((error: unknown) => this.recordFailure(segment.id, error)),
     );
@@ -106,6 +107,9 @@ export class RollingSession {
     }
     if (outcome.status === 'failed') {
       this.recordFailure(segmentId, outcome.error);
+    }
+    if (outcome.status === 'dropped') {
+      this.recordFailure(segmentId, new Error(`Final of segment ${segmentId} was dropped: ${outcome.reason}`));
     }
     this.emit(this.assembler.skipFinal(segmentId));
   }
@@ -127,7 +131,7 @@ export class RollingSession {
     const revision = this.assembler.nextPartialRevision(segmentId);
     const pcm = this.buffer.slice(start, this.buffer.endSample);
     void this.options.submitter
-      .submit({ deviceId: this.options.deviceId, kind: 'partial', segmentId, revision, pcm })
+      .submit(this.job('partial', segmentId, revision, pcm))
       .then((outcome) => this.onPartial(segmentId, revision, leadInSamples, outcome))
       .catch((error: unknown) => this.recordFailure(segmentId, error));
   }
@@ -151,12 +155,16 @@ export class RollingSession {
       return;
     }
     this.state = 'done';
-    this.options.registry.detach(this.options.deviceId);
+    this.options.registry.detach(this.sessionId);
     if (this.failure !== undefined) {
       reject(new SegmentFailedError(this.failure.segmentId, this.assembler.text(), { cause: this.failure.error }));
       return;
     }
     resolve(this.assembler.text());
+  }
+
+  private job(kind: JobKind, segmentId: number, revision: number, pcm: Uint8Array): TranscriptionJob<TContext> {
+    return { sessionId: this.sessionId, deviceId: this.options.deviceId, kind, segmentId, revision, pcm, context: this.options.context };
   }
 
   private emit(events: TranscriptEvent[]): void {

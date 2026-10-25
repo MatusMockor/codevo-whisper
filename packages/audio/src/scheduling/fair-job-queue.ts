@@ -1,29 +1,34 @@
 import { nextInRotation } from './round-robin';
-import type { Dropped, TranscriptionJob } from './transcription-job';
+import type { Dropped, QueueKey } from './transcription-job';
 
 type Lane<T> = {
   finals: T[];
-  partial: T | undefined;
-  runningPartials: number;
-  runningFinals: number;
+  partials: Map<string, T>;
 };
 
-export class FairJobQueue<T extends { job: TranscriptionJob }> {
+type SessionLoad = {
+  queuedFinals: number;
+  runningFinals: number;
+  runningPartials: number;
+};
+
+export class FairJobQueue<T extends { job: QueueKey }> {
   private readonly lanes = new Map<string, Lane<T>>();
-  private readonly runningIn = new Map<T, Lane<T>>();
+  private readonly sessions = new Map<string, SessionLoad>();
   private lastFinalDevice: string | undefined;
   private lastPartialDevice: string | undefined;
 
   get size(): number {
-    return [...this.lanes.values()].reduce((total, lane) => total + lane.finals.length + (lane.partial === undefined ? 0 : 1), 0);
+    return [...this.lanes.values()].reduce((total, lane) => total + lane.finals.length + lane.partials.size, 0);
   }
 
   offer(entry: T): Dropped<T>[] {
     const lane = this.lane(entry.job.deviceId);
+    const load = this.load(entry.job.sessionId);
     if (entry.job.kind === 'final') {
-      return this.offerFinal(lane, entry);
+      return this.offerFinal(lane, load, entry);
     }
-    return this.offerPartial(lane, entry);
+    return this.offerPartial(lane, load, entry);
   }
 
   take(): T | undefined {
@@ -31,71 +36,73 @@ export class FairJobQueue<T extends { job: TranscriptionJob }> {
   }
 
   complete(entry: T): void {
-    const lane = this.runningIn.get(entry);
-    this.runningIn.delete(entry);
-    if (lane === undefined) {
+    const load = this.sessions.get(entry.job.sessionId);
+    if (load === undefined) {
       return;
     }
     if (entry.job.kind === 'final') {
-      lane.runningFinals = Math.max(0, lane.runningFinals - 1);
+      load.runningFinals = Math.max(0, load.runningFinals - 1);
       return;
     }
-    lane.runningPartials = Math.max(0, lane.runningPartials - 1);
+    load.runningPartials = Math.max(0, load.runningPartials - 1);
   }
 
-  removeDevice(deviceId: string): Dropped<T>[] {
-    const lane = this.lanes.get(deviceId);
-    this.lanes.delete(deviceId);
-    if (lane === undefined) {
-      return [];
+  removeSession(sessionId: string): Dropped<T>[] {
+    this.sessions.delete(sessionId);
+    const dropped: T[] = [];
+    for (const lane of this.lanes.values()) {
+      dropped.push(...lane.finals.filter((entry) => entry.job.sessionId === sessionId));
+      lane.finals = lane.finals.filter((entry) => entry.job.sessionId !== sessionId);
+      const partial = lane.partials.get(sessionId);
+      lane.partials.delete(sessionId);
+      dropped.push(...(partial === undefined ? [] : [partial]));
     }
-    const queued = lane.partial === undefined ? lane.finals : [...lane.finals, lane.partial];
-    return queued.map((entry) => ({ entry, reason: 'cancelled' }));
+    return dropped.map((entry) => ({ entry, reason: 'cancelled' }));
   }
 
-  private offerFinal(lane: Lane<T>, entry: T): Dropped<T>[] {
+  private offerFinal(lane: Lane<T>, load: SessionLoad, entry: T): Dropped<T>[] {
     lane.finals.push(entry);
-    const superseded = lane.partial;
-    lane.partial = undefined;
+    load.queuedFinals += 1;
+    const superseded = lane.partials.get(entry.job.sessionId);
+    lane.partials.delete(entry.job.sessionId);
     return superseded === undefined ? [] : [{ entry: superseded, reason: 'superseded' }];
   }
 
-  private offerPartial(lane: Lane<T>, entry: T): Dropped<T>[] {
-    if (lane.finals.length > 0 || lane.runningFinals > 0) {
+  private offerPartial(lane: Lane<T>, load: SessionLoad, entry: T): Dropped<T>[] {
+    if (load.queuedFinals > 0 || load.runningFinals > 0) {
       return [{ entry, reason: 'finalizing' }];
     }
-    if (lane.runningPartials > 0) {
+    if (load.runningPartials > 0) {
       return [{ entry, reason: 'partial-in-flight' }];
     }
-    const replaced = lane.partial;
-    lane.partial = entry;
+    const replaced = lane.partials.get(entry.job.sessionId);
+    lane.partials.set(entry.job.sessionId, entry);
     return replaced === undefined ? [] : [{ entry: replaced, reason: 'replaced' }];
   }
 
   private takeFinal(): T | undefined {
     const deviceId = nextInRotation([...this.lanes.keys()], this.lastFinalDevice, (id) => (this.lanes.get(id)?.finals.length ?? 0) > 0);
-    const lane = deviceId === undefined ? undefined : this.lanes.get(deviceId);
-    const entry = lane?.finals.shift();
-    if (lane === undefined || entry === undefined) {
+    const entry = deviceId === undefined ? undefined : this.lanes.get(deviceId)?.finals.shift();
+    if (entry === undefined) {
       return undefined;
     }
     this.lastFinalDevice = deviceId;
-    lane.runningFinals += 1;
-    this.runningIn.set(entry, lane);
+    const load = this.load(entry.job.sessionId);
+    load.queuedFinals = Math.max(0, load.queuedFinals - 1);
+    load.runningFinals += 1;
     return entry;
   }
 
   private takePartial(): T | undefined {
-    const deviceId = nextInRotation([...this.lanes.keys()], this.lastPartialDevice, (id) => this.lanes.get(id)?.partial !== undefined);
+    const deviceId = nextInRotation([...this.lanes.keys()], this.lastPartialDevice, (id) => (this.lanes.get(id)?.partials.size ?? 0) > 0);
     const lane = deviceId === undefined ? undefined : this.lanes.get(deviceId);
-    const entry = lane?.partial;
+    const entry = lane?.partials.values().next().value;
     if (lane === undefined || entry === undefined) {
       return undefined;
     }
     this.lastPartialDevice = deviceId;
-    lane.partial = undefined;
-    lane.runningPartials += 1;
-    this.runningIn.set(entry, lane);
+    lane.partials.delete(entry.job.sessionId);
+    this.load(entry.job.sessionId).runningPartials += 1;
     return entry;
   }
 
@@ -104,8 +111,18 @@ export class FairJobQueue<T extends { job: TranscriptionJob }> {
     if (existing !== undefined) {
       return existing;
     }
-    const created: Lane<T> = { finals: [], partial: undefined, runningPartials: 0, runningFinals: 0 };
+    const created: Lane<T> = { finals: [], partials: new Map() };
     this.lanes.set(deviceId, created);
+    return created;
+  }
+
+  private load(sessionId: string): SessionLoad {
+    const existing = this.sessions.get(sessionId);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const created = { queuedFinals: 0, runningFinals: 0, runningPartials: 0 };
+    this.sessions.set(sessionId, created);
     return created;
   }
 }

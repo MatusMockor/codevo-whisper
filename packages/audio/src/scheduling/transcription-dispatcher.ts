@@ -5,57 +5,63 @@ import { ServiceTimeEstimator } from '../partials/service-time-estimator';
 import { FairJobQueue } from './fair-job-queue';
 import type { DeviceRegistry, JobOutcome, JobSubmitter } from './job-outcome';
 import type { SegmentTranscriber } from './segment-transcriber';
-import type { Dropped, TranscriptionJob } from './transcription-job';
+import type { Dropped, TranscriptionContext, TranscriptionJob } from './transcription-job';
 
-type Entry = {
-  job: TranscriptionJob;
+type Entry<TContext> = {
+  job: TranscriptionJob<TContext>;
   resolve: (outcome: JobOutcome) => void;
   controller: AbortController;
 };
 
-export type TranscriptionDispatcherDeps = {
-  transcriber: SegmentTranscriber;
+type SessionRegistration = { deviceId: string; partials: boolean };
+
+export type TranscriptionDispatcherDeps<TContext> = {
+  transcriber: SegmentTranscriber<TContext>;
   clock: Clock;
   partials?: Partial<PartialConfig>;
 };
 
 const CANCELLED: JobOutcome = { status: 'dropped', reason: 'cancelled' };
 
-export class TranscriptionDispatcher implements JobSubmitter, DeviceRegistry {
-  private readonly queue = new FairJobQueue<Entry>();
-  private readonly running = new Set<Entry>();
-  private readonly devices = new Map<string, boolean>();
+export class TranscriptionDispatcher<TContext = TranscriptionContext> implements JobSubmitter<TContext>, DeviceRegistry {
+  private readonly queue = new FairJobQueue<Entry<TContext>>();
+  private readonly running = new Set<Entry<TContext>>();
+  private readonly sessions = new Map<string, SessionRegistration>();
+  private sessionCounter = 0;
   private readonly serviceTime = new ServiceTimeEstimator();
   private readonly config: PartialConfig;
   private idleWaiters: (() => void)[] = [];
   private pumping = false;
 
-  constructor(private readonly deps: TranscriptionDispatcherDeps) {
+  constructor(private readonly deps: TranscriptionDispatcherDeps<TContext>) {
     this.config = validatePartialConfig({ ...DEFAULT_PARTIAL_CONFIG, ...deps.partials });
   }
 
-  submit(job: TranscriptionJob): Promise<JobOutcome> {
+  submit(job: TranscriptionJob<TContext>): Promise<JobOutcome> {
     return new Promise<JobOutcome>((resolve) => {
       this.settleDropped(this.queue.offer({ job, resolve, controller: new AbortController() }));
       void this.pump();
     });
   }
 
-  cancelDevice(deviceId: string): void {
-    this.settleDropped(this.queue.removeDevice(deviceId));
+  cancelSession(sessionId: string): void {
+    this.settleDropped(this.queue.removeSession(sessionId));
     for (const entry of this.running) {
-      if (entry.job.deviceId === deviceId) {
+      if (entry.job.sessionId === sessionId) {
         entry.controller.abort();
       }
     }
   }
 
-  attach(deviceId: string, partials: boolean): void {
-    this.devices.set(deviceId, partials);
+  attach(deviceId: string, partials: boolean): string {
+    this.sessionCounter += 1;
+    const sessionId = `${deviceId}#${this.sessionCounter}`;
+    this.sessions.set(sessionId, { deviceId, partials });
+    return sessionId;
   }
 
-  detach(deviceId: string): void {
-    this.devices.delete(deviceId);
+  detach(sessionId: string): void {
+    this.sessions.delete(sessionId);
   }
 
   partialIntervalSource(): PartialIntervalSource {
@@ -72,7 +78,8 @@ export class TranscriptionDispatcher implements JobSubmitter, DeviceRegistry {
   }
 
   private liveDevices(): number {
-    return [...this.devices.values()].filter((partials) => partials).length;
+    const live = [...this.sessions.values()].filter((session) => session.partials).map((session) => session.deviceId);
+    return new Set(live).size;
   }
 
   private async pump(): Promise<void> {
@@ -91,11 +98,11 @@ export class TranscriptionDispatcher implements JobSubmitter, DeviceRegistry {
     waiters.forEach((resolve) => resolve());
   }
 
-  private async run(entry: Entry): Promise<void> {
+  private async run(entry: Entry<TContext>): Promise<void> {
     this.running.add(entry);
     const startedAt = this.deps.clock.now();
     try {
-      const text = await this.deps.transcriber.transcribe(entry.job.pcm, entry.controller.signal);
+      const text = await this.deps.transcriber.transcribe(entry.job, entry.controller.signal);
       this.serviceTime.record(this.deps.clock.now() - startedAt);
       entry.resolve(entry.controller.signal.aborted ? CANCELLED : { status: 'done', text });
     } catch (error) {
@@ -106,7 +113,7 @@ export class TranscriptionDispatcher implements JobSubmitter, DeviceRegistry {
     }
   }
 
-  private settleDropped(dropped: Dropped<Entry>[]): void {
+  private settleDropped(dropped: Dropped<Entry<TContext>>[]): void {
     for (const { entry, reason } of dropped) {
       entry.resolve({ status: 'dropped', reason });
     }
