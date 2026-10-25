@@ -40,6 +40,9 @@ export class ServerStatusBoard implements ConnectionObserver {
   }
 
   checking(): void {
+    if (this.current.kind === 'repair-needed') {
+      return;
+    }
     this.set({ kind: 'checking' });
   }
 

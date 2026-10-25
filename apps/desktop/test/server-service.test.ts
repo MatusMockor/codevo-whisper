@@ -166,4 +166,21 @@ describe('ServerService', () => {
     await target.refreshOnFocus();
     expect(statuses).toEqual(['checking', 'online']);
   });
+
+  it('keeps the re-pair state while it checks the server again', async () => {
+    const { service: target, statuses } = create();
+    const deviceId = await pairThroughService(target);
+    await gateway.admin({ cmd: 'revoke', deviceId });
+    await target.check();
+    expect(target.needsRepair()).toBe(true);
+    const repairWhileChecking: boolean[] = [];
+    target.onChange(() => repairWhileChecking.push(target.needsRepair()));
+    statuses.splice(0);
+
+    await target.check();
+
+    expect(statuses).not.toContain('checking');
+    expect(repairWhileChecking.every(Boolean)).toBe(true);
+    expect((await target.view()).server?.status).toEqual({ kind: 'repair-needed', reason: 'device-unknown' });
+  });
 });
