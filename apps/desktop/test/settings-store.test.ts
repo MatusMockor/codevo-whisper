@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
+import { RecordingLogger } from './recording-logger';
 
 let dir: string;
 let file: string;
@@ -32,6 +33,17 @@ describe('SettingsStore', () => {
     const store = new SettingsStore(file);
 
     expect(await store.load()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('falls back to defaults and logs when the file cannot be read', async () => {
+    await mkdir(file);
+    const logger = new RecordingLogger();
+    const store = new SettingsStore(file, logger);
+
+    expect(await store.load()).toEqual(DEFAULT_SETTINGS);
+    expect(store.get()).toEqual(DEFAULT_SETTINGS);
+    expect(logger.errors).toHaveLength(1);
+    expect(logger.errors[0]?.error).toMatchObject({ code: 'EISDIR' });
   });
 
   it('persists an update', async () => {
@@ -88,6 +100,27 @@ describe('SettingsStore', () => {
     await store.update({ language: 'cs' });
 
     expect(calls).toEqual([{ next: { ...DEFAULT_SETTINGS, language: 'en' }, previous: DEFAULT_SETTINGS }]);
+  });
+
+  it('keeps a saved update and the other listeners when a listener throws', async () => {
+    const logger = new RecordingLogger();
+    const store = new SettingsStore(file, logger);
+    await store.load();
+    const failure = new Error('listener failed');
+    const seen: string[] = [];
+    store.onChange(() => {
+      throw failure;
+    });
+    store.onChange((next) => {
+      seen.push(next.language);
+    });
+
+    const updated = await store.update({ language: 'en' });
+
+    expect(updated.language).toBe('en');
+    expect(seen).toEqual(['en']);
+    expect(logger.errors.map((entry) => entry.error)).toEqual([failure]);
+    expect((await new SettingsStore(file).load()).language).toBe('en');
   });
 
   it('applies concurrent updates in order', async () => {

@@ -3,6 +3,12 @@ import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, ty
 import type { Settings } from '../shared/settings';
 
 function subscribe<E extends IpcEventName>(event: E, listener: IpcEventListener<E>): () => void {
+  if (!Object.hasOwn(EVENT_CHANNELS, event)) {
+    throw new TypeError('Unknown event');
+  }
+  if (typeof listener !== 'function') {
+    throw new TypeError('Listener must be a function');
+  }
   const channel = EVENT_CHANNELS[event];
   const handler = (_event: IpcRendererEvent, payload: IpcEvents[E]): void => {
     listener(payload);

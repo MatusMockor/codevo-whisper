@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, launchApp, removeUserDataDir } from './launch-app';
@@ -88,4 +88,35 @@ test('notifies the renderer about settings changes', async () => {
   );
 
   expect(received).toEqual({ ...DEFAULTS, overlay: 'live' });
+});
+
+test('starts with defaults when the settings file cannot be read', async () => {
+  await app.close();
+  await mkdir(join(userDataDir, 'settings.json'));
+  await start();
+
+  await expect(page).toHaveTitle('Codevo Whisper');
+  expect(app.windows()).toHaveLength(1);
+  expect(await page.evaluate(() => window.codevo.getSettings())).toEqual(DEFAULTS);
+});
+
+test('rejects subscriptions to unknown events or without a listener', async () => {
+  const outcome = await page.evaluate(() => {
+    const attempt = (run: () => unknown): string => {
+      try {
+        run();
+        return 'accepted';
+      } catch (error) {
+        return String(error);
+      }
+    };
+    const loose = window.codevo as unknown as { on: (event: unknown, listener: unknown) => unknown };
+    return {
+      unknownEvent: attempt(() => loose.on('toString', () => undefined)),
+      missingListener: attempt(() => loose.on('settings-changed', 'not a function')),
+    };
+  });
+
+  expect(outcome.unknownEvent).toContain('Unknown event');
+  expect(outcome.missingListener).toContain('Listener must be a function');
 });
