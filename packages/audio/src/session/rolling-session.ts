@@ -28,6 +28,7 @@ export class RollingSession<TContext = TranscriptionContext> {
   private voicedSinceRequest = false;
   private failure: Failure | undefined;
   private rejectFinish: ((error: Error) => void) | undefined;
+  private lastCut: Segment['reason'] | undefined;
 
   constructor(private readonly options: RollingSessionOptions<TContext>) {
     this.vad = options.vad ?? new AdaptiveVad();
@@ -82,7 +83,9 @@ export class RollingSession<TContext = TranscriptionContext> {
 
   private commit(segment: Segment): void {
     const revision = this.assembler.commit(segment);
-    if (!segment.voiced && segment.reason !== 'end') {
+    const followsHardCut = this.lastCut === 'hard';
+    this.lastCut = segment.reason;
+    if (!segment.voiced && segment.reason !== 'end' && !followsHardCut) {
       this.buffer.discardBefore(this.segmenter.openStartSample);
       this.emit(this.assembler.skipFinal(segment.id));
       return;

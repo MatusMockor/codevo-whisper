@@ -9,6 +9,7 @@ export type TimelineMode = {
   wordMs?: number;
   truncateAtCut?: boolean;
   fragmentAtStart?: boolean;
+  speechEndSample?: number;
 };
 
 function wordFor(block: number): string {
@@ -29,6 +30,7 @@ export class TimelineTranscriber implements SegmentTranscriber {
   private readonly offsets = new Map<string, number>();
   private readonly ambiguous = new Set<string>();
   private readonly blockSamples: number;
+  readonly jobSamples: number[] = [];
 
   constructor(
     private readonly source: Int16Array,
@@ -51,6 +53,7 @@ export class TimelineTranscriber implements SegmentTranscriber {
     if (offset === undefined || this.ambiguous.has(key)) {
       return Promise.reject(new Error('job audio does not map to one position in the timeline source'));
     }
+    this.jobSamples.push(samples.length);
     return Promise.resolve(this.render(offset, offset + samples.length).join(' '));
   }
 
@@ -81,7 +84,8 @@ export class TimelineTranscriber implements SegmentTranscriber {
 
   private truncatedAfter(to: number): string[] {
     const block = Math.floor(to / this.blockSamples);
-    if (!this.mode.truncateAtCut || to >= this.source.length || this.center(block) < to || block * this.blockSamples >= to) {
+    const speechEnd = this.mode.speechEndSample ?? this.source.length;
+    if (!this.mode.truncateAtCut || to >= speechEnd || this.center(block) < to || block * this.blockSamples >= to) {
       return [];
     }
     return [wordFor(block).slice(0, 5)];
@@ -93,7 +97,8 @@ export class TimelineTranscriber implements SegmentTranscriber {
 
   private blocksIn(from: number, to: number): number[] {
     const blocks: number[] = [];
-    for (let block = Math.max(0, Math.ceil(from / this.blockSamples - 0.5)); this.center(block) < to; block += 1) {
+    const end = Math.min(to, this.mode.speechEndSample ?? to);
+    for (let block = Math.max(0, Math.ceil(from / this.blockSamples - 0.5)); this.center(block) < end; block += 1) {
       blocks.push(block);
     }
     return blocks;

@@ -19,14 +19,22 @@ describe('resolveBoundary with a carried word from a hard cut', () => {
     expect(resolveBoundary('niečo', 'koniec', '', 7)).toBe('koniec');
   });
 
+  it('keeps the next segment version and its punctuation after a truncated carried word', () => {
+    expect(resolveBoundary('a potom', 'pokrač', 'potom pokračujeme , ďalej', 7)).toBe('pokračujeme , ďalej');
+  });
+
+  it('accepts a lowercase one-word fragment of the carried word', () => {
+    expect(resolveBoundary('Nebolo to tak', 'doteraz', 'teraz je to iné', 7)).toBe('doteraz je to iné');
+  });
+
   it('prefers the next segment version of an exactly matching carried word', () => {
     expect(resolveBoundary('jeden dva', 'tri', 'dva Tri, štyri', 7)).toBe('Tri, štyri');
   });
 });
 
 describe('removeBoundaryDuplicates fragments and truncation', () => {
-  it('drops a pre-roll fragment of the last word', () => {
-    expect(removeBoundaryDuplicates('potom to zahodíme.', 'díme. Potom nový', 4)).toBe('Potom nový');
+  it('keeps a lone suffix-like first word after a pause cut', () => {
+    expect(removeBoundaryDuplicates('potom to zahodíme.', 'díme. Potom nový', 4)).toBe('díme. Potom nový');
   });
 
   it('drops a fragment that starts a longer overlap', () => {
@@ -54,5 +62,29 @@ describe('splitLastWord', () => {
   it('returns no tail for text without words', () => {
     expect(splitLastWord(' - ')).toEqual({ head: '-', tail: undefined });
     expect(splitLastWord('')).toEqual({ head: '', tail: undefined });
+  });
+});
+
+const sentenceBoundaries: [previous: string, next: string][] = [
+  ['Toto je riešenie.', 'Nie je iné.'],
+  ['Bol tam stále.', 'Ale potom odišiel.'],
+  ['Prišiel niekto?', 'Kto to bol?'],
+  ['Máme stretnutie.', 'Tie veci počkajú.'],
+  ['Nebolo to tak doteraz', 'Teraz je to iné'],
+];
+
+describe('Slovak sentence boundaries keep their first word', () => {
+  it.each(sentenceBoundaries)('after a pause cut: %s | %s', (previous, next) => {
+    expect(removeBoundaryDuplicates(previous, next, 4)).toBe(next);
+  });
+
+  it.each(sentenceBoundaries)('after a hard cut with the last word carried: %s | %s', (previous, next) => {
+    const { head, tail } = splitLastWord(previous);
+
+    expect(resolveBoundary(head, tail, next, 7)).toBe(`${tail ?? ''} ${next}`);
+  });
+
+  it('keeps the first word of the carry path example', () => {
+    expect(resolveBoundary('Toto je', 'riešenie.', 'Nie je to tak', 7)).toBe('riešenie. Nie je to tak');
   });
 });

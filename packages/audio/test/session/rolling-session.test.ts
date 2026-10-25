@@ -283,12 +283,27 @@ describe('RollingSession', () => {
 
     expect(text).toBe(engine.expectedText(audio.length));
     expect(events.map((event) => event.segmentId)).toEqual([0, 1]);
+    expect(engine.jobSamples.every((samples) => samples <= 400000)).toBe(true);
     expect(
       events
         .map((event) => event.text)
         .filter((piece) => piece.length > 0)
         .join(' '),
     ).toBe(text);
+  });
+
+  it('silence right after a hard cut still re-reads the overlap so the carried word is complete', async () => {
+    const audio = addWhiteNoise(concatSamples(long.subarray(0, 400000), silence(25000)), 30, 21);
+    const engine = new TimelineTranscriber(audio, { truncateAtCut: true, speechEndSample: 25.1 * 16000 });
+    const { clock, open } = harness(engine);
+    const { session, events } = open('a', false);
+
+    await feed(clock, [session], audio);
+    const text = await session.finish();
+
+    expect(text).toBe(engine.expectedText(audio.length));
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    expect(engine.jobSamples.length).toBeGreaterThanOrEqual(2);
   });
 
   it('push after finish throws', async () => {
