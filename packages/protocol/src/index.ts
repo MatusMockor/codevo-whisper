@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 'cw1';
+export { PROTOCOL_VERSION } from './version';
 
 export { CipherState, MAX_NONCE } from './noise/cipher-state';
 export {
@@ -28,3 +28,4 @@ export {
   type ServerMessage,
 } from './messages';
 export { MAX_NOISE_MESSAGE, REKEY_EVERY, SecureTransport } from './transport/secure-transport';
+export { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from './pairing';
