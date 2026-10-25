@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+<style>
+  html, body { margin: 0; background: transparent; font: 13px -apple-system, system-ui, sans-serif; color: #f5f5f7; overflow: hidden; user-select: none; }
+  .panel { box-sizing: border-box; height: 124px; margin: 4px; padding: 12px 16px; border-radius: 16px; background: rgba(28, 28, 32, 0.88); border: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #636366; }
+  .dot.down { background: #ff453a; box-shadow: 0 0 8px #ff453a; }
+  .meta { color: #aeaeb2; font-size: 12px; }
+  .elapsed { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .transcript { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+  .message { font-size: 12px; }
+  .message.ok { color: #30d158; }
+  .message.warn { color: #ffd60a; }
+  button { margin-left: auto; font: inherit; color: #f5f5f7; background: #0a84ff; border: 0; border-radius: 8px; padding: 4px 12px; }
+  button[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <div class="row">
+      <span id="dot" class="dot"></span>
+      <span id="hotkey"></span>
+      <span id="meta" class="meta"></span>
+      <span id="elapsed" class="elapsed meta"></span>
+    </div>
+    <div id="transcript" class="transcript"></div>
+    <div class="row">
+      <span id="message" class="message"></span>
+      <button id="copy" hidden>Kopírovať</button>
+    </div>
+  </div>
+  <script type="module" src="overlay.js"></script>
+</body>
+</html>

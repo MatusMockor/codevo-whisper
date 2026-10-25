@@ -1,0 +1,36 @@
+{
+  "name": "codevo-whisper-spike-macos-input",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/main/main.js",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "compile:helper": "./helper/build.sh",
+    "compile:ts": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/*.html dist/renderer/",
+    "compile": "pnpm compile:helper && pnpm compile:ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "pnpm compile && ./scripts/start.sh",
+    "start:direct": "pnpm compile && env -u ELECTRON_RUN_AS_NODE electron .",
+    "selftest": "pnpm compile && env -u ELECTRON_RUN_AS_NODE electron . --selftest",
+    "stop": "./scripts/stop.sh",
+    "helper:listen": "./helper/build/codevo-input-helper listen",
+    "log": "tail -n 50 -f ~/Library/Logs/CodevoWhisperSpike/macos-input.jsonl",
+    "log:summary": "node scripts/log-summary.mjs"
+  },
+  "dependencies": {
+    "uiohook-napi": "1.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "electron": "45.0.0",
+    "typescript": "7.0.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "uiohook-napi"
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Codevo Whisper - macOS input spike</title>
+<style>
+  body { font: 13px -apple-system, system-ui, sans-serif; margin: 16px; color: #1d1d1f; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  h2 { font-size: 13px; margin: 16px 0 6px; text-transform: uppercase; color: #6e6e73; }
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 6px 12px; align-items: center; }
+  .ok { color: #1a7f37; }
+  .bad { color: #c62828; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  textarea { width: 100%; height: 60px; box-sizing: border-box; }
+  #log { height: 260px; overflow: auto; background: #f5f5f7; padding: 6px; font: 11px ui-monospace, Menlo, monospace; white-space: pre; }
+  input[type=number] { width: 100px; }
+</style>
+</head>
+<body>
+  <h1>Codevo Whisper - macOS input spike</h1>
+  <div class="grid" id="status"></div>
+
+  <h2>Settings</h2>
+  <div class="grid">
+    <label for="candidate">Hotkey candidate</label>
+    <select id="candidate"><option value="swift">Swift helper (CGEventTap)</option><option value="uiohook">uiohook-napi (in main)</option></select>
+    <label for="key">Key</label>
+    <select id="key"><option value="rightOption">Right Option (61)</option><option value="leftOption">Left Option (58)</option><option value="fn">Fn (63)</option></select>
+    <label for="observeBoth">Also log the other candidate</label>
+    <input type="checkbox" id="observeBoth">
+    <label for="transcriptionMs">Simulated transcription (ms)</label>
+    <input type="number" id="transcriptionMs" min="0" step="100">
+    <label for="restoreDelayMs">Clipboard restore delay (ms)</label>
+    <input type="number" id="restoreDelayMs" min="0" step="50">
+    <label for="maxSessionMs">Push-to-talk maximum (ms)</label>
+    <input type="number" id="maxSessionMs" min="1000" step="1000">
+    <label for="compareWindow">Focus check compares window id</label>
+    <input type="checkbox" id="compareWindow">
+    <label for="transientClipboard">Mark clipboard write transient</label>
+    <input type="checkbox" id="transientClipboard">
+    <label for="skipTransformProcessType">Overlay skipTransformProcessType</label>
+    <input type="checkbox" id="skipTransformProcessType">
+  </div>
+
+  <h2>Actions</h2>
+  <div class="buttons">
+    <button data-permission="listen">Request Input Monitoring</button>
+    <button data-permission="accessibility">Request Accessibility</button>
+    <button data-pane="listen">Open Input Monitoring pane</button>
+    <button data-pane="accessibility">Open Accessibility pane</button>
+    <button id="overlay-test">Overlay test (in 3 s, 5 s)</button>
+    <button id="simulate-delayed">Simulated press in 3 s (2 s hold)</button>
+    <button id="simulate-hold">Hold to simulate press</button>
+    <button id="restart-helper">Restart helper</button>
+    <button id="reveal-log">Reveal log file</button>
+  </div>
+
+  <h2>Paste target</h2>
+  <textarea id="paste-target" placeholder="Focus here and press the hotkey to paste into this window"></textarea>
+
+  <h2>Log (this run)</h2>
+  <div id="log"></div>
+  <script type="module" src="control.js"></script>
+</body>
+</html>
