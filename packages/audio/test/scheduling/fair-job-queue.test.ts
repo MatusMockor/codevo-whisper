@@ -152,6 +152,37 @@ describe('FairJobQueue', () => {
     expect(drain(queue)).toEqual([kept, other]);
   });
 
+  it('forgets a released session once its jobs completed and prunes its empty lane', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('a', 'final', 'first'));
+    const running = takeDefined(queue);
+    queue.releaseSession('first');
+    expect(queue.stats()).toEqual({ sessions: 1, lanes: 1 });
+
+    queue.complete(running);
+
+    expect(queue.stats()).toEqual({ sessions: 0, lanes: 0 });
+  });
+
+  it('releasing an idle session forgets it at once and keeps lanes with work', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('local', 'final', 'first'));
+    drain(queue);
+    queue.offer(entry('local', 'final', 'second'));
+
+    queue.releaseSession('first');
+
+    expect(queue.stats()).toEqual({ sessions: 1, lanes: 1 });
+  });
+
+  it('removeSession prunes lanes left empty', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('a', 'final', 'first'));
+    queue.removeSession('first');
+
+    expect(queue.stats()).toEqual({ sessions: 0, lanes: 0 });
+  });
+
   it('completing a job of a removed session does not change another session', () => {
     const queue = new FairJobQueue<Entry>();
     queue.offer(entry('local', 'final', 'first'));

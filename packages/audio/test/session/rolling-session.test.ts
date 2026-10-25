@@ -279,8 +279,16 @@ describe('RollingSession', () => {
 
     await feed(clock, [session], audio);
 
-    await expect(session.finish()).resolves.toBe(engine.expectedText(audio.length));
+    const text = await session.finish();
+
+    expect(text).toBe(engine.expectedText(audio.length));
     expect(events.map((event) => event.segmentId)).toEqual([0, 1]);
+    expect(
+      events
+        .map((event) => event.text)
+        .filter((piece) => piece.length > 0)
+        .join(' '),
+    ).toBe(text);
   });
 
   it('push after finish throws', async () => {

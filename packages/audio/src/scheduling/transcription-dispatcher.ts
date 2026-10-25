@@ -2,7 +2,7 @@ import type { Clock } from '../clock';
 import { DEFAULT_PARTIAL_CONFIG, validatePartialConfig, type PartialConfig } from '../partials/partial-config';
 import { partialIntervalMs, type PartialIntervalSource } from '../partials/partial-interval';
 import { ServiceTimeEstimator } from '../partials/service-time-estimator';
-import { FairJobQueue } from './fair-job-queue';
+import { FairJobQueue, type QueueStats } from './fair-job-queue';
 import type { DeviceRegistry, JobOutcome, JobSubmitter } from './job-outcome';
 import type { SegmentTranscriber } from './segment-transcriber';
 import type { Dropped, TranscriptionContext, TranscriptionJob } from './transcription-job';
@@ -62,6 +62,11 @@ export class TranscriptionDispatcher<TContext = TranscriptionContext> implements
 
   detach(sessionId: string): void {
     this.sessions.delete(sessionId);
+    this.queue.releaseSession(sessionId);
+  }
+
+  queueStats(): QueueStats {
+    return this.queue.stats();
   }
 
   partialIntervalSource(): PartialIntervalSource {

@@ -172,6 +172,26 @@ describe('TranscriptionDispatcher', () => {
     expect(outcomes).toHaveLength(2);
   });
 
+  it('does not retain finished or cancelled sessions', async () => {
+    const engine = new ControllableTranscriber();
+    const dispatcher = new TranscriptionDispatcher({ transcriber: engine, clock: new ManualClock() });
+    for (let index = 0; index < 50; index += 1) {
+      const sessionId = dispatcher.attach(`device-${index % 3}`, true);
+      const outcome = dispatcher.submit(job(`device-${index % 3}`, 'final', index, sessionId));
+      await flush();
+      engine.call(index).resolve('');
+      await outcome;
+      dispatcher.detach(sessionId);
+    }
+    const cancelled = dispatcher.attach('gone', true);
+    void dispatcher.submit(job('gone', 'final', 99, cancelled));
+    dispatcher.cancelSession(cancelled);
+    dispatcher.detach(cancelled);
+    await dispatcher.whenIdle();
+
+    expect(dispatcher.queueStats()).toEqual({ sessions: 0, lanes: 0 });
+  });
+
   it('whenIdle resolves at once when nothing runs', async () => {
     await expect(setup().dispatcher.whenIdle()).resolves.toBeUndefined();
   });

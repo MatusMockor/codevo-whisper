@@ -2,10 +2,10 @@ import { msToSamples } from '../pcm/pcm-format';
 import type { VadFrame } from '../vad/vad-frame';
 import { PauseTracker } from './pause-tracker';
 import type { CutReason, Segment } from './segment';
-import { DEFAULT_SEGMENT_CONFIG, validateSegmentConfig, type SegmentConfig } from './segment-config';
+import { DEFAULT_SEGMENT_CONFIG, MIN_HARD_CUT_LEAD_IN_MS, validateSegmentConfig, type SegmentConfig } from './segment-config';
 import { selectCut } from './select-cut';
 
-const MIN_SEGMENT_SAMPLES = msToSamples(20);
+const MIN_SEGMENT_SAMPLES = msToSamples(MIN_HARD_CUT_LEAD_IN_MS);
 
 type Limits = {
   target: number;

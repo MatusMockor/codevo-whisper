@@ -10,7 +10,10 @@ type SessionLoad = {
   queuedFinals: number;
   runningFinals: number;
   runningPartials: number;
+  released: boolean;
 };
+
+export type QueueStats = { sessions: number; lanes: number };
 
 export class FairJobQueue<T extends { job: QueueKey }> {
   private readonly lanes = new Map<string, Lane<T>>();
@@ -20,6 +23,10 @@ export class FairJobQueue<T extends { job: QueueKey }> {
 
   get size(): number {
     return [...this.lanes.values()].reduce((total, lane) => total + lane.finals.length + lane.partials.size, 0);
+  }
+
+  stats(): QueueStats {
+    return { sessions: this.sessions.size, lanes: this.lanes.size };
   }
 
   offer(entry: T): Dropped<T>[] {
@@ -42,9 +49,20 @@ export class FairJobQueue<T extends { job: QueueKey }> {
     }
     if (entry.job.kind === 'final') {
       load.runningFinals = Math.max(0, load.runningFinals - 1);
+    }
+    if (entry.job.kind === 'partial') {
+      load.runningPartials = Math.max(0, load.runningPartials - 1);
+    }
+    this.forgetIfIdle(entry.job.sessionId, load);
+  }
+
+  releaseSession(sessionId: string): void {
+    const load = this.sessions.get(sessionId);
+    if (load === undefined) {
       return;
     }
-    load.runningPartials = Math.max(0, load.runningPartials - 1);
+    load.released = true;
+    this.forgetIfIdle(sessionId, load);
   }
 
   removeSession(sessionId: string): Dropped<T>[] {
@@ -57,7 +75,26 @@ export class FairJobQueue<T extends { job: QueueKey }> {
       lane.partials.delete(sessionId);
       dropped.push(...(partial === undefined ? [] : [partial]));
     }
+    this.pruneEmptyLanes();
     return dropped.map((entry) => ({ entry, reason: 'cancelled' }));
+  }
+
+  private forgetIfIdle(sessionId: string, load: SessionLoad): void {
+    const busy = load.queuedFinals + load.runningFinals + load.runningPartials > 0;
+    const pendingPartial = [...this.lanes.values()].some((lane) => lane.partials.has(sessionId));
+    if (!load.released || busy || pendingPartial) {
+      return;
+    }
+    this.sessions.delete(sessionId);
+    this.pruneEmptyLanes();
+  }
+
+  private pruneEmptyLanes(): void {
+    for (const [deviceId, lane] of this.lanes) {
+      if (lane.finals.length === 0 && lane.partials.size === 0) {
+        this.lanes.delete(deviceId);
+      }
+    }
   }
 
   private offerFinal(lane: Lane<T>, load: SessionLoad, entry: T): Dropped<T>[] {
@@ -121,7 +158,7 @@ export class FairJobQueue<T extends { job: QueueKey }> {
     if (existing !== undefined) {
       return existing;
     }
-    const created = { queuedFinals: 0, runningFinals: 0, runningPartials: 0 };
+    const created: SessionLoad = { queuedFinals: 0, runningFinals: 0, runningPartials: 0, released: false };
     this.sessions.set(sessionId, created);
     return created;
   }

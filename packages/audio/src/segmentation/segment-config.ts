@@ -1,3 +1,5 @@
+export const MIN_HARD_CUT_LEAD_IN_MS = 20;
+
 export type SegmentConfig = {
   targetMs: number;
   hardMs: number;
@@ -24,6 +26,9 @@ export function validateSegmentConfig(config: SegmentConfig): SegmentConfig {
   }
   if (config.overlapMs < 0 || config.preRollMs < 0) {
     throw new RangeError('Segment overlap and pre-roll must not be negative');
+  }
+  if (Math.max(config.overlapMs, config.preRollMs) < MIN_HARD_CUT_LEAD_IN_MS) {
+    throw new RangeError(`A hard cut needs at least ${MIN_HARD_CUT_LEAD_IN_MS} ms of overlap or pre-roll`);
   }
   if (config.minPauseMs <= 0 || config.settledPauseMs < config.minPauseMs) {
     throw new RangeError('Segment pauses need 0 < minPauseMs <= settledPauseMs');

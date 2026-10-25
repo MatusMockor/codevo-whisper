@@ -7,7 +7,7 @@ export type { VadFrame } from './vad/vad-frame';
 export type { VoiceActivityDetector } from './vad/voice-activity-detector';
 export type { Pause } from './segmentation/pause';
 export type { CutReason, Segment } from './segmentation/segment';
-export { DEFAULT_SEGMENT_CONFIG, type SegmentConfig, validateSegmentConfig } from './segmentation/segment-config';
+export { DEFAULT_SEGMENT_CONFIG, MIN_HARD_CUT_LEAD_IN_MS, type SegmentConfig, validateSegmentConfig } from './segmentation/segment-config';
 export { Segmenter } from './segmentation/segmenter';
 export { removeBoundaryDuplicates, resolveBoundary } from './dedup/resolve-boundary';
 export { splitLastWord } from './dedup/split-last-word';
@@ -18,7 +18,7 @@ export { DEFAULT_PARTIAL_CONFIG, type PartialConfig, validatePartialConfig } fro
 export { PartialGate } from './partials/partial-gate';
 export { partialIntervalMs, type PartialIntervalSource } from './partials/partial-interval';
 export { ServiceTimeEstimator } from './partials/service-time-estimator';
-export { FairJobQueue } from './scheduling/fair-job-queue';
+export { FairJobQueue, type QueueStats } from './scheduling/fair-job-queue';
 export type { DropReason, Dropped, JobKind, QueueKey, TranscriptionContext, TranscriptionJob } from './scheduling/transcription-job';
 export type { DeviceRegistry, JobOutcome, JobSubmitter } from './scheduling/job-outcome';
 export type { SegmentTranscriber } from './scheduling/segment-transcriber';
