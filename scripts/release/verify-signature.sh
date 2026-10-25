@@ -9,7 +9,7 @@ codesign --verify --deep --strict --verbose=2 "$app"
 
 expect_signature() {
   local file="$1" identifier="$2" details
-  details="$(codesign --display --verbose=4 "$file" 2>&1)"
+  details="$(codesign --display --verbose=4 "$file" 2>&1)" || { echo "$details" >&2; echo "$file: no readable signature" >&2; exit 1; }
   grep -q "^Identifier=$identifier$" <<<"$details" || { echo "$file: identifier is not $identifier" >&2; exit 1; }
   grep -q "^TeamIdentifier=$team$" <<<"$details" || { echo "$file: team is not $team" >&2; exit 1; }
   grep -q "flags=0x10000(runtime)" <<<"$details" || { echo "$file: hardened runtime is off" >&2; exit 1; }
