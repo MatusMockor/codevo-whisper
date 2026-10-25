@@ -19,12 +19,14 @@ import { TrayMenu } from '../tray/tray-menu';
 import { MainWindowController } from '../windows/main-window-controller';
 import { OverlayWindow } from '../windows/overlay-window';
 import { rendererSource } from '../windows/renderer-source';
+import { backgroundPresentation, foregroundPresentation } from '../windows/window-presentation';
 import type { OverlayState } from '../../shared/overlay-contract';
 import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
 import { createInputHelper } from './input-helper-factory';
 import { createModels } from './model-wiring';
 import { startInput } from './start-input';
+import { isE2eMode } from './test-mode';
 
 const SETTINGS_FILE = 'settings.json';
 
@@ -48,11 +50,12 @@ function installSecurity(captureWindow: CaptureWindow, mainWindow: MainWindowCon
 }
 
 export function composeApplication(logger: Logger): Application {
+  const e2e = isE2eMode();
   const helper = createInputHelper(logger);
   const captureWindow = new CaptureWindow(rendererSource('capture'), logger);
   const capture = new WindowAudioCapture(captureWindow, logger);
   const lastTranscript = new LastTranscript(logger);
-  const mainWindow = new MainWindowController(logger);
+  const mainWindow = new MainWindowController(logger, e2e ? backgroundPresentation : foregroundPresentation);
   const disposers: Array<() => void> = [];
 
   async function initialize(): Promise<void> {
@@ -105,7 +108,7 @@ export function composeApplication(logger: Logger): Application {
       () => overlay.destroy(),
       () => home.dispose(),
     );
-    exposeE2eHooks(!app.isPackaged && process.env['CW_E2E_HOOKS'] === '1', { capture, overlay, lastTranscript });
+    exposeE2eHooks(e2e, { capture, overlay, lastTranscript });
     void startInput(helper, hotkey, logger).then(() => {
       input.resolve();
       home.status.refresh();

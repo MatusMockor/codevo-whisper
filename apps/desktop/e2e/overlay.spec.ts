@@ -51,18 +51,8 @@ function panelFlags(): Promise<PanelFlags> {
   }, OVERLAY_PAGE);
 }
 
-function focusMainWindow(): Promise<void> {
-  return app.evaluate(({ app: electronApp, BrowserWindow }) => {
-    electronApp.focus({ steal: true });
-    BrowserWindow.getAllWindows()
-      .find((window) => window.getTitle() === 'Codevo Whisper')
-      ?.focus();
-  });
-}
-
 test('overlay window is not focusable and shows the recording state from an injected state', async () => {
-  await focusMainWindow();
-  await expect.poll(async () => (await panelFlags()).mainFocused).toBe(true);
+  const mainFocusedBefore = (await panelFlags()).mainFocused;
   await inject({ kind: 'recording', elapsedMs: 4200, level: 0.5, language: 'SK' });
   const overlay = await overlayPage();
 
@@ -73,7 +63,7 @@ test('overlay window is not focusable and shows the recording state from an inje
   await expect.poll(panelFlags).toMatchObject({ focusable: false, visible: true, alwaysOnTop: true, allWorkspaces: true, focused: false });
   await inject({ kind: 'processing' });
   await expect(overlay.getByText('Spracúvam')).toBeVisible();
-  expect(await panelFlags()).toMatchObject({ focused: false, mainFocused: true });
+  expect(await panelFlags()).toMatchObject({ focusable: false, focused: false, mainFocused: mainFocusedBefore });
 
   await inject({ kind: 'hidden' });
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);

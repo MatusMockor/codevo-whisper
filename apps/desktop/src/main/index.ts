@@ -2,11 +2,16 @@ import { app, dialog } from 'electron';
 import { configureAppIdentity } from './app/app-identity';
 import { composeApplication } from './app/compose';
 import { createStartup } from './app/startup';
+import { isE2eMode } from './app/test-mode';
 import { consoleLogger } from './logging/logger';
 import { hardenWebContents } from './security/harden';
+import { runInBackground } from './windows/window-presentation';
 
 configureAppIdentity();
 app.enableSandbox();
+if (isE2eMode()) {
+  runInBackground();
+}
 
 const application = composeApplication(consoleLogger);
 

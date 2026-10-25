@@ -1,9 +1,10 @@
-import { app, type BrowserWindow, type WebContents } from 'electron';
+import type { BrowserWindow, WebContents } from 'electron';
 import { EVENT_CHANNELS, type IpcEventName, type IpcEvents } from '../../shared/ipc-contract';
 import type { PageId } from '../../shared/pages';
 import { Listeners } from '../helper/listeners';
 import { consoleLogger, type Logger } from '../logging/logger';
 import { createMainWindow } from './main-window';
+import { foregroundPresentation, type WindowPresentation } from './window-presentation';
 
 export type MainWindowEvents = {
   send<E extends IpcEventName>(event: E, payload: IpcEvents[E]): void;
@@ -14,7 +15,10 @@ export class MainWindowController implements MainWindowEvents {
   private window: BrowserWindow | null = null;
   private readonly focusListeners: Listeners<void>;
 
-  constructor(logger: Logger = consoleLogger) {
+  constructor(
+    logger: Logger = consoleLogger,
+    private readonly presentation: WindowPresentation = foregroundPresentation,
+  ) {
     this.focusListeners = new Listeners(logger, 'A main window focus listener failed');
   }
 
@@ -23,7 +27,7 @@ export class MainWindowController implements MainWindowEvents {
   }
 
   open(page?: PageId): void {
-    app.focus({ steal: true });
+    this.presentation.activateApp();
     const window = this.window;
     if (window === null || window.isDestroyed()) {
       this.create(page);
@@ -53,7 +57,7 @@ export class MainWindowController implements MainWindowEvents {
   }
 
   private create(page: PageId | undefined): void {
-    const window = createMainWindow(page);
+    const window = createMainWindow(page ?? 'home', this.presentation);
     this.window = window;
     window.on('focus', () => {
       this.focusListeners.emit();
@@ -69,6 +73,6 @@ export class MainWindowController implements MainWindowEvents {
     if (window.isMinimized()) {
       window.restore();
     }
-    window.show();
+    this.presentation.show(window);
   }
 }

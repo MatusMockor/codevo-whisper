@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { PageId } from '../../shared/pages';
 import { loadSource } from './load-source';
 import { rendererSource } from './renderer-source';
+import type { WindowPresentation } from './window-presentation';
 
 const APP_TITLE = 'Codevo Whisper';
 
@@ -13,7 +14,7 @@ function windowChrome(): BrowserWindowConstructorOptions {
   return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 } };
 }
 
-export function createMainWindow(page: PageId = 'home'): BrowserWindow {
+export function createMainWindow(page: PageId, presentation: WindowPresentation): BrowserWindow {
   const window = new BrowserWindow({
     title: APP_TITLE,
     width: 980,
@@ -31,7 +32,7 @@ export function createMainWindow(page: PageId = 'home'): BrowserWindow {
     },
   });
   window.once('ready-to-show', () => {
-    window.show();
+    presentation.show(window);
   });
   void loadSource(window, rendererSource(), page === 'home' ? '' : page);
   return window;
