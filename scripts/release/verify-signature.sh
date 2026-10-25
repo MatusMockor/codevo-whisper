@@ -3,7 +3,7 @@ set -euo pipefail
 
 app="${1:?usage: scripts/release/verify-signature.sh <path/to/Codevo Whisper.app> <arm64|x64>}"
 arch="${2:?usage: scripts/release/verify-signature.sh <path/to/Codevo Whisper.app> <arm64|x64>}"
-team="U574W69TH6"
+team="${APPLE_TEAM_ID:-U574W69TH6}"
 
 codesign --verify --deep --strict --verbose=2 "$app"
 

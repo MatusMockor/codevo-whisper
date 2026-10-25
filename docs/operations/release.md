@@ -19,7 +19,7 @@ Spec section 10 and the recommendations in `docs/spikes/signed-update.md`. Workf
 Steps of one `build-mac` job:
 
 1. `scripts/release/import-certificate.sh`: decodes `CSC_LINK` into a temporary keychain in `$RUNNER_TEMP` and puts it into the search list.
-2. `scripts/release/write-api-key.sh`: writes the `.p8` from `APPLE_API_KEY` to `$RUNNER_TEMP` (mode 0600) and exports its path as `APPLE_API_KEY` for `notarytool`.
+2. `scripts/release/write-api-key.sh`: writes the `.p8` from `APPLE_API_KEY` to `$RUNNER_TEMP/AuthKey.p8` (mode 0600) and exports its path as `APPLE_API_KEY` for `notarytool`.
 3. `scripts/release/build-native.sh <arch>` and `scripts/release/sign-native.sh <arch>`: input helper and transcribe-cli, hardened runtime, timestamp, identifiers `app.codevo.whisper.input-helper` / `app.codevo.whisper.transcribe-cli`.
 4. `pnpm --filter @codevo-whisper/desktop build`.
 5. `scripts/release/package-app.sh <arch> <version>`: `electron-builder --mac zip --<arch> --publish never` into `apps/desktop/release/stage/<arch>`. The `zip` target (not `dir`) is required because electron-builder only writes `Contents/Resources/app-update.yml` (the electron-updater GitHub config) when a `dmg` or `zip` target is packed. The stage ZIP itself is discarded. Fuses are flipped and the app is signed here; signature and fuses are verified right away.
@@ -30,6 +30,13 @@ Steps of one `build-mac` job:
 10. Upload `apps/desktop/release/dist/<arch>` (DMG, ZIP, ZIP blockmap, per-arch `latest-mac.yml`), then delete the keychain and the key file.
 
 Artifact names: `codevo-whisper-${version}-${arch}-mac.{dmg,zip}`. The arch token is required by MacUpdater's file selection; x64 names never contain `arm64`.
+
+## Workflow hardening
+
+- Every `uses:` is pinned to a full commit SHA with a trailing `# vX.Y.Z` comment; `.github/dependabot.yml` proposes updates for the `github-actions` ecosystem weekly. Only first-party `actions/*` actions are used; pnpm comes from `corepack enable` (version from `packageManager`), not from a third-party action.
+- `permissions: contents: read` for the workflow; only the `publish` job gets `contents: write`. Checkouts use `persist-credentials: false`.
+- Secrets are exposed only as step-level `env` of the steps that need them: `CSC_LINK` / `CSC_KEY_PASSWORD` to the certificate import, `APPLE_API_KEY` to the key file step, `APPLE_API_KEY_ID` / `APPLE_API_ISSUER` to the two notarization steps, `GH_TOKEN` to the release step. The keychain and the key file are deleted at the end of each build job (`if: always()`).
+- `APPLE_TEAM_ID` (variable) is the team `verify-signature.sh` requires on the app and both binaries (default `U574W69TH6`).
 
 ## Secrets and variables
 
