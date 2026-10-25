@@ -1,0 +1,76 @@
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", Inter, "Segoe UI", system-ui, sans-serif;
+  --font-display: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 18px;
+  --radius-overlay: 22px;
+  --radius-pill: 999px;
+
+  --lamp: #F0A23A;
+  --lamp-hi: #FFD08A;
+  --lamp-deep: #C46F12;
+  --lamp-soft: rgba(240, 162, 58, .16);
+  --logo-cyan: #0891B2;
+  --ok: #3DBE84;
+  --bad: #F06A5A;
+  --ov-ink: #F2F4F7;
+  --ov-ink-2: rgba(242, 244, 247, .66);
+  --ov-ink-t: rgba(242, 244, 247, .46);
+
+  --bg: #E6EAEF;
+  --bg-2: #DCE1E8;
+  --surface: #F4F6F9;
+  --surface-2: #FFFFFF;
+  --group: #F3F5F8;
+  --ink: #18202C;
+  --ink-2: #3F4A5A;
+  --ink-3: #596476;
+  --line: rgba(24, 32, 44, .14);
+  --line-2: rgba(24, 32, 44, .08);
+  --lamp-ink: #8A4A00;
+  --ok-ink: #17744B;
+  --bad-ink: #B3291A;
+  --focus: #B76A00;
+  --win-bg: #FFFFFF;
+  --win-side: rgba(234, 237, 242, .92);
+  --hover: rgba(24, 32, 44, .05);
+  --sel: rgba(240, 162, 58, .22);
+  --seg-bg: rgba(24, 32, 44, .07);
+  --seg-on: #FFFFFF;
+  --shadow-win: 0 0 0 .5px rgba(0, 0, 0, .2), 0 26px 60px -22px rgba(20, 28, 40, .42), 0 8px 20px -10px rgba(20, 28, 40, .2);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F131B;
+    --bg-2: #141924;
+    --surface: #161B25;
+    --surface-2: #1E2430;
+    --group: #232A36;
+    --ink: #E8ECF2;
+    --ink-2: #B6BFCC;
+    --ink-3: #939DAC;
+    --line: rgba(232, 236, 242, .14);
+    --line-2: rgba(232, 236, 242, .07);
+    --lamp-ink: #F5B866;
+    --logo-cyan: #22D3EE;
+    --ok-ink: #5BD39C;
+    --bad-ink: #FF8C7E;
+    --focus: #F5B866;
+    --win-bg: #1A1F2A;
+    --win-side: rgba(32, 38, 50, .92);
+    --hover: rgba(255, 255, 255, .05);
+    --sel: rgba(240, 162, 58, .2);
+    --seg-bg: rgba(255, 255, 255, .07);
+    --seg-on: #3A4252;
+    --shadow-win: 0 0 0 .5px rgba(0, 0, 0, .7), inset 0 0 0 .5px rgba(255, 255, 255, .08), 0 30px 70px -22px rgba(0, 0, 0, .75);
+    color-scheme: dark;
+  }
+}

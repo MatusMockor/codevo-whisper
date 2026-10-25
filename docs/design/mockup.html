@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codevo Whisper - návrh rozhrania</title>
+<style>
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro",Inter,"Segoe UI",system-ui,sans-serif;
+  --font-display:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --lamp:#F0A23A;
+  --lamp-hi:#FFD08A;
+  --lamp-deep:#C46F12;
+  --lamp-soft:rgba(240,162,58,.16);
+  --logo-cyan:#0891B2;
+  --ok:#3DBE84;
+  --bad:#F06A5A;
+  --ov-ink:#F2F4F7;
+  --ov-ink-2:rgba(242,244,247,.66);
+  --ov-ink-t:rgba(242,244,247,.46);
+  --bg:#E6EAEF;
+  --bg-2:#DCE1E8;
+  --surface:#F4F6F9;
+  --surface-2:#FFFFFF;
+  --group:#F3F5F8;
+  --ink:#18202C;
+  --ink-2:#3F4A5A;
+  --ink-3:#596476;
+  --line:rgba(24,32,44,.14);
+  --line-2:rgba(24,32,44,.08);
+  --lamp-ink:#8A4A00;
+  --ok-ink:#17744B;
+  --bad-ink:#B3291A;
+  --focus:#B76A00;
+  --win-bg:#FFFFFF;
+  --win-side:rgba(234,237,242,.92);
+  --hover:rgba(24,32,44,.05);
+  --sel:rgba(240,162,58,.22);
+  --seg-bg:rgba(24,32,44,.07);
+  --seg-on:#FFFFFF;
+  --chat-bg:#FFFFFF;
+  --chat-compose:#FFFFFF;
+  --menu-bg:rgba(242,243,246,.84);
+  --menu-ink:#1C222C;
+  --shadow-win:0 0 0 .5px rgba(0,0,0,.2),0 26px 60px -22px rgba(20,28,40,.42),0 8px 20px -10px rgba(20,28,40,.2);
+  color-scheme:light;
+}
+[data-theme=dark]{
+  --bg:#0F131B;
+  --bg-2:#141924;
+  --surface:#161B25;
+  --surface-2:#1E2430;
+  --group:#232A36;
+  --ink:#E8ECF2;
+  --ink-2:#B6BFCC;
+  --ink-3:#939DAC;
+  --line:rgba(232,236,242,.14);
+  --line-2:rgba(232,236,242,.07);
+  --lamp-ink:#F5B866;
+  --logo-cyan:#22D3EE;
+  --ok-ink:#5BD39C;
+  --bad-ink:#FF8C7E;
+  --focus:#F5B866;
+  --win-bg:#1A1F2A;
+  --win-side:rgba(32,38,50,.92);
+  --hover:rgba(255,255,255,.05);
+  --sel:rgba(240,162,58,.2);
+  --seg-bg:rgba(255,255,255,.07);
+  --seg-on:#3A4252;
+  --chat-bg:#1B1E26;
+  --chat-compose:#22262F;
+  --menu-bg:rgba(44,48,58,.86);
+  --menu-ink:#ECEEF2;
+  --shadow-win:0 0 0 .5px rgba(0,0,0,.7),inset 0 0 0 .5px rgba(255,255,255,.08),0 30px 70px -22px rgba(0,0,0,.75);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;font-family:var(--font-ui);font-size:15px;line-height:1.5;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.page{max-width:1260px;margin:0 auto;padding:0 40px}
+
+.top{padding-top:44px;padding-bottom:20px}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-tile{width:36px;height:36px;flex:none}
+.brand-tile .arcs{transform-box:fill-box;transform-origin:center;transition:transform .9s cubic-bezier(.45,0,.2,1)}
+.brand:hover .brand-tile .arcs{transform:rotate(180deg)}
+.wm{display:inline-flex;align-items:baseline;font-size:21px;line-height:1}
+.wm-mono{font-family:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;font-weight:700;letter-spacing:-.02em}
+.wm-cur{font-family:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;font-weight:700;color:var(--logo-cyan);animation:blink 1.06s steps(1) infinite}
+.wm-ui{font-family:var(--font-ui);font-weight:500;margin-left:.42em;color:var(--ink-2)}
+.top-meta{display:flex;align-items:center;gap:18px;color:var(--ink-3);font-size:13px}
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:56px;align-items:end;margin-top:64px}
+.hero h1{font-family:var(--font-display);font-size:60px;line-height:1.02;letter-spacing:-.035em;font-weight:700;margin:0;text-wrap:balance}
+.hero p{margin:0;font-size:18px;line-height:1.55;color:var(--ink-2);max-width:46ch}
+.facts{display:flex;gap:28px;margin-top:22px;color:var(--ink-3);font-size:13.5px;flex-wrap:wrap}
+.facts span{display:inline-flex;align-items:center;gap:7px}
+.facts .ic{color:var(--lamp-ink)}
+
+section.block{margin-top:112px}
+section.block:first-of-type{margin-top:56px}
+.s-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:48px;align-items:end;margin-bottom:28px}
+.s-head h2{font-family:var(--font-display);font-size:36px;line-height:1.08;letter-spacing:-.025em;font-weight:680;margin:0}
+.s-head p{margin:0;color:var(--ink-2);font-size:16px;max-width:56ch;justify-self:end}
+
+.seg{display:inline-flex;background:var(--seg-bg);padding:2px;border-radius:9px;gap:2px}
+.seg button{border:0;background:transparent;padding:5px 12px;border-radius:7px;font-size:13px;font-weight:520;color:var(--ink-2);transition:background .2s,color .2s,box-shadow .2s}
+.seg button[aria-pressed=true]{background:var(--seg-on);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.06)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;font-size:13px;font-weight:560;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);transition:background .15s,transform .1s}
+.btn:hover{background:var(--group)}
+.btn:active{transform:translateY(.5px)}
+.btn.primary{background:var(--lamp);border-color:transparent;color:#2A1600}
+.btn.primary:hover{background:#F5AE4E}
+.btn.primary:disabled{background:var(--seg-bg);color:var(--ink-3);cursor:not-allowed}
+.btn.danger{color:var(--bad-ink)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.switch{position:relative;width:38px;height:22px;border-radius:11px;border:0;background:var(--seg-bg);box-shadow:inset 0 0 0 1px var(--line);transition:background .2s;flex:none;padding:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .22s cubic-bezier(.3,1.3,.5,1)}
+.switch[aria-checked=true]{background:var(--lamp);box-shadow:none}
+.switch[aria-checked=true]::after{transform:translateX(16px)}
+.lbl-switch{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2)}
+
+.demo-tools{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.demo-tools .grp{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.stage{position:relative;height:680px;border-radius:18px;overflow:hidden;isolation:isolate;box-shadow:0 0 0 .5px rgba(0,0,0,.35),0 40px 80px -40px rgba(10,16,30,.55)}
+.wall{position:absolute;inset:0;width:100%;height:100%;z-index:-1}
+.mbar{position:absolute;top:0;left:0;right:0;height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;color:#fff;font-size:13px;background:rgba(14,18,32,.32);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);z-index:5}
+.mbar .l,.mbar .r{display:flex;align-items:center;gap:18px}
+.mbar .r{gap:14px}
+.mbar b{font-weight:700}
+.mbar .ic{width:15px;height:15px}
+.tray{position:relative;display:grid;place-items:center;width:26px;height:22px;border-radius:5px;color:#fff}
+.tray svg{width:16px;height:16px}
+.tray.open{background:rgba(255,255,255,.22)}
+.tray.rec{color:var(--lamp)}
+.tray.proc svg{animation:spin 2.6s linear infinite,breathe 1.3s ease-in-out infinite}
+.privdot{width:7px;height:7px;border-radius:50%;background:#FF9F0A;opacity:0;transition:opacity .3s;box-shadow:0 0 6px rgba(255,159,10,.8)}
+.privdot.on{opacity:1}
+@keyframes breathe{50%{opacity:.4}}
+
+.chat-win{position:absolute;top:50px;left:50%;transform:translateX(-50%);width:min(900px,84%);height:432px;display:grid;grid-template-columns:200px minmax(0,1fr);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-win);background:var(--chat-bg)}
+.chat-side{background:#252935;color:rgba(255,255,255,.74);padding:12px 10px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.tl{display:flex;gap:8px;padding:2px 4px 14px}
+.tl i{width:12px;height:12px;border-radius:50%;background:#FF5F57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
+.tl i:nth-child(2){background:#FEBC2E}
+.tl i:nth-child(3){background:#28C840}
+.ws{font-weight:700;color:#fff;font-size:14px;padding:0 8px 10px}
+.ch{padding:4px 8px;border-radius:6px;display:flex;align-items:center;gap:8px}
+.ch.on{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+.ch-h{padding:12px 8px 4px;font-size:12px;color:rgba(255,255,255,.5)}
+.dm-dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dm-dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4)}
+.chat-main{display:flex;flex-direction:column;min-width:0}
+.chat-head{height:46px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;padding:0 18px;gap:10px;font-weight:680;font-size:14px;color:var(--ink)}
+.chat-head small{font-weight:400;color:var(--ink-3);font-size:12.5px}
+.chat-msgs{flex:1;padding:14px 18px 10px;display:flex;flex-direction:column;gap:14px;justify-content:flex-end;overflow:hidden}
+.msg{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;font-size:13.5px;line-height:1.45;color:var(--ink)}
+.av{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-size:12.5px;font-weight:700;color:#fff}
+.msg b{font-weight:700;margin-right:6px}
+.msg time{font-size:12px;color:var(--ink-3)}
+.msg p{margin:1px 0 0}
+.msg.sent{animation:msgIn .45s cubic-bezier(.2,.9,.3,1)}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}}
+.compose{margin:0 18px 16px;border:1px solid var(--ink-3);border-radius:10px;background:var(--chat-compose)}
+.compose-field{padding:10px 12px 4px;min-height:44px;font-size:13.5px;line-height:1.45;color:var(--ink)}
+.compose-ph{color:var(--ink-3)}
+.caret{display:inline-block;width:1.5px;height:1.15em;background:var(--ink);vertical-align:-.22em;margin:0 1px;animation:blink 1.06s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#composeText{border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+#composeText.flash{animation:insertFlash 1.6s ease-out}
+@keyframes insertFlash{0%{background:rgba(240,162,58,.38)}100%{background:transparent}}
+.compose-tools{display:flex;align-items:center;gap:12px;padding:4px 10px 8px;color:var(--ink-3)}
+.compose-tools .send{margin-left:auto;width:28px;height:24px;border-radius:6px;display:grid;place-items:center;background:var(--seg-bg)}
+.compose-tools .send.ready{background:#2E7D5B;color:#fff}
+
+.dock{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:6px 8px;border-radius:18px;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(20px) saturate(160%);backdrop-filter:blur(20px) saturate(160%);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.32)}
+.dock .app{position:relative;width:44px;height:44px;border-radius:11px;display:grid;place-items:center;color:#fff;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.22),0 2px 6px rgba(0,0,0,.25)}
+.dock .app svg{width:22px;height:22px}
+.dock .app.logo{background:none;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.dock .app.logo svg{width:44px;height:44px}
+.dock .app.run::after{content:"";position:absolute;bottom:-5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:rgba(255,255,255,.75)}
+
+.ov{position:relative;width:440px;border-radius:22px;background:rgba(18,22,32,.76);-webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%);color:var(--ov-ink);box-shadow:0 0 0 .5px rgba(0,0,0,.6),inset 0 0 0 .5px rgba(255,255,255,.16),0 22px 50px -16px rgba(0,0,0,.65);overflow:hidden;font-family:var(--font-ui);font-size:14px}
+.ov-body{position:relative}
+.ov-text{display:flex;flex-direction:column;justify-content:flex-end;max-height:calc(3 * 1.45em + 16px);overflow:hidden;padding:12px 18px 2px;font-size:15px;line-height:1.45;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 16px);mask-image:linear-gradient(to bottom,transparent 0,#000 16px)}
+.ov-text .lines{text-wrap:pretty}
+.ov-bar{display:flex;align-items:center;gap:11px;height:48px;padding:0 12px 0 11px}
+.orb{position:relative;width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center}
+.orb .ic{width:14px;height:14px}
+.orb.rec{background:radial-gradient(circle at 35% 30%,var(--lamp-hi),var(--lamp) 55%,var(--lamp-deep));color:#3A2200;box-shadow:0 0 0 calc(var(--lvl,.2) * 8px) rgba(240,162,58,.2),0 0 16px rgba(240,162,58,.45)}
+.orb.rec .ic{stroke-width:2}
+.orb.proc{background:rgba(255,255,255,.08)}
+.orb.proc svg{width:18px;height:18px;animation:spin 1.8s cubic-bezier(.55,.1,.45,.9) infinite}
+.orb.smooth{box-shadow:inset 0 0 0 2px rgba(255,255,255,.14)}
+.orb.smooth::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--lamp-hi);border-left-color:var(--lamp);animation:spin 1.4s linear infinite}
+.orb.smooth .ic{width:12px;height:12px;color:var(--lamp-hi)}
+.orb.done{background:var(--ok);color:#06301C;animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.orb.done .ic{stroke-width:2.4}
+.orb.err{background:rgba(240,106,90,.2);color:#FF9A8D}
+.orb.err .ic{stroke-width:2}
+.orb.mute{background:rgba(255,255,255,.1);color:var(--ov-ink-2)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pop{0%{transform:scale(.4)}}
+.wave{flex:1;height:28px;display:flex;align-items:center;justify-content:space-between;min-width:0}
+.wave i{display:block;width:3px;height:100%;border-radius:2px;background:linear-gradient(to bottom,var(--lamp-hi),var(--lamp) 50%,var(--lamp-hi));transform:scaleY(.08);will-change:transform}
+.wave.dim i{background:rgba(255,255,255,.4)}
+.ov-time{font-variant-numeric:tabular-nums;font-size:13px;color:var(--ov-ink-2);min-width:30px;text-align:right}
+.chip{font-size:11.5px;font-weight:650;padding:3px 7px;border-radius:7px;background:rgba(255,255,255,.1);color:rgba(242,244,247,.88);letter-spacing:.03em}
+.ov-lock{display:inline-flex;color:rgba(242,244,247,.5)}
+.ov-lock .ic{width:13px;height:13px}
+.ov-stop{width:24px;height:24px;border-radius:7px;border:0;background:rgba(255,255,255,.12);display:grid;place-items:center;color:var(--ov-ink)}
+.ov-stop i{width:8px;height:8px;border-radius:2px;background:currentColor}
+.ov-status{flex:1;font-size:14px;font-weight:540;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ov-status small{font-weight:400;color:var(--ov-ink-2);font-size:13px;margin-left:6px}
+.ov-undo{display:inline-flex;align-items:center;gap:6px;border:0;background:rgba(255,255,255,.1);color:var(--ov-ink);font-size:12.5px;padding:4px 8px;border-radius:7px}
+.ov-undo kbd{font-family:inherit;color:var(--ov-ink-2)}
+.dots{display:none;gap:4px;align-items:center;justify-content:center;width:100%}
+.dots i{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.55)}
+.w{transition:color .45s}
+.w.t{color:var(--ov-ink-t)}
+.w.in{animation:wIn .45s ease-out}
+.w.fix .wt{animation:wFix 1.1s ease-out}
+.w.drop .wt{text-decoration:line-through;text-decoration-color:var(--lamp);text-decoration-thickness:1.5px;color:var(--ov-ink-t);transition:color .3s}
+.w.gone{display:inline-block;max-width:0!important;opacity:0;overflow:hidden;white-space:nowrap;vertical-align:bottom;transition:max-width .4s ease,opacity .3s}
+.w.drop{display:inline-block;max-width:4em;white-space:nowrap;vertical-align:bottom}
+.p.on{animation:pIn 1.4s ease-out forwards}
+@keyframes wIn{from{opacity:0;filter:blur(3px)}}
+@keyframes wFix{0%{color:var(--lamp-hi)}100%{color:inherit}}
+@keyframes pIn{0%{opacity:0;color:var(--lamp)}25%{opacity:1;color:var(--lamp)}100%{color:var(--ov-ink)}}
+.ov-body.smoothing::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(240,162,58,.16) 50%,transparent 70%);background-size:250% 100%;animation:sweep 1.3s linear infinite;pointer-events:none}
+@keyframes sweep{from{background-position:120% 0}to{background-position:-130% 0}}
+
+.ov.dyn{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);width:min(470px,90%);transition:width .45s cubic-bezier(.3,1.2,.4,1),opacity .35s,transform .35s;z-index:4}
+.ov.dyn .ov-body{max-height:0;opacity:0;transition:max-height .45s cubic-bezier(.3,1,.4,1),opacity .3s}
+.ov.dyn.has-text .ov-body{max-height:100px;opacity:1}
+.ov.dyn .ov-bar{transition:height .4s cubic-bezier(.3,1.2,.4,1),padding .4s}
+.ov.dyn .x-wave,.ov.dyn .x-time,.ov.dyn .x-lock,.ov.dyn .x-stop,.ov.dyn .x-status,.ov.dyn .x-chip,.ov.dyn .x-undo{display:none}
+.ov.dyn[data-s=rec] .x-wave{display:flex}
+.ov.dyn[data-s=rec] .x-time{display:inline}
+.ov.dyn[data-s=rec] .x-lock{display:inline-flex}
+.ov.dyn[data-s=rec][data-mode=toggle] .x-stop{display:grid}
+.ov.dyn:is([data-s=proc],[data-s=smooth],[data-s=done]) .x-status{display:block}
+.ov.dyn:is([data-s=rec],[data-s=proc],[data-s=smooth]) .x-chip{display:inline-block}
+.ov.dyn[data-s=done] .x-undo{display:inline-flex}
+.ov.dyn[data-s=done]{width:262px}
+.ov.dyn[data-s=idle]{width:58px;border-radius:8px}
+.ov.dyn[data-s=idle] .ov-bar{height:12px;padding:0}
+.ov.dyn[data-s=idle] .orb{display:none}
+.ov.dyn[data-s=idle] .dots{display:flex}
+
+.demo-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:32px;align-items:center;margin-top:18px}
+.keywrap{display:flex;align-items:center;gap:18px;min-width:0}
+.keycap{position:relative;width:70px;height:58px;border-radius:11px;flex:none;background:linear-gradient(to bottom,var(--surface-2),var(--group));box-shadow:0 0 0 1px var(--line),0 3px 0 var(--line),0 6px 12px -6px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;padding:7px 9px;transition:transform .09s,box-shadow .09s}
+.keycap b{font-size:20px;line-height:1;font-weight:500;color:var(--ink)}
+.keycap span{font-size:11px;color:var(--ink-3)}
+.keycap.down{transform:translateY(3px);box-shadow:0 0 0 1px rgba(240,162,58,.7),0 0 0 var(--line),0 0 18px rgba(240,162,58,.35)}
+.keyhint{min-width:0}
+.keyhint small{display:block;font-size:12.5px;color:var(--ink-3)}
+.keyhint p{margin:2px 0 0;font-size:15.5px;font-weight:550;color:var(--ink);min-height:1.5em;transition:opacity .2s}
+.phases{display:flex;list-style:none;margin:0;padding:0;gap:0;counter-reset:none}
+.phases li{position:relative;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-3);padding:0 14px}
+.phases li+li::before{content:"";position:absolute;left:-10px;width:20px;height:1px;background:var(--line)}
+.phases li i{width:8px;height:8px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink-3);transition:background .25s,box-shadow .25s}
+.phases li.on{color:var(--ink);font-weight:600}
+.phases li.on i{background:var(--lamp);box-shadow:0 0 0 4px var(--lamp-soft)}
+.phases li.past i{background:var(--ink-3);box-shadow:none}
+.phases li.skip{opacity:.4;text-decoration:line-through}
+
+.states{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.tile{display:flex;flex-direction:column;gap:12px;margin:0}
+.tile.wide{grid-column:span 2}
+.tile-stage{position:relative;height:230px;border-radius:14px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:22px;box-shadow:0 0 0 .5px var(--line),0 10px 30px -18px rgba(0,0,0,.35)}
+.tile-stage .ov{width:min(100% - 36px,440px)}
+.tile figcaption b{display:block;font-size:15px;font-weight:650}
+.tile figcaption span{display:block;font-size:13.5px;color:var(--ink-2);max-width:52ch}
+.bg-doc{background:linear-gradient(#fff,#fff) 0 0/100% 34px no-repeat,repeating-linear-gradient(to bottom,transparent 0 20px,#E3E6EB 20px 27px,transparent 27px 34px) 34px 50px/62% 100% no-repeat,#FBFBFC}
+.bg-code{background:repeating-linear-gradient(to bottom,transparent 0 12px,rgba(120,190,255,.28) 12px 18px,transparent 18px 22px,rgba(240,162,58,.22) 22px 28px,transparent 28px 34px,rgba(160,230,180,.22) 34px 40px,transparent 40px 46px) 46px 18px/56% 100% no-repeat,linear-gradient(90deg,#161A22 0 30px,#1C212B 30px)}
+.bg-wall{background:radial-gradient(120% 90% at 80% 110%,#D9946A 0,#6A5577 35%,#2E3560 65%,#18203A 100%)}
+.bg-photo{background:radial-gradient(70% 90% at 20% 100%,#F7C873 0,#E07F5F 40%,transparent 70%),radial-gradient(90% 80% at 90% 10%,#7DB6C9 0,#3E6F8A 50%,#22364A 100%)}
+.bg-sheet{background:linear-gradient(90deg,rgba(0,0,0,.08) 1px,transparent 1px) 0 0/90px 26px,linear-gradient(rgba(0,0,0,.08) 1px,transparent 1px) 0 0/90px 26px,linear-gradient(#EEF6EF,#EEF6EF) 0 0/100% 26px no-repeat,#FFFFFF}
+.bg-mail{background:linear-gradient(90deg,#F2F4F7 0 32%,#fff 32%)}
+.bg-figma{background:radial-gradient(circle at 30% 40%,#8BD3B0 0 46px,transparent 47px),radial-gradient(circle at 62% 46%,#B9A6F5 0 60px,transparent 61px),#E9ECEF}
+.idle-pair{display:flex;align-items:center;gap:22px}
+.ov.idle-tiny{width:58px;border-radius:8px}
+.ov.idle-tiny .ov-bar{height:12px;padding:0;justify-content:center}
+.ov.idle-tiny .dots{display:flex}
+.ov.idle-hover{width:auto}
+.ov.idle-hover .ov-bar{height:34px;padding:0 13px 0 9px;gap:9px}
+.ov.idle-hover .orb{width:20px;height:20px;background:rgba(255,255,255,.12);color:var(--ov-ink-2)}
+.ov.idle-hover .orb .ic{width:12px;height:12px}
+.ov.idle-hover span{font-size:13px;white-space:nowrap}
+.ov.idle-hover kbd{font-family:inherit;padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.12);margin:0 2px}
+.ov-msg{display:flex;gap:12px;padding:14px 16px 4px;align-items:flex-start}
+.ov-msg .orb{margin-top:1px}
+.ov-title{margin:0;font-weight:650;font-size:14.5px}
+.ov-desc{margin:2px 0 0;color:var(--ov-ink-2);font-size:13px;line-height:1.45}
+.ov-actions{display:flex;gap:8px;justify-content:flex-end;padding:10px 12px 12px}
+.ov-btn{border:0;height:28px;padding:0 12px;border-radius:8px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.12);color:var(--ov-ink)}
+.ov-btn.primary{background:var(--lamp);color:#2A1600}
+.chunks{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--ov-ink-2)}
+.chunks i{width:10px;height:4px;border-radius:2px;background:rgba(255,255,255,.5)}
+.chunks i.cur{background:var(--lamp);animation:breathe 1.2s ease-in-out infinite}
+.chunks span{margin-left:5px;font-variant-numeric:tabular-nums}
+
+.mw{display:grid;grid-template-columns:232px minmax(0,1fr);height:720px;border-radius:12px;overflow:hidden;background:var(--win-bg);box-shadow:var(--shadow-win)}
+.mw-side{background:var(--win-side);border-right:1px solid var(--line-2);padding:14px 10px 12px;display:flex;flex-direction:column}
+.mw-side .tl{padding:2px 6px 18px}
+.mw-id{display:flex;align-items:center;gap:10px;padding:0 8px 18px;font-family:var(--font-display);font-weight:700;font-size:16px;letter-spacing:-.01em}
+.mw-id svg{width:28px;height:28px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;border:0;background:transparent;font-size:13.5px;text-align:left;color:var(--ink)}
+.nav button:hover{background:var(--hover)}
+.nav button .ic{color:var(--ink-3)}
+.nav button[aria-selected=true]{background:var(--sel);font-weight:600}
+.nav button[aria-selected=true] .ic{color:var(--lamp-ink)}
+.side-status{margin-top:auto;padding:12px;border-radius:10px;background:var(--hover);font-size:12.5px;line-height:1.4}
+.side-status b{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px}
+.side-status span{color:var(--ink-3)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(61,190,132,.2);flex:none}
+.mw-main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.mw-bar{height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 26px;border-bottom:1px solid var(--line-2)}
+.mw-bar h3{margin:0;font-size:15px;font-weight:700}
+.panel{flex:1;min-height:0;overflow:auto;padding:22px 28px 28px}
+.panel[hidden]{display:none}
+.search{display:flex;align-items:center;gap:8px;height:30px;width:280px;padding:0 10px;border-radius:8px;background:var(--seg-bg);color:var(--ink-3)}
+.search input{flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:13px;color:var(--ink)}
+.search:focus-within{box-shadow:0 0 0 2px var(--focus)}
+.banner{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--lamp-soft);font-size:13.5px;margin-bottom:22px}
+.banner kbd{font-family:inherit;padding:1px 6px;border-radius:5px;background:var(--surface-2);box-shadow:0 0 0 1px var(--line);font-size:12.5px}
+.banner .orb{width:22px;height:22px}
+.hgroup{margin:0 0 18px}
+.hgroup h4{margin:0 0 6px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.hlist{list-style:none;margin:0;padding:0;border-radius:10px;border:1px solid var(--line-2);overflow:hidden}
+.hrow{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:14px;padding:12px 12px 12px 14px;align-items:start;border-top:1px solid var(--line-2);transition:background .15s}
+.hrow:first-child{border-top:0}
+.hrow:hover{background:var(--hover)}
+.hrow time{font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink-3);padding-top:1px}
+.hrow p{margin:0;font-size:14px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hmeta{display:flex;align-items:center;gap:12px;margin-top:5px;font-size:12.5px;color:var(--ink-3)}
+.hmeta .app{display:inline-flex;align-items:center;gap:6px}
+.hmeta .app i{width:14px;height:14px;border-radius:4px;display:inline-grid;place-items:center;font-style:normal;font-size:9px;font-weight:800;color:#fff}
+.lang{font-size:11px;font-weight:650;letter-spacing:.03em;padding:1px 6px;border-radius:5px;background:var(--seg-bg);color:var(--ink-2)}
+.copy{width:30px;height:30px;border-radius:7px;border:0;background:transparent;display:grid;place-items:center;color:var(--ink-3)}
+.copy:hover{background:var(--seg-bg);color:var(--ink)}
+.copy.ok{color:var(--ok-ink)}
+.empty{padding:36px 20px;text-align:center;color:var(--ink-2);border:1px dashed var(--line);border-radius:10px;font-size:14px}
+.retention{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:13px;color:var(--ink-3)}
+.retention .ic{color:var(--lamp-ink)}
+.linkbtn{border:0;background:none;padding:0;color:var(--lamp-ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+
+.card{border-radius:12px;background:var(--group);border:1px solid var(--line-2);padding:20px}
+.srv-top{display:flex;align-items:center;gap:14px}
+.srv-ic{width:46px;height:46px;border-radius:11px;background:linear-gradient(160deg,#2B3350,#141A2B);display:grid;place-items:center;color:var(--lamp);flex:none}
+.srv-ic .ic{width:22px;height:22px}
+.srv-top h4{margin:0;font-size:17px;font-weight:700}
+.srv-top p{margin:0;font-size:13px;color:var(--ink-3)}
+.pill{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(61,190,132,.14);color:var(--ok-ink)}
+.e2e{display:flex;gap:14px;align-items:center;margin:18px 0;padding:14px 16px;border-radius:10px;background:var(--surface-2);box-shadow:inset 0 0 0 1px rgba(240,162,58,.45)}
+.e2e-badge{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px;background:var(--lamp);color:#2A1600;font-weight:700;font-size:13.5px;white-space:nowrap}
+.e2e-badge .ic{stroke-width:2}
+.e2e p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0}
+.kv div{min-width:0}
+.kv dt{font-size:12.5px;color:var(--ink-3)}
+.kv dd{margin:2px 0 0;font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.routes{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.routes li{padding:11px 12px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line-2);font-size:13px}
+.routes li b{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px}
+.routes li span{color:var(--ink-3)}
+.routes li.on{border-color:rgba(240,162,58,.6);box-shadow:0 0 0 3px var(--lamp-soft)}
+.routes li i{width:8px;height:8px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.routes li.on i{background:var(--lamp);box-shadow:none}
+.routes li.ok i{background:var(--ok);box-shadow:none}
+.note{font-size:12.5px;color:var(--ink-3);margin:8px 0 0}
+.fp{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line-2)}
+.fp small{display:block;font-size:12.5px;color:var(--ink-3)}
+.fp code{font-family:var(--font-mono);font-size:13.5px;letter-spacing:.02em;word-spacing:.25em}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.test-out{font-size:12.5px;color:var(--ok-ink);margin:10px 0 0;min-height:1.4em}
+.pair{margin-top:26px}
+.pair h4{margin:0 0 12px;font-size:15px;font-weight:700}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:14px;counter-reset:st}
+.steps>li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:12px;counter-increment:st}
+.steps>li::before{content:counter(st);width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;background:var(--seg-bg);color:var(--ink-2)}
+.steps>li p{margin:2px 0 8px;font-size:14px}
+.term{border-radius:10px;background:#12161F;color:#D8DEE8;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;padding:12px 14px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.term .pr{color:#7E8899}
+.term .hl{color:var(--lamp);font-weight:700;letter-spacing:.08em}
+.term .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#E8ECF2;height:26px;font-family:var(--font-ui)}
+.code-in{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.code-in input{width:40px;height:46px;text-align:center;font-size:20px;font-weight:650;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);text-transform:uppercase;outline:none;transition:border-color .15s,box-shadow .15s}
+.code-in input:focus{border-color:var(--lamp);box-shadow:0 0 0 3px var(--lamp-soft)}
+.code-in .sep{width:10px;height:2px;background:var(--ink-3);border-radius:1px;margin:0 4px}
+.code-in .btn{margin-left:10px;height:46px;padding:0 18px;font-size:14px}
+.pair-ok{display:none;margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(61,190,132,.12);font-size:13.5px}
+.pair-ok.show{display:block;animation:msgIn .4s ease-out}
+.pair-ok code{font-family:var(--font-mono);font-weight:600}
+
+.groups{display:grid;gap:22px}
+.sgroup h4{margin:0 0 8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.sbox{border-radius:10px;background:var(--group);border:1px solid var(--line-2)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:12px 16px;border-top:1px solid var(--line-2)}
+.srow:first-child{border-top:0}
+.srow .t{min-width:0}
+.srow .t b{display:block;font-weight:560;font-size:14px}
+.srow .t span{display:block;font-size:12.5px;color:var(--ink-3);max-width:52ch}
+.select{appearance:none;-webkit-appearance:none;height:30px;padding:0 30px 0 11px;border-radius:8px;border:1px solid var(--line);font-size:13px;background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3 3-3' fill='none' stroke='%238A93A3' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;min-width:200px}
+.hk{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:13.5px;font-weight:600;min-width:200px;justify-content:space-between}
+.hk small{font-weight:400;color:var(--ink-3);font-size:12px}
+.hk[data-rec=true]{border-color:var(--lamp);box-shadow:0 0 0 3px var(--lamp-soft);color:var(--lamp-ink)}
+.hk[data-rec=true] small{display:none}
+.meter{display:flex;gap:3px;align-items:center;margin-top:7px}
+.meter i{width:8px;height:6px;border-radius:2px;background:var(--seg-bg);box-shadow:inset 0 0 0 .5px var(--line)}
+.meter i.on{background:var(--ok);box-shadow:none}
+.meter i.on.hot{background:var(--lamp)}
+.radio{display:flex;flex-direction:column;gap:2px}
+.radio label{display:flex;gap:10px;align-items:flex-start;padding:10px 16px;border-top:1px solid var(--line-2);cursor:pointer}
+.radio label:first-child{border-top:0}
+.radio input{accent-color:var(--lamp);margin-top:3px}
+.radio b{display:block;font-weight:560;font-size:14px}
+.radio span{display:block;font-size:12.5px;color:var(--ink-3)}
+
+.priv-lead{font-family:var(--font-display);font-size:24px;line-height:1.25;letter-spacing:-.015em;font-weight:650;margin:0 0 6px;max-width:30ch}
+.priv-sub{margin:0 0 20px;color:var(--ink-2);font-size:14.5px;max-width:62ch}
+.flow{width:100%;height:auto;display:block;border-radius:12px;background:var(--group);border:1px solid var(--line-2)}
+.flow .node{fill:var(--surface-2);stroke:var(--line)}
+.flow .node.hot{stroke:rgba(240,162,58,.7)}
+.flow .t1{fill:var(--ink);font:700 14px var(--font-ui)}
+.flow .t2{fill:var(--ink-3);font:400 12px var(--font-ui)}
+.flow .t3{fill:var(--lamp-ink);font:600 12px var(--font-ui)}
+.flow .tx{fill:var(--ink-3);font:500 11.5px var(--font-ui)}
+.flow .pipe{stroke:var(--lamp);stroke-width:2;fill:none;stroke-dasharray:4 7;animation:flowDash 1.2s linear infinite}
+.flow .pipe.back{stroke:var(--ink-3);animation-direction:reverse}
+.flow .nocloud{stroke:var(--ink-3);stroke-width:1.5;fill:none;stroke-dasharray:3 5}
+.flow .cloud{fill:none;stroke:var(--ink-3);stroke-width:1.5}
+.flow .strike{stroke:var(--bad-ink);stroke-width:2;stroke-linecap:round}
+.flow .lockbg{fill:var(--lamp)}
+.flow .lockic{fill:none;stroke:#2A1600;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.flow .glyph{fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+@keyframes flowDash{to{stroke-dashoffset:-22}}
+.priv-cols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;margin-top:22px}
+.priv-cols h4{margin:0 0 10px;font-size:15px;font-weight:700}
+.priv-steps{margin:0;padding-left:22px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
+.priv-steps li::marker{color:var(--lamp-ink);font-weight:700}
+.never{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
+.never li{display:flex;gap:10px;align-items:flex-start}
+.never .ic{color:var(--bad-ink);margin-top:3px}
+.crypto{margin:18px 0 0;font-size:12.5px;color:var(--ink-3)}
+
+.tray-wrap{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px;align-items:start}
+.mcrop{position:relative;height:440px;border-radius:16px;overflow:hidden;isolation:isolate;box-shadow:0 0 0 .5px rgba(0,0,0,.3),0 30px 60px -36px rgba(10,16,30,.5)}
+.menu{position:absolute;top:32px;right:12px;width:318px;padding:5px;border-radius:11px;background:var(--menu-bg);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);color:var(--menu-ink);box-shadow:0 0 0 .5px rgba(0,0,0,.35),inset 0 0 0 .5px rgba(255,255,255,.25),0 18px 40px -10px rgba(0,0,0,.5);font-size:13.5px}
+.menu .mi{display:flex;align-items:center;gap:9px;padding:4px 10px;border-radius:6px;min-height:24px;width:100%;border:0;background:transparent;color:inherit;text-align:left;font-size:13.5px}
+.menu .mi kbd{margin-left:auto;font-family:inherit;opacity:.55;font-size:13px}
+.menu .mi:hover,.menu .mi.hl{background:#0A64E0;color:#fff}
+.menu .mi:hover kbd,.menu .mi.hl kbd{opacity:.85}
+.menu hr{border:0;height:1px;background:rgba(128,128,140,.25);margin:5px 10px}
+.menu .head{padding:8px 10px 6px;display:flex;gap:10px;align-items:flex-start}
+.menu .head b{display:block;font-weight:650}
+.menu .head span{display:block;font-size:12.5px;opacity:.65}
+.menu .head .dot{margin-top:6px}
+.menu .sub{padding:4px 10px 2px;font-size:12px;opacity:.55;font-weight:600}
+.menu .last{margin:0 10px 4px;font-size:12.5px;line-height:1.4;opacity:.85;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.menu .chev{margin-left:auto;opacity:.6}
+.icon-states{display:grid;gap:10px}
+.istate{display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:10px;background:var(--group);border:1px solid var(--line-2)}
+.istate .chipbar{width:64px;height:28px;border-radius:7px;background:#1E2436;display:grid;place-items:center;color:#fff;flex:none}
+.istate .chipbar svg{width:16px;height:16px}
+.istate b{display:block;font-size:14px;font-weight:600}
+.istate span{display:block;font-size:12.5px;color:var(--ink-3)}
+.ti-rec{color:var(--lamp)}
+.ti-proc svg{animation:spin 2.6s linear infinite,breathe 1.3s ease-in-out infinite}
+.ti-pause{opacity:.45}
+.ti-err{position:relative}
+.ti-err::after{content:"";position:absolute;right:21px;top:4px;width:7px;height:7px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 1.5px #1E2436}
+
+.gnome{position:relative;height:300px;border-radius:14px;overflow:hidden;isolation:isolate;background:radial-gradient(90% 120% at 85% 110%,#E95420 0,#9C2B3E 30%,#4A1238 58%,#2C001E 100%);box-shadow:0 0 0 .5px rgba(0,0,0,.4),0 30px 60px -36px rgba(10,16,30,.5)}
+.gbar{position:absolute;top:0;left:0;right:0;height:30px;background:#0B0B0D;color:#F2F2F2;font-size:13.5px;font-family:Ubuntu,"Cantarell",var(--font-ui);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 10px}
+.gbar .ws-dots{display:flex;gap:6px;align-items:center}
+.gbar .ws-dots i{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.4)}
+.gbar .ws-dots i.on{width:28px;background:#fff}
+.gbar .clock{font-weight:600}
+.gbar .sys{justify-self:end;display:flex;gap:12px;align-items:center;padding:3px 10px;border-radius:999px}
+.gbar .sys .ic{width:15px;height:15px}
+.gbar .sys svg.logo-t{width:15px;height:15px;color:var(--lamp)}
+.gwin{position:absolute;top:58px;left:7%;width:52%;height:150px;border-radius:12px;background:#242424;box-shadow:0 12px 30px rgba(0,0,0,.45);overflow:hidden}
+.gwin .hd{height:38px;background:#303030;display:flex;align-items:center;justify-content:space-between;padding:0 12px;color:#ddd;font-size:13px;font-weight:600}
+.gwin .hd span{display:flex;gap:8px}
+.gwin .hd span i{width:14px;height:14px;border-radius:50%;background:#4a4a4a}
+.gwin .bd{padding:12px 16px;font-size:14px;color:#E6E6E6;line-height:1.6}
+.gwin .bd .caret{background:#E6E6E6}
+.gnome .ov{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(470px,90%)}
+.gcap{display:flex;gap:24px;margin-top:14px;font-size:13.5px;color:var(--ink-2);flex-wrap:wrap}
+.gcap span{display:inline-flex;align-items:center;gap:8px}
+.gcap .ic{color:var(--lamp-ink)}
+
+footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;color:var(--ink-3);font-size:13px;flex-wrap:wrap}
+
+@media (max-width:1100px){
+  .hero{grid-template-columns:1fr;gap:20px}
+  .hero h1{font-size:48px}
+  .s-head{grid-template-columns:1fr;gap:10px}
+  .s-head p{justify-self:start}
+  .states{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile.wide{grid-column:span 2}
+  .tray-wrap{grid-template-columns:1fr}
+  .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .demo-foot{grid-template-columns:1fr}
+}
+@media (max-width:820px){
+  .page{padding:0 18px}
+  .hero h1{font-size:38px}
+  .stage{height:600px}
+  .chat-win{grid-template-columns:1fr;width:92%;height:380px}
+  .chat-side{display:none}
+  .mbar .l span:not(:first-child):not(:nth-child(2)){display:none}
+  .states{grid-template-columns:1fr}
+  .tile.wide{grid-column:auto}
+  .mw{grid-template-columns:1fr;height:auto}
+  .mw-side{flex-direction:row;align-items:center;gap:8px;padding:10px;overflow-x:auto}
+  .mw-side .tl,.mw-id,.side-status{display:none}
+  .nav{flex-direction:row}
+  .panel{max-height:none}
+  .routes{grid-template-columns:1fr}
+  .priv-cols{grid-template-columns:1fr}
+  .phases{flex-wrap:wrap;row-gap:8px}
+  .menu{right:12px}
+  .search{width:100%}
+  .mw-bar{flex-wrap:wrap;height:auto;padding:12px 18px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="logo" viewBox="12 12 64 64">
+    <rect x="12" y="12" width="64" height="64" rx="15" fill="#0B1120"/>
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#22D3EE"/>
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#E2E8F0" transform="rotate(180 44 44)"/>
+    <circle cx="44" cy="44" r="3.2" fill="#22D3EE"/>
+  </symbol>
+  <symbol id="mark" viewBox="17 17 54 54">
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="currentColor"/>
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="currentColor" transform="rotate(180 44 44)"/>
+    <circle cx="44" cy="44" r="3.2" fill="currentColor"/>
+  </symbol>
+  <symbol id="mark-color" viewBox="17 17 54 54">
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#22D3EE"/>
+    <path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#E2E8F0" transform="rotate(180 44 44)"/>
+    <circle cx="44" cy="44" r="3.2" fill="#22D3EE"/>
+  </symbol>
+  <symbol id="i-mic" viewBox="0 0 16 16"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 8a5 5 0 0 0 10 0M8 13v1.8"/></symbol>
+  <symbol id="i-micoff" viewBox="0 0 16 16"><path d="M10.5 6.5V4a2.5 2.5 0 0 0-5 0v4a2.5 2.5 0 0 0 4 2M3 8a5 5 0 0 0 8.2 3.8M13 8a5 5 0 0 1-.3 1.6M8 13v1.8M2 2l12 12"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7.5" rx="2"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="2"/><path d="M10.5 3.2V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2L8 2.5l5.5 4.7V13a1 1 0 0 1-1 1h-3v-4h-3v4h-3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-server" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5" rx="1.5"/><rect x="2" y="9" width="12" height="4.5" rx="1.5"/><path d="M4.8 4.75h.01M4.8 11.25h.01M8 4.75h3M8 11.25h3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M2.5 4.5h6M12 4.5h1.5M2.5 11.5H4M7.5 11.5h6"/><circle cx="10.2" cy="4.5" r="1.7"/><circle cx="5.8" cy="11.5" r="1.7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.2-2.1 5.6-5 6.6-2.9-1-5-3.4-5-6.6v-4z"/><path d="M5.8 8l1.6 1.6 3-3.2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 4.5v4.2M8 11.3h.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 16 16"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l1.8 1.8M10.2 10.2L12 12M12 4l-1.8 1.8M5.8 10.2L4 12"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 16 16"><path d="M1.8 6a9 9 0 0 1 12.4 0M4 8.5a6 6 0 0 1 8 0M6.2 11a3 3 0 0 1 3.6 0"/><circle cx="8" cy="13.2" r=".6"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 16 16"><rect x="1.5" y="5" width="11.5" height="6" rx="1.6"/><path d="M14.5 7v2"/><rect x="3" y="6.5" width="7" height="3" rx=".6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="4" rx="2"/><rect x="2" y="9" width="12" height="4" rx="2"/><circle cx="5" cy="5" r=".8"/><circle cx="11" cy="11" r=".8"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 16 16"><path d="M2.5 6v4h2.5l3.5 3V3L5 6zM11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></symbol>
+  <symbol id="i-power" viewBox="0 0 16 16"><path d="M8 2v5.5M4.6 4.3a5 5 0 1 0 6.8 0"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.6"/><path d="M2.5 4.5L8 9l5.5-4.5"/></symbol>
+  <symbol id="i-term" viewBox="0 0 16 16"><path d="M3.5 5l3 3-3 3M8.5 11.5h4"/></symbol>
+  <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 16 16"><path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M2.5 8L13.5 3 10 13.5 7.5 9z"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 16 16"><path d="M2.8 8a5.2 5.2 0 1 0 1.6-3.8M2.5 2.2v2.6h2.6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-bold" viewBox="0 0 16 16"><path d="M5 3h3.8a2.5 2.5 0 0 1 0 5H5zM5 8h4.3a2.5 2.5 0 0 1 0 5H5z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 16 16"><path d="M4.5 12.5a3 3 0 0 1-.4-6A4 4 0 0 1 11.8 6a3.2 3.2 0 0 1-.3 6.5z"/></symbol>
+  <symbol id="i-house" viewBox="0 0 16 16"><path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h8V6.5"/><rect x="7" y="9" width="2" height="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="7" rx="1"/><path d="M1.5 12.5h13"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+</svg>
+
+<header class="page top">
+  <div class="top-row">
+    <div class="brand" aria-label="Codevo Whisper"><svg class="brand-tile" viewBox="12 12 64 64" aria-hidden="true"><rect x="12" y="12" width="64" height="64" rx="15" fill="#0B1120"/><g class="arcs"><path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#22D3EE"/><path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#E2E8F0" transform="rotate(180 44 44)"/></g><circle cx="44" cy="44" r="3.2" fill="#22D3EE"/></svg><span class="wm" aria-hidden="true"><span class="wm-mono">codevo</span><span class="wm-cur">_</span><span class="wm-ui">Whisper</span></span></div>
+    <div class="top-meta">
+      <span>Návrh rozhrania, verzia 0.1</span>
+      <div class="seg" role="group" aria-label="Vzhľad stránky">
+        <button type="button" data-theme-set="light" aria-pressed="true">Svetlý</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">Tmavý</button>
+      </div>
+    </div>
+  </div>
+  <div class="hero">
+    <h1>Diktovanie, ktoré zostáva doma</h1>
+    <div>
+      <p>Podržte kláves, povedzte vetu a text sa objaví tam, kde bliká kurzor. Prepis robí váš vlastný server, cesta k nemu je šifrovaná od začiatku do konca.</p>
+      <div class="facts">
+        <span><svg class="ic"><use href="#i-house"/></svg>Prepis na vašom serveri</span>
+        <span><svg class="ic"><use href="#i-lock"/></svg>End-to-end šifrovanie</span>
+        <span><svg class="ic"><use href="#i-cloud"/></svg>Žiadny cloud</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+<section class="block" id="diktovanie" aria-labelledby="h-dikt">
+  <div class="s-head">
+    <h2 id="h-dikt">Diktovanie</h2>
+    <p>Celý priebeh od stlačenia klávesu po vložený text. Slová pribúdajú zhruba každú sekundu, svetlejšie slová si model ešte môže rozmyslieť.</p>
+  </div>
+  <div class="demo-tools">
+    <div class="grp">
+      <div class="seg" role="group" aria-label="Režim klávesu v ukážke">
+        <button type="button" data-mode="hold" aria-pressed="true">Podrž klávesu</button>
+        <button type="button" data-mode="toggle" aria-pressed="false">Prepínací režim</button>
+      </div>
+      <span class="lbl-switch"><button type="button" class="switch" role="switch" aria-checked="true" id="demoSmooth" aria-labelledby="demoSmoothLbl"></button><span id="demoSmoothLbl">Uhladiť text</span></span>
+    </div>
+    <button type="button" class="btn" id="replay"><svg class="ic"><use href="#i-replay"/></svg>Prehrať znova</button>
+  </div>
+
+  <div class="stage" role="img" aria-label="Animovaná ukážka: používateľ drží kláves, hovorí, overlay zobrazuje živý prepis a po pustení klávesu sa text vloží do okna chatu.">
+    <svg class="wall" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#151C34"/>
+          <stop offset=".45" stop-color="#2C3360"/>
+          <stop offset=".74" stop-color="#6A5577"/>
+          <stop offset="1" stop-color="#D9946A"/>
+        </linearGradient>
+        <radialGradient id="glow">
+          <stop offset="0" stop-color="#FFC56B" stop-opacity=".75"/>
+          <stop offset="1" stop-color="#FFC56B" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="1200" height="700" fill="url(#sky)"/>
+      <g fill="#fff">
+        <circle cx="90" cy="70" r="1.2" opacity=".7"/><circle cx="240" cy="130" r=".9" opacity=".5"/><circle cx="420" cy="60" r="1.1" opacity=".6"/><circle cx="610" cy="110" r=".8" opacity=".5"/><circle cx="820" cy="54" r="1.3" opacity=".7"/><circle cx="1010" cy="120" r="1" opacity=".6"/><circle cx="1130" cy="66" r=".9" opacity=".5"/><circle cx="1160" cy="200" r="1" opacity=".4"/><circle cx="40" cy="220" r=".9" opacity=".4"/>
+      </g>
+      <path d="M0 520C200 470 380 500 560 480S900 430 1200 470V700H0Z" fill="#2A2F50"/>
+      <path d="M0 585C180 545 360 565 520 550S860 525 1200 565V700H0Z" fill="#1C2139"/>
+      <circle cx="1083" cy="601" r="46" fill="url(#glow)"/>
+      <path d="M0 640C260 610 520 630 760 615S1060 600 1200 620V700H0Z" fill="#12162A"/>
+      <path d="M1062 612V593l-4 1 19-15 19 15-4-1v19z" fill="#12162A"/>
+      <rect x="1088" y="582" width="4" height="9" fill="#12162A"/>
+      <rect x="1080" y="598" width="6" height="6" rx="1" fill="#FFC56B"/>
+    </svg>
+
+    <div class="mbar" aria-hidden="true">
+      <div class="l">
+        <span><svg viewBox="0 0 16 16" width="14" height="14" fill="#fff"><path d="M11.2 8.4c0-1.6 1.3-2.3 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6C4.3 4.8 3 5.5 2.3 6.8c-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.4 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6 1.7-1 2.3-2c.7-1.1 1-2.2 1-2.3 0 0-2.8-1.1-2.8-4.1zM9.7 3.6c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.1-.5.5-.9 1.4-.8 2.3.9.1 1.8-.4 2.3-1z" transform="translate(0 -1.5)"/></svg></span>
+        <span><b>Slack</b></span><span>Súbor</span><span>Úpravy</span><span>Zobraziť</span><span>Okno</span><span>Pomoc</span>
+      </div>
+      <div class="r">
+        <span class="privdot" id="privDot"></span>
+        <span class="tray" id="demoTray"><svg><use href="#mark"/></svg></span>
+        <svg class="ic"><use href="#i-wifi"/></svg>
+        <svg class="ic"><use href="#i-battery"/></svg>
+        <svg class="ic"><use href="#i-cc"/></svg>
+        <span>ne 25. 10.&nbsp; 14:32</span>
+      </div>
+    </div>
+
+    <div class="chat-win" aria-hidden="true">
+      <aside class="chat-side">
+        <div class="tl"><i></i><i></i><i></i></div>
+        <div class="ws">dev-tím</div>
+        <div class="ch"># všeobecné</div>
+        <div class="ch on"># backend</div>
+        <div class="ch"># release</div>
+        <div class="ch-h">Priame správy</div>
+        <div class="ch"><span class="dm-dot"></span>Peter Novák</div>
+        <div class="ch"><span class="dm-dot off"></span>Jana Kováčová</div>
+      </aside>
+      <div class="chat-main">
+        <div class="chat-head"># backend <small>8 členov</small></div>
+        <div class="chat-msgs" id="chatMsgs">
+          <div class="msg"><span class="av" style="background:#7A5AC7">JK</span><div><b>Jana Kováčová</b><time>14:21</time><p>Nasadila som novú verziu párovania na staging. Kľúč servera sa už pripne po prvom spojení.</p></div></div>
+          <div class="msg"><span class="av" style="background:#2F8F83">PN</span><div><b>Peter Novák</b><time>14:28</time><p>Super. Pozrie sa niekto na PR #482? Pridal som tam overenie odtlačku pri párovaní.</p></div></div>
+        </div>
+        <div class="compose">
+          <div class="compose-field"><span id="composeText"></span><span class="caret"></span><span class="compose-ph" id="composePh">Správa pre #backend</span></div>
+          <div class="compose-tools"><svg class="ic"><use href="#i-plus"/></svg><svg class="ic"><use href="#i-bold"/></svg><svg class="ic"><use href="#i-code"/></svg><span class="send" id="sendBtn"><svg class="ic"><use href="#i-send"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ov dyn" id="demoOv" data-s="idle" data-mode="hold" aria-hidden="true">
+      <div class="ov-body" id="demoBody"><div class="ov-text"><div class="lines" id="demoWords"></div></div></div>
+      <div class="ov-bar">
+        <span class="dots"><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="orb rec" id="demoOrb"><svg class="ic"><use href="#i-mic"/></svg></span>
+        <div class="wave x-wave" id="demoWave"></div>
+        <span class="ov-status x-status" id="demoStatus">Spracúvam</span>
+        <span class="ov-time x-time" id="demoTime">0:00</span>
+        <span class="chip x-chip">SK</span>
+        <span class="ov-lock x-lock" title="Šifrované"><svg class="ic"><use href="#i-lock"/></svg></span>
+        <span class="ov-stop x-stop"><i></i></span>
+        <span class="ov-undo x-undo">Späť <kbd>⌘Z</kbd></span>
+      </div>
+    </div>
+
+    <div class="dock" aria-hidden="true">
+      <span class="app run" style="background:linear-gradient(160deg,#5AA9FF,#1F6FE0)"><svg class="ic"><use href="#i-laptop"/></svg></span>
+      <span class="app run" style="background:linear-gradient(160deg,#5C3A7E,#3A1F57)"><svg class="ic"><use href="#i-chat"/></svg></span>
+      <span class="app" style="background:linear-gradient(160deg,#5FC2FF,#2A84E8)"><svg class="ic"><use href="#i-mail"/></svg></span>
+      <span class="app run" style="background:linear-gradient(160deg,#2B79C9,#174F8E)"><svg class="ic"><use href="#i-code"/></svg></span>
+      <span class="app run" style="background:linear-gradient(160deg,#3A3F48,#16181D)"><svg class="ic"><use href="#i-term"/></svg></span>
+      <span class="app logo run"><svg><use href="#logo"/></svg></span>
+      <span class="app" style="background:linear-gradient(160deg,#A4A9B2,#6C717A)"><svg class="ic"><use href="#i-gear"/></svg></span>
+    </div>
+  </div>
+
+  <div class="demo-foot">
+    <div class="keywrap">
+      <div class="keycap" id="keycap" aria-hidden="true"><b>⌥</b><span>option</span></div>
+      <div class="keyhint">
+        <small id="keyLabel">Pravý Option, podržte počas hovorenia</small>
+        <p id="keyHint" aria-live="polite">Kurzor je v okne chatu. Codevo Whisper čaká.</p>
+      </div>
+    </div>
+    <ol class="phases" id="phases" aria-label="Fázy diktovania">
+      <li data-p="idle"><i></i>Pripravené</li>
+      <li data-p="rec"><i></i>Nahrávam</li>
+      <li data-p="proc"><i></i>Spracúvam</li>
+      <li data-p="smooth"><i></i>Uhladzujem</li>
+      <li data-p="done"><i></i>Vložené</li>
+    </ol>
+  </div>
+</section>
+
+<section class="block" id="stavy" aria-labelledby="h-stavy">
+  <div class="s-head">
+    <h2 id="h-stavy">Stavy overlay</h2>
+    <p>Overlay je vždy tmavý a priesvitný, aby bol čitateľný nad dokumentom, kódom aj tapetou. Každý stav hovorí, čo sa deje a čo môžete urobiť.</p>
+  </div>
+  <div class="states">
+    <figure class="tile">
+      <div class="tile-stage bg-doc">
+        <div class="idle-pair">
+          <div class="ov idle-tiny"><div class="ov-bar"><span class="dots"><i></i><i></i><i></i><i></i><i></i></span></div></div>
+          <div class="ov idle-hover"><div class="ov-bar"><span class="orb"><svg class="ic"><use href="#i-mic"/></svg></span><span>Podržte <kbd>pravý ⌥</kbd> a hovorte</span></div></div>
+        </div>
+      </div>
+      <figcaption><b>Pripravené</b><span>Nenápadná kapsula pri spodnom okraji. Po prejdení myšou ukáže skratku.</span></figcaption>
+    </figure>
+
+    <figure class="tile wide">
+      <div class="tile-stage bg-code">
+        <div class="ov">
+          <div class="ov-text"><div class="lines"><span class="w">ahoj Peter pozrel som si ten pull request vyzerá to </span><span class="w t">dobre len by</span></div></div>
+          <div class="ov-bar">
+            <span class="orb rec" style="--lvl:.6"><svg class="ic"><use href="#i-mic"/></svg></span>
+            <div class="wave" data-wave="speech" data-seed="1"></div>
+            <span class="ov-time">0:04</span><span class="chip">SK</span>
+            <span class="ov-lock" title="Šifrované"><svg class="ic"><use href="#i-lock"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Nahrávam</b><span>Potvrdené slová sú plné, posledné dve či tri sú svetlejšie, kým ich model nepotvrdí. Zámok pripomína, že zvuk odchádza šifrovaný.</span></figcaption>
+    </figure>
+
+    <figure class="tile">
+      <div class="tile-stage bg-wall">
+        <div class="ov" style="width:min(100% - 36px,330px)">
+          <div class="ov-bar">
+            <span class="orb proc"><svg aria-hidden="true"><use href="#mark-color"/></svg></span>
+            <span class="ov-status">Spracúvam <small>posledná časť</small></span>
+            <span class="chip">SK</span>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Spracúvam</b><span>Po pustení klávesu server dopíše poslednú časť. Zvyčajne to trvá menej ako pol sekundy.</span></figcaption>
+    </figure>
+
+    <figure class="tile">
+      <div class="tile-stage bg-sheet">
+        <div class="ov" style="width:min(100% - 36px,270px)">
+          <div class="ov-bar">
+            <span class="orb done"><svg class="ic"><use href="#i-check"/></svg></span>
+            <span class="ov-status">Vložené do Slacku</span>
+            <span class="ov-undo">Späť <kbd>⌘Z</kbd></span>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Vložené</b><span>Krátke potvrdenie s možnosťou vrátiť vloženie. Po sekunde a pol zmizne samo.</span></figcaption>
+    </figure>
+
+    <figure class="tile">
+      <div class="tile-stage bg-photo">
+        <div class="ov" style="width:min(100% - 36px,380px)">
+          <div class="ov-msg">
+            <span class="orb err"><svg class="ic"><use href="#i-warn"/></svg></span>
+            <div><p class="ov-title">Server nedostupný</p><p class="ov-desc">Doterajší text je v schránke. Zvyšok nahrávky zostal v zariadení a odošle sa, keď bude domáci server opäť dostupný.</p></div>
+          </div>
+          <div class="ov-actions"><button type="button" class="ov-btn">Zavrieť</button><button type="button" class="ov-btn primary">Skúsiť znova</button></div>
+        </div>
+      </div>
+      <figcaption><b>Server nedostupný</b><span>Nič sa nestratí. Text je v schránke a nahrávka čaká na spojenie.</span></figcaption>
+    </figure>
+
+    <figure class="tile">
+      <div class="tile-stage bg-mail">
+        <div class="ov" style="width:min(100% - 36px,380px)">
+          <div class="ov-msg">
+            <span class="orb mute"><svg class="ic"><use href="#i-micoff"/></svg></span>
+            <div><p class="ov-title">Mikrofón nie je povolený</p><p class="ov-desc">Povoľte aplikácii Codevo Whisper prístup v sekcii Súkromie a bezpečnosť, potom podržte kláves znova.</p></div>
+          </div>
+          <div class="ov-actions"><button type="button" class="ov-btn">Neskôr</button><button type="button" class="ov-btn primary">Otvoriť nastavenia</button></div>
+        </div>
+      </div>
+      <figcaption><b>Bez mikrofónu alebo povolení</b><span>Jedno tlačidlo otvorí správne miesto v nastaveniach systému.</span></figcaption>
+    </figure>
+
+    <figure class="tile wide">
+      <div class="tile-stage bg-figma">
+        <div class="ov">
+          <div class="ov-text"><div class="lines"><span class="w">takže párovací kód by mal platiť kratšie ako päť minút lebo v kancelárii ho uvidí každý kto ide okolo monitora a potom ešte </span><span class="w t">skontrolovať či</span></div></div>
+          <div class="ov-bar">
+            <span class="orb rec" style="--lvl:.5"><svg class="ic"><use href="#i-mic"/></svg></span>
+            <div class="wave" data-wave="speech" data-seed="3"></div>
+            <span class="chunks" title="Nahrávka sa posiela po častiach"><i></i><i></i><i></i><i class="cur"></i><span>časť 4</span></span>
+            <span class="ov-time">1:42</span><span class="chip">SK</span>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Dlhé diktovanie</b><span>Po 30 sekundách sa nahrávka posiela po častiach. Pre vás sa nič nemení, hovoríte ďalej a starší text plynulo odchádza hore.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="block" id="okno" aria-labelledby="h-okno">
+  <div class="s-head">
+    <h2 id="h-okno">Hlavné okno</h2>
+    <p>Otvára sa z lišty. História, server, nastavenia a vysvetlenie súkromia na jednom mieste. Sekcie prepínajte v bočnom paneli.</p>
+  </div>
+
+  <div class="mw">
+    <aside class="mw-side">
+      <div class="tl" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="mw-id"><svg aria-hidden="true"><use href="#logo"/></svg>Codevo Whisper</div>
+      <div class="nav" role="tablist" aria-orientation="vertical" aria-label="Sekcie aplikácie">
+        <button type="button" role="tab" id="tab-home" aria-controls="p-home" aria-selected="true"><svg class="ic"><use href="#i-home"/></svg>Domov</button>
+        <button type="button" role="tab" id="tab-server" aria-controls="p-server" aria-selected="false" tabindex="-1"><svg class="ic"><use href="#i-server"/></svg>Server</button>
+        <button type="button" role="tab" id="tab-settings" aria-controls="p-settings" aria-selected="false" tabindex="-1"><svg class="ic"><use href="#i-sliders"/></svg>Nastavenia</button>
+        <button type="button" role="tab" id="tab-privacy" aria-controls="p-privacy" aria-selected="false" tabindex="-1"><svg class="ic"><use href="#i-shield"/></svg>Súkromie</button>
+      </div>
+      <div class="side-status">
+        <b><span class="dot"></span>domáci server</b>
+        <span>Pripojené cez Cloudflare tunel, <span id="sideLat">38</span> ms</span>
+      </div>
+    </aside>
+
+    <div class="mw-main">
+      <div role="tabpanel" id="p-home" aria-labelledby="tab-home" class="mw-main" style="flex:1">
+        <div class="mw-bar">
+          <h3>História</h3>
+          <label class="search"><svg class="ic"><use href="#i-search"/></svg><span class="sr-only">Hľadať v diktovaniach</span><input type="search" id="hSearch" placeholder="Hľadať v diktovaniach" autocomplete="off"></label>
+        </div>
+        <div class="panel">
+          <div class="banner"><span class="orb done"><svg class="ic"><use href="#i-check"/></svg></span><span>Všetko je pripravené. Podržte <kbd>pravý ⌥</kbd> v ľubovoľnej aplikácii a hovorte.</span></div>
+          <div id="hGroups">
+            <div class="hgroup">
+              <h4>Dnes</h4>
+              <ul class="hlist">
+                <li class="hrow"><time>14:32</time><div><p>Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.</p><div class="hmeta"><span class="app"><i style="background:#5C3A7E">S</i>Slack</span><span class="lang">SK</span><span>0:07</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+                <li class="hrow"><time>13:05</time><div><p>Dobrý deň, posielam aktualizovaný odhad migrácie. Backend vychádza na tri dni, frontend na dva a testy s nasadením na ďalší deň. Ak by ste potrebovali skorší termín, dajte vedieť do piatku.</p><div class="hmeta"><span class="app"><i style="background:#2A84E8">M</i>Mail</span><span class="lang">SK</span><span>0:21</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+                <li class="hrow"><time>11:48</time><div><p>Refactor the pairing handshake so the server key is pinned after the first successful exchange.</p><div class="hmeta"><span class="app"><i style="background:#174F8E">C</i>VS Code</span><span class="lang">EN</span><span>0:05</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+                <li class="hrow"><time>10:12</time><div><p>Oprava timeoutu pri opätovnom pripojení cez tunel.</p><div class="hmeta"><span class="app"><i style="background:#2A2D33">T</i>Terminál</span><span class="lang">SK</span><span>0:03</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+              </ul>
+            </div>
+            <div class="hgroup">
+              <h4>Včera</h4>
+              <ul class="hlist">
+                <li class="hrow"><time>17:40</time><div><p>Na zítřejší schůzku připravím přehled latence z domácí sítě a přes tunel, ať víme, jestli WireGuard stojí za to.</p><div class="hmeta"><span class="app"><i style="background:#3A3A3A">N</i>Notion</span><span class="lang">CS</span><span>0:14</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+                <li class="hrow"><time>16:02</time><div><p>Server beží, model je načítaný a odozva je okolo štyridsať milisekúnd aj cez tunel.</p><div class="hmeta"><span class="app"><i style="background:#5C3A7E">S</i>Slack</span><span class="lang">SK</span><span>0:09</span></div></div><button type="button" class="copy" aria-label="Kopírovať text"><svg class="ic"><use href="#i-copy"/></svg></button></li>
+              </ul>
+            </div>
+          </div>
+          <div class="empty" id="hEmpty" hidden>Pre „<span id="hQ"></span>“ sa nič nenašlo. Skúste iné slovo, história je dostupná za posledných 30 dní.</div>
+          <p class="retention"><svg class="ic"><use href="#i-lock"/></svg><span>Diktovania sú uložené iba na tomto Macu, šifrované kľúčom v Kľúčenke, a mažú sa po 30 dňoch. Server si nepamätá nič. <button type="button" class="linkbtn" data-goto="tab-settings">Zmeniť uchovávanie</button></span></p>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-server" aria-labelledby="tab-server" class="mw-main" style="flex:1" hidden>
+        <div class="mw-bar"><h3>Server</h3><button type="button" class="btn ghost" data-scroll="pairBox"><svg class="ic"><use href="#i-plus"/></svg>Spárovať nový server</button></div>
+        <div class="panel">
+          <div class="card">
+            <div class="srv-top">
+              <span class="srv-ic"><svg class="ic"><use href="#i-server"/></svg></span>
+              <div><h4>domáci server</h4><p>Ubuntu 26.04, spárované 12. októbra</p></div>
+              <span class="pill"><span class="dot"></span>Online</span>
+            </div>
+            <div class="e2e">
+              <span class="e2e-badge"><svg class="ic"><use href="#i-lock"/></svg>End-to-end šifrované</span>
+              <p>Zvuk aj text sa šifrujú už na tomto Macu. Cloudflare tunel prenáša iba šifrované dáta a nevie ich prečítať.</p>
+            </div>
+            <dl class="kv">
+              <div><dt>Odozva</dt><dd><span id="lat">38</span> ms</dd></div>
+              <div><dt>Model</dt><dd>Parakeet Ultra · RX 7800 XT</dd></div>
+              <div><dt>Rýchlosť prepisu</dt><dd>7 s reči za 0,4 s</dd></div>
+              <div><dt>Uhladzovanie</dt><dd>Ollama, beží</dd></div>
+            </dl>
+            <ul class="routes" aria-label="Cesty k serveru">
+              <li><b><i></i>Domáca sieť</b><span>Mimo dosahu, nie ste doma</span></li>
+              <li class="ok"><b><i></i>WireGuard</b><span>Dostupná, 44 ms</span></li>
+              <li class="on"><b><i></i>Cloudflare tunel</b><span>Aktívna cesta</span></li>
+            </ul>
+            <p class="note">Codevo Whisper vždy použije najrýchlejšiu dostupnú cestu. Šifrovanie je rovnaké na každej z nich.</p>
+            <div class="fp">
+              <div><small>Odtlačok kľúča servera</small><code>7F3A 92C1 0B4E D8A6 51F0 3C9D 6E27 A4B8</code></div>
+              <div class="row-btns"><button type="button" class="btn" id="testBtn">Otestovať spojenie</button><button type="button" class="btn danger">Odpojiť server</button></div>
+            </div>
+            <p class="test-out" id="testOut" aria-live="polite"></p>
+          </div>
+
+          <div class="pair card" id="pairBox">
+            <h4>Spárovať nový server</h4>
+            <ol class="steps">
+              <li><div><p>Na serveri spustite príkaz</p>
+                <div class="term"><div><span class="pr">$</span> dictate pair<br>Párovací kód: <span class="hl">K7QM-4XPB</span><br><span class="pr">Čaká sa na zariadenie, kód platí 5 minút</span></div><button type="button" class="btn" id="copyCmd"><svg class="ic"><use href="#i-copy"/></svg>Kopírovať príkaz</button></div>
+              </div></li>
+              <li><div><p>Opíšte kód z terminálu</p>
+                <div class="code-in" id="codeIn" role="group" aria-label="Párovací kód, 8 znakov">
+                  <input aria-label="Znak 1" maxlength="1" inputmode="text" autocomplete="off"><input aria-label="Znak 2" maxlength="1" autocomplete="off"><input aria-label="Znak 3" maxlength="1" autocomplete="off"><input aria-label="Znak 4" maxlength="1" autocomplete="off"><span class="sep" aria-hidden="true"></span><input aria-label="Znak 5" maxlength="1" autocomplete="off"><input aria-label="Znak 6" maxlength="1" autocomplete="off"><input aria-label="Znak 7" maxlength="1" autocomplete="off"><input aria-label="Znak 8" maxlength="1" autocomplete="off">
+                  <button type="button" class="btn primary" id="pairBtn" disabled>Spárovať</button>
+                </div>
+              </div></li>
+              <li><div><p>Porovnajte odtlačok s tým, čo ukazuje terminál</p>
+                <div class="pair-ok" id="pairOk" aria-live="polite">Spárované so serverom <b>pracovňa</b>. Ak terminál ukazuje rovnaký odtlačok <code>4F1C 9A07 E2D3 58B6</code>, spojenie je vaše a nikto iný ho nepodvrhol.</div>
+                <p class="note" id="pairWait">Odtlačok sa zobrazí po spárovaní.</p>
+              </div></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-settings" aria-labelledby="tab-settings" class="mw-main" style="flex:1" hidden>
+        <div class="mw-bar"><h3>Nastavenia</h3></div>
+        <div class="panel">
+          <div class="groups">
+            <div class="sgroup">
+              <h4>Diktovanie</h4>
+              <div class="sbox">
+                <div class="srow"><div class="t"><b>Klávesová skratka</b><span>Odporúčame pravý ⌥ alebo Fn, nekolidujú s inými skratkami.</span></div><button type="button" class="hk" id="hk" data-rec="false"><span id="hkLabel">Pravý ⌥ Option</span><small>Zmeniť</small></button></div>
+                <div class="srow"><div class="t"><b>Režim</b><span id="modeDesc">Nahráva sa, kým kláves držíte.</span></div><div class="seg" role="group" aria-label="Režim klávesu"><button type="button" data-set-mode="hold" aria-pressed="true">Podrž klávesu</button><button type="button" data-set-mode="toggle" aria-pressed="false">Prepínanie</button></div></div>
+                <div class="srow"><div class="t"><b>Jazyk</b><span>Automatické rozpoznanie pridá k prvému slovu asi 0,1 s.</span></div><select class="select" aria-label="Jazyk"><option>Slovenčina</option><option>Čeština</option><option>Angličtina</option><option>Rozpoznať automaticky</option></select></div>
+              </div>
+            </div>
+            <div class="sgroup">
+              <h4>Mikrofón</h4>
+              <div class="sbox">
+                <div class="srow"><div class="t"><b>Vstup</b><span>Povedzte niečo a sledujte úroveň.</span><div class="meter" id="micMeter" aria-hidden="true"></div></div><select class="select" aria-label="Mikrofón"><option>Mikrofón MacBooku Pro</option><option>AirPods Pro</option><option>Shure MV7+</option></select></div>
+              </div>
+            </div>
+            <div class="sgroup">
+              <h4>Vkladanie textu</h4>
+              <div class="sbox">
+                <div class="radio" role="radiogroup" aria-label="Spôsob vkladania">
+                  <label><input type="radio" name="ins" checked><div><b>Vložiť do aktívnej aplikácie</b><span>Text sa objaví na mieste kurzora. Obsah schránky sa po vložení vráti späť.</span></div></label>
+                  <label><input type="radio" name="ins"><div><b>Iba skopírovať do schránky</b><span>Vložíte si ho sami cez ⌘V, keď budete chcieť.</span></div></label>
+                </div>
+                <div class="srow"><div class="t"><b>Uhladiť text</b><span>Lokálny model cez Ollama na vašom serveri doplní interpunkciu a vyhodí vatové slová. Pridá asi 0,6 s.</span></div><button type="button" class="switch" role="switch" aria-checked="true" aria-label="Uhladiť text"></button></div>
+              </div>
+            </div>
+            <div class="sgroup">
+              <h4>Systém</h4>
+              <div class="sbox">
+                <div class="srow"><div class="t"><b>Spustiť po prihlásení</b><span>Codevo Whisper sa potichu usadí v lište.</span></div><button type="button" class="switch" role="switch" aria-checked="true" aria-label="Spustiť po prihlásení"></button></div>
+                <div class="srow"><div class="t"><b>Uchovávať históriu</b><span>Ukladá sa iba na tomto Macu, šifrovaná.</span></div><select class="select" aria-label="Uchovávať históriu"><option>7 dní</option><option selected>30 dní</option><option>90 dní</option><option>Neukladať</option></select></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-privacy" aria-labelledby="tab-privacy" class="mw-main" style="flex:1" hidden>
+        <div class="mw-bar"><h3>Súkromie</h3></div>
+        <div class="panel">
+          <p class="priv-lead">Vaše slová idú iba k vám domov a späť</p>
+          <p class="priv-sub">Codevo Whisper nemá vlastný cloud. Hlas putuje zašifrovaný z tohto Macu na server, ktorý vlastníte, a vráti sa ako text. Nikto po ceste ho nevie prečítať.</p>
+          <svg class="flow" viewBox="0 0 760 250" role="img" aria-label="Schéma: Váš Mac zašifruje zvuk, cesta cez LAN, WireGuard alebo Cloudflare tunel vidí iba šifrované dáta, váš server prepíše text a nič neukladá. Do cloudu neodchádza nič.">
+            <path class="cloud" d="M350 66a14 14 0 0 1-1-28 20 20 0 0 1 38-3 15 15 0 0 1 2 31z"/>
+            <path class="strike" d="M352 32l40 38"/>
+            <text class="t3" x="408" y="50">Do cloudu neodchádza nič</text>
+            <path class="nocloud" d="M380 80v38"/>
+            <rect class="node" x="20" y="126" width="190" height="80" rx="14"/>
+            <rect class="node hot" x="285" y="126" width="190" height="80" rx="14"/>
+            <rect class="node" x="550" y="126" width="190" height="80" rx="14"/>
+            <g transform="translate(38 144) scale(1.25)"><use href="#i-laptop" class="glyph" width="16" height="16"/></g>
+            <g transform="translate(303 144) scale(1.25)"><use href="#i-lock" class="glyph" width="16" height="16"/></g>
+            <g transform="translate(568 144) scale(1.25)"><use href="#i-house" class="glyph" width="16" height="16"/></g>
+            <text class="t1" x="66" y="158">Váš Mac</text>
+            <text class="t2" x="38" y="186">nahrá a zašifruje zvuk</text>
+            <text class="t1" x="331" y="158">Cesta</text>
+            <text class="t2" x="303" y="186">LAN, WireGuard alebo tunel</text>
+            <text class="t1" x="596" y="158">Váš server</text>
+            <text class="t2" x="568" y="186">prepíše a hneď zabudne</text>
+            <path class="pipe" d="M212 156H283"/>
+            <path class="pipe" d="M477 156H548"/>
+            <path class="pipe back" d="M212 176H283"/>
+            <path class="pipe back" d="M477 176H548"/>
+            <text class="tx" x="222" y="146">zvuk</text>
+            <text class="tx" x="222" y="194">text</text>
+            <text class="tx" x="487" y="146">zvuk</text>
+            <text class="tx" x="487" y="194">text</text>
+            <text class="t3" x="380" y="232" text-anchor="middle">po ceste vidno iba šifrované dáta</text>
+          </svg>
+          <div class="priv-cols">
+            <div>
+              <h4>Čo sa deje s vaším hlasom</h4>
+              <ol class="priv-steps">
+                <li>Mikrofón sa zapne, až keď podržíte kláves. Keď ho pustíte, vypne sa.</li>
+                <li>Zvuk sa zašifruje ešte na tomto Macu kľúčom, ktorý vznikol pri párovaní.</li>
+                <li>Prejde cez vašu sieť, VPN alebo Cloudflare tunel. Po ceste sa nedá prečítať.</li>
+                <li>Server ho prepíše na text, pošle späť a nahrávku hneď zahodí.</li>
+                <li>Text sa vloží do aplikácie. Históriu má iba tento Mac, šifrovanú.</li>
+              </ol>
+            </div>
+            <div>
+              <h4>Čo Codevo Whisper nerobí</h4>
+              <ul class="never">
+                <li><svg class="ic"><use href="#i-x"/></svg>Neposiela zvuk ani text žiadnej cloudovej službe.</li>
+                <li><svg class="ic"><use href="#i-x"/></svg>Nezbiera analytiku ani telemetriu.</li>
+                <li><svg class="ic"><use href="#i-x"/></svg>Nepotrebuje účet, e-mail ani predplatné.</li>
+              </ul>
+              <div class="row-btns" style="margin-top:18px"><button type="button" class="btn">Exportovať históriu</button><button type="button" class="btn danger">Vymazať celú históriu</button></div>
+            </div>
+          </div>
+          <p class="crypto">Technicky: výmena kľúčov X25519, dáta šifruje ChaCha20-Poly1305. Kľúč servera sa pripne pri prvom spárovaní, takže podvrhnutý server sa neprihlási.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="lista" aria-labelledby="h-lista">
+  <div class="s-head">
+    <h2 id="h-lista">Menu v lište</h2>
+    <p>Ikona v lište ukazuje stav na prvý pohľad. Kliknutím sa otvorí menu s posledným diktovaním a rýchlymi akciami.</p>
+  </div>
+  <div class="tray-wrap">
+    <div class="mcrop">
+      <svg class="wall" viewBox="0 0 1200 700" preserveAspectRatio="xMaxYMin slice" aria-hidden="true"><rect width="1200" height="700" fill="url(#sky)"/><path d="M0 520C200 470 380 500 560 480S900 430 1200 470V700H0Z" fill="#2A2F50"/></svg>
+      <div class="mbar" aria-hidden="true">
+        <div class="l"><span><b>Finder</b></span><span>Súbor</span><span>Úpravy</span></div>
+        <div class="r">
+          <span class="tray open"><svg><use href="#mark"/></svg></span>
+          <svg class="ic"><use href="#i-wifi"/></svg>
+          <svg class="ic"><use href="#i-battery"/></svg>
+          <svg class="ic"><use href="#i-cc"/></svg>
+          <span>ne 25. 10.&nbsp; 14:33</span>
+        </div>
+      </div>
+      <div class="menu" role="menu" aria-label="Menu Codevo Whisper">
+        <div class="head"><span class="dot"></span><div><b>Pripojené k domácemu serveru</b><span>Cloudflare tunel, 38 ms, šifrované</span></div></div>
+        <hr>
+        <div class="sub">Posledné diktovanie, 14:32</div>
+        <p class="last">Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.</p>
+        <button type="button" class="mi" role="menuitem">Kopírovať posledné diktovanie<kbd>⌥⌘C</kbd></button>
+        <hr>
+        <button type="button" class="mi" role="menuitem">Pozastaviť diktovanie<kbd>⌥⌘P</kbd></button>
+        <button type="button" class="mi" role="menuitem">Jazyk: slovenčina<svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <hr>
+        <button type="button" class="mi hl" role="menuitem">Otvoriť Codevo Whisper<kbd>⌘O</kbd></button>
+        <button type="button" class="mi" role="menuitem">Nastavenia…<kbd>⌘,</kbd></button>
+        <hr>
+        <button type="button" class="mi" role="menuitem">Ukončiť Codevo Whisper<kbd>⌘Q</kbd></button>
+      </div>
+    </div>
+    <div class="icon-states" aria-label="Stavy ikony v lište">
+      <div class="istate"><span class="chipbar"><svg><use href="#mark"/></svg></span><div><b>Pripravené</b><span>Jednofarebná značka codevo, prispôsobí sa svetlej aj tmavej lište.</span></div></div>
+      <div class="istate"><span class="chipbar ti-rec"><svg><use href="#mark"/></svg></span><div><b>Nahrávam</b><span>Jantárová ikona, macOS navyše ukáže oranžovú bodku mikrofónu.</span></div></div>
+      <div class="istate"><span class="chipbar ti-proc"><svg><use href="#mark"/></svg></span><div><b>Spracúvam</b><span>Značka sa pomaly otáča, kým server dopíše text.</span></div></div>
+      <div class="istate"><span class="chipbar ti-pause"><svg><use href="#mark"/></svg></span><div><b>Pozastavené</b><span>Skratka nič nenahrá, kým diktovanie znova nezapnete.</span></div></div>
+      <div class="istate"><span class="chipbar ti-err"><svg><use href="#mark"/></svg></span><div><b>Bez spojenia</b><span>Server nie je dostupný na žiadnej ceste. Menu ponúkne opakovanie.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="linux" aria-labelledby="h-linux">
+  <div class="s-head">
+    <h2 id="h-linux">Na Linuxe</h2>
+    <p>Rovnaký overlay a rovnaké správanie v Ubuntu s prostredím GNOME. Ikona sedí v hornej lište vpravo, vedľa systémových ikon.</p>
+  </div>
+  <div class="gnome" aria-label="Ukážka overlay v Ubuntu GNOME" role="img">
+    <div class="gbar" aria-hidden="true">
+      <div class="ws-dots"><i class="on"></i><i></i><i></i></div>
+      <div class="clock">ne 25. okt&nbsp; 14:34</div>
+      <div class="sys"><svg class="logo-t"><use href="#mark"/></svg><svg class="ic"><use href="#i-wifi"/></svg><svg class="ic"><use href="#i-vol"/></svg><svg class="ic"><use href="#i-power"/></svg></div>
+    </div>
+    <div class="gwin" aria-hidden="true">
+      <div class="hd">Poznámky<span><i></i><i></i><i></i></span></div>
+      <div class="bd">Plán na pondelok<br><span class="caret"></span></div>
+    </div>
+    <div class="ov" aria-hidden="true">
+      <div class="ov-text"><div class="lines"><span class="w">zajtra ráno nasadím novú verziu servera a pošlem vám odtlačok kľúča </span><span class="w t">na kontrolu</span></div></div>
+      <div class="ov-bar">
+        <span class="orb rec" style="--lvl:.5"><svg class="ic"><use href="#i-mic"/></svg></span>
+        <div class="wave" data-wave="speech" data-seed="5"></div>
+        <span class="ov-time">0:06</span><span class="chip">SK</span>
+        <span class="ov-lock"><svg class="ic"><use href="#i-lock"/></svg></span>
+      </div>
+    </div>
+  </div>
+  <div class="gcap">
+    <span><svg class="ic"><use href="#i-check"/></svg>Wayland aj X11</span>
+    <span><svg class="ic"><use href="#i-check"/></svg>Globálna skratka cez systémový portál</span>
+    <span><svg class="ic"><use href="#i-check"/></svg>Rovnaké párovanie aj šifrovanie</span>
+  </div>
+</section>
+
+</main>
+
+<footer class="page">
+  <span>Návrh rozhrania, október 2026.</span>
+  <span>Všetky ukážkové dáta sú vymyslené.</span>
+</footer>
+<div class="sr-only" aria-live="polite" id="live"></div>
+
+<script>
+(function(){
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const live = $('#live');
+  const announce = msg => { live.textContent = ''; setTimeout(() => { live.textContent = msg; }, 30); };
+
+  const root = document.documentElement;
+  const setTheme = t => {
+    root.dataset.theme = t;
+    $$('[data-theme-set]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === t)));
+  };
+  setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  $$('[data-theme-set]').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themeSet)));
+
+  const speech = (t, seed) => {
+    const s = t / 1000 + seed * 1.7;
+    const cycle = s % 3.4;
+    if (cycle > 2.9) return 0.06;
+    const syll = Math.abs(Math.sin(s * 7.3)) * 0.55 + Math.abs(Math.sin(s * 2.1 + seed)) * 0.35;
+    return Math.min(1, 0.18 + syll * 0.85);
+  };
+
+  const waves = [];
+  const mountWave = (el, n, source) => {
+    const bars = [];
+    for (let i = 0; i < n; i++) {
+      const b = document.createElement('i');
+      el.appendChild(b);
+      const x = (i + 0.5) / n;
+      bars.push({ el: b, ph: Math.random() * 6.28, sp: 3 + Math.random() * 6, shape: 0.35 + 0.65 * Math.pow(Math.sin(Math.PI * x), 0.7), cur: 0.08 });
+    }
+    waves.push({ bars, source });
+  };
+
+  const demo = { tok: 0, mode: 'hold', smooth: true, level: 0, speaking: false, timer: null };
+  mountWave($('#demoWave'), 38, () => demo.level);
+  $$('[data-wave="speech"]').forEach(el => {
+    const seed = Number(el.dataset.seed || 0);
+    mountWave(el, 34, t => speech(t, seed));
+  });
+
+  const meter = $('#micMeter');
+  const meterBars = [];
+  for (let i = 0; i < 24; i++) { const b = document.createElement('i'); meter.appendChild(b); meterBars.push(b); }
+
+  const demoOrb = $('#demoOrb');
+  let last = 0;
+  const frame = t => {
+    const target = demo.speaking ? speech(t, 0) : 0;
+    demo.level += (target - demo.level) * 0.18;
+    demoOrb.style.setProperty('--lvl', demo.level.toFixed(3));
+    for (const w of waves) {
+      const L = w.source(t);
+      for (const b of w.bars) {
+        const osc = 0.4 + 0.6 * Math.abs(Math.sin(t / 1000 * b.sp + b.ph));
+        const goal = 0.08 + L * b.shape * osc * 0.92;
+        b.cur += (goal - b.cur) * 0.32;
+        b.el.style.transform = 'scaleY(' + Math.min(1, b.cur).toFixed(3) + ')';
+      }
+    }
+    if (t - last > 70) {
+      last = t;
+      const lv = Math.round(speech(t, 2) * 24 * 0.9);
+      meterBars.forEach((b, i) => { b.classList.toggle('on', i < lv); b.classList.toggle('hot', i >= 19); });
+    }
+    if (!reduced) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
+  const R = 'ahoj Peter pozrel som si ten pull request ehm vyzerá to dobre len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť'.split(' ');
+  const SNAPS = [
+    [0, ['ahoj', 'Peter']],
+    [2, ['pozrel', 'som', 'si']],
+    [5, ['ten', 'pul', 'rekvest']],
+    [8, ['ehm', 'vyzerá', 'to']],
+    [11, ['dobre', 'len', 'by']],
+    [14, ['som', 'ešte', 'doplnil']],
+    [17, ['testy', 'na', 'párovanie']],
+    [19, ['párovanie', 'zariadenia', 'a']],
+    [22, ['potom', 'to', 'môžeme']],
+    [25, ['mergnúť']]
+  ];
+  const PUNCT = [[1, ','], [7, ','], [11, ','], [25, '.']];
+  const DROP = 8;
+  const SMOOTH_TEXT = 'Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.';
+  const RAW_TEXT = R.join(' ');
+
+  const ov = $('#demoOv');
+  const body = $('#demoBody');
+  const wordsEl = $('#demoWords');
+  const statusEl = $('#demoStatus');
+  const timeEl = $('#demoTime');
+  const keycap = $('#keycap');
+  const keyHint = $('#keyHint');
+  const keyLabel = $('#keyLabel');
+  const tray = $('#demoTray');
+  const privDot = $('#privDot');
+  const composeText = $('#composeText');
+  const composePh = $('#composePh');
+  const sendBtn = $('#sendBtn');
+  const chatMsgs = $('#chatMsgs');
+  const phaseItems = $$('#phases li');
+  const ORDER = ['idle', 'rec', 'proc', 'smooth', 'done'];
+
+  let confirmedEls = [];
+  let tentEls = [];
+  let prev = { c: 0, t: [] };
+
+  const makeWord = (txt, cls) => {
+    const w = document.createElement('span');
+    w.className = 'w ' + (cls || '');
+    const wt = document.createElement('span');
+    wt.className = 'wt';
+    wt.textContent = txt;
+    const p = document.createElement('span');
+    p.className = 'p';
+    w.append(wt, p, document.createTextNode(' '));
+    return w;
+  };
+
+  const renderSnap = (c, tent) => {
+    tentEls.forEach(e => e.remove());
+    tentEls = [];
+    for (let i = prev.c; i < c; i++) {
+      const was = prev.t[i - prev.c];
+      let cls = 't';
+      if (was === undefined) cls += ' in';
+      if (was !== undefined && was !== R[i]) cls += ' fix';
+      const el = makeWord(R[i], cls);
+      wordsEl.appendChild(el);
+      confirmedEls[i] = el;
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('t')));
+    }
+    tent.forEach((word, j) => {
+      const abs = c + j;
+      const was = prev.t[abs - prev.c];
+      const fresh = was !== word;
+      const el = makeWord(word, 't' + (fresh ? ' in' : ''));
+      wordsEl.appendChild(el);
+      tentEls.push(el);
+    });
+    prev = { c, t: tent.slice() };
+    ov.classList.toggle('has-text', c + tent.length > 0);
+  };
+
+  const setPhase = p => {
+    const idx = ORDER.indexOf(p);
+    phaseItems.forEach((li, i) => {
+      li.classList.toggle('on', i === idx);
+      li.classList.toggle('past', i < idx);
+      li.classList.toggle('skip', li.dataset.p === 'smooth' && !demo.smooth);
+    });
+  };
+
+  const ORB = {
+    rec: ['orb rec', '<svg class="ic"><use href="#i-mic"/></svg>'],
+    proc: ['orb proc', '<svg aria-hidden="true"><use href="#mark-color"/></svg>'],
+    smooth: ['orb smooth', '<svg class="ic"><use href="#i-sparkle"/></svg>'],
+    done: ['orb done', '<svg class="ic"><use href="#i-check"/></svg>'],
+    idle: ['orb rec', '<svg class="ic"><use href="#i-mic"/></svg>']
+  };
+  const setOv = (s, status) => {
+    ov.dataset.s = s;
+    demoOrb.className = ORB[s][0];
+    demoOrb.innerHTML = ORB[s][1];
+    if (status) statusEl.innerHTML = status;
+    if (s === 'done' || s === 'idle') ov.classList.remove('has-text');
+  };
+
+  const hint = txt => { keyHint.textContent = txt; };
+  const setTray = s => {
+    tray.className = 'tray' + (s ? ' ' + s : '');
+    privDot.classList.toggle('on', s === 'rec');
+  };
+
+  const startTimer = () => {
+    const t0 = performance.now();
+    clearInterval(demo.timer);
+    timeEl.textContent = '0:00';
+    demo.timer = setInterval(() => {
+      const s = Math.floor((performance.now() - t0) / 1000);
+      timeEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }, 200);
+  };
+  const stopTimer = () => clearInterval(demo.timer);
+
+  const wait = (ms, tok) => new Promise((res, rej) => setTimeout(() => (tok === demo.tok ? res() : rej(new Error('cancel'))), ms));
+  const key = down => keycap.classList.toggle('down', down);
+  const tap = async tok => { key(true); await wait(170, tok); key(false); };
+
+  const resetDemo = () => {
+    stopTimer();
+    demo.speaking = false;
+    wordsEl.textContent = '';
+    confirmedEls = [];
+    tentEls = [];
+    prev = { c: 0, t: [] };
+    body.classList.remove('smoothing');
+    setOv('idle');
+    ov.dataset.mode = demo.mode;
+    composeText.textContent = '';
+    composeText.classList.remove('flash');
+    composePh.hidden = false;
+    sendBtn.classList.remove('ready');
+    $$('.msg.sent', chatMsgs).forEach(m => m.remove());
+    key(false);
+    setTray('');
+    setPhase('idle');
+    keyLabel.textContent = demo.mode === 'hold' ? 'Pravý Option, podržte počas hovorenia' : 'Pravý Option, stlačte raz na začiatok a raz na koniec';
+    hint('Kurzor je v okne chatu. Codevo Whisper čaká.');
+  };
+
+  const smoothText = async tok => {
+    body.classList.add('smoothing');
+    await wait(380, tok);
+    const drop = confirmedEls[DROP];
+    drop.classList.add('drop');
+    await wait(520, tok);
+    drop.classList.add('gone');
+    await wait(260, tok);
+    const first = confirmedEls[0];
+    first.querySelector('.wt').textContent = 'Ahoj';
+    first.classList.remove('fix');
+    void first.offsetWidth;
+    first.classList.add('fix');
+    for (const [i, mark] of PUNCT) {
+      const p = confirmedEls[i].querySelector('.p');
+      p.textContent = mark;
+      p.classList.add('on');
+      await wait(170, tok);
+    }
+    await wait(520, tok);
+    body.classList.remove('smoothing');
+  };
+
+  const insertText = () => {
+    composeText.textContent = demo.smooth ? SMOOTH_TEXT : RAW_TEXT;
+    composePh.hidden = true;
+    composeText.classList.remove('flash');
+    void composeText.offsetWidth;
+    composeText.classList.add('flash');
+    sendBtn.classList.add('ready');
+  };
+
+  const sendMessage = () => {
+    const m = document.createElement('div');
+    m.className = 'msg sent';
+    m.innerHTML = '<span class="av" style="background:#B8681A">MM</span><div><b>Matúš</b><time>14:32</time><p></p></div>';
+    m.querySelector('p').textContent = composeText.textContent;
+    chatMsgs.appendChild(m);
+    composeText.textContent = '';
+    composePh.hidden = false;
+    sendBtn.classList.remove('ready');
+  };
+
+  const cycle = async tok => {
+    resetDemo();
+    await wait(1500, tok);
+    if (demo.mode === 'hold') {
+      key(true);
+      hint('Držíte pravý ⌥ a hovoríte');
+    }
+    if (demo.mode === 'toggle') {
+      await tap(tok);
+      hint('Stlačili ste pravý ⌥ raz. Nahrávanie beží, ruky máte voľné.');
+    }
+    await wait(160, tok);
+    setOv('rec');
+    setPhase('rec');
+    setTray('rec');
+    startTimer();
+    demo.speaking = true;
+    await wait(650, tok);
+    for (const [c, t] of SNAPS) {
+      renderSnap(c, t);
+      await wait(960, tok);
+    }
+    demo.speaking = false;
+    await wait(420, tok);
+    if (demo.mode === 'hold') {
+      key(false);
+      hint('Pustili ste kláves');
+    }
+    if (demo.mode === 'toggle') {
+      await tap(tok);
+      hint('Druhým stlačením ste nahrávanie ukončili');
+    }
+    stopTimer();
+    setOv('proc', 'Spracúvam <small>posledná časť</small>');
+    setPhase('proc');
+    setTray('proc');
+    await wait(420, tok);
+    renderSnap(26, []);
+    await wait(380, tok);
+    if (demo.smooth) {
+      setOv('smooth', 'Uhladzujem text');
+      setPhase('smooth');
+      hint('Ollama na serveri dopĺňa interpunkciu a vyhadzuje vatové slová');
+      await smoothText(tok);
+    }
+    insertText();
+    setOv('done', 'Vložené do #backend');
+    setPhase('done');
+    setTray('');
+    hint('Text je vložený na mieste kurzora');
+    await wait(1800, tok);
+    setOv('idle');
+    await wait(1200, tok);
+    sendMessage();
+    hint('Správa odoslaná. Ukážka začne znova.');
+    await wait(2800, tok);
+  };
+
+  const loop = async tok => {
+    for (;;) await cycle(tok);
+  };
+  const restart = () => {
+    demo.tok += 1;
+    const tok = demo.tok;
+    loop(tok).catch(() => {});
+  };
+
+  $$('[data-mode]').forEach(b => b.addEventListener('click', () => {
+    demo.mode = b.dataset.mode;
+    $$('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    restart();
+  }));
+  const smoothSw = $('#demoSmooth');
+  smoothSw.addEventListener('click', () => {
+    demo.smooth = smoothSw.getAttribute('aria-checked') !== 'true';
+    smoothSw.setAttribute('aria-checked', String(demo.smooth));
+    restart();
+  });
+  $('#replay').addEventListener('click', restart);
+
+  if (!reduced) restart();
+  if (reduced) {
+    resetDemo();
+    setOv('rec');
+    setPhase('rec');
+    renderSnap(11, ['dobre', 'len', 'by']);
+    hint('Animácia je vypnutá kvôli nastaveniu systému. Spustíte ju tlačidlom Prehrať znova.');
+  }
+
+  $$('.switch').forEach(sw => {
+    if (sw.id === 'demoSmooth') return;
+    sw.addEventListener('click', () => sw.setAttribute('aria-checked', String(sw.getAttribute('aria-checked') !== 'true')));
+  });
+
+  const tabs = $$('[role="tab"]');
+  const selectTab = tab => {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      $('#' + t.getAttribute('aria-controls')).hidden = !on;
+    });
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => selectTab(t));
+    t.addEventListener('keydown', e => {
+      const dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      const next = tabs[(i + dir + tabs.length) % tabs.length];
+      selectTab(next);
+      next.focus();
+    });
+  });
+  $$('[data-goto]').forEach(b => b.addEventListener('click', () => {
+    const t = $('#' + b.dataset.goto);
+    selectTab(t);
+    t.focus();
+  }));
+  $$('[data-scroll]').forEach(b => b.addEventListener('click', () => {
+    const target = $('#' + b.dataset.scroll);
+    target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    const first = $('input', target);
+    if (first) setTimeout(() => first.focus({ preventScroll: true }), reduced ? 0 : 400);
+  }));
+
+  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const hSearch = $('#hSearch');
+  hSearch.addEventListener('input', () => {
+    const q = fold(hSearch.value.trim());
+    let any = 0;
+    $$('.hgroup').forEach(g => {
+      let shown = 0;
+      $$('.hrow', g).forEach(r => {
+        const hit = !q || fold(r.textContent).includes(q);
+        r.hidden = !hit;
+        shown += hit ? 1 : 0;
+      });
+      g.hidden = shown === 0;
+      any += shown;
+    });
+    $('#hEmpty').hidden = any > 0;
+    $('#hQ').textContent = hSearch.value.trim();
+  });
+
+  const copyText = (txt, btn, restore) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
+    btn.classList.add('ok');
+    const old = btn.innerHTML;
+    btn.innerHTML = restore || '<svg class="ic"><use href="#i-check"/></svg>';
+    announce('Skopírované do schránky');
+    setTimeout(() => { btn.innerHTML = old; btn.classList.remove('ok'); }, 1400);
+  };
+  $$('.copy').forEach(b => b.addEventListener('click', () => copyText($('p', b.parentElement).textContent, b)));
+  $('#copyCmd').addEventListener('click', e => copyText('dictate pair', e.currentTarget, '<svg class="ic"><use href="#i-check"/></svg>Skopírované'));
+
+  const testBtn = $('#testBtn');
+  testBtn.addEventListener('click', () => {
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testujem…';
+    $('#testOut').textContent = '';
+    setTimeout(() => {
+      const ms = 31 + Math.round(Math.random() * 12);
+      $('#lat').textContent = ms;
+      $('#sideLat').textContent = ms;
+      $('#testOut').textContent = 'Overené práve teraz: šifrovaný kanál funguje, odozva ' + ms + ' ms, model odpovedá.';
+      testBtn.disabled = false;
+      testBtn.textContent = 'Otestovať spojenie';
+    }, 800);
+  });
+
+  const codeInputs = $$('#codeIn input');
+  const pairBtn = $('#pairBtn');
+  const refreshPair = () => { pairBtn.disabled = !codeInputs.every(i => i.value); };
+  codeInputs.forEach((inp, i) => {
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/[^a-z0-9]/gi, '').slice(-1).toUpperCase();
+      if (inp.value && codeInputs[i + 1]) codeInputs[i + 1].focus();
+      refreshPair();
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !inp.value && codeInputs[i - 1]) codeInputs[i - 1].focus();
+      if (e.key === 'Enter' && !pairBtn.disabled) pairBtn.click();
+    });
+    inp.addEventListener('paste', e => {
+      e.preventDefault();
+      const chars = (e.clipboardData.getData('text') || '').replace(/[^a-z0-9]/gi, '').toUpperCase().split('');
+      chars.slice(0, codeInputs.length - i).forEach((ch, k) => { codeInputs[i + k].value = ch; });
+      const nextEmpty = codeInputs.find(x => !x.value);
+      (nextEmpty || pairBtn).focus();
+      refreshPair();
+    });
+  });
+  pairBtn.addEventListener('click', () => {
+    pairBtn.disabled = true;
+    pairBtn.textContent = 'Overujem…';
+    setTimeout(() => {
+      pairBtn.textContent = 'Spárované';
+      $('#pairOk').classList.add('show');
+      $('#pairWait').hidden = true;
+    }, 900);
+  });
+
+  const hk = $('#hk');
+  const hkLabel = $('#hkLabel');
+  const MOD = { AltRight: 'Pravý ⌥ Option', AltLeft: 'Ľavý ⌥ Option', MetaRight: 'Pravý ⌘ Command', MetaLeft: 'Ľavý ⌘ Command', ControlLeft: '⌃ Control', ControlRight: 'Pravý ⌃ Control', ShiftLeft: 'Ľavý ⇧ Shift', ShiftRight: 'Pravý ⇧ Shift', CapsLock: '⇪ Caps Lock' };
+  let hkPrev = hkLabel.textContent;
+  let pendingMod = null;
+  const stopRec = label => {
+    hk.dataset.rec = 'false';
+    hkLabel.textContent = label || hkPrev;
+    hkPrev = hkLabel.textContent;
+    pendingMod = null;
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
+    if (label) announce('Skratka nastavená: ' + label);
+  };
+  const onKeyDown = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') { stopRec(); return; }
+    if (MOD[e.code] || e.code === 'Fn') { pendingMod = e.code; return; }
+    pendingMod = null;
+    const mods = (e.ctrlKey ? '⌃' : '') + (e.altKey ? '⌥' : '') + (e.shiftKey ? '⇧' : '') + (e.metaKey ? '⌘' : '');
+    const name = e.code === 'Space' ? 'Medzerník' : (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+    stopRec((mods ? mods + ' ' : '') + name);
+  };
+  const onKeyUp = e => {
+    if (!pendingMod || e.code !== pendingMod) return;
+    e.preventDefault();
+    stopRec(MOD[pendingMod] || 'Fn');
+  };
+  hk.addEventListener('click', () => {
+    if (hk.dataset.rec === 'true') { stopRec(); return; }
+    hk.dataset.rec = 'true';
+    hkLabel.textContent = 'Stlačte novú skratku…';
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('keyup', onKeyUp, true);
+  });
+
+  const modeDesc = $('#modeDesc');
+  $$('[data-set-mode]').forEach(b => b.addEventListener('click', () => {
+    $$('[data-set-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    modeDesc.textContent = b.dataset.setMode === 'hold' ? 'Nahráva sa, kým kláves držíte.' : 'Prvé stlačenie začne nahrávať, druhé ukončí.';
+  }));
+})();
+</script>
+</body>
+</html>

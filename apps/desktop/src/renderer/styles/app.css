@@ -1,0 +1,139 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--win-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ic {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  height: 100%;
+  background: var(--win-bg);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  padding: 52px 10px 12px;
+  background: var(--win-side);
+  border-right: 1px solid var(--line-2);
+  -webkit-app-region: drag;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 18px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.brand svg {
+  width: 28px;
+  height: 28px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--ink);
+}
+
+.nav button:hover {
+  background: var(--hover);
+}
+
+.nav button .ic {
+  color: var(--ink-3);
+}
+
+.nav button[aria-selected="true"] {
+  background: var(--sel);
+  font-weight: 600;
+}
+
+.nav button[aria-selected="true"] .ic {
+  color: var(--lamp-ink);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 54px;
+  padding: 0 26px;
+  border-bottom: 1px solid var(--line-2);
+  -webkit-app-region: drag;
+}
+
+.bar h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 28px 28px;
+}

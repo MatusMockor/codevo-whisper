@@ -5,3 +5,8 @@ release/
 *.p12
 .DS_Store
 feed/
+out/
+apps/desktop/resources/bin/
+test-results/
+playwright-report/
+*.tsbuildinfo
