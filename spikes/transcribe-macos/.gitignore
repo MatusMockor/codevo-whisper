@@ -1,0 +1,5 @@
+*.gguf
+build/
+transcribe.cpp/
+out.txt
+sample.wav
