@@ -135,6 +135,7 @@ Push-to-talk needs reliable key-down and key-up events, which Electron `globalSh
 - Linux Wayland: XDG GlobalShortcuts portal, using `Activated` / `Deactivated` signals where supported.
 - Linux X11: key grab via a small helper.
 - Toggle mode (press to start, press to stop) is always available as a fallback.
+- The hotkey is user-configurable in settings through a key recorder (press the key you want). First run asks the user to press their key instead of assuming one: the Fn/Globe key is invisible to macOS on many third-party keyboards, and some keyboards have no right Option. Suggested defaults in the recorder: Fn/Globe on Apple keyboards, right Control or right Option otherwise. Owner decision 2026-10-25 after the phase 0 test (an external keyboard without right Option, Fn not seen by the event tap, right Control worked).
 
 ### 5.2 Insertion
 
@@ -154,6 +155,10 @@ Clipboard fallback is the only behaviour guaranteed everywhere. `ydotool` is doc
 
 ### 5.3 Overlay
 
+- Two display modes, chosen in settings (owner decision 2026-10-25):
+  - **Indikátor** (default): a small pill with a recording dot and a voice-level waveform, then a short processing and inserted state. No transcript text.
+  - **Živý text**: the pill expands and shows the live transcript (confirmed words solid, tentative words lighter), as in the mockup.
+  - In Indikátor mode the client does not request partials, so the server only transcribes committed segments and the final tail. This lowers server load and end-of-speech latency, which matters most with several devices (phase 0 latency spike).
 - macOS: non-activating panel, `showInactive`, always on top including over fullscreen apps and across Spaces; verified in phase 0.
 - Linux X11: frameless always-on-top window positioned bottom-center.
 - Linux Wayland: Electron cannot reliably do `showInactive`, always-on-top or arbitrary positioning. v1 uses a reduced mode there (regular small window or system notification with the live text), clearly documented. A compositor-specific layer-shell backend is a later option.

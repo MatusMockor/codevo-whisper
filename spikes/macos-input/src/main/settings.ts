@@ -4,7 +4,7 @@ export type SettingsListener = (next: Settings, previous: Settings) => void
 
 export const defaultSettings: Settings = {
   candidate: 'swift',
-  key: 'fn',
+  key: 'rightControl',
   observeBoth: false,
   transcriptionMs: 1000,
   restoreDelayMs: 500,
