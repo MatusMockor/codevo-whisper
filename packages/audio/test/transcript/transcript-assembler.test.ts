@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { msToSamples } from '../../src/pcm/pcm-format';
-import type { Segment } from '../../src/segmentation/segment';
+import type { CutReason, Segment } from '../../src/segmentation/segment';
 import { TranscriptAssembler } from '../../src/transcript/transcript-assembler';
 
-function segment(id: number, leadInMs = 0): Segment {
-  return { id, startSample: 0, endSample: 1, leadInSamples: msToSamples(leadInMs), reason: 'pause', voiced: true };
+function segment(id: number, leadInMs = 0, reason: CutReason = 'pause'): Segment {
+  return { id, startSample: 0, endSample: 1, leadInSamples: msToSamples(leadInMs), reason, voiced: true };
 }
 
 describe('TranscriptAssembler', () => {
@@ -99,6 +99,44 @@ describe('TranscriptAssembler', () => {
       { type: 'final', segmentId: 0, revision: 1, text: '' },
       { type: 'final', segmentId: 1, revision: 1, text: 'druhý' },
     ]);
+  });
+
+  it('removes a five-word overlap with a 1 s lead-in by default', () => {
+    const assembler = new TranscriptAssembler();
+    assembler.commit(segment(0));
+    assembler.commit(segment(1, 1000));
+    assembler.acceptFinal(0, 'a teraz raz dva tri štyri päť');
+
+    expect(assembler.acceptFinal(1, 'raz dva tri štyri päť šesť')[0]?.text).toBe('šesť');
+  });
+
+  it('withholds the last word of a hard-cut final until the next final', () => {
+    const assembler = new TranscriptAssembler();
+    assembler.commit(segment(0, 0, 'hard'));
+    assembler.commit(segment(1, 1000, 'end'));
+
+    expect(assembler.acceptFinal(0, 'a potom pokrač')[0]?.text).toBe('a potom');
+    expect(assembler.acceptFinal(1, 'potom pokračujeme ďalej')[0]?.text).toBe('pokračujeme ďalej');
+    expect(assembler.text()).toBe('a potom pokračujeme ďalej');
+  });
+
+  it('emits the withheld word when the segment after a hard cut fails', () => {
+    const assembler = new TranscriptAssembler();
+    assembler.commit(segment(0, 0, 'hard'));
+    assembler.commit(segment(1, 1000, 'end'));
+    assembler.acceptFinal(0, 'a potom koniec');
+
+    expect(assembler.skipFinal(1)[0]?.text).toBe('koniec');
+    expect(assembler.text()).toBe('a potom koniec');
+  });
+
+  it('a partial after a hard cut resolves against the withheld word', () => {
+    const assembler = new TranscriptAssembler();
+    assembler.commit(segment(0, 0, 'hard'));
+    assembler.acceptFinal(0, 'a potom pokrač');
+    const revision = assembler.nextPartialRevision(1);
+
+    expect(assembler.acceptPartial(1, revision, 'potom pokračujeme', msToSamples(1000))?.text).toBe('pokračujeme');
   });
 
   it('text joins the non-empty finals', () => {

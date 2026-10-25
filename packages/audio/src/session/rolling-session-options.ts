@@ -22,4 +22,4 @@ export type RollingSessionOptions<TContext = TranscriptionContext> = {
 };
 
 export const DEFAULT_MIN_PARTIAL_TAIL_MS = 500;
-export const DEFAULT_MS_PER_OVERLAP_WORD = 250;
+export const DEFAULT_MS_PER_OVERLAP_WORD = 150;

@@ -1,6 +1,7 @@
-import { removeBoundaryDuplicates } from '../dedup/remove-boundary-duplicates';
+import { resolveBoundary } from '../dedup/resolve-boundary';
+import { splitLastWord } from '../dedup/split-last-word';
 import { samplesToMs } from '../pcm/pcm-format';
-import type { Segment } from '../segmentation/segment';
+import type { CutReason, Segment } from '../segmentation/segment';
 import type { TranscriptEvent } from './transcript-event';
 
 type SegmentState = {
@@ -8,6 +9,7 @@ type SegmentState = {
   emittedRevision: number;
   committed: boolean;
   leadInSamples: number;
+  reason: CutReason | undefined;
 };
 
 export class TranscriptAssembler {
@@ -15,8 +17,9 @@ export class TranscriptAssembler {
   private readonly arrivedFinals = new Map<number, string>();
   private readonly released: string[] = [];
   private committedCount = 0;
+  private carried: string | undefined;
 
-  constructor(private readonly msPerOverlapWord = 250) {}
+  constructor(private readonly msPerOverlapWord = 150) {}
 
   get pendingFinals(): number {
     return this.committedCount - this.released.length;
@@ -32,6 +35,7 @@ export class TranscriptAssembler {
     const state = this.state(segment.id);
     state.committed = true;
     state.leadInSamples = segment.leadInSamples;
+    state.reason = segment.reason;
     state.issuedRevision += 1;
     this.committedCount += 1;
     return state.issuedRevision;
@@ -43,7 +47,7 @@ export class TranscriptAssembler {
       return undefined;
     }
     state.emittedRevision = revision;
-    const deduped = this.released.length === segmentId ? this.dedup(text, leadInSamples) : text.trim();
+    const deduped = this.released.length === segmentId ? this.resolve(text, leadInSamples) : text.trim();
     return { type: 'partial', segmentId, revision, text: deduped };
   }
 
@@ -57,7 +61,7 @@ export class TranscriptAssembler {
   }
 
   text(): string {
-    return this.released.filter((text) => text.length > 0).join(' ');
+    return [...this.released, this.carried ?? ''].filter((text) => text.length > 0).join(' ');
   }
 
   private release(): TranscriptEvent[] {
@@ -66,7 +70,7 @@ export class TranscriptAssembler {
     let raw = this.arrivedFinals.get(segmentId);
     while (raw !== undefined) {
       const state = this.state(segmentId);
-      const text = this.dedup(raw, state.leadInSamples);
+      const text = this.withheld(this.resolve(raw, state.leadInSamples), state.reason);
       this.arrivedFinals.delete(segmentId);
       this.released.push(text);
       events.push({ type: 'final', segmentId, revision: state.issuedRevision, text });
@@ -76,9 +80,19 @@ export class TranscriptAssembler {
     return events;
   }
 
-  private dedup(text: string, leadInSamples: number): string {
+  private withheld(text: string, reason: CutReason | undefined): string {
+    this.carried = undefined;
+    if (reason !== 'hard') {
+      return text;
+    }
+    const split = splitLastWord(text);
+    this.carried = split.tail;
+    return split.head;
+  }
+
+  private resolve(text: string, leadInSamples: number): string {
     const previous = this.released.findLast((released) => released.length > 0) ?? '';
-    return removeBoundaryDuplicates(previous, text, Math.ceil(samplesToMs(leadInSamples) / this.msPerOverlapWord));
+    return resolveBoundary(previous, this.carried, text, Math.ceil(samplesToMs(leadInSamples) / this.msPerOverlapWord));
   }
 
   private state(segmentId: number): SegmentState {
@@ -86,7 +100,7 @@ export class TranscriptAssembler {
     if (existing !== undefined) {
       return existing;
     }
-    const created = { issuedRevision: 0, emittedRevision: 0, committed: false, leadInSamples: 0 };
+    const created: SegmentState = { issuedRevision: 0, emittedRevision: 0, committed: false, leadInSamples: 0, reason: undefined };
     this.segments.set(segmentId, created);
     return created;
   }

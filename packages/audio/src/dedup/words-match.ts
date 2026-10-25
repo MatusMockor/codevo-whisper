@@ -40,6 +40,16 @@ export function endingsDifferOnly(a: string, b: string): boolean {
   return stem >= MIN_SHARED_STEM && a.length - stem <= MAX_ENDING_LENGTH && b.length - stem <= MAX_ENDING_LENGTH;
 }
 
+const MIN_FRAGMENT = 3;
+
+export function isTruncationOf(prefix: string, full: string): boolean {
+  return prefix.length >= MIN_SHARED_STEM && full.length > prefix.length && full.startsWith(prefix);
+}
+
+export function isFragmentOf(fragment: string, full: string): boolean {
+  return fragment.length >= MIN_FRAGMENT && full.length > fragment.length && full.endsWith(fragment);
+}
+
 export function wordsMatch(a: string, b: string): boolean {
   return normalizedWordsMatch(normalizeWord(a), normalizeWord(b));
 }

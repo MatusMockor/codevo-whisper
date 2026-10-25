@@ -92,6 +92,13 @@ describe('Segmenter', () => {
     expect(segmenter.finish(end)).toBeUndefined();
   });
 
+  it('finish always emits the end segment after a hard cut so the overlap is re-read', () => {
+    const segmenter = new Segmenter();
+    segmentFrames(buildFrames([[true, 24900], [false, 1000]]), segmenter);
+
+    expect(segmenter.finish(at(25.9))).toMatchObject({ id: 1, startSample: at(24), reason: 'end', voiced: false });
+  });
+
   it('marks a later segment without voiced audio as unvoiced', () => {
     const { segments } = run([[true, 15500], [false, 26000]]);
 

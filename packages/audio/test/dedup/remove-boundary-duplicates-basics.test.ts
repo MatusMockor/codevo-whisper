@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { removeBoundaryDuplicates } from '../../src/dedup/remove-boundary-duplicates';
+import { removeBoundaryDuplicates } from '../../src/dedup/resolve-boundary';
 
 describe('removeBoundaryDuplicates', () => {
   it('removes an exact overlap ignoring case and punctuation', () => {

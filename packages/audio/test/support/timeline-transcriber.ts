@@ -1,9 +1,15 @@
-import { decodePcm16le } from '../../src/pcm/pcm-format';
+import { decodePcm16le, msToSamples } from '../../src/pcm/pcm-format';
 import type { SegmentTranscriber } from '../../src/scheduling/segment-transcriber';
 import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 
 const KEY_SAMPLES = 8;
 const LETTERS = 'bcdfghjklmnprstvzaeiou';
+
+export type TimelineMode = {
+  wordMs?: number;
+  truncateAtCut?: boolean;
+  fragmentAtStart?: boolean;
+};
 
 function wordFor(block: number): string {
   let state = (block + 1) * 2654435761;
@@ -22,11 +28,13 @@ function inflect(word: string): string {
 export class TimelineTranscriber implements SegmentTranscriber {
   private readonly offsets = new Map<string, number>();
   private readonly ambiguous = new Set<string>();
+  private readonly blockSamples: number;
 
   constructor(
-    source: Int16Array,
-    private readonly blockSamples = 4800,
+    private readonly source: Int16Array,
+    private readonly mode: TimelineMode = {},
   ) {
+    this.blockSamples = msToSamples(mode.wordMs ?? 300);
     for (let offset = 0; offset + KEY_SAMPLES <= source.length; offset += 1) {
       const key = source.subarray(offset, offset + KEY_SAMPLES).join(',');
       if (this.offsets.has(key)) {
@@ -43,26 +51,49 @@ export class TimelineTranscriber implements SegmentTranscriber {
     if (offset === undefined || this.ambiguous.has(key)) {
       return Promise.reject(new Error('job audio does not map to one position in the timeline source'));
     }
-    const words = this.blocksIn(offset, offset + samples.length).map(wordFor);
-    const first = words[0];
-    if (offset > 0 && first !== undefined) {
-      words[0] = inflect(first);
-    }
-    return Promise.resolve(words.join(' '));
+    return Promise.resolve(this.render(offset, offset + samples.length).join(' '));
   }
 
   expectedText(endSample: number): string {
-    return this.blocksIn(0, endSample).map(wordFor).join(' ');
+    return this.vocabulary(endSample).join(' ');
   }
 
   vocabulary(endSample: number): string[] {
     return this.blocksIn(0, endSample).map(wordFor);
   }
 
+  private render(from: number, to: number): string[] {
+    const words = this.blocksIn(from, to).map(wordFor);
+    const first = words[0];
+    if (from > 0 && first !== undefined) {
+      words[0] = inflect(first);
+    }
+    return [...this.fragmentBefore(from), ...words, ...this.truncatedAfter(to)];
+  }
+
+  private fragmentBefore(from: number): string[] {
+    const block = Math.floor(from / this.blockSamples);
+    if (!this.mode.fragmentAtStart || from === 0 || this.center(block) >= from) {
+      return [];
+    }
+    return [`${wordFor(block).slice(-4)}.`];
+  }
+
+  private truncatedAfter(to: number): string[] {
+    const block = Math.floor(to / this.blockSamples);
+    if (!this.mode.truncateAtCut || to >= this.source.length || this.center(block) < to || block * this.blockSamples >= to) {
+      return [];
+    }
+    return [wordFor(block).slice(0, 5)];
+  }
+
+  private center(block: number): number {
+    return (block + 0.5) * this.blockSamples;
+  }
+
   private blocksIn(from: number, to: number): number[] {
     const blocks: number[] = [];
-    const first = Math.max(0, Math.ceil(from / this.blockSamples - 0.5));
-    for (let block = first; (block + 0.5) * this.blockSamples < to; block += 1) {
+    for (let block = Math.max(0, Math.ceil(from / this.blockSamples - 0.5)); this.center(block) < to; block += 1) {
       blocks.push(block);
     }
     return blocks;
