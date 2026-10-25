@@ -36,7 +36,7 @@ export function createServerServices({ settings, window, e2e, logger }: ServerWi
   const connector = new ServerConnector({ pairings, observer: status, clock: Date.now, timeoutMs: CONNECT_TIMEOUT_MS });
   const pairing = new DevicePairing({ pairings, vault, deviceName: () => computerName(), clock: Date.now, timeoutMs: PAIRING_TIMEOUT_MS });
   const service = new ServerService({ pairings, vault, connector, status, pairing, settings, logger });
-  const unsubscribers = [service.onChange((view) => window.send('server-changed', view)), window.onFocus(() => void service.check())];
+  const unsubscribers = [service.onChange((view) => window.send('server-changed', view)), window.onFocus(() => void service.refreshOnFocus())];
   void service.check();
   return {
     engine: new RemoteEngine({ connector, observer: status }),

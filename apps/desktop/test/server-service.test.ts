@@ -33,7 +33,9 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function create(availability: VaultAvailability = 'available'): { service: ServerService; views: ServerView[]; file: string } {
+let now = Date.parse('2026-10-26T10:00:00.000Z');
+
+function create(availability: VaultAvailability = 'available'): { service: ServerService; views: ServerView[]; file: string; statuses: string[] } {
   const logger = new RecordingLogger();
   const vault = new InsecureTestVault(availability);
   const file = join(dir, 'server-pairing.json');
@@ -41,10 +43,12 @@ function create(availability: VaultAvailability = 'available'): { service: Serve
   const status = new ServerStatusBoard(logger);
   const connector = new ServerConnector({ pairings, observer: status, clock: Date.now, timeoutMs: 2000 });
   const pairing = new DevicePairing({ pairings, vault, deviceName: () => Promise.resolve('Test Mac'), clock: Date.now, timeoutMs: 2000 });
-  service = new ServerService({ pairings, vault, connector, status, pairing, settings, logger });
+  service = new ServerService({ pairings, vault, connector, status, pairing, settings, logger, clock: () => now });
   const views: ServerView[] = [];
+  const statuses: string[] = [];
+  status.onChange((next) => statuses.push(next.kind));
   service.onChange((view) => views.push(view));
-  return { service, views, file };
+  return { service, views, file, statuses };
 }
 
 async function pairThroughService(target: ServerService): Promise<string> {
@@ -141,5 +145,25 @@ describe('ServerService', () => {
 
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'idle' } });
+  });
+
+  it('runs one check at a time and checks on focus at most every 15 seconds', async () => {
+    const { service: target, statuses } = create();
+    await pairThroughService(target);
+    statuses.splice(0);
+
+    await Promise.all([target.check(), target.check()]);
+    expect(statuses).toEqual(['checking', 'online']);
+
+    statuses.splice(0);
+    now += 1000;
+    await target.refreshOnFocus();
+    now += 14_000;
+    await target.refreshOnFocus();
+    expect(statuses).toEqual([]);
+
+    now += 1000;
+    await target.refreshOnFocus();
+    expect(statuses).toEqual(['checking', 'online']);
   });
 });

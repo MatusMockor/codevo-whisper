@@ -18,7 +18,10 @@ export type ServerServiceDeps = {
   pairing: Pick<DevicePairing, 'pair'>;
   settings: Pick<SettingsStore, 'get' | 'update'>;
   logger: Logger;
+  clock?: () => number;
 };
+
+export const FOCUS_CHECK_INTERVAL_MS = 15_000;
 
 const IDLE: PairingView = { kind: 'idle' };
 const LOCAL_ONLY: Settings['engineOrder'] = ['local'];
@@ -39,6 +42,8 @@ function describe(pairing: ServerPairing, status: PairedServerView['status']): P
 export class ServerService {
   private progress: PairingView = IDLE;
   private pairingRun: AbortController | null = null;
+  private checking: Promise<void> | null = null;
+  private lastCheckAt = Number.NEGATIVE_INFINITY;
   private readonly listeners: Listeners<ServerView>;
   private readonly unsubscribe: () => void;
 
@@ -76,7 +81,26 @@ export class ServerService {
     this.pairingRun?.abort();
   }
 
-  async check(): Promise<void> {
+  check(): Promise<void> {
+    this.checking ??= this.runCheck().finally(() => {
+      this.checking = null;
+    });
+    return this.checking;
+  }
+
+  refreshOnFocus(): Promise<void> {
+    if (this.now() - this.lastCheckAt <= FOCUS_CHECK_INTERVAL_MS) {
+      return Promise.resolve();
+    }
+    return this.check();
+  }
+
+  private now(): number {
+    return (this.deps.clock ?? Date.now)();
+  }
+
+  private async runCheck(): Promise<void> {
+    this.lastCheckAt = this.now();
     if (!(await this.isPaired())) {
       this.deps.status.reset();
       return;
