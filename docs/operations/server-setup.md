@@ -5,7 +5,7 @@ The server is a Docker Compose project with two services:
 - `gateway` - the encrypted WebSocket endpoint for paired devices, the admin socket and the `codevo-whisper` CLI. It is the only service that publishes a port, on `127.0.0.1:8787` by default.
 - `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on `/dev/dri`). Internal only, reachable from the gateway as `http://stt:8001`.
 
-The gateway stores only its static key (`/data/server-key.json`, mode 0600) and the device registry (`/data/devices.json`) in the `cw-data` volume. Audio and transcripts stay in memory. Core dumps are disabled in both containers (`ulimits.core: 0`) and logs contain only sizes, durations and error codes. Swap is outside the app's control; disable it or encrypt it if that matters to you.
+The gateway stores only its static key (`/data/server-key.json`, mode 0600) and the device registry (`/data/devices.json`) in the `cw-data` volume. Audio and transcripts stay in memory. Core dumps are disabled in both containers (`ulimits.core: 0`) and logs contain only device ids, sizes, durations and error codes. Swap is outside the app's control; disable it or encrypt it if that matters to you.
 
 ## Requirements
 
@@ -120,5 +120,7 @@ Home server (`codex@192.168.1.110`, Ubuntu x86_64, RX 7800 XT), commit `38375d1`
 3. SSH tunnel `ssh -N -L 8787:127.0.0.1:8787 codex@192.168.1.110`. `codevo-whisper pair` on the server and `dev-client pair` on the Mac showed the same device fingerprint (`E255 EA96 ...`) and connection fingerprint (`1D8F F424 ...`). After `y` the device was paired as `e255ea96`.
 4. `dev-client transcribe sample.wav --language sk` returned exactly `Ahoj, toto je skúška prepisu slovenskej reči na grafickej karte. Potrebujem skontrolovať náš editor a potom odoslať zmenu.` The gateway logged `audioSeconds 6.7, chunks 1, durationMs 587, result ok`, and the client wall time was 0.9 s including the tunnel.
 5. `codevo-whisper revoke e255ea96`, then the same `transcribe` failed with `Chyba: unknown_device`.
+
+Redeployed at commit `63162f0`, after the pairing secret was changed to 32 bytes used directly as the Noise psk. The 43-character secret token paired (connection fingerprints matched), the sample transcript was again exact, and after `revoke` the device list was empty and `transcribe` returned `unknown_device`.
 
 The stack was left running on the server, with no paired devices. Stop it with `docker compose -f infrastructure/compose/compose.yaml down`. Add `-v` to also delete the key, the registry and the model.

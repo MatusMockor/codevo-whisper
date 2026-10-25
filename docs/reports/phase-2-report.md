@@ -151,7 +151,7 @@ The same commit also fixes a flaky sidecar test: the sidecar now drains an unrea
 4. The transcript matched the expected Slovak text exactly. The gateway reported 587 ms for 6.7 s of audio; client wall time was 0.9 s.
 5. After `revoke`: `unknown_device`.
 
-The stack is still running on the server with no paired devices. The revoked dev identity remains in `~/.config/codevo-whisper-dev/identity.json` on the Mac.
+After the 32-byte secret change the stack was redeployed at `63162f0` and pair, transcribe and revoke were repeated with the same results. The stack is still running on the server with no paired devices. The revoked dev identity remains in `~/.config/codevo-whisper-dev/identity.json` on the Mac.
 
 Before the server came back, the same flow was also checked locally with Docker Desktop (both image builds, container CLI, pairing, `stt_unavailable`, revoke).
 
@@ -164,4 +164,5 @@ Before the server came back, the same flow was also checked locally with Docker 
   2. `STT_BACKEND=cpu` still needs `/dev/dri`. Documented that CPU-only hosts must remove `devices` and `group_add`; the plan's compose layout is kept.
   3. The dev client resolved relative WAV paths against the package directory. They are now resolved against `INIT_CWD`.
   4. When storing an approved device failed, the operator was never notified and the CLI hung. The device now gets `pairing_closed` and the operator `failed`. Test: `tells the operator when the approved device cannot be stored`.
-- No CodeRabbit findings were rejected. The CodeRabbit run covered the branch up to `38375d1` and did not see the later commits.
+- After the controller rulings, a second CodeRabbit run (branch up to `63162f0`) had 1 minor finding, accepted: the privacy line in `server-setup.md` now lists device ids among what is logged.
+- No CodeRabbit findings were rejected.
