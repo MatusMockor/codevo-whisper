@@ -1,6 +1,4 @@
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPair, parsePairingToken, type KeyPair } from '@codevo-whisper/protocol';
@@ -9,6 +7,9 @@ import { connectAdmin, type AdminConnection } from '../../../server/src/admin/ad
 import { startServer, type RunningServer, type ServerOptions } from '../../../server/src/app';
 import { startFakeSttServer, type FakeSttBehaviour, type FakeSttServer } from '../../../server/test/support/fake-stt-server';
 import type { ServerPairing } from '../../src/main/remote/pairing-repository';
+import { freePort } from './free-port';
+
+export { freePort } from './free-port';
 
 export type TestGatewayOptions = { stt?: FakeSttBehaviour; publicEndpoint?: (port: number) => string; server?: ServerOptions };
 
@@ -27,14 +28,6 @@ export type TestGateway = {
   restart(): Promise<void>;
   close(): Promise<void>;
 };
-
-export async function freePort(): Promise<number> {
-  const probe = createServer();
-  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
-  const { port } = probe.address() as AddressInfo;
-  await new Promise<void>((resolve) => probe.close(() => resolve()));
-  return port;
-}
 
 function pairingFor(server: RunningServer, endpoint: string, deviceKey: KeyPair, deviceId: string, deviceName: string): ServerPairing {
   return { deviceKey, serverPublicKey: server.serverKey.publicKey, endpoint, deviceId, deviceName, pairedAt: '2026-10-26T08:00:00.000Z' };

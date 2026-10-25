@@ -1,26 +1,45 @@
-import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
-import { ComingSoon, SettingsGroup, SettingsRow } from './SettingsGroup';
+import type { EngineId } from '../../shared/settings';
+import { SettingsGroup } from './SettingsGroup';
+import { saveSettings } from './use-settings';
 
-type EngineChoice = 'local' | 'server';
+type EngineOption = { order: EngineId[]; title: string; description: string; usesServer: boolean };
 
-const ENGINES: ReadonlyArray<SegmentOption<EngineChoice>> = [
-  { id: 'local', label: 'Lokálne' },
-  { id: 'server', label: 'Server', disabled: true },
+const OPTIONS: readonly EngineOption[] = [
+  { order: ['local'], title: 'Lokálne', description: 'Prepisuje sa na tomto Macu stiahnutým modelom. Zvuk neopustí počítač.', usesServer: false },
+  { order: ['server'], title: 'Server', description: 'Prepisuje váš spárovaný server. Zvuk putuje zašifrovaný od začiatku do konca.', usesServer: true },
+  { order: ['server', 'local'], title: 'Server, potom lokálne', description: 'Keď server pri začatí diktovania nie je dostupný, prepíše sa lokálne.', usesServer: true },
+  { order: ['local', 'server'], title: 'Lokálne, potom server', description: 'Keď lokálny model nie je pripravený, zvuk sa pošle zašifrovaný na váš server.', usesServer: true },
 ];
 
-export function EngineSection() {
+function sameOrder(left: readonly EngineId[], right: readonly EngineId[]): boolean {
+  return left.length === right.length && left.every((engine, index) => engine === right[index]);
+}
+
+export function EngineSection({ engineOrder, paired }: { engineOrder: readonly EngineId[]; paired: boolean }) {
   return (
     <SettingsGroup title="Kde beží prepis">
-      <SettingsRow
-        title="Prepis"
-        description={
-          <>
-            Lokálne sa reč prepisuje priamo na tomto Macu, bez internetu. Server: <ComingSoon />
-          </>
-        }
-      >
-        <SegmentedControl label="Kde beží prepis" options={ENGINES} value="local" onChange={() => undefined} />
-      </SettingsRow>
+      <div className="radio" role="radiogroup" aria-label="Kde beží prepis">
+        {OPTIONS.map((option) => (
+          <label key={option.order.join('-')}>
+            <input
+              type="radio"
+              name="engine-order"
+              checked={sameOrder(engineOrder, option.order)}
+              disabled={option.usesServer && !paired}
+              onChange={() => {
+                saveSettings({ engineOrder: option.order });
+              }}
+            />
+            <div>
+              <b>{option.title}</b>
+              <span>{option.description}</span>
+            </div>
+          </label>
+        ))}
+      </div>
+      <p className="sbox-foot">
+        {paired ? 'Výber platí od ďalšieho diktovania, nikdy sa nemení počas neho.' : 'Najprv spárujte server na stránke Server.'}
+      </p>
     </SettingsGroup>
   );
 }

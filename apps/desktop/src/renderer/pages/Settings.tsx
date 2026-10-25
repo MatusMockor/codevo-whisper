@@ -8,10 +8,12 @@ import { SettingsGroup } from '../settings/SettingsGroup';
 import { SystemSection } from '../settings/SystemSection';
 import { useModels } from '../settings/use-models';
 import { saveSettings, useSettings } from '../settings/use-settings';
+import { useServer } from '../server/use-server';
 
 export function Settings() {
   const settings = useSettings();
   const models = useModels();
+  const server = useServer();
   if (settings.kind === 'loading') {
     return null;
   }
@@ -28,7 +30,7 @@ export function Settings() {
     <div className="groups">
       <SaveErrorNotice />
       <DictationSection settings={value} activeModel={activeModel} />
-      <EngineSection />
+      <EngineSection engineOrder={value.engineOrder} paired={server.kind === 'ready' && server.value.server !== null} />
       <SettingsGroup title="Lokálny model">
         <LocalModelSection settings={value} models={models} />
       </SettingsGroup>
