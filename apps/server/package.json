@@ -9,6 +9,7 @@
     "build": "node ../../scripts/bundle.js main=src/main.ts cli=src/cli/main.ts"
   },
   "dependencies": {
+    "@codevo-whisper/audio": "workspace:*",
     "@codevo-whisper/protocol": "workspace:*",
     "@noble/hashes": "2.4.0",
     "qrcode": "1.5.4",

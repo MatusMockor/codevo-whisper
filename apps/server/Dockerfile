@@ -4,6 +4,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY scripts ./scripts
 COPY packages/protocol ./packages/protocol
+COPY packages/audio ./packages/audio
 COPY apps/server ./apps/server
 RUN pnpm install --frozen-lockfile --filter "@codevo-whisper/server..." --filter codevo-whisper
 RUN pnpm --filter @codevo-whisper/server build
