@@ -116,7 +116,7 @@ The two ends are the user's device and the user's own gateway. Everything betwee
 
 ### 4.6 Desktop data protection
 
-- No transcript history (owner decision 2026-10-25): the app never writes audio or transcripts to disk; only settings and aggregated statistics (5.6) are stored. Only the last transcript is kept in memory (for "Vložiť posledný prepis" and the tray) and is gone when the app quits.
+- No transcript history (owner decision 2026-10-25): the app never writes audio or transcripts to disk; only settings and aggregated statistics (5.6) are stored. The only exception is technical: the local engine (transcribe.cpp CLI) reads audio from a file, so each chunk is written as a transient WAV into a private temp directory (mode 0600) and deleted as soon as the chunk is transcribed (also on failure). Measured microphone start latency in phase 1 is about 170 ms (455 ms on the first recording after launch), so the optional "Rýchlejší štart" setting (5.5) is the mitigation if first words get cut. Only the last transcript is kept in memory (for "Vložiť posledný prepis" and the tray) and is gone when the app quits.
 - Device private key and pinned server keys are stored via Electron `safeStorage`.
 - On Linux, `safeStorage` can fall back to `basic_text` (no real protection). The app checks the backend; without a secure backend it asks the user for a passphrase to protect the device key (or warns clearly if they decline).
 - Electron hardening: renderer sandbox, `contextIsolation`, no Node in renderers, strict CSP, navigation and new-window blocked, narrow validated IPC, transcripts rendered as text only, keys never cross into a renderer.
