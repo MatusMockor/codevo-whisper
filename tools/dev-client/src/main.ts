@@ -6,14 +6,14 @@ import { FileIdentityStore } from './identity-store';
 import { pair } from './pair';
 import { transcribe } from './transcribe';
 
-const USAGE = 'Použitie: dev-client pair "<token>" --name <názov> | dev-client transcribe <súbor.wav> [--language sk]';
+const USAGE = 'Použitie: dev-client pair "<token>" --name <názov> | dev-client transcribe <súbor.wav> [--language sk] [--live]';
 
 const print = (line: string): void => {
   process.stdout.write(`${line}\n`);
 };
 
 const store = new FileIdentityStore(join(homedir(), '.config', 'codevo-whisper-dev', 'identity.json'));
-const { positional, options } = parseArgs(process.argv.slice(2));
+const { positional, options, flags } = parseArgs(process.argv.slice(2));
 const [command, argument] = positional;
 
 async function run(): Promise<number> {
@@ -21,7 +21,8 @@ async function run(): Promise<number> {
     return pair(store, argument, options.get('name') ?? 'dev-client', print);
   }
   if (command === 'transcribe' && argument !== undefined) {
-    return transcribe(store, resolve(process.env.INIT_CWD ?? process.cwd(), argument), options.get('language') ?? 'sk', print);
+    const file = resolve(process.env.INIT_CWD ?? process.cwd(), argument);
+    return transcribe(store, file, { language: options.get('language') ?? 'sk', live: flags.has('live') }, print);
   }
   print(USAGE);
   return 2;
