@@ -11,6 +11,10 @@ const LANGUAGES: readonly string[] = ['sk', 'en', 'cs', 'auto'];
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
+function parseUrl(raw: string | undefined): URL | null {
+  return URL.parse(raw ?? '/', 'http://stt');
+}
+
 function reply(response: ServerResponse, status: number, body: object): void {
   if (response.headersSent || response.destroyed) {
     return;
@@ -90,7 +94,11 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
     request.on('error', () => request.destroy());
     response.once('finish', () => request.resume());
     response.on('error', () => response.destroy());
-    const url = new URL(request.url ?? '/', 'http://stt');
+    const url = parseUrl(request.url);
+    if (url === null) {
+      reply(response, 400, { error: 'invalid request URL' });
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/health') {
       reply(response, 200, { status: 'UP', busy: handler.isBusy() });
       return;

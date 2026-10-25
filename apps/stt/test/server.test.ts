@@ -27,6 +27,7 @@ function send(path: string, options: { method?: string; contentType?: string; bo
       },
     );
     outgoing.on('error', reject);
+    outgoing.on('socket', (socket) => socket.on('error', () => undefined));
     outgoing.end(options.body === undefined ? undefined : Buffer.from(options.body));
   });
 }
@@ -91,6 +92,7 @@ describe('STT sidecar', () => {
     const { port } = server.address() as AddressInfo;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const socket = connect(port, '127.0.0.1');
+      socket.on('error', () => undefined);
       await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
       socket.write('POST /transcribe?language=sk HTTP/1.1\r\nHost: stt\r\nContent-Type: application/octet-stream\r\nContent-Length: 32000\r\n\r\n');
       socket.write(Buffer.alloc(1000));
@@ -101,6 +103,23 @@ describe('STT sidecar', () => {
 
     expect(await send('/health', { method: 'GET' })).toEqual({ status: 200, body: { status: 'UP', busy: false } });
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(200);
+  });
+
+  it('answers 400 to a malformed request URL and keeps running', async () => {
+    const { port } = server.address() as AddressInfo;
+    const socket = connect(port, '127.0.0.1');
+    socket.on('error', () => undefined);
+    const response = await new Promise<string>((resolve) => {
+      let text = '';
+      socket.on('data', (chunk: Buffer) => {
+        text += chunk.toString('latin1');
+      });
+      socket.on('close', () => resolve(text));
+      socket.write('GET http://[ HTTP/1.1\r\nHost: stt\r\nConnection: close\r\n\r\n');
+    });
+
+    expect(response).toMatch(/^HTTP\/1\.1 400/);
+    expect((await send('/health', { method: 'GET' })).status).toBe(200);
   });
 
   it('answers 404 for unknown routes', async () => {
