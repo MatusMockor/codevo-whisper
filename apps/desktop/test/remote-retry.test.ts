@@ -22,21 +22,24 @@ afterEach(async () => {
   gateway = undefined;
 });
 
-type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource };
+type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource; controller: AbortController };
+
+type SetupOptions = { keepAliveMs?: number; timeoutMs?: number };
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
-async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}, keepAliveMs?: number): Promise<Setup> {
+async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}, keepAliveMs?: number, extra: SetupOptions = {}): Promise<Setup> {
   const proxyPort = await freePort();
   gateway = await startTestGateway({ stt, publicEndpoint: () => `ws://127.0.0.1:${proxyPort}` });
   proxy = await startDropProxy(gateway.port, proxyPort);
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
-  const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
+  const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: extra.timeoutMs ?? 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
   const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: new AbortController().signal });
-  return { server: gateway, relay: proxy, dictation, source };
+  const controller = new AbortController();
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal });
+  return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
 function speak(dictation: EngineDictation, bytes: number): void {
@@ -173,5 +176,93 @@ describe('RemoteDictation retry', () => {
 
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBeGreaterThanOrEqual(2);
+  });
+
+  it('stops reconnecting when the dictation is cancelled during the backoff and opens no further connection', async () => {
+    const { server, relay, dictation, controller } = await setup({ ...bySize, delayMs: 2000 }, { reconnectDelaysMs: [400, 400, 400] });
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await settle(50);
+    await server.stop();
+    await expect.poll(() => relay.connections()).toBe(2);
+    await settle(100);
+
+    controller.abort();
+
+    await expect(finished).rejects.toMatchObject({ name: 'AbortError' });
+    await settle(1000);
+    expect(relay.connections()).toBe(2);
+  });
+
+  it('stops after one reconnect attempt when the server no longer knows the device', async () => {
+    const { server, relay, dictation, source } = await setup(bySize, { reconnectDelaysMs: [50, 50, 50] });
+    speak(dictation, SECOND);
+    await settle(50);
+    const opened = Promise.withResolvers<void>();
+    source.gate = opened.promise;
+    relay.dropAll();
+    const devices = (await server.admin({ cmd: 'devices' })) as { devices: Array<{ id: string }> };
+    await server.admin({ cmd: 'revoke', deviceId: devices.devices[0]?.id });
+
+    opened.resolve();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'repair-needed' });
+    expect(relay.connections()).toBe(2);
+  });
+
+  it('stops after one reconnect attempt when the server key changed', async () => {
+    const { server, relay, dictation, source } = await setup(bySize, { reconnectDelaysMs: [50, 50, 50] });
+    speak(dictation, SECOND);
+    await settle(50);
+    const opened = Promise.withResolvers<void>();
+    source.gate = opened.promise;
+    relay.dropAll();
+    await server.admin({ cmd: 'rotate-key' });
+
+    opened.resolve();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'repair-needed' });
+    expect(relay.connections()).toBe(2);
+  });
+
+  it('gives up reconnecting to a server that keeps refusing once the overall deadline passes', async () => {
+    const { server, relay, dictation } = await setup({ ...bySize, delayMs: 2000 }, { reconnectDelaysMs: Array.from({ length: 50 }, () => 50), reconnectWindowMs: 600 });
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await settle(50);
+    const startedAt = Date.now();
+
+    await server.stop();
+
+    await expect(finished).rejects.toMatchObject({ reason: 'connection-lost' });
+    expect(Date.now() - startedAt).toBeLessThan(1500);
+    expect(relay.connections()).toBeGreaterThan(2);
+  });
+
+  it('does not back off again after a reconnect attempt timed out on silently dropped packets', async () => {
+    const { relay, dictation } = await setup(bySize, { reconnectDelaysMs: [50, 50, 50], reconnectWindowMs: 5000 }, undefined, { timeoutMs: 300 });
+    speak(dictation, SECOND);
+    await settle(50);
+    relay.blackhole();
+    const startedAt = Date.now();
+
+    relay.dropAll();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'connection-lost' });
+    expect(Date.now() - startedAt).toBeLessThan(1500);
+    expect(relay.connections()).toBe(2);
+  });
+
+  it('caps a slow reconnect attempt at the overall deadline', async () => {
+    const { relay, dictation } = await setup(bySize, { reconnectWindowMs: 300 }, undefined, { timeoutMs: 5000 });
+    speak(dictation, SECOND);
+    await settle(50);
+    relay.blackhole();
+    const startedAt = Date.now();
+
+    relay.dropAll();
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'connection-lost' });
+    expect(Date.now() - startedAt).toBeLessThan(1500);
   });
 });

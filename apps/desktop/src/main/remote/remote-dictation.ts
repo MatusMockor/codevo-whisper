@@ -13,6 +13,7 @@ export type RemoteDictationDeps = {
   retryBufferBytes: number;
   reconnect: (previous: ReadyConnection) => Promise<ReadyConnection>;
   reconnectDelaysMs: readonly number[];
+  reconnectWindowMs: number;
   newSessionId?: () => string;
 };
 
@@ -35,7 +36,14 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
 
 const RETRYABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline', 'timeout']);
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const RECONNECTABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline']);
+
+function closeWhenReady(attempt: Promise<ReadyConnection>): void {
+  attempt.then(
+    (ready) => ready.connection.close(),
+    () => undefined,
+  );
+}
 
 function joinSegments(segments: ReadonlyMap<number, string>): string {
   return [...segments.entries()]
@@ -58,6 +66,7 @@ export class RemoteDictation implements EngineDictation {
   private paused = false;
   private settled = false;
   private idleTimer: NodeJS.Timeout | null = null;
+  private backoff: { timer: NodeJS.Timeout; resolve: () => void } | null = null;
 
   constructor(
     ready: ReadyConnection,
@@ -201,20 +210,61 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private async connectAgain(): Promise<ReadyConnection> {
-    for (const delayMs of this.deps.reconnectDelaysMs) {
+    const deadline = Date.now() + this.deps.reconnectWindowMs;
+    for (const delayMs of [...this.deps.reconnectDelaysMs, null]) {
       try {
-        return await this.deps.reconnect(this.ready);
+        return await this.attemptBefore(deadline);
       } catch (error) {
-        if (this.settled || !RETRYABLE.has(asRemoteFailure(error, 'connection-lost').kind)) {
+        if (this.settled || delayMs === null || !RECONNECTABLE.has(asRemoteFailure(error, 'connection-lost').kind)) {
           throw error;
         }
-        await wait(delayMs);
-        if (this.settled) {
-          throw new RemoteFailure('connection-lost', 'the dictation ended while reconnecting');
-        }
+        await this.pause(Math.min(delayMs, deadline - Date.now()));
       }
     }
-    return this.deps.reconnect(this.ready);
+    throw new RemoteFailure('connection-lost', 'no reconnect attempt is left');
+  }
+
+  private attemptBefore(deadline: number): Promise<ReadyConnection> {
+    const remainingMs = deadline - Date.now();
+    if (this.settled || remainingMs <= 0) {
+      return Promise.reject(new RemoteFailure('timeout', 'the server did not come back in time'));
+    }
+    const attempt = this.deps.reconnect(this.ready);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        closeWhenReady(attempt);
+        reject(new RemoteFailure('timeout', 'the server did not come back in time'));
+      }, remainingMs);
+      attempt.then(
+        (ready) => {
+          clearTimeout(timer);
+          resolve(ready);
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  }
+
+  private pause(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.backoff = null;
+        resolve();
+      }, Math.max(0, ms));
+      this.backoff = { timer, resolve };
+    });
+  }
+
+  private stopBackoff(): void {
+    if (this.backoff === null) {
+      return;
+    }
+    clearTimeout(this.backoff.timer);
+    this.backoff.resolve();
+    this.backoff = null;
   }
 
   private resume(ready: ReadyConnection): void {
@@ -282,6 +332,7 @@ export class RemoteDictation implements EngineDictation {
   private settle(): void {
     this.settled = true;
     this.clearIdle();
+    this.stopBackoff();
     this.attempt.connection.close();
   }
 }

@@ -3,12 +3,13 @@ import { RemoteDictation } from './remote-dictation';
 import { asRemoteFailure, type RemoteFailureKind } from './remote-failure';
 import type { ConnectionObserver, ServerConnector } from './server-connector';
 
-export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number; reconnectDelaysMs: readonly number[] };
+export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number; reconnectDelaysMs: readonly number[]; reconnectWindowMs: number };
 
 export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({
   finishIdleMs: 120_000,
   retryBufferBytes: 120 * 32_000,
   reconnectDelaysMs: Object.freeze([250, 500, 1000, 2000, 4000]),
+  reconnectWindowMs: 10_000,
 });
 
 export type RemoteEngineDeps = {
@@ -47,6 +48,7 @@ export class RemoteEngine implements TranscriptionEngine {
               finishIdleMs: this.options.finishIdleMs,
               retryBufferBytes: this.options.retryBufferBytes,
               reconnectDelaysMs: this.options.reconnectDelaysMs,
+              reconnectWindowMs: this.options.reconnectWindowMs,
               reconnect: (previous) => this.deps.connector.reconnect(previous.pairing),
             }),
           release: () => ready.connection.close(),
