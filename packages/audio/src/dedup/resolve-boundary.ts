@@ -7,7 +7,7 @@ type Boundary = {
 };
 
 function fragmentAllowed(length: number, boundary: Boundary): boolean {
-  return length > 1 || (boundary.carriedLast && boundary.lowercaseLead);
+  return boundary.lowercaseLead && (length > 1 || boundary.carriedLast);
 }
 
 function pairMatches(previous: string, next: string, position: number, length: number, boundary: Boundary): boolean {

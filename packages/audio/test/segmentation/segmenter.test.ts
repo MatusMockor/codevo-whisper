@@ -36,7 +36,7 @@ describe('Segmenter', () => {
   it('cuts at the longest pause once a pause ends after the target', () => {
     const { segments, segmenter } = run([[true, 11000], [false, 300], [true, 4700], [false, 220], [true, 500]]);
 
-    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(11.15), leadInSamples: 0, reason: 'pause', voiced: true }]);
+    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(11.15), leadInSamples: 0, reason: 'pause', voiced: true, followsVoicedHardCut: false }]);
     expect(segmenter.openStartSample).toBe(at(10.65));
     expect(segmenter.openSegmentId).toBe(1);
     expect(segmenter.openLeadInSamples).toBe(at(0.5));
@@ -45,7 +45,7 @@ describe('Segmenter', () => {
   it('cuts on a settled 500 ms silence without waiting for speech', () => {
     const { segments } = run([[true, 15500], [false, 500]]);
 
-    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(15.75), leadInSamples: 0, reason: 'pause', voiced: true }]);
+    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(15.75), leadInSamples: 0, reason: 'pause', voiced: true, followsVoicedHardCut: false }]);
   });
 
   it('commits a silence that was already settled when the target is reached', () => {
@@ -63,8 +63,8 @@ describe('Segmenter', () => {
     const segments = segmentFrames(buildFrames([[true, 30000]]), segmenter);
     const last = segmenter.finish(at(30));
 
-    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(25), leadInSamples: 0, reason: 'hard', voiced: true }]);
-    expect(last).toEqual({ id: 1, startSample: at(24), endSample: at(30), leadInSamples: at(1), reason: 'end', voiced: true });
+    expect(segments).toEqual([{ id: 0, startSample: 0, endSample: at(25), leadInSamples: 0, reason: 'hard', voiced: true, followsVoicedHardCut: false }]);
+    expect(last).toEqual({ id: 1, startSample: at(24), endSample: at(30), leadInSamples: at(1), reason: 'end', voiced: true, followsVoicedHardCut: true });
   });
 
   it('at the hard limit cuts at an earlier candidate pause instead of mid-word', () => {
@@ -82,7 +82,7 @@ describe('Segmenter', () => {
   it('finish emits the remaining tail as an end segment', () => {
     const { segmenter } = run([[true, 3000]]);
 
-    expect(segmenter.finish(at(3.01))).toEqual({ id: 0, startSample: 0, endSample: at(3.01), leadInSamples: 0, reason: 'end', voiced: true });
+    expect(segmenter.finish(at(3.01))).toEqual({ id: 0, startSample: 0, endSample: at(3.01), leadInSamples: 0, reason: 'end', voiced: true, followsVoicedHardCut: false });
   });
 
   it('finish skips the end segment when nothing was voiced after a cut', () => {
@@ -97,6 +97,25 @@ describe('Segmenter', () => {
     segmentFrames(buildFrames([[true, 24900], [false, 1000]]), segmenter);
 
     expect(segmenter.finish(at(25.9))).toMatchObject({ id: 1, startSample: at(24), reason: 'end', voiced: false });
+  });
+
+  it('finish skips the silent end after a hard cut of silence', () => {
+    const segmenter = new Segmenter();
+    const segments = segmentFrames(buildFrames([[true, 5000], [false, 55000]]), segmenter);
+
+    expect(segments.some((segment) => segment.reason === 'hard' && !segment.voiced)).toBe(true);
+    expect(segmenter.finish(at(60))).toBeUndefined();
+  });
+
+  it('marks the segment after a voiced hard cut so it re-reads the overlap', () => {
+    const segmenter = new Segmenter();
+    const segments = segmentFrames(buildFrames([[true, 25000], [false, 40000]]), segmenter);
+
+    expect(segments.map((segment) => [segment.reason, segment.voiced, segment.followsVoicedHardCut])).toEqual([
+      ['hard', true, false],
+      ['pause', false, true],
+      ['hard', false, false],
+    ]);
   });
 
   it('marks a later segment without voiced audio as unvoiced', () => {

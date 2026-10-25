@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { decodePcm16le } from '../../src/pcm/pcm-format';
 import type { JobOutcome, JobSubmitter } from '../../src/scheduling/job-outcome';
 import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 import { SegmentFailedError, SessionCancelledError } from '../../src/session/session-errors';
@@ -8,6 +9,10 @@ import { addWhiteNoise, silence } from '../support/signals';
 import { TimelineTranscriber } from '../support/timeline-transcriber';
 import { ImmediateTranscriber } from '../support/immediate-transcriber';
 import { feed, harness } from '../support/session-harness';
+
+function peakAmplitude(pcm: Uint8Array): number {
+  return decodePcm16le(pcm).reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0);
+}
 
 const speech = loadFixture('speech-pauses');
 const continuous = loadFixture('speech-continuous');
@@ -304,6 +309,30 @@ describe('RollingSession', () => {
     expect(text).toBe(engine.expectedText(audio.length));
     expect(events.length).toBeGreaterThanOrEqual(2);
     expect(engine.jobSamples.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each([55, 120])('a silence-only dictation of %i s makes no engine call', async (seconds) => {
+    const engine = new ImmediateTranscriber();
+    const { clock, open } = harness(engine);
+    const { session } = open('a', true);
+
+    await feed(clock, [session], addWhiteNoise(silence(seconds * 1000), 30, 23));
+
+    await expect(session.finish()).resolves.toBe('');
+    expect(engine.lengths).toEqual([]);
+  });
+
+  it.each([10, 25])('%i s of speech followed by 60 s of silence sends no all-silent job', async (speechSeconds) => {
+    const engine = new ImmediateTranscriber();
+    const { clock, open } = harness(engine);
+    const { session } = open('a', false);
+    const audio = addWhiteNoise(concatSamples(long.subarray(0, speechSeconds * 16000), silence(60000)), 30, 29);
+
+    await feed(clock, [session], audio);
+    await session.finish();
+
+    expect(engine.jobs.length).toBeGreaterThanOrEqual(1);
+    expect(engine.jobs.every((job) => peakAmplitude(job.pcm) > 2000)).toBe(true);
   });
 
   it('push after finish throws', async () => {

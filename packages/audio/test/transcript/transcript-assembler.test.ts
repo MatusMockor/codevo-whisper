@@ -4,7 +4,7 @@ import type { CutReason, Segment } from '../../src/segmentation/segment';
 import { TranscriptAssembler } from '../../src/transcript/transcript-assembler';
 
 function segment(id: number, leadInMs = 0, reason: CutReason = 'pause'): Segment {
-  return { id, startSample: 0, endSample: 1, leadInSamples: msToSamples(leadInMs), reason, voiced: true };
+  return { id, startSample: 0, endSample: 1, leadInSamples: msToSamples(leadInMs), reason, voiced: true, followsVoicedHardCut: false };
 }
 
 describe('TranscriptAssembler', () => {

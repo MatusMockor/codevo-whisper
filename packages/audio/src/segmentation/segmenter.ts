@@ -23,6 +23,7 @@ export class Segmenter {
   private leadIn = 0;
   private id = 0;
   private lastCut: CutReason | undefined;
+  private carryOpen = false;
   private lastVoicedStart: number | undefined;
   private firstVoicedInSegment: number | undefined;
 
@@ -72,7 +73,7 @@ export class Segmenter {
     if (endSample - this.start < MIN_SEGMENT_SAMPLES) {
       return undefined;
     }
-    if (this.lastCut !== undefined && this.lastCut !== 'hard' && !this.isVoicedBefore(endSample)) {
+    if (this.lastCut !== undefined && !this.carryOpen && !this.isVoicedBefore(endSample)) {
       return undefined;
     }
     return this.cut(endSample, 'end');
@@ -110,7 +111,9 @@ export class Segmenter {
       leadInSamples: this.leadIn,
       reason,
       voiced: this.isVoicedBefore(endSample),
+      followsVoicedHardCut: this.carryOpen,
     };
+    this.carryOpen = reason === 'hard' && segment.voiced;
     this.leadIn = reason === 'pause' ? this.limits.pauseLeadIn : this.limits.hardLeadIn;
     this.start = endSample - this.leadIn;
     this.id += 1;

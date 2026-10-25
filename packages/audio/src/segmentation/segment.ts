@@ -7,4 +7,5 @@ export type Segment = {
   leadInSamples: number;
   reason: CutReason;
   voiced: boolean;
+  followsVoicedHardCut: boolean;
 };

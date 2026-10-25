@@ -73,6 +73,15 @@ const sentenceBoundaries: [previous: string, next: string][] = [
   ['Nebolo to tak doteraz', 'Teraz je to iné'],
 ];
 
+describe('capitalized first words in longer overlaps after a pause cut', () => {
+  it.each([
+    ['Robí to stále tak.', 'Ale tak to nie je.'],
+    ['Bolo to stále to.', 'Ale to nevadí.'],
+  ])('keeps the capitalized word: %s | %s', (previous, next) => {
+    expect(removeBoundaryDuplicates(previous, next, 4)).toBe(next);
+  });
+});
+
 describe('Slovak sentence boundaries keep their first word', () => {
   it.each(sentenceBoundaries)('after a pause cut: %s | %s', (previous, next) => {
     expect(removeBoundaryDuplicates(previous, next, 4)).toBe(next);
