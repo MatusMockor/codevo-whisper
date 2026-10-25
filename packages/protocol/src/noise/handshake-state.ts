@@ -21,6 +21,7 @@ export interface HandshakeState {
   writeMessage(payload: Uint8Array): Uint8Array;
   readMessage(message: Uint8Array): Uint8Array;
   isComplete(): boolean;
+  remoteStaticKey(): Uint8Array | null;
   result(): HandshakeResult;
 }
 
@@ -33,7 +34,7 @@ class NoiseHandshake implements HandshakeState {
   private readonly staticKey: KeyPair;
   private readonly psk: Uint8Array | undefined;
   private ephemeralKey: KeyPair | undefined;
-  private remoteStaticKey: Uint8Array | undefined;
+  private remoteStatic: Uint8Array | undefined;
   private remoteEphemeralKey: Uint8Array | undefined;
   private messageIndex = 0;
   private failed = false;
@@ -45,7 +46,7 @@ class NoiseHandshake implements HandshakeState {
     this.initiator = options.initiator;
     this.staticKey = options.staticKey;
     this.ephemeralKey = options.ephemeralKey;
-    this.remoteStaticKey = options.remoteStaticKey;
+    this.remoteStatic = options.remoteStaticKey;
     this.psk = options.psk;
     this.symmetric = new SymmetricState(this.pattern.protocolName);
     this.symmetric.mixHash(options.prologue);
@@ -81,6 +82,10 @@ class NoiseHandshake implements HandshakeState {
 
   isComplete(): boolean {
     return this.completed !== undefined;
+  }
+
+  remoteStaticKey(): Uint8Array | null {
+    return this.remoteStatic === undefined ? null : Uint8Array.from(this.remoteStatic);
   }
 
   result(): HandshakeResult {
@@ -128,7 +133,7 @@ class NoiseHandshake implements HandshakeState {
       send,
       receive,
       handshakeHash: this.symmetric.getHandshakeHash(),
-      remoteStaticKey: required(this.remoteStaticKey, 'remote static key'),
+      remoteStaticKey: required(this.remoteStatic, 'remote static key'),
     };
   }
 
@@ -154,7 +159,7 @@ class NoiseHandshake implements HandshakeState {
     }
     if (token === 's') {
       const length = this.symmetric.hasKey() ? DH_LENGTH + TAG_LENGTH : DH_LENGTH;
-      this.remoteStaticKey = this.symmetric.decryptAndHash(reader.take(length));
+      this.remoteStatic = this.symmetric.decryptAndHash(reader.take(length));
       return;
     }
     this.mixToken(token);
@@ -178,7 +183,7 @@ class NoiseHandshake implements HandshakeState {
   private dhFor(token: DhToken): Uint8Array {
     const ephemeral = (): KeyPair => required(this.ephemeralKey, 'local ephemeral key');
     const remoteEphemeral = (): Uint8Array => required(this.remoteEphemeralKey, 'remote ephemeral key');
-    const remoteStatic = (): Uint8Array => required(this.remoteStaticKey, 'remote static key');
+    const remoteStatic = (): Uint8Array => required(this.remoteStatic, 'remote static key');
     if (token === 'ee') {
       return dh(ephemeral(), remoteEphemeral());
     }
@@ -194,7 +199,7 @@ class NoiseHandshake implements HandshakeState {
 
   private responderStaticPublicKey(): Uint8Array {
     if (this.initiator) {
-      return required(this.remoteStaticKey, 'remote static key');
+      return required(this.remoteStatic, 'remote static key');
     }
     return this.staticKey.publicKey;
   }

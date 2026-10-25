@@ -73,6 +73,11 @@ export function parsePairingToken(text: string): PairingToken {
   };
 }
 
+export function pairingPsk(secret: Uint8Array): Uint8Array {
+  assertLength(secret, SECRET_BYTES, 'pairing secret');
+  return blake2s(secret);
+}
+
 export function fingerprint(bytes: Uint8Array): string {
   const hex = Buffer.from(blake2s(bytes).subarray(0, FINGERPRINT_BYTES)).toString('hex').toUpperCase();
   return (hex.match(/.{4}/g) ?? []).join(' ');

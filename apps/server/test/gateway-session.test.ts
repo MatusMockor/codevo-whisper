@@ -1,0 +1,269 @@
+import { generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
+import WebSocket from 'ws';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
+import { pcmSeconds } from './support/pcm';
+import { sendAudio } from './support/send-audio';
+import { startHarness, type Harness } from './support/server-harness';
+import { createTempDir } from './support/temp-dir';
+import { connectSession, openSocket, type TestSession } from './support/test-client';
+import { waitUntil } from './support/wait-until';
+
+let dir: Awaited<ReturnType<typeof createTempDir>>;
+let fake: FakeSttServer;
+let harness: Harness | undefined;
+
+beforeEach(async () => {
+  dir = await createTempDir();
+  fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text: 'ahoj svet' } }) });
+});
+
+afterEach(async () => {
+  await harness?.close();
+  harness = undefined;
+  await fake.close();
+  await dir.remove();
+});
+
+async function start(options: Parameters<typeof startHarness>[2] = {}): Promise<Harness> {
+  harness = await startHarness(dir.path, fake.url, options);
+  return harness;
+}
+
+async function readySession(server: Harness): Promise<TestSession> {
+  const device = await server.addDevice();
+  const session = await connectSession(server.url, device, server.serverKey.publicKey);
+  expect(await session.next()).toEqual({ type: 'ready', serverVersion: expect.any(String) as string });
+  return session;
+}
+
+async function expectBadMessageClose(session: TestSession): Promise<void> {
+  expect(await session.next()).toMatchObject({ type: 'error', code: 'bad_message' });
+  expect((await session.closed).code).toBe(4000);
+}
+
+async function collectUntilDone(session: TestSession): Promise<ServerMessage[]> {
+  const messages: ServerMessage[] = [];
+  for (;;) {
+    const message = await session.next();
+    messages.push(message);
+    if (message.type === 'done' || message.type === 'error') {
+      return messages;
+    }
+  }
+}
+
+describe('gateway sessions', () => {
+  it('transcribes a session end to end', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(2));
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toEqual([{ type: 'final', segmentId: 0, text: 'ahoj svet' }, { type: 'done' }]);
+    expect(fake.requests).toEqual([{ language: 'sk', bytes: 64_000 }]);
+    expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
+  });
+
+  it('splits long audio into 25 s chunks', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'en' });
+    sendAudio(session, pcmSeconds(60));
+    session.send({ type: 'finish' });
+
+    const messages = await collectUntilDone(session);
+    expect(messages.map((message) => (message.type === 'final' ? message.segmentId : message.type))).toEqual([0, 1, 2, 'done']);
+    expect(fake.requests.map((request) => request.bytes)).toEqual([800_000, 800_000, 320_000]);
+  });
+
+  it('accepts a new dictation after done', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    for (const id of ['a', 'b']) {
+      session.send({ type: 'start', sessionId: id, language: 'sk' });
+      sendAudio(session, pcmSeconds(1));
+      session.send({ type: 'finish' });
+      expect((await collectUntilDone(session)).at(-1)).toEqual({ type: 'done' });
+    }
+    expect(fake.requests).toHaveLength(2);
+  });
+
+  it('rejects an unknown device before ready', async () => {
+    const server = await start();
+
+    await expect(connectSession(server.url, generateKeyPair(), server.serverKey.publicKey)).rejects.toMatchObject({
+      code: 'unknown_device',
+    });
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('rejects a client that expects another server key', async () => {
+    const server = await start();
+    const device = await server.addDevice();
+
+    await expect(connectSession(server.url, device, generateKeyPair().publicKey)).rejects.toMatchObject({ code: 'bad_message' });
+  });
+
+  it('rejects out-of-order messages', async () => {
+    const server = await start();
+    const audioFirst = await readySession(server);
+    audioFirst.send({ type: 'audio', pcm: pcmSeconds(1) });
+    await expectBadMessageClose(audioFirst);
+
+    const twoStarts = await readySession(server);
+    twoStarts.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    twoStarts.send({ type: 'start', sessionId: 's2', language: 'sk' });
+    await expectBadMessageClose(twoStarts);
+
+    const audioAfterFinish = await readySession(server);
+    audioAfterFinish.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    audioAfterFinish.send({ type: 'finish' });
+    expect(await audioAfterFinish.next()).toEqual({ type: 'done' });
+    audioAfterFinish.send({ type: 'audio', pcm: pcmSeconds(1) });
+    await expectBadMessageClose(audioAfterFinish);
+
+
+    const pairInSession = await readySession(server);
+    pairInSession.send({ type: 'pair-request', deviceName: 'x' });
+    await expectBadMessageClose(pairInSession);
+
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('rejects audio while finishing', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ delayMs: 200 });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+    session.send({ type: 'audio', pcm: pcmSeconds(1) });
+
+    await expectBadMessageClose(session);
+    await waitUntil(() => fake.aborted() === 1);
+  });
+
+  it('reports stt_unavailable', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ respond: () => ({ status: 500, body: { error: 'engine' } }) });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'stt_unavailable' });
+  });
+
+  it('cancel drops buffered audio', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(3));
+    session.send({ type: 'cancel' });
+    session.send({ type: 'finish' });
+
+    await expectBadMessageClose(session);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('reconnects after gateway restart', async () => {
+    const first = await start();
+    const device = await first.addDevice();
+    const serverKey = first.serverKey.publicKey;
+    const session = await connectSession(first.url, device, serverKey);
+    expect(await session.next()).toMatchObject({ type: 'ready' });
+    await first.close();
+    harness = undefined;
+    await session.closed;
+
+    const second = await start();
+    expect(second.serverKey.publicKey).toEqual(serverKey);
+    const again = await connectSession(second.url, device, serverKey);
+    expect(await again.next()).toMatchObject({ type: 'ready' });
+  });
+
+  it('closes a session after the maximum duration', async () => {
+    let now = 1_000_000;
+    const server = await start({ clock: () => now });
+    const session = await readySession(server);
+    now += 600_001;
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'session_expired' });
+    expect((await session.closed).code).toBe(4005);
+  });
+
+  it('rejects a text frame and an oversized frame', async () => {
+    const server = await start();
+    const text = await openSocket(server.url);
+    text.socket.send('ahoj');
+    expect((await text.inbox.closed).code).toBe(1003);
+
+    const oversized = await openSocket(server.url);
+    oversized.socket.send(new Uint8Array(65_537));
+    expect((await oversized.inbox.closed).code).toBe(1009);
+  });
+
+  it('rejects a garbage opening frame', async () => {
+    const server = await start();
+    const garbage = await openSocket(server.url);
+    garbage.socket.send(new Uint8Array([0x02, 1, 2, 3]));
+
+    expect((await garbage.inbox.closed).code).toBe(4000);
+  });
+
+  it('signals flow pause when buffered audio exceeds 300 s', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(301));
+
+    expect(await session.next()).toEqual({ type: 'flow', paused: true });
+    session.send({ type: 'cancel' });
+    expect(await session.next()).toEqual({ type: 'flow', paused: false });
+  });
+
+  it('rejects more than 600 s of audio with too_long', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(601));
+
+    expect(await session.next()).toEqual({ type: 'flow', paused: true });
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'too_long' });
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('closes a connection that does not finish the handshake in time', async () => {
+    const server = await start({ handshakeTimeoutMs: 100 });
+    const idle = await openSocket(server.url);
+    await waitUntil(() => server.gateway.limiter.pending() === 1);
+
+    expect((await idle.inbox.closed).code).toBe(1008);
+    await waitUntil(() => server.gateway.limiter.pending() === 0);
+  });
+
+  it('closes sessions when the gateway closes', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    expect(server.gateway.sessions.count()).toBe(1);
+    await server.close();
+    harness = undefined;
+
+    expect((await session.closed).code).toBe(1001);
+  });
+
+  it('limits concurrent connections per IP', async () => {
+    const server = await start();
+    const sockets = await Promise.all(Array.from({ length: 4 }, () => openSocket(server.url)));
+    const extra = new WebSocket(server.url);
+    const closed = await new Promise<number>((resolve) => extra.on('close', (code) => resolve(code)));
+
+    expect(closed).toBe(1013);
+    sockets.forEach(({ socket }) => socket.close());
+  });
+});

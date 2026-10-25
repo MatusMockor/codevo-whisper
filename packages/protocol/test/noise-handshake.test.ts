@@ -118,6 +118,15 @@ describe('Noise handshake', () => {
     expect(initiator.result().remoteStaticKey).toEqual(server.publicKey);
   });
 
+  it('exposes the initiator static key to the responder after the first message', () => {
+    const { initiator, responder, client } = pair();
+
+    expect(responder.remoteStaticKey()).toBeNull();
+    responder.readMessage(initiator.writeMessage(EMPTY));
+    expect(responder.isComplete()).toBe(false);
+    expect(responder.remoteStaticKey()).toEqual(client.publicKey);
+  });
+
   it('rejects messages out of turn and results before completion', () => {
     const { initiator, responder } = pair();
 

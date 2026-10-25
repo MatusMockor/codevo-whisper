@@ -28,4 +28,6 @@ export {
   type ServerMessage,
 } from './messages';
 export { MAX_NOISE_MESSAGE, REKEY_EVERY, SecureTransport } from './transport/secure-transport';
-export { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from './pairing';
+export { createPairingSecret, encodePairingToken, fingerprint, pairingPsk, parsePairingToken, type PairingToken } from './pairing';
+export { beginPairing, beginSession, type ClientHandshake, type CompletedHandshake } from './client/client-handshake';
+export { closeCodeFor, errorCodeForClose } from './close-codes';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ProtocolError } from '../src/errors';
 import { generateKeyPair } from '../src/noise/primitives';
-import { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from '../src/pairing';
+import { createPairingSecret, encodePairingToken, fingerprint, pairingPsk, parsePairingToken, type PairingToken } from '../src/pairing';
 
 function token(overrides: Partial<PairingToken> = {}): PairingToken {
   return {
@@ -94,5 +94,16 @@ describe('fingerprint', () => {
 
   it('is the first 16 bytes of BLAKE2s', () => {
     expect(fingerprint(new Uint8Array(0))).toBe('6921 7A30 7990 8094 E111 21D0 4235 4A7C');
+  });
+});
+
+describe('pairingPsk', () => {
+  it('expands the 16 byte secret to the 32 byte Noise psk with BLAKE2s', () => {
+    const secret = createPairingSecret();
+
+    expect(pairingPsk(secret)).toHaveLength(32);
+    expect(pairingPsk(Uint8Array.from(secret))).toEqual(pairingPsk(secret));
+    expect(pairingPsk(createPairingSecret())).not.toEqual(pairingPsk(secret));
+    expect(() => pairingPsk(new Uint8Array(15))).toThrow(ProtocolError);
   });
 });

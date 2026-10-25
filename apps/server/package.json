@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@codevo-whisper/protocol": "workspace:*",
-    "@noble/hashes": "2.4.0"
+    "@noble/hashes": "2.4.0",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
     "typescript": "6.0.3",
     "vitest": "5.0.5"
   }
