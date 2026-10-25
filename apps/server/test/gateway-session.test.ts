@@ -278,6 +278,30 @@ describe('gateway sessions', () => {
     expect(await session.next()).toMatchObject({ type: 'error', code: 'stt_unavailable', sessionId: 's1' });
   });
 
+  it('answers a dictation shorter than 20 ms with done and no STT call', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    session.send({ type: 'audio', pcm: new Uint8Array(100) });
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toEqual([{ type: 'done', sessionId: 's1' }]);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('reports busy when the STT engine answers 503', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ respond: () => ({ status: 503, body: { error: 'busy' } }) });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toEqual({ type: 'final', sessionId: 's1', segmentId: 0, text: '' });
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'busy', sessionId: 's1' });
+  });
+
   it('cancel drops buffered audio', async () => {
     const server = await start();
     const session = await readySession(server);
