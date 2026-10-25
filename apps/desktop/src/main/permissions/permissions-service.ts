@@ -38,10 +38,12 @@ function sameStatus(a: PermissionsStatus | null, b: PermissionsStatus): boolean 
 
 export class PermissionsService {
   private readonly changes: Listeners<PermissionsChange>;
+  private readonly reads: Listeners<PermissionsStatus>;
   private last: PermissionsStatus | null = null;
 
   constructor(private readonly deps: PermissionsDeps) {
     this.changes = new Listeners(deps.logger, 'A permissions listener failed');
+    this.reads = new Listeners(deps.logger, 'A permissions read listener failed');
   }
 
   async status(): Promise<PermissionsStatus> {
@@ -52,6 +54,7 @@ export class PermissionsService {
     });
     const next = { microphone: microphonePermission(this.deps.microphone.status()), inputMonitoring: input.listen, accessibility: input.accessibility };
     this.remember(next);
+    this.reads.emit(next);
     return next;
   }
 
@@ -69,6 +72,10 @@ export class PermissionsService {
 
   onChange(listener: (next: PermissionsStatus, previous: PermissionsStatus | null) => void): () => void {
     return this.changes.add(({ next, previous }) => listener(next, previous));
+  }
+
+  onRead(listener: (status: PermissionsStatus) => void): () => void {
+    return this.reads.add(listener);
   }
 
   private remember(next: PermissionsStatus): void {

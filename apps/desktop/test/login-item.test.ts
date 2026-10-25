@@ -9,8 +9,15 @@ import { RecordingLogger } from './recording-logger';
 class SystemLoginItems implements LoginItem {
   readonly applied: boolean[] = [];
 
+  constructor(private enabled: boolean) {}
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
   apply(openAtLogin: boolean): void {
     this.applied.push(openAtLogin);
+    this.enabled = openAtLogin;
   }
 }
 
@@ -24,28 +31,61 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+async function settings(launchAtLogin: boolean): Promise<SettingsStore> {
+  const store = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
+  await store.load();
+  await store.update({ launchAtLogin });
+  return store;
+}
+
 describe('syncLoginItem', () => {
-  it('applies the stored choice at startup and every change after it', async () => {
-    const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
-    await settings.load();
-    const items = new SystemLoginItems();
+  it('never removes an existing login item at startup', async () => {
+    const items = new SystemLoginItems(true);
 
-    const stop = syncLoginItem(settings, items, new RecordingLogger());
-    await settings.update({ launchAtLogin: true });
-    await settings.update({ mode: 'toggle' });
-    await settings.update({ launchAtLogin: false });
+    syncLoginItem(await settings(false), items, new RecordingLogger());
+
+    expect(items.applied).toEqual([]);
+  });
+
+  it('adds the login item at startup when the setting asks for it and the system has none', async () => {
+    const items = new SystemLoginItems(false);
+
+    syncLoginItem(await settings(true), items, new RecordingLogger());
+
+    expect(items.applied).toEqual([true]);
+  });
+
+  it('writes only when the setting changes and differs from the system', async () => {
+    const store = await settings(false);
+    const items = new SystemLoginItems(false);
+    const stop = syncLoginItem(store, items, new RecordingLogger());
+
+    await store.update({ launchAtLogin: true });
+    await store.update({ mode: 'toggle' });
+    await store.update({ launchAtLogin: false });
+    await store.update({ launchAtLogin: true });
+    expect(items.applied.splice(0)).toEqual([true, false, true]);
+    items.apply(false);
+    items.applied.splice(0);
+    await store.update({ launchAtLogin: false });
     stop();
-    await settings.update({ launchAtLogin: true });
+    await store.update({ launchAtLogin: true });
 
-    expect(items.applied).toEqual([false, true, false]);
+    expect(items.applied).toEqual([]);
   });
 
   it('logs when the system refuses the change', async () => {
-    const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
-    await settings.load();
+    const store = await settings(false);
     const logger = new RecordingLogger();
+    const refusing: LoginItem = {
+      isEnabled: () => false,
+      apply: () => {
+        throw new Error('denied');
+      },
+    };
 
-    syncLoginItem(settings, { apply: () => { throw new Error('denied'); } }, logger);
+    syncLoginItem(store, refusing, logger);
+    await store.update({ launchAtLogin: true });
 
     expect(logger.errors).toHaveLength(1);
   });

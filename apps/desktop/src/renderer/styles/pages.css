@@ -314,6 +314,10 @@
   color: var(--bad-ink);
 }
 
+.priv-note {
+  margin-top: 12px;
+}
+
 .kept {
   margin: 0;
   font-size: 14px;

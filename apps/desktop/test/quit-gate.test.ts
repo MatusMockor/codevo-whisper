@@ -73,4 +73,17 @@ describe('QuitGate', () => {
     expect(event.prevented).toBe(1);
     await expect.poll(quits).toBe(1);
   });
+
+  it('never holds the quit back while the system shuts down or logs out', async () => {
+    const { capture, gate, quits } = harness();
+    void capture.startMeter({ deviceId: null, label: null });
+    const event = new QuitEvent();
+
+    gate.systemShuttingDown();
+    gate.handle(event);
+
+    expect(event.prevented).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(quits()).toBe(0);
+  });
 });

@@ -26,6 +26,10 @@ export class QuitGate {
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
+  systemShuttingDown(): void {
+    this.drained = true;
+  }
+
   handle(event: QuitEvent): void {
     if (this.drained || !this.work.isBusy()) {
       return;

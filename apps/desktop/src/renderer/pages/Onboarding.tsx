@@ -8,6 +8,7 @@ import { ModelStep } from '../onboarding/ModelStep';
 import { ONBOARDING_STEPS } from '../onboarding/steps';
 import { TryStep } from '../onboarding/TryStep';
 import { useModels } from '../settings/use-models';
+import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { usePermissions } from '../settings/use-permissions';
 import { saveSettings } from '../settings/use-settings';
 
@@ -57,6 +58,7 @@ export function Onboarding({ settings }: { settings: Settings }) {
         </p>
         <h1 id="ob-title">{current?.title}</h1>
         <p className="ob-lead">{current?.lead}</p>
+        <SaveErrorNotice />
         <div className="ob-body">
           <StepBody step={step} settings={settings} />
         </div>

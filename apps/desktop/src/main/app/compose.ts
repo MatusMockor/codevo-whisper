@@ -1,7 +1,8 @@
-import { app, session, shell } from 'electron';
+import { app, powerMonitor, session, shell } from 'electron';
 import { join } from 'node:path';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
+import type { InputHelper } from '../helper/input-helper';
 import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
 import { HotkeyService } from '../hotkey/hotkey-service';
@@ -59,13 +60,14 @@ function installSecurity(captureWindow: CaptureWindow, mainWindow: MainWindowCon
 
 export function composeApplication(logger: Logger): Application {
   const e2e = isE2eMode();
-  const helper = createInputHelper(logger, e2e && process.env['CW_E2E_FAKE_HELPER'] === '1');
+  let startedHelper: InputHelper | null = null;
   const captureWindow = new CaptureWindow(rendererSource('capture'), logger);
   const capture = new WindowAudioCapture(captureWindow, logger);
   const lastTranscript = new LastTranscript(logger);
   const mainWindow = new MainWindowController(logger, e2e ? backgroundPresentation : foregroundPresentation);
   const disposers: Array<() => void> = [];
   const quitGate = new QuitGate(capture, () => app.quit(), logger);
+  const allowShutdown = (): void => quitGate.systemShuttingDown();
 
   function disposeAll(): void {
     for (const dispose of disposers.splice(0)) {
@@ -75,7 +77,7 @@ export function composeApplication(logger: Logger): Application {
 
   async function relaunch(): Promise<void> {
     disposeAll();
-    await helper.stop().catch((error: unknown) => {
+    await startedHelper?.stop().catch((error: unknown) => {
       logger.error('The input helper could not be stopped before the relaunch', error);
     });
     app.relaunch();
@@ -84,6 +86,10 @@ export function composeApplication(logger: Logger): Application {
 
   async function initialize(): Promise<void> {
     installSecurity(captureWindow, mainWindow);
+    const helper = await createInputHelper(logger, e2e && process.env['CW_E2E_FAKE_HELPER'] === '1');
+    startedHelper = helper;
+    powerMonitor.on('shutdown', allowShutdown);
+    disposers.push(() => powerMonitor.removeListener('shutdown', allowShutdown));
     const settings = new SettingsStore(join(app.getPath('userData'), SETTINGS_FILE), logger);
     await settings.load();
     const models = createModels(settings, logger);
@@ -107,6 +113,7 @@ export function composeApplication(logger: Logger): Application {
       lastTranscript,
       permissions,
       recorder: new KeyRecorder(helper),
+      hotkey,
       relaunch,
       catalog: models.catalog,
       models: models.manager,
@@ -171,7 +178,7 @@ export function composeApplication(logger: Logger): Application {
     beforeQuit: (event) => quitGate.handle(event),
     dispose: () => {
       disposeAll();
-      void helper.stop();
+      void startedHelper?.stop();
     },
   };
 }

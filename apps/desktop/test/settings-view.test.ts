@@ -115,8 +115,8 @@ describe('hotkeyRecordMessage', () => {
 
 describe('microphoneOptions', () => {
   const devices = [
-    { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro', isBluetooth: false },
-    { deviceId: 'airpods', label: 'AirPods Pro', isBluetooth: true },
+    { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro', isBluetooth: false, isDefault: false },
+    { deviceId: 'airpods', label: 'AirPods Pro', isBluetooth: true, isDefault: false },
   ];
 
   it('starts with the system default and lists the connected inputs', () => {
@@ -143,6 +143,8 @@ describe('microphoneOptions', () => {
     );
     expect(bluetoothHint(devices, { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro' })).toBeNull();
     expect(bluetoothHint(devices, { deviceId: null, label: null })).toBeNull();
+    const airPodsDefault = devices.map((device) => ({ ...device, isDefault: device.isBluetooth }));
+    expect(bluetoothHint(airPodsDefault, { deviceId: null, label: null })).toContain('Bluetooth slúchadlá');
   });
 });
 

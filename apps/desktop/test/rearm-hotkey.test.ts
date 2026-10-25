@@ -88,4 +88,23 @@ describe('rearmHotkeyOnGrant', () => {
 
     expect(starts).toBe(0);
   });
+
+  it('stays unarmed when listening fails after the grant and retries on the next permission read', async () => {
+    const { helper, hotkey, permissions } = await harness();
+    const logger = new RecordingLogger();
+    rearmHotkeyOnGrant(permissions, hotkey, logger);
+    await hotkey.start();
+    helper.permissionState = { listen: true, post: true, accessibility: true };
+    helper.listenFails = true;
+
+    await permissions.status();
+    await expect.poll(() => logger.errors.length).toBe(1);
+    expect(hotkey.isArmed()).toBe(false);
+
+    helper.listenFails = false;
+    await permissions.status();
+
+    await expect.poll(() => hotkey.isArmed()).toBe(true);
+    expect(helper.listening).toEqual([62]);
+  });
 });

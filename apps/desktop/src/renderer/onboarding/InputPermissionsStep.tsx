@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Live } from '../home/live-value';
-import type { PermissionKind, PermissionsStatus } from '../../shared/permissions';
+import type { PermissionKind } from '../../shared/permissions';
+import type { PermissionsView } from '../settings/use-permissions';
 import { PermissionRow } from './PermissionRow';
 
 function grantLabel(granted: boolean): string {
@@ -16,10 +17,15 @@ function openPermission(kind: PermissionKind): void {
     });
 }
 
-function RelaunchNotice() {
+const RELAUNCH_MESSAGES = {
+  pending: 'Ak ste monitorovanie vstupu už povolili a stav sa nezmenil, macOS ho uplatní až po reštarte aplikácie.',
+  unarmed: 'Monitorovanie vstupu je povolené, ale klávesová skratka zatiaľ nereaguje. macOS ju sprístupní po reštarte aplikácie.',
+} as const;
+
+function RelaunchNotice({ message }: { message: string }) {
   return (
     <div className="relaunch" role="status">
-      <p>Ak ste monitorovanie vstupu už povolili a stav sa nezmenil, macOS ho uplatní až po reštarte aplikácie.</p>
+      <p>{message}</p>
       <button
         type="button"
         className="btn primary"
@@ -35,12 +41,13 @@ function RelaunchNotice() {
   );
 }
 
-export function InputPermissionsStep({ permissions }: { permissions: Live<PermissionsStatus> }) {
+export function InputPermissionsStep({ permissions }: { permissions: Live<PermissionsView> }) {
   const [askedForInput, setAskedForInput] = useState(false);
   if (permissions.kind !== 'ready') {
     return null;
   }
-  const { inputMonitoring, accessibility } = permissions.value;
+  const { inputMonitoring, accessibility, hotkeyArmed } = permissions.value;
+  const needsRelaunch = (askedForInput && !inputMonitoring) || (inputMonitoring && !hotkeyArmed);
   return (
     <>
       <div className="sbox">
@@ -64,7 +71,7 @@ export function InputPermissionsStep({ permissions }: { permissions: Live<Permis
           onAction={() => openPermission('accessibility')}
         />
       </div>
-      {askedForInput && !inputMonitoring && <RelaunchNotice />}
+      {needsRelaunch && <RelaunchNotice message={inputMonitoring ? RELAUNCH_MESSAGES.unarmed : RELAUNCH_MESSAGES.pending} />}
     </>
   );
 }

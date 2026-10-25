@@ -1,5 +1,6 @@
 import type { Live } from '../home/live-value';
-import type { MicrophonePermission, PermissionsStatus } from '../../shared/permissions';
+import type { MicrophonePermission } from '../../shared/permissions';
+import type { PermissionsView } from '../settings/use-permissions';
 import { PermissionRow } from './PermissionRow';
 
 const STATUS_LABELS: Readonly<Record<MicrophonePermission, string>> = {
@@ -12,7 +13,7 @@ function report(error: unknown): void {
   console.error('The microphone permission request failed', error);
 }
 
-export function MicrophoneStep({ permissions, refresh }: { permissions: Live<PermissionsStatus>; refresh: () => void }) {
+export function MicrophoneStep({ permissions, refresh }: { permissions: Live<PermissionsView>; refresh: () => void }) {
   if (permissions.kind !== 'ready') {
     return null;
   }

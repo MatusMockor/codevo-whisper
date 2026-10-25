@@ -116,8 +116,16 @@ test('overlay error and blocked states offer their actions', async () => {
 test('the overlay settings action opens the settings page', async () => {
   await inject({ kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
   const overlay = await overlayPage();
+  const button = overlay.getByRole('button', { name: 'Otvoriť nastavenia' });
+  const style = (property: 'cursor' | 'backgroundColor') => button.evaluate((element, name) => getComputedStyle(element)[name], property);
+  await expect(button).toBeVisible();
+  expect(await style('cursor')).toBe('pointer');
+  expect(await overlay.locator('.ov-title').evaluate((element) => getComputedStyle(element).cursor)).toBe('default');
+  const resting = await style('backgroundColor');
+  await button.hover();
+  await expect.poll(() => style('backgroundColor')).not.toBe(resting);
 
-  await overlay.getByRole('button', { name: 'Otvoriť nastavenia' }).click();
+  await button.click();
 
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
   await expect(main.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');

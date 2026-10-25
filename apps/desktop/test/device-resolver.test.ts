@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { isBluetoothLabel, resolveDevice, toAudioDevices, type AudioDevice } from '../src/main/audio/device-resolver';
 
-const builtIn: AudioDevice = { deviceId: 'built-in-id', label: 'MacBook Pro Microphone', isBluetooth: false };
-const airPods: AudioDevice = { deviceId: 'airpods-id', label: 'Matúš AirPods Pro', isBluetooth: true };
-const usb: AudioDevice = { deviceId: 'usb-id', label: 'Scarlett 2i2 USB', isBluetooth: false };
+const builtIn: AudioDevice = { deviceId: 'built-in-id', label: 'MacBook Pro Microphone', isBluetooth: false, isDefault: false };
+const airPods: AudioDevice = { deviceId: 'airpods-id', label: 'Matúš AirPods Pro', isBluetooth: true, isDefault: false };
+const usb: AudioDevice = { deviceId: 'usb-id', label: 'Scarlett 2i2 USB', isBluetooth: false, isDefault: false };
 
 describe('resolveDevice', () => {
   it('uses the system default when nothing was chosen', () => {
@@ -62,6 +62,20 @@ describe('toAudioDevices', () => {
       { deviceId: '', label: 'Unknown' },
     ]);
 
-    expect(devices).toEqual([builtIn, airPods]);
+    expect(devices).toEqual([{ ...builtIn, isDefault: true }, airPods]);
+  });
+
+  it('marks the input behind the system default alias', () => {
+    const devices = toAudioDevices([
+      { deviceId: 'default', label: 'Default - Matúš AirPods Pro' },
+      { deviceId: 'built-in-id', label: 'MacBook Pro Microphone' },
+      { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' },
+    ]);
+
+    expect(devices).toEqual([builtIn, { ...airPods, isDefault: true }]);
+  });
+
+  it('marks nothing when the alias is missing', () => {
+    expect(toAudioDevices([{ deviceId: 'built-in-id', label: 'MacBook Pro Microphone' }])).toEqual([builtIn]);
   });
 });

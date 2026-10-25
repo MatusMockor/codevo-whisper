@@ -33,7 +33,13 @@ export function microphoneOptions(devices: readonly AudioDevice[], chosen: Micro
   return { selected: chosen.deviceId ?? chosen.label ?? SYSTEM_DEFAULT_VALUE, options };
 }
 
+function recordingDevice(devices: readonly AudioDevice[], chosen: MicrophoneSetting): AudioDevice | undefined {
+  if (isSystemDefault(chosen)) {
+    return devices.find((device) => device.isDefault);
+  }
+  return devices.find((device) => device.deviceId === chosen.deviceId);
+}
+
 export function bluetoothHint(devices: readonly AudioDevice[], chosen: MicrophoneSetting): string | null {
-  const device = devices.find((candidate) => candidate.deviceId === chosen.deviceId);
-  return device?.isBluetooth === true ? BLUETOOTH_HINT : null;
+  return recordingDevice(devices, chosen)?.isBluetooth === true ? BLUETOOTH_HINT : null;
 }

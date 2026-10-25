@@ -1,4 +1,5 @@
 import type { AudioCapture } from '../audio/audio-capture';
+import { MeterPolicy, type MeterWindow, type RecordingStops } from '../audio/meter-policy';
 import { MicrophoneMeter } from '../audio/microphone-meter';
 import { MicrophoneSettings } from '../audio/microphone-settings';
 import type { Logger } from '../logging/logger';
@@ -9,10 +10,10 @@ import { electronLoginItem, syncLoginItem, unpackagedLoginItem } from '../system
 import type { MainWindowEvents } from '../windows/main-window-controller';
 
 export type SettingsWiringDeps = {
-  capture: AudioCapture;
+  capture: AudioCapture & RecordingStops;
   models: ModelManager;
   settings: SettingsStore;
-  window: MainWindowEvents;
+  window: MainWindowEvents & MeterWindow;
   isPackaged: boolean;
   logger: Logger;
 };
@@ -22,14 +23,11 @@ export type SettingsServices = { actions: ModelActions; microphones: MicrophoneS
 export function createSettingsServices({ capture, models, settings, window, isPackaged, logger }: SettingsWiringDeps): SettingsServices {
   const actions = new ModelActions({ models, settings });
   const meter = new MicrophoneMeter(capture, (rms) => window.send('microphone-level', rms));
-  const microphones = new MicrophoneSettings(capture, meter, (devices) => window.send('microphones-changed', devices));
+  const policy = new MeterPolicy({ meter, window, recordings: capture, logger });
+  const microphones = new MicrophoneSettings(capture, policy, (devices) => window.send('microphones-changed', devices));
   const unsubscribers = [
     models.onChange((states) => window.send('model-states-changed', states)),
-    window.onClose(() => {
-      meter.stop().catch((error: unknown) => {
-        logger.error('The microphone meter could not be stopped', error);
-      });
-    }),
+    () => policy.dispose(),
     syncLoginItem(settings, isPackaged ? electronLoginItem : unpackagedLoginItem(logger), logger),
   ];
   return {

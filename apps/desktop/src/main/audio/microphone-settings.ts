@@ -1,14 +1,14 @@
 import type { AudioDevice } from '../../shared/microphones';
 import type { MicrophoneSetting } from '../../shared/settings';
 import type { AudioCapture } from './audio-capture';
-import type { MicrophoneMeter } from './microphone-meter';
+import type { MeterPolicy } from './meter-policy';
 
 export class MicrophoneSettings {
   private unwatch: (() => void) | null = null;
 
   constructor(
     private readonly capture: Pick<AudioCapture, 'listDevices' | 'onDevicesChanged'>,
-    private readonly meter: Pick<MicrophoneMeter, 'start' | 'stop'>,
+    private readonly meter: Pick<MeterPolicy, 'request' | 'release'>,
     private readonly sendDevices: (devices: AudioDevice[]) => void,
   ) {}
 
@@ -18,11 +18,11 @@ export class MicrophoneSettings {
   }
 
   startMeter(microphone: MicrophoneSetting): Promise<void> {
-    return this.meter.start(microphone);
+    return this.meter.request(microphone);
   }
 
   stopMeter(): Promise<void> {
-    return this.meter.stop();
+    return this.meter.release();
   }
 
   dispose(): void {

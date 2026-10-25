@@ -28,6 +28,7 @@ export class WindowAudioCapture implements AudioCapture {
   private readonly levels: Listeners<number>;
   private readonly devices: Listeners<AudioDevice[]>;
   private readonly limits: Listeners<void>;
+  private readonly recordingStops: Listeners<void>;
 
   constructor(
     private readonly host: CaptureHost,
@@ -38,6 +39,7 @@ export class WindowAudioCapture implements AudioCapture {
     this.levels = new Listeners(logger, 'A microphone level listener failed');
     this.devices = new Listeners(logger, 'A microphone list listener failed');
     this.limits = new Listeners(logger, 'A recording limit listener failed');
+    this.recordingStops = new Listeners(logger, 'A recording stop listener failed');
     host.onFrame((pcm) => {
       this.keep(pcm);
     });
@@ -76,6 +78,10 @@ export class WindowAudioCapture implements AudioCapture {
 
   onLimitReached(listener: () => void): () => void {
     return this.limits.add(listener);
+  }
+
+  onRecordingStopped(listener: () => void): () => void {
+    return this.recordingStops.add(listener);
   }
 
   start(chosen: MicrophoneSetting): Promise<CaptureStart> {
@@ -123,7 +129,9 @@ export class WindowAudioCapture implements AudioCapture {
     }
     await this.closeStream();
     this.mode = 'idle';
-    return this.recording.take();
+    const pcm = this.recording.take();
+    this.recordingStops.emit(undefined);
+    return pcm;
   }
 
   private async startMetering(chosen: MicrophoneSetting): Promise<void> {

@@ -4,14 +4,20 @@ import type { PermissionsStatus } from '../../shared/permissions';
 
 const POLL_MS = 1000;
 
-export function usePermissions(): { permissions: Live<PermissionsStatus>; refresh: () => void } {
-  const [permissions, setPermissions] = useState<Live<PermissionsStatus>>({ kind: 'loading' });
+export type PermissionsView = PermissionsStatus & { hotkeyArmed: boolean };
+
+function loadPermissions(): Promise<PermissionsView> {
+  return Promise.all([window.codevo.getPermissions(), window.codevo.isHotkeyArmed()]).then(([status, hotkeyArmed]) => ({ ...status, hotkeyArmed }));
+}
+
+export function usePermissions(): { permissions: Live<PermissionsView>; refresh: () => void } {
+  const [permissions, setPermissions] = useState<Live<PermissionsView>>({ kind: 'loading' });
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((value) => value + 1), []);
 
   useEffect(() => {
     let active = true;
-    window.codevo.getPermissions().then(
+    loadPermissions().then(
       (value) => {
         if (active) {
           setPermissions({ kind: 'ready', value });

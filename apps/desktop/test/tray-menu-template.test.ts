@@ -7,8 +7,8 @@ const MODEL: TrayMenuModel = {
   lastTranscript: null,
   paused: false,
   devices: [
-    { deviceId: 'built-in', label: 'MacBook Pro Microphone', isBluetooth: false },
-    { deviceId: 'usb', label: 'Shure MV7', isBluetooth: false },
+    { deviceId: 'built-in', label: 'MacBook Pro Microphone', isBluetooth: false, isDefault: false },
+    { deviceId: 'usb', label: 'Shure MV7', isBluetooth: false, isDefault: false },
   ],
   microphone: { deviceId: null, label: null },
   language: 'sk',

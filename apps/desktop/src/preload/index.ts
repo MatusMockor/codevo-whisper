@@ -37,6 +37,7 @@ const api: IpcApi = {
   openPermissionSettings: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.openPermissionSettings, kind) as Promise<void>,
   relaunch: () => ipcRenderer.invoke(INVOKE_CHANNELS.relaunch) as Promise<void>,
   recordHotkey: () => ipcRenderer.invoke(INVOKE_CHANNELS.recordHotkey) as Promise<HotkeyRecordResult>,
+  isHotkeyArmed: () => ipcRenderer.invoke(INVOKE_CHANNELS.isHotkeyArmed) as Promise<boolean>,
   getModelCatalog: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelCatalog) as Promise<ModelCatalogView>,
   getModelStates: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelStates) as Promise<ModelState[]>,
   downloadModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.downloadModel, id) as Promise<void>,

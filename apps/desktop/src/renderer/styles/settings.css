@@ -205,3 +205,13 @@
     transition: none;
   }
 }
+
+.save-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: rgba(240, 106, 90, .12);
+  color: var(--bad-ink);
+  font-size: 13.5px;
+  font-weight: 560;
+}

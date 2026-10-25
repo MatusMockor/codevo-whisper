@@ -19,6 +19,7 @@ export type IpcInvokeApi = {
   openPermissionSettings(kind: PermissionKind): Promise<void>;
   relaunch(): Promise<void>;
   recordHotkey(): Promise<HotkeyRecordResult>;
+  isHotkeyArmed(): Promise<boolean>;
   getModelCatalog(): Promise<ModelCatalogView>;
   getModelStates(): Promise<ModelState[]>;
   downloadModel(id: string): Promise<void>;
@@ -61,6 +62,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   openPermissionSettings: 'permissions:open-settings',
   relaunch: 'app:relaunch',
   recordHotkey: 'hotkey:record',
+  isHotkeyArmed: 'hotkey:armed',
   getModelCatalog: 'models:catalog',
   getModelStates: 'models:states',
   downloadModel: 'models:download',

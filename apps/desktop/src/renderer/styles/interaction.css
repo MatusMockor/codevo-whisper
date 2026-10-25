@@ -81,6 +81,22 @@ label:has(> input:disabled) {
   background: var(--group);
 }
 
+.ov-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, .2);
+}
+
+.ov-btn:not(:disabled):active {
+  background: rgba(255, 255, 255, .28);
+}
+
+.ov-btn.primary:not(:disabled):hover {
+  background: var(--lamp-hover);
+}
+
+.ov-btn.primary:not(:disabled):active {
+  background: var(--lamp-press);
+}
+
 .linkbtn:hover {
   color: var(--ink);
 }
@@ -94,7 +110,7 @@ label:has(> input:disabled) {
   background: var(--hover);
 }
 
-:is(.btn, .seg button, .nav button, .hk, .switch, .select, .linkbtn, .radio input, .model-pick input):focus-visible {
+:is(.btn, .ov-btn, .seg button, .nav button, .hk, .switch, .select, .linkbtn, .radio input, .model-pick input):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

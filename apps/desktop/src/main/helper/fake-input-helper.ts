@@ -38,6 +38,7 @@ export class FakeInputHelper implements InputHelper {
   permissionState: Permissions;
   recordedKey: number | null;
   running = false;
+  listenFails = false;
   listening: number[] = [];
   readonly pasted: string[] = [];
   readonly requestedPermissions: PermissionKind[] = [];
@@ -137,6 +138,9 @@ export class FakeInputHelper implements InputHelper {
   }
 
   listen(keycodes: number[]): Promise<void> {
+    if (this.listenFails) {
+      return Promise.reject(new Error('tap-create-failed'));
+    }
     this.listening = [...keycodes];
     return Promise.resolve();
   }

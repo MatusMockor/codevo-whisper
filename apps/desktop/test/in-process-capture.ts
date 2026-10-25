@@ -5,7 +5,7 @@ import { concatPcm, PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/
 import type { MicrophoneSetting } from '../src/shared/settings';
 import { RecordingLogger } from './recording-logger';
 
-export const BUILT_IN: AudioDevice = { deviceId: 'built-in', label: 'MacBook Pro Microphone', isBluetooth: false };
+export const BUILT_IN: AudioDevice = { deviceId: 'built-in', label: 'MacBook Pro Microphone', isBluetooth: false, isDefault: false };
 
 export function stampedPcm(marker: number, seconds = 1): Uint8Array {
   const pcm = new Uint8Array(seconds * PCM_BYTES_PER_SECOND);
@@ -26,6 +26,7 @@ export class InProcessCapture implements AudioCapture {
   private frames: Uint8Array[] = [];
   private readonly levels = new Listeners<number>(new RecordingLogger(), 'In-process level listener failed');
   private readonly limits = new Listeners<void>(new RecordingLogger(), 'In-process limit listener failed');
+  private readonly recordingStops = new Listeners<void>(new RecordingLogger(), 'In-process recording stop listener failed');
 
   listDevices(): Promise<AudioDevice[]> {
     return Promise.resolve([...this.devices]);
@@ -47,6 +48,7 @@ export class InProcessCapture implements AudioCapture {
       return Promise.reject(new Error('Recording is already running'));
     }
     this.recording = true;
+    this.metering = null;
     this.frames = [];
     const { device, fallback } = resolveDevice(this.devices, chosen);
     return Promise.resolve({ fallback, deviceLabel: device?.label ?? BUILT_IN.label });
@@ -57,6 +59,7 @@ export class InProcessCapture implements AudioCapture {
       return Promise.resolve(new Uint8Array(0));
     }
     this.recording = false;
+    this.recordingStops.emit(undefined);
     return Promise.resolve(concatPcm(this.frames));
   }
 
@@ -82,6 +85,10 @@ export class InProcessCapture implements AudioCapture {
 
   onLimitReached(listener: () => void): () => void {
     return this.limits.add(listener);
+  }
+
+  onRecordingStopped(listener: () => void): () => void {
+    return this.recordingStops.add(listener);
   }
 
   startMeter(chosen: MicrophoneSetting): Promise<void> {

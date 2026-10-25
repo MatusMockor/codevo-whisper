@@ -61,7 +61,7 @@ export function DictationSection({ settings, activeModel }: { settings: Settings
           </>
         }
       >
-        <SegmentedControl label="Zobrazenie panela" options={OVERLAYS} value="indicator" onChange={(overlay) => saveSettings({ overlay })} />
+        <SegmentedControl label="Zobrazenie panela" options={OVERLAYS} value={settings.overlay} onChange={(overlay) => saveSettings({ overlay })} />
       </SettingsRow>
       <SettingsRow title="Jazyk" titleId="set-language" description={languageNote(activeModel)}>
         <LanguageSelect language={settings.language} activeModel={activeModel} />

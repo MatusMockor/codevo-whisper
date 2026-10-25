@@ -16,6 +16,8 @@ export class MainWindowController implements MainWindowEvents {
   private window: BrowserWindow | null = null;
   private readonly focusListeners: Listeners<void>;
   private readonly closeListeners: Listeners<void>;
+  private readonly activityListeners: Listeners<boolean>;
+  private lastActive = false;
 
   constructor(
     logger: Logger = consoleLogger,
@@ -23,6 +25,7 @@ export class MainWindowController implements MainWindowEvents {
   ) {
     this.focusListeners = new Listeners(logger, 'A main window focus listener failed');
     this.closeListeners = new Listeners(logger, 'A main window close listener failed');
+    this.activityListeners = new Listeners(logger, 'A main window activity listener failed');
   }
 
   isOpen(): boolean {
@@ -63,19 +66,45 @@ export class MainWindowController implements MainWindowEvents {
     return this.closeListeners.add(listener);
   }
 
+  isActive(): boolean {
+    const window = this.window;
+    return window !== null && !window.isDestroyed() && this.presentation.isActive(window);
+  }
+
+  onActivityChange(listener: (active: boolean) => void): () => void {
+    return this.activityListeners.add(listener);
+  }
+
   private create(page: PageId | undefined): void {
     const window = createMainWindow(page ?? 'home', this.presentation);
     this.window = window;
+    const report = (): void => this.reportActivity();
     window.on('focus', () => {
       this.focusListeners.emit();
+      report();
     });
+    window.on('blur', report);
+    window.on('show', report);
+    window.on('hide', report);
+    window.on('minimize', report);
+    window.on('restore', report);
     window.once('closed', () => {
       if (this.window !== window) {
         return;
       }
       this.window = null;
       this.closeListeners.emit();
+      this.reportActivity();
     });
+  }
+
+  private reportActivity(): void {
+    const active = this.isActive();
+    if (active === this.lastActive) {
+      return;
+    }
+    this.lastActive = active;
+    this.activityListeners.emit(active);
   }
 
   private reveal(window: BrowserWindow): void {

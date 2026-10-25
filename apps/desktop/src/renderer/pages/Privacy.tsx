@@ -18,6 +18,7 @@ const STORED: ReadonlyArray<{ what: string; where: string }> = [
   { what: 'Nastavenia', where: 'settings.json' },
   { what: 'Súhrnné štatistiky po dňoch, bez textu', where: 'stats.json' },
   { what: 'Stiahnuté modely na prepis', where: 'priečinok models' },
+  { what: 'Verzia aplikácie, pre ktorú je model pripravený na rýchly štart', where: 'warm-up.json' },
 ];
 
 function LocalFlow() {
@@ -77,6 +78,7 @@ export function Privacy({ onOpenSettings }: { onOpenSettings: () => void }) {
               <li key={step}>{step}</li>
             ))}
           </ol>
+          <p className="kept priv-note">Ukazovateľ úrovne v Nastaveniach používa mikrofón iba vtedy, keď máte Nastavenia otvorené a okno aplikácie je aktívne.</p>
           <h2 className="priv-gap">
             <LaptopIcon />
             Čo sa ukladá na tomto Macu

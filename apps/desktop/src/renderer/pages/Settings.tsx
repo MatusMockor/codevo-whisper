@@ -3,6 +3,7 @@ import { DictationSection } from '../settings/DictationSection';
 import { EngineSection } from '../settings/EngineSection';
 import { InsertionSection } from '../settings/InsertionSection';
 import { LocalModelSection } from '../settings/LocalModelSection';
+import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { SettingsGroup } from '../settings/SettingsGroup';
 import { SystemSection } from '../settings/SystemSection';
 import { useModels } from '../settings/use-models';
@@ -25,6 +26,7 @@ export function Settings() {
   const activeModel = models.catalog.kind === 'ready' ? (models.catalog.value.models.find((model) => model.id === value.localModelId) ?? null) : null;
   return (
     <div className="groups">
+      <SaveErrorNotice />
       <DictationSection settings={value} activeModel={activeModel} />
       <EngineSection />
       <SettingsGroup title="Lokálny model">

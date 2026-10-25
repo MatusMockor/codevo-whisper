@@ -143,4 +143,14 @@ describe('ModelActions', () => {
     await expect(activate).rejects.toMatchObject({ name: 'ModelError', reason: 'not-ready' });
     expect(settings.get().localModelId).toBeNull();
   });
+
+  it('rejects an unknown model before queueing anything', async () => {
+    const { actions } = harness();
+
+    for (const run of [() => actions.download('nope'), () => actions.delete('nope'), () => actions.activate('nope')]) {
+      await expect(run()).rejects.toMatchObject({ name: 'ModelError', reason: 'unknown-model' });
+    }
+    expect(() => actions.pause('nope')).toThrow(expect.objectContaining({ reason: 'unknown-model' }));
+    expect(actions.queuedModels()).toBe(0);
+  });
 });

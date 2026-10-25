@@ -86,11 +86,11 @@ test.describe('settings api', () => {
             unsubscribe();
             resolve(settings);
           });
-          void window.codevo.updateSettings({ overlay: 'live' });
+          void window.codevo.updateSettings({ mode: 'toggle' });
         }),
     );
 
-    expect(received).toEqual({ ...DEFAULTS, overlay: 'live' });
+    expect(received).toEqual({ ...DEFAULTS, mode: 'toggle' });
   });
 
   test('starts with defaults when the settings file cannot be read', async () => {
@@ -132,6 +132,32 @@ function row(title: string): Locator {
 async function openSettings(): Promise<void> {
   await page.getByRole('tab', { name: 'Nastavenia' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+}
+
+function levelWithin(ms: number): Promise<boolean> {
+  return page.evaluate(
+    (timeout) =>
+      new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+          stop();
+          resolve(false);
+        }, timeout);
+        const stop = window.codevo.on('microphone-level', () => {
+          clearTimeout(timer);
+          stop();
+          resolve(true);
+        });
+      }),
+    ms,
+  );
+}
+
+function mainWindow(action: 'hide' | 'showInactive' | 'minimize' | 'restore'): Promise<void> {
+  return app.evaluate(({ BrowserWindow }, name) => {
+    BrowserWindow.getAllWindows()
+      .find((window) => window.webContents.getURL().endsWith('/renderer/index.html'))
+      ?.[name]();
+  }, action);
 }
 
 function setRecordedKey(keycode: number): Promise<void> {
@@ -244,6 +270,34 @@ test.describe('settings page', () => {
     const device = await select.locator('option').nth(1).getAttribute('value');
     await select.selectOption(device ?? '');
     await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.microphone.deviceId))).toBe(device);
+  });
+
+  test('the meter releases the microphone while the main window is hidden or minimized', async () => {
+    await expect.poll(() => levelWithin(1500)).toBe(true);
+
+    await mainWindow('hide');
+    await page.waitForTimeout(300);
+    expect(await levelWithin(1500)).toBe(false);
+    await mainWindow('showInactive');
+    await expect.poll(() => levelWithin(1500)).toBe(true);
+
+    await mainWindow('minimize');
+    await page.waitForTimeout(300);
+    expect(await levelWithin(1500)).toBe(false);
+    await mainWindow('restore');
+    await expect.poll(() => levelWithin(1500)).toBe(true);
+  });
+
+  test('a setting that cannot be saved shows an inline error', async () => {
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:update');
+      ipcMain.handle('settings:update', () => Promise.reject(new Error('disk full')));
+    });
+
+    await page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'Zmenu sa nepodarilo uložiť.' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Podrž klávesu' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('Vynulovať štatistiky deletes the statistics after a confirmation', async () => {
