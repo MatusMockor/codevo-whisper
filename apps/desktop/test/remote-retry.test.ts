@@ -26,13 +26,13 @@ type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
-async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}): Promise<Setup> {
+async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions> = {}, keepAliveMs?: number): Promise<Setup> {
   const proxyPort = await freePort();
   gateway = await startTestGateway({ stt, publicEndpoint: () => `ws://127.0.0.1:${proxyPort}` });
   proxy = await startDropProxy(gateway.port, proxyPort);
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
-  const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+  const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
   const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: new AbortController().signal });
@@ -140,5 +140,26 @@ describe('RemoteDictation retry', () => {
     expect(other.stt.requests).toEqual([]);
     expect(other.server.gateway.sessions.count()).toBe(0);
     await other.close();
+  });
+
+  it('keeps waiting for a slow but connected server after finish and never retries it', async () => {
+    const { server, relay, dictation } = await setup({ ...bySize, delayMs: 2000 }, { finishIdleMs: 300 });
+    speak(dictation, SECOND);
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable' });
+    expect(relay.connections()).toBe(1);
+    expect(server.stt.requests).toHaveLength(1);
+  });
+
+  it('retries after finish when the connection silently stops answering', async () => {
+    const { server, relay, dictation } = await setup({ ...bySize, delayMs: 300 }, {}, 100);
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await expect.poll(() => server.stt.requests.length).toBe(1);
+
+    relay.freezeAll();
+
+    expect(await finished).toBe('úsek32000');
+    expect(relay.connections()).toBe(2);
   });
 });

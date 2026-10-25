@@ -230,8 +230,10 @@ export class RemoteDictation implements EngineDictation {
     this.clearIdle();
     const attempt = this.attempt;
     this.idleTimer = setTimeout(() => {
-      attempt.connection.close();
-      this.dropped(attempt, new RemoteFailure('connection-lost', 'the server stopped answering'));
+      if (attempt !== this.attempt) {
+        return;
+      }
+      this.fail(new RemoteFailure('stt-unavailable', 'the connected server sent no result in time'));
     }, this.deps.finishIdleMs);
   }
 

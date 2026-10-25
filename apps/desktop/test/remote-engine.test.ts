@@ -130,12 +130,12 @@ describe('RemoteEngine', () => {
     await expect.poll(() => server.stt.aborted()).toBe(1);
   });
 
-  it('gives up when the server stays silent after finish', async () => {
+  it('gives up when the connected server sends nothing for the finish wait', async () => {
     const { pairing } = await startWith({ delayMs: 5000 });
     const dictation = (await prepared(engine(pairing, { finishIdleMs: 200 }))).start({ language: 'sk', signal: new AbortController().signal });
     speak(dictation, SECOND);
 
-    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'connection-lost' });
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable' });
   });
 
   it('closes the prepared connection when it is released unused', async () => {

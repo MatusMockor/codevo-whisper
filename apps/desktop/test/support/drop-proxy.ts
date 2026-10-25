@@ -1,7 +1,7 @@
 import { connect, createServer, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 
-export type DropProxy = { url: string; port: number; connections(): number; dropAll(): void; close(): Promise<void> };
+export type DropProxy = { url: string; port: number; connections(): number; dropAll(): void; freezeAll(): void; close(): Promise<void> };
 
 export async function startDropProxy(targetPort: number, port = 0): Promise<DropProxy> {
   const sockets = new Set<Socket>();
@@ -28,6 +28,11 @@ export async function startDropProxy(targetPort: number, port = 0): Promise<Drop
     port: actual,
     connections: () => connections,
     dropAll: () => sockets.forEach((socket) => socket.destroy()),
+    freezeAll: () =>
+      sockets.forEach((socket) => {
+        socket.unpipe();
+        socket.pause();
+      }),
     close: () =>
       new Promise<void>((resolve) => {
         sockets.forEach((socket) => socket.destroy());

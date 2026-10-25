@@ -5,7 +5,7 @@ import type { ConnectionObserver, ServerConnector } from './server-connector';
 
 export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number };
 
-export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({ finishIdleMs: 30_000, retryBufferBytes: 120 * 32_000 });
+export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({ finishIdleMs: 120_000, retryBufferBytes: 120 * 32_000 });
 
 export type RemoteEngineDeps = {
   connector: Pick<ServerConnector, 'connect' | 'reconnect'>;
