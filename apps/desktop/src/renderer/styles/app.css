@@ -137,3 +137,117 @@ button {
   overflow: auto;
   padding: 22px 28px 28px;
 }
+
+kbd {
+  font-family: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 560;
+  white-space: nowrap;
+  transition: background .15s, transform .1s;
+}
+
+.btn:hover {
+  background: var(--group);
+}
+
+.btn:active {
+  transform: translateY(.5px);
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn:disabled:hover {
+  background: var(--surface-2);
+}
+
+.btn.primary {
+  background: var(--lamp);
+  border-color: transparent;
+  color: #2A1600;
+}
+
+.btn.primary:hover {
+  background: #F5AE4E;
+}
+
+.btn.ok {
+  color: var(--ok-ink);
+}
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--seg-bg);
+}
+
+.seg button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 520;
+  color: var(--ink-2);
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--seg-on);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 0 0 .5px rgba(0, 0, 0, .06);
+}
+
+.orb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.orb .ic {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+
+.orb.done {
+  background: var(--ok);
+  color: #06301C;
+}
+
+.orb.warn {
+  background: var(--lamp);
+  color: #2A1600;
+}
+
+.orb.mute {
+  background: var(--seg-bg);
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .seg button {
+    transition: none;
+  }
+}

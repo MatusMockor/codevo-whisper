@@ -9,8 +9,11 @@ import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
 import { ModelManager } from '../src/main/models/model-manager';
+import { PauseState } from '../src/main/session/pause-state';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
 import { SettingsStore } from '../src/main/settings/settings-store';
+import { StatsStore } from '../src/main/stats/stats-store';
+import { localDate } from '../src/shared/calendar-date';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
@@ -65,6 +68,8 @@ async function prepared(setup: Setup = {}) {
   const insertion = new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger);
   const states: OverlayState[] = [];
   const settingsOpened: string[] = [];
+  const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
+  const pause = new PauseState(logger);
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
@@ -73,12 +78,14 @@ async function prepared(setup: Setup = {}) {
     lastTranscript,
     helper,
     settings,
+    stats,
+    pause,
     overlay: (state) => states.push(state),
     openSettings: () => settingsOpened.push('settings'),
     logger,
   });
   coordinator.start();
-  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir };
+  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir, stats, pause };
 }
 
 async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
@@ -334,6 +341,45 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
     expect(harness.helper.pasted).toEqual([]);
     expect(harness.lastTranscript.get()).toBeNull();
+  });
+
+  it('records stats after a successful dictation and not after an empty or failed one', async () => {
+    const harness = await prepared();
+
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.helper.pressKey('up', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
+    vi.stubEnv('FAKE_CLI_MODE', 'fail');
+    await dictate(harness, 3);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
+    expect(await harness.stats.days()).toEqual([]);
+
+    vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    const today = localDate(new Date());
+    await expect.poll(() => harness.stats.days()).toEqual([{ date: today, words: 1, dictations: 1, seconds: 1 }]);
+
+    await pressAndSpeak(harness, 4);
+    harness.helper.frontmostApp = NOTES;
+    harness.helper.pressKey('up', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'focus' });
+    await expect.poll(() => harness.stats.days()).toEqual([{ date: today, words: 2, dictations: 2, seconds: 2 }]);
+  });
+
+  it('pausing and resuming updates the shared pause state', async () => {
+    const harness = await prepared();
+    const changes: boolean[] = [];
+    harness.pause.onChange((paused) => changes.push(paused));
+
+    harness.coordinator.pause();
+    harness.coordinator.pause();
+    harness.coordinator.resume();
+
+    expect(changes).toEqual([true, false]);
+    expect(harness.coordinator.isPaused()).toBe(false);
+    expect(harness.pause.isPaused()).toBe(false);
   });
 
   it('toggle mode records until the second press and then inserts', async () => {

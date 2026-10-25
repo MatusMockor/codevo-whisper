@@ -30,7 +30,10 @@ const mainContents = { id: 2 } as unknown as WebContents;
 
 function installed(): FakeSession {
   const session = new FakeSession();
-  installPermissionHandlers(session.asSession(), (contents, url) => contents === captureContents && url === CAPTURE_URL);
+  installPermissionHandlers(session.asSession(), {
+    isCaptureFrame: (contents, url) => contents === captureContents && url === CAPTURE_URL,
+    isAppFrame: (contents, url) => contents === mainContents && url === MAIN_URL,
+  });
   return session;
 }
 
@@ -76,6 +79,20 @@ describe('installPermissionHandlers', () => {
     for (const permission of ['notifications', 'geolocation', 'clipboard-read', 'display-capture', 'midiSysex', 'openExternal', 'fullscreen']) {
       expect(requestOutcome(session, captureContents, permission, {})).toBe(false);
     }
+  });
+
+  it('lets only the main window write text to the clipboard', () => {
+    const session = installed();
+    const main = { requestingUrl: MAIN_URL };
+
+    expect(requestOutcome(session, mainContents, 'clipboard-sanitized-write', main)).toBe(true);
+    expect(checkOutcome(session, mainContents, 'clipboard-sanitized-write', main)).toBe(true);
+    expect(requestOutcome(session, mainContents, 'clipboard-sanitized-write', { ...main, isMainFrame: false })).toBe(false);
+    expect(requestOutcome(session, captureContents, 'clipboard-sanitized-write', {})).toBe(false);
+    expect(requestOutcome(session, mainContents, 'clipboard-sanitized-write', { requestingUrl: 'https://example.invalid/' })).toBe(false);
+    expect(checkOutcome(session, null, 'clipboard-sanitized-write', main)).toBe(false);
+    expect(requestOutcome(session, mainContents, 'clipboard-read', main)).toBe(false);
+    expect(checkOutcome(session, mainContents, 'clipboard-read', main)).toBe(false);
   });
 
   it('answers permission checks for the microphone in the capture window only', () => {

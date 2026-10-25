@@ -8,10 +8,14 @@ import { bindPasteLastShortcut } from '../insertion/paste-last-shortcut';
 import { SerialQueue } from '../insertion/serial-queue';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
+import { countWords } from '../stats/count-words';
+import type { StatsRecorder } from '../stats/stats-store';
+import { pcmDurationMs } from '../../shared/pcm';
 import type { OverlayAction, OverlayState } from '../../shared/overlay-contract';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
 import { copyLastState, errorState, MESSAGES, pasteLastState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
+import type { PauseState } from './pause-state';
 
 export type SessionCoordinatorDeps = {
   hotkey: HotkeyService;
@@ -21,6 +25,8 @@ export type SessionCoordinatorDeps = {
   lastTranscript: LastTranscript;
   helper: InputHelper;
   settings: SettingsStore;
+  stats: StatsRecorder;
+  pause: PauseState;
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
   clock?: () => number;
@@ -34,7 +40,6 @@ export class SessionCoordinator {
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
   private recording: DictationSession | null = null;
-  private paused = false;
   private unsubscribers: Array<() => void> = [];
 
   constructor(private readonly deps: SessionCoordinatorDeps) {
@@ -54,17 +59,17 @@ export class SessionCoordinator {
   }
 
   pause(): void {
-    this.paused = true;
+    this.deps.pause.set(true);
     this.deps.hotkey.pause();
   }
 
   resume(): void {
-    this.paused = false;
+    this.deps.pause.set(false);
     this.deps.hotkey.resume();
   }
 
   isPaused(): boolean {
-    return this.paused;
+    return this.deps.pause.isPaused();
   }
 
   async pasteLast(): Promise<PasteLastOutcome> {
@@ -148,6 +153,12 @@ export class SessionCoordinator {
     this.deps.hotkey.stopForLimit();
   }
 
+  private recordStats(text: string, pcm: Uint8Array): void {
+    this.deps.stats.record({ words: countWords(text), seconds: pcmDurationMs(pcm) / 1000 }).catch((error: unknown) => {
+      this.logger.error('The dictation statistics could not be saved', error);
+    });
+  }
+
   private showUtility(state: OverlayState): void {
     if (this.recording !== null) {
       return;
@@ -172,6 +183,7 @@ export class SessionCoordinator {
       settings: this.deps.settings,
       overlay: this.sessionOverlay(),
       abandon: (session) => this.handleAbandon(session),
+      transcribed: (text, pcm) => this.recordStats(text, pcm),
       captureLane: this.captureLane,
       pipeline: this.pipeline,
       clock: this.deps.clock ?? Date.now,

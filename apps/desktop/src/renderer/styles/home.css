@@ -1,0 +1,259 @@
+.home {
+  container-type: inline-size;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--lamp-soft);
+  font-size: 13.5px;
+}
+
+.banner > span:not(.orb) {
+  flex: 1;
+  min-width: 0;
+}
+
+.banner kbd {
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--line);
+  font-size: 12.5px;
+}
+
+.banner .orb {
+  width: 22px;
+  height: 22px;
+}
+
+.stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 10px;
+}
+
+.stats-head h2,
+.last-top h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xl);
+  background: var(--group);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border-right: 1px solid var(--line-2);
+  background: var(--line-2);
+}
+
+.tiles > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px 13px;
+  background: var(--group);
+}
+
+.tiles dt {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.tiles dd {
+  display: contents;
+  margin: 0;
+}
+
+.tiles .v {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 680;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tiles .v small {
+  margin-left: 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
+.tiles .h {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px 10px;
+}
+
+.week-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.week-top b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.week-top span {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.week svg {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  margin: auto auto 0;
+  overflow: visible;
+}
+
+.week .bar .col {
+  fill: var(--bar);
+}
+
+.week .bar.now .col {
+  fill: var(--bar-now);
+}
+
+.week .mask {
+  fill: var(--group);
+}
+
+.week .bar .val {
+  fill: var(--ink-2);
+  font: 600 11.5px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.week .bar.now .val,
+.week .bar:hover .val {
+  opacity: 1;
+}
+
+.week .bar .hit {
+  fill: transparent;
+}
+
+.week .day {
+  fill: var(--ink-3);
+  font: 500 11.5px var(--font-ui);
+}
+
+.week .day.now {
+  fill: var(--ink);
+  font-weight: 700;
+}
+
+.week .base {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.privline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.privline .ic {
+  color: var(--lamp-ink);
+}
+
+.last {
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xl);
+  background: var(--surface-2);
+}
+
+.last-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.last p {
+  max-width: 72ch;
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.last p.empty {
+  color: var(--ink-3);
+}
+
+.last .note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.last .note .ic {
+  width: 14px;
+  height: 14px;
+}
+
+@container (max-width: 760px) {
+  .stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tiles {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .week .bar .val {
+    transition: none;
+  }
+}

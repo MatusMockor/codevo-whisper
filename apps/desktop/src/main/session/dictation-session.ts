@@ -27,6 +27,7 @@ export type DictationSessionDeps = {
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
+  transcribed(text: string, pcm: Uint8Array): void;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
   clock: () => number;
@@ -168,6 +169,7 @@ export class DictationSession {
       return;
     }
     this.deps.lastTranscript.set(text);
+    this.deps.transcribed(text, pcm);
     const target = await this.target;
     const outcome = await this.insert(text, target);
     this.end(insertionState(outcome, target?.name ?? ''));
