@@ -2,7 +2,7 @@ import type { OverlayApi, OverlayState } from '../shared/types.js'
 
 const api = (window as unknown as { overlay: OverlayApi }).overlay
 const byId = (id: string) => document.getElementById(id) as HTMLElement
-const keyLabels: Record<OverlayState['key'], string> = { rightOption: 'Right Option', leftOption: 'Left Option', fn: 'Fn' }
+const keyLabels: Record<OverlayState['key'], string> = { rightOption: 'Right Option', leftOption: 'Left Option', fn: 'Fn', rightCommand: 'Right Command', rightControl: 'Right Control' }
 let current: OverlayState | null = null
 
 function elapsed(state: OverlayState): string {

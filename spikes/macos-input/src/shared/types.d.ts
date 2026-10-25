@@ -1,5 +1,5 @@
 export type Candidate = 'swift' | 'uiohook'
-export type HotkeyKey = 'rightOption' | 'leftOption' | 'fn'
+export type HotkeyKey = 'rightOption' | 'leftOption' | 'fn' | 'rightCommand' | 'rightControl'
 export type KeyPhase = 'down' | 'up'
 export type SessionState = 'idle' | 'recording' | 'transcribing' | 'inserting' | 'result'
 export type PermissionKind = 'listen' | 'post' | 'accessibility'

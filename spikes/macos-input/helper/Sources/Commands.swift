@@ -31,7 +31,7 @@ final class Commands {
         case "paste":
             return Paste.commandV()
         case "listen-start":
-            return KeyTap.shared.start(keycodes: (args["keycodes"] as? [Int] ?? [58, 61, 63]).map(Int64.init))
+            return KeyTap.shared.start(keycodes: (args["keycodes"] as? [Int] ?? [54, 58, 61, 62, 63]).map(Int64.init))
         case "listen-stop":
             return KeyTap.shared.stop()
         default:

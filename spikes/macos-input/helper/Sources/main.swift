@@ -8,7 +8,7 @@ setvbuf(stdout, nil, _IONBF, 0)
 MainActor.assumeIsolated {
     if mode == "listen" {
         let keycodes = arguments.dropFirst().compactMap { Int64($0) }
-        _ = KeyTap.shared.start(keycodes: keycodes.isEmpty ? [58, 61, 63] : keycodes)
+        _ = KeyTap.shared.start(keycodes: keycodes.isEmpty ? [54, 58, 61, 62, 63] : keycodes)
         guard KeyTap.shared.isRunning else {
             exit(2)
         }

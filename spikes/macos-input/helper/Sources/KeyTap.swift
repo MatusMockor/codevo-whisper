@@ -9,6 +9,8 @@ final class KeyTap {
         58: 0x0000_0020,
         61: 0x0000_0040,
         63: 0x0080_0000,
+        54: 0x0000_0010,
+        62: 0x0000_2000,
     ]
 
     private var port: CFMachPort?
