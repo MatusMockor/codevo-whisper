@@ -4,7 +4,7 @@ import { ProtocolError } from '../src/errors';
 import { decodeOpeningFrame, HandshakeMode, PROLOGUE_PAIR, PROLOGUE_SESSION } from '../src/framing';
 import { createHandshake } from '../src/noise/handshake-state';
 import { generateKeyPair } from '../src/noise/primitives';
-import { createPairingSecret, pairingPsk } from '../src/pairing';
+import { createPairingSecret } from '../src/pairing';
 import { SecureTransport } from '../src/transport/secure-transport';
 
 const EMPTY = new Uint8Array(0);
@@ -27,7 +27,7 @@ describe('client handshakes', () => {
     expect(serverTransport.open(transport.seal(Uint8Array.of(1, 2)))).toEqual(Uint8Array.of(1, 2));
   });
 
-  it('opens a pairing with an IKpsk2 opening frame keyed by the token secret', () => {
+  it('opens a pairing with an IKpsk2 opening frame that uses the token secret as the psk', () => {
     const server = generateKeyPair();
     const secret = createPairingSecret();
     const client = beginPairing(generateKeyPair(), { serverPublicKey: server.publicKey, secret, endpoint: 'ws://127.0.0.1:8787' });
@@ -37,7 +37,7 @@ describe('client handshakes', () => {
       initiator: false,
       prologue: PROLOGUE_PAIR,
       staticKey: server,
-      psk: pairingPsk(secret),
+      psk: secret,
     });
 
     expect(opening.mode).toBe(HandshakeMode.Pair);
@@ -57,7 +57,7 @@ describe('client handshakes', () => {
       initiator: false,
       prologue: PROLOGUE_PAIR,
       staticKey: server,
-      psk: pairingPsk(createPairingSecret()),
+      psk: createPairingSecret(),
     });
     responder.readMessage(decodeOpeningFrame(client.openingFrame).noiseMessage);
 

@@ -3,7 +3,7 @@ import { encodeOpeningFrame, HandshakeMode, PROLOGUE_PAIR, PROLOGUE_SESSION } fr
 import { createHandshake, type HandshakeResult, type HandshakeState } from '../noise/handshake-state';
 import { NoiseError } from '../noise/noise-error';
 import type { KeyPair } from '../noise/primitives';
-import { pairingPsk, type PairingToken } from '../pairing';
+import type { PairingToken } from '../pairing';
 import { SecureTransport } from '../transport/secure-transport';
 
 const EMPTY = new Uint8Array(0);
@@ -59,7 +59,7 @@ export function beginPairing(device: KeyPair, token: PairingToken): ClientHandsh
     prologue: PROLOGUE_PAIR,
     staticKey: device,
     remoteStaticKey: token.serverPublicKey,
-    psk: pairingPsk(token.secret),
+    psk: token.secret,
   });
   return begin(HandshakeMode.Pair, state);
 }

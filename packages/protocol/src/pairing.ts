@@ -5,7 +5,7 @@ import { PROTOCOL_VERSION } from './version';
 export type PairingToken = { serverPublicKey: Uint8Array; secret: Uint8Array; endpoint: string };
 
 const KEY_BYTES = 32;
-const SECRET_BYTES = 16;
+const SECRET_BYTES = 32;
 const FINGERPRINT_BYTES = 16;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const ENDPOINT_PROTOCOLS = ['ws:', 'wss:'];
@@ -71,11 +71,6 @@ export function parsePairingToken(text: string): PairingToken {
     secret: decodeBase64url(secret, SECRET_BYTES, 'pairing secret'),
     endpoint: decodeEndpoint(endpoint),
   };
-}
-
-export function pairingPsk(secret: Uint8Array): Uint8Array {
-  assertLength(secret, SECRET_BYTES, 'pairing secret');
-  return blake2s(secret);
 }
 
 export function fingerprint(bytes: Uint8Array): string {

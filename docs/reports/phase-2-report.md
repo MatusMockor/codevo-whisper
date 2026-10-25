@@ -47,7 +47,7 @@ Built from scratch per Noise rev 34 sections 5 and 9, on top of `@noble/curves` 
 
 ### Task 4 - Pairing token and fingerprint (`7d9572d`)
 
-`cw1:<key b64url>:<secret b64url>:<encodeURIComponent(endpoint)>`. Base64url must be canonical (no padding, the bytes must re-encode to the same text). Key must be 32 bytes, secret 16, endpoint `ws:` or `wss:`. `fingerprint` = the first 16 bytes of BLAKE2s as 8 groups of 4 uppercase hex characters (tested against the known BLAKE2s("") value). TDD: failed first, then passed.
+`cw1:<key b64url>:<secret b64url>:<encodeURIComponent(endpoint)>`. Base64url must be canonical (no padding, the bytes must re-encode to the same text). Key must be 32 bytes, secret 32 (used directly as the Noise psk, controller ruling after review), endpoint `ws:` or `wss:`. `fingerprint` = the first 16 bytes of BLAKE2s as 8 groups of 4 uppercase hex characters (tested against the known BLAKE2s("") value). TDD: failed first, then passed.
 
 ### Task 5 - Config, key store, device registry (`e89fbfa`)
 
@@ -125,7 +125,7 @@ The same commit also fixes a flaky sidecar test: the sidecar now drains an unrea
 
 - **Branch instead of `main`**: commits go to `phase-2-protocol-server`, per the controller's instructions.
 - **Task 1 commit message**: kept `chore: monorepo scaffold` even though only the protocol package was added.
-- **Pairing psk = BLAKE2s(secret)**: the token secret is 128 bits (spec), but Noise requires a 32-byte psk. The psk is the BLAKE2s hash of the 16-byte secret (`pairingPsk`). This is the only extra construction; it keeps the 128-bit entropy and uses the suite's own hash.
+- **Pairing secret is 32 bytes**: the spec said 128 bits, but Noise needs a 32-byte psk. A first version derived the psk as BLAKE2s(16-byte secret). By controller ruling the token now carries a 32-byte random secret that is the Noise psk directly, with no derivation (the controller updates the spec). Commit `fix(protocol): 32 byte pairing secret used directly as the psk`.
 - **`hello` client message**: added because of finding 1. The session flow is `hello`, `ready`, `start`, and so on.
 - **`partial` server message**: reserved in the codec (`{ segmentId, revision, text }`) at the controller's request for phase 3. Shapes were confirmed with the phase 3 agent, and an empty `final.text` is accepted.
 - **`HandshakeState.remoteStaticKey()`**: added so the responder can check the device after the first message, before replying.

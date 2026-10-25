@@ -1,7 +1,6 @@
 import {
   createHandshake,
   NoiseError,
-  pairingPsk,
   PROLOGUE_PAIR,
   PROLOGUE_SESSION,
   ProtocolError,
@@ -35,7 +34,7 @@ export function respondToPairing(serverKey: KeyPair, secret: Uint8Array, noiseMe
     initiator: false,
     prologue: PROLOGUE_PAIR,
     staticKey: serverKey,
-    psk: pairingPsk(secret),
+    psk: secret,
   });
   return readFirstMessage(state, noiseMessage);
 }

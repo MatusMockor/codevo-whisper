@@ -98,7 +98,7 @@ describe('pairing', () => {
   it('a wrong secret fails without closing the window', async () => {
     const server = await start();
     const window = await openPairingWindow(server.config.adminSocket);
-    const wrong = { ...window.token, secret: new Uint8Array(16).fill(7) };
+    const wrong = { ...window.token, secret: new Uint8Array(32).fill(7) };
 
     await expect(pairDevice(server.url, wrong, generateKeyPair(), 'Útočník')).rejects.toMatchObject({ code: 'bad_message' });
     await waitUntil(() => server.pairing.failedAttempts('127.0.0.1') === 1);
@@ -114,7 +114,7 @@ describe('pairing', () => {
   it('limits failed pairing attempts per IP', async () => {
     const server = await start();
     const window = await openPairingWindow(server.config.adminSocket);
-    const wrong = { ...window.token, secret: new Uint8Array(16).fill(7) };
+    const wrong = { ...window.token, secret: new Uint8Array(32).fill(7) };
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await expect(pairDevice(server.url, wrong, generateKeyPair(), 'Útočník')).rejects.toMatchObject({ code: 'bad_message' });
       await waitUntil(() => server.pairing.failedAttempts('127.0.0.1') === attempt);
@@ -151,7 +151,7 @@ describe('pairing', () => {
 
   it('no pairing without an open window', async () => {
     const server = await start();
-    const token = { serverPublicKey: server.serverKey.publicKey, secret: new Uint8Array(16), endpoint: 'ws://127.0.0.1:8787' };
+    const token = { serverPublicKey: server.serverKey.publicKey, secret: new Uint8Array(32), endpoint: 'ws://127.0.0.1:8787' };
 
     await expect(pairDevice(server.url, token, generateKeyPair(), 'Bez okna')).rejects.toMatchObject({ code: 'pairing_closed' });
   });

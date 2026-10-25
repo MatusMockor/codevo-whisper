@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ProtocolError } from '../src/errors';
 import { generateKeyPair } from '../src/noise/primitives';
-import { createPairingSecret, encodePairingToken, fingerprint, pairingPsk, parsePairingToken, type PairingToken } from '../src/pairing';
+import { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from '../src/pairing';
 
 function token(overrides: Partial<PairingToken> = {}): PairingToken {
   return {
@@ -32,10 +32,10 @@ describe('pairing token', () => {
     expect(parsePairingToken(text)).toEqual(original);
   });
 
-  it('creates a 16 byte random secret', () => {
+  it('creates a 32 byte random secret', () => {
     const first = createPairingSecret();
 
-    expect(first).toHaveLength(16);
+    expect(first).toHaveLength(32);
     expect(createPairingSecret()).not.toEqual(first);
   });
 
@@ -55,9 +55,11 @@ describe('pairing token', () => {
     expect(() => encodePairingToken(token({ serverPublicKey: new Uint8Array(33) }))).toThrow(ProtocolError);
   });
 
-  it('rejects wrong secret length (not 16 bytes)', () => {
+  it('rejects wrong secret length (not 32 bytes)', () => {
     const valid = token();
-    expectBadMessage(`cw1:${base64url(valid.serverPublicKey)}:${base64url(new Uint8Array(15))}:${encodeURIComponent(valid.endpoint)}`);
+    expectBadMessage(`cw1:${base64url(valid.serverPublicKey)}:${base64url(new Uint8Array(16))}:${encodeURIComponent(valid.endpoint)}`);
+    expectBadMessage(`cw1:${base64url(valid.serverPublicKey)}:${base64url(new Uint8Array(33))}:${encodeURIComponent(valid.endpoint)}`);
+    expect(() => encodePairingToken(token({ secret: new Uint8Array(16) }))).toThrow(ProtocolError);
   });
 
   it('rejects endpoint that is not ws:// or wss://', () => {
@@ -97,13 +99,3 @@ describe('fingerprint', () => {
   });
 });
 
-describe('pairingPsk', () => {
-  it('expands the 16 byte secret to the 32 byte Noise psk with BLAKE2s', () => {
-    const secret = createPairingSecret();
-
-    expect(pairingPsk(secret)).toHaveLength(32);
-    expect(pairingPsk(Uint8Array.from(secret))).toEqual(pairingPsk(secret));
-    expect(pairingPsk(createPairingSecret())).not.toEqual(pairingPsk(secret));
-    expect(() => pairingPsk(new Uint8Array(15))).toThrow(ProtocolError);
-  });
-});
