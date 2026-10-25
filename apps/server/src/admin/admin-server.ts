@@ -83,7 +83,7 @@ export async function startAdminServer(path: string, commands: AdminCommands): P
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
-    void serve(commands, new LineChannel(socket));
+    serve(commands, new LineChannel(socket)).catch(() => socket.destroy());
   });
   await listenPrivately(server, path);
   await chmod(path, 0o600);

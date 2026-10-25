@@ -51,6 +51,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     handshakeTimeoutMs: deps.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS,
     logger: deps.logger ?? silentLogger,
   };
+  sockets.on('error', () => undefined);
   sockets.on('connection', (socket, request) => GatewayConnection.accept(socket, request.socket.remoteAddress ?? 'unknown', connectionDeps));
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);

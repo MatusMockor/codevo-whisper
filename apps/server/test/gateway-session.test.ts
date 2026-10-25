@@ -1,4 +1,6 @@
 import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
@@ -125,6 +127,18 @@ describe('gateway sessions', () => {
     await waitUntil(() => server.gateway.limiter.pending() === 0);
     expect(server.gateway.sessions.count()).toBe(0);
     expect((await server.devices.list())[0]?.lastSeenAt).toBe(seenAt);
+  });
+
+  it('closes the connection instead of crashing when the device registry cannot be read', async () => {
+    const server = await start();
+    const device = await server.addDevice();
+    const connecting = await runHandshake(server.url, beginSession(device, server.serverKey.publicKey));
+    await writeFile(join(dir.path, 'devices.json'), '{ not json', { mode: 0o600 });
+    connecting.send({ type: 'hello' });
+
+    expect((await connecting.closed).code).toBe(1011);
+    await waitUntil(() => server.gateway.sessions.count() === 0);
+    await expect(connectSession(server.url, device, server.serverKey.publicKey)).rejects.toThrow(/1011/);
   });
 
   it('requires hello as the first transport message', async () => {

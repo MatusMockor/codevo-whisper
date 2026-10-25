@@ -3,7 +3,7 @@ import type { Logger } from '../logging/logger';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { AudioBuffer } from './audio-buffer';
 import { logDictation } from './dictation-log';
-import { FLOW_PAUSE_SECONDS, MAX_AUDIO_SECONDS, MAX_SESSION_MS } from './limits';
+import { CLOSE_INTERNAL_ERROR, FLOW_PAUSE_SECONDS, MAX_AUDIO_SECONDS, MAX_SESSION_MS } from './limits';
 import type { SecureChannel } from './secure-channel';
 import { transcribeDictation } from './transcribe-dictation';
 
@@ -87,7 +87,7 @@ export class SessionHandler {
     const finishing: State = { kind: 'finishing', controller };
     this.state = finishing;
     const request = { deviceId: this.deviceId, pcm: this.audio.take(), language, signal: controller.signal };
-    void transcribeDictation(this.deps.queue, this.channel, request).then((outcome) => {
+    const transcription = transcribeDictation(this.deps.queue, this.channel, request).then((outcome) => {
       logDictation(this.deps.logger, {
         deviceId: this.deviceId,
         audioSeconds,
@@ -99,6 +99,7 @@ export class SessionHandler {
         this.becomeIdle();
       }
     });
+    transcription.catch(() => this.channel.close(CLOSE_INTERNAL_ERROR));
   }
 
   private onCancel(): void {

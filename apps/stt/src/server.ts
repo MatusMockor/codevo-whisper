@@ -57,6 +57,10 @@ class SingleFlightHandler {
 
   private async transcribe(request: IncomingMessage, response: ServerResponse, language: string): Promise<void> {
     const body = await readPcm(request);
+    if (body.kind === 'aborted') {
+      request.destroy();
+      return;
+    }
     if (body.kind === 'too-long') {
       reply(response, 413, { error: 'audio is too long' });
       return;
@@ -81,13 +85,18 @@ class SingleFlightHandler {
 export async function startSttServer(options: SttServerOptions): Promise<SttServer> {
   const handler = new SingleFlightHandler(options);
   const server = createServer((request, response) => {
+    request.on('error', () => request.destroy());
+    response.on('error', () => response.destroy());
     const url = new URL(request.url ?? '/', 'http://stt');
     if (request.method === 'GET' && url.pathname === '/health') {
       reply(response, 200, { status: 'UP', busy: handler.isBusy() });
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {
-      void handler.handle(request, response, url);
+      handler.handle(request, response, url).catch(() => {
+        reply(response, 500, { error: 'internal error' });
+        request.destroy();
+      });
       return;
     }
     reply(response, 404, { error: 'not found' });

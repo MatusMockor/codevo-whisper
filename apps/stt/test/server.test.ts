@@ -1,4 +1,5 @@
 import { request } from 'node:http';
+import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,6 +85,22 @@ describe('STT sidecar', () => {
     server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
     vi.stubEnv('FAKE_CLI_MODE', 'hang');
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(504);
+  });
+
+  it('survives a client that resets the socket mid-body', async () => {
+    const { port } = server.address() as AddressInfo;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const socket = connect(port, '127.0.0.1');
+      await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
+      socket.write('POST /transcribe?language=sk HTTP/1.1\r\nHost: stt\r\nContent-Type: application/octet-stream\r\nContent-Length: 32000\r\n\r\n');
+      socket.write(Buffer.alloc(1000));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      socket.resetAndDestroy();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    expect(await send('/health', { method: 'GET' })).toEqual({ status: 200, body: { status: 'UP', busy: false } });
+    expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(200);
   });
 
   it('answers 404 for unknown routes', async () => {

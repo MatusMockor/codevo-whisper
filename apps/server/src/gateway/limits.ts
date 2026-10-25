@@ -10,4 +10,5 @@ export const CLOSE_NORMAL = 1000;
 export const CLOSE_GOING_AWAY = 1001;
 export const CLOSE_UNSUPPORTED_DATA = 1003;
 export const CLOSE_POLICY_VIOLATION = 1008;
+export const CLOSE_INTERNAL_ERROR = 1011;
 export const CLOSE_TRY_AGAIN_LATER = 1013;

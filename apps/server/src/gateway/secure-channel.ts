@@ -16,7 +16,7 @@ export interface SecureChannel {
   onMessage(handler: (message: ClientMessage) => void): void;
   onClose(handler: () => void): void;
   fail(code: ErrorCode, message?: string): void;
-  close(): void;
+  close(code?: number): void;
   isOpen(): boolean;
 }
 
@@ -62,8 +62,8 @@ export class WebSocketSecureChannel implements SecureChannel {
     this.socket.close(closeCodeFor(code));
   }
 
-  close(): void {
-    this.socket.close(CLOSE_NORMAL);
+  close(code = CLOSE_NORMAL): void {
+    this.socket.close(code);
   }
 
   isOpen(): boolean {

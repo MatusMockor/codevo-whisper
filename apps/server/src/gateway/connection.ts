@@ -16,7 +16,7 @@ import type { PairingService } from '../pairing/pairing-service';
 import type { TranscriptionQueue } from '../stt/transcription-queue';
 import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
-import { CLOSE_POLICY_VIOLATION, CLOSE_TRY_AGAIN_LATER, CLOSE_UNSUPPORTED_DATA } from './limits';
+import { CLOSE_INTERNAL_ERROR, CLOSE_POLICY_VIOLATION, CLOSE_TRY_AGAIN_LATER, CLOSE_UNSUPPORTED_DATA } from './limits';
 import type { PreAuthLimiter } from './pre-auth-limiter';
 import { WebSocketSecureChannel } from './secure-channel';
 import { SessionHandler } from './session-handler';
@@ -39,7 +39,9 @@ const EMPTY = new Uint8Array(0);
 type PendingSession = { channel: WebSocketSecureChannel; deviceId: string; publicKey: Uint8Array; serverKey: KeyPair };
 
 export class GatewayConnection {
-  private route: (bytes: Uint8Array) => void = (bytes) => void this.onOpening(bytes);
+  private route: (bytes: Uint8Array) => void = (bytes) => {
+    this.onOpening(bytes).catch(() => this.socket.close(CLOSE_INTERNAL_ERROR));
+  };
   private authenticated = false;
   private readonly deadline: NodeJS.Timeout;
 
@@ -89,7 +91,11 @@ export class GatewayConnection {
       }
       this.acceptPairing(frame.noiseMessage);
     } catch (error) {
-      this.reject(error instanceof ProtocolError ? error.code : 'bad_message');
+      if (error instanceof ProtocolError) {
+        this.reject(error.code);
+        return;
+      }
+      this.socket.close(CLOSE_INTERNAL_ERROR);
     }
   }
 
@@ -107,7 +113,9 @@ export class GatewayConnection {
     }
     const channel = this.establish(handshake);
     const pending: PendingSession = { channel, deviceId: device.id, publicKey: device.publicKey, serverKey };
-    channel.onMessage((message) => void this.startSession(pending, message));
+    channel.onMessage((message) => {
+      this.startSession(pending, message).catch(() => channel.close(CLOSE_INTERNAL_ERROR));
+    });
   }
 
   private async startSession(pending: PendingSession, first: ClientMessage): Promise<void> {
