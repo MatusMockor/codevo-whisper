@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodePcm16le } from '../../src/pcm/pcm-format';
 import type { JobOutcome, JobSubmitter } from '../../src/scheduling/job-outcome';
+import type { SegmentTranscriber } from '../../src/scheduling/segment-transcriber';
 import type { TranscriptionJob } from '../../src/scheduling/transcription-job';
 import { SegmentFailedError, SessionCancelledError } from '../../src/session/session-errors';
 import { ControllableTranscriber, flush } from '../support/controllable-transcriber';
@@ -60,6 +61,34 @@ describe('RollingSession', () => {
 
     await expect(done).resolves.toBe('finálny text');
     expect(events).toEqual([{ type: 'final', segmentId: 0, revision: 2, text: 'finálny text' }]);
+  });
+
+  it('a partial of a silent tail that is never committed is not emitted after finish', async () => {
+    const held: Array<(text: string) => void> = [];
+    const engine: SegmentTranscriber = {
+      transcribe: (job, signal) => {
+        if (job.kind === 'partial' && job.segmentId === 1) {
+          return new Promise<string>((resolve, reject) => {
+            held.push(resolve);
+            signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+          });
+        }
+        return Promise.resolve('slovo');
+      },
+    };
+    const { clock, dispatcher, open } = harness(engine);
+    const { session, events } = open('a', true, { segment: { targetMs: 4000, minSegmentMs: 3000 } });
+
+    await feed(clock, [session], concatSamples(speech.subarray(0, 16_000 * 6.5), silence(3000)));
+    expect(held).toHaveLength(1);
+    await session.finish();
+    const eventsAtFinish = [...events];
+    await flush();
+    expect(dispatcher.pendingJobs()).toBe(0);
+    held.forEach((resolve) => resolve('neskoro'));
+    await flush();
+
+    expect(events).toEqual(eventsAtFinish);
   });
 
   it('finish resolves the joined text and final events carry ids 0..n', async () => {

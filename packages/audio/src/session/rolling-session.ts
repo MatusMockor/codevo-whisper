@@ -138,7 +138,7 @@ export class RollingSession<TContext = TranscriptionContext> {
   }
 
   private onPartial(segmentId: number, revision: number, leadInSamples: number, outcome: JobOutcome): void {
-    if (this.state === 'cancelled') {
+    if (this.state !== 'recording') {
       return;
     }
     if (outcome.status === 'dropped') {
@@ -163,6 +163,7 @@ export class RollingSession<TContext = TranscriptionContext> {
       return;
     }
     this.state = 'done';
+    this.options.submitter.cancelSession(this.sessionId);
     this.options.registry.detach(this.sessionId);
     if (this.failure !== undefined) {
       reject(new SegmentFailedError(this.failure.segmentId, this.assembler.text(), { cause: this.failure.error }));
