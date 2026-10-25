@@ -29,6 +29,7 @@ export type ConnectionDeps = {
   pairing: PairingService;
   sessions: SessionRegistry;
   clock: () => number;
+  beforeReady: (deviceId: string) => Promise<void>;
   logger: Logger;
 };
 
@@ -115,6 +116,7 @@ export class GatewayConnection {
       return;
     }
     await this.deps.devices.touch(deviceId, new Date(this.deps.clock())).catch(() => undefined);
+    await this.deps.beforeReady(deviceId);
     if (!channel.isOpen()) {
       return;
     }

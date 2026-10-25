@@ -22,6 +22,7 @@ export type GatewayDeps = {
   clock?: () => number;
   handshakeTimeoutMs?: number;
   logger?: Logger;
+  beforeReady?: (deviceId: string) => Promise<void>;
 };
 
 export type Gateway = { port: number; close(): Promise<void>; sessions: SessionRegistry; limiter: PreAuthLimiter };
@@ -52,6 +53,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     pairing: deps.pairing,
     sessions,
     clock: deps.clock ?? Date.now,
+    beforeReady: deps.beforeReady ?? (() => Promise.resolve()),
     logger: deps.logger ?? silentLogger,
   };
   sockets.on('error', () => undefined);

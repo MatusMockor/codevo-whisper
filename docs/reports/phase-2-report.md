@@ -137,9 +137,9 @@ The same commit also fixes a flaky sidecar test: the sidecar now drains an unrea
   - Pre-handshake rejections close with WebSocket code 4000 + error index and the code as the close reason.
   - Handshake timeout closes with 1008 and internal errors with 1011. Connections over the limit are dropped at TCP level.
 - **Server image**: the gateway and the sidecar are bundled with esbuild (`scripts/bundle.js`, root dev dependency `esbuild` 0.28.2) instead of `pnpm deploy --prod`. There is no `node_modules` in the runtime images, and `dist/provision.js` exists as the plan's compose command expects.
-- **STT build flags**: `-DBUILD_SHARED_LIBS=OFF` was added and the image checks `ldd` at build time, so the single copied binary has no missing libraries. The aivora build could not be compared because the server was unreachable.
+- **STT build flags**: `-DBUILD_SHARED_LIBS=OFF` was added (accepted by the controller) and the image checks `ldd` at build time, so the single copied binary has no missing libraries. No aivora Dockerfile with transcribe.cpp flags was found to compare against.
 - **`--language` for `auto`**: the phase 1 `stt-runner` leaves out `--language` for `auto`. Kept as is.
-- **No test for messages before `ready`**: such messages are refused in code, but the only test possible without slowing a real collaborator was racy (it failed 1 run in 30), so it was dropped.
+- **`beforeReady` hook**: `ServerOptions` and `GatewayDeps` take an optional `beforeReady(deviceId)` promise, awaited just before `ready`. Production never sets it. The test `refuses messages sent before ready` holds the gate, sends `start`, audio and `finish`, gets `bad_message` and the 4000 close, then releases the gate. It checks that no `ready` follows and that the STT saw no request. This replaced an earlier racy test (controller ruling).
 
 ## Home server smoke test
 

@@ -102,6 +102,35 @@ describe('gateway sessions', () => {
     expect(fake.requests).toHaveLength(0);
   });
 
+  it('refuses messages sent before ready', async () => {
+    let reached: () => void = () => undefined;
+    let release: () => void = () => undefined;
+    const gateReached = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = await start({
+      beforeReady: () => {
+        reached();
+        return gate;
+      },
+    });
+    const device = await server.addDevice();
+    const session = await connectSession(server.url, device, server.serverKey.publicKey);
+    await gateReached;
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'bad_message' });
+    release();
+    expect((await session.closed).code).toBe(4000);
+    await expect(session.next()).rejects.toBeInstanceOf(Error);
+    expect(fake.requests).toHaveLength(0);
+  });
+
   it('has no side effects when a captured opening frame is replayed', async () => {
     let now = 1_000_000;
     const server = await start({ clock: () => now, handshakeTimeoutMs: 200 });
