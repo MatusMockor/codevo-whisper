@@ -65,7 +65,9 @@ git commit -m "spike: macOS hotkey, overlay and paste findings"
 
 ---
 
-### Task 2: Linux hotkey and insertion spike
+### Task 2: Linux hotkey and insertion spike (deferred to the start of phase 4)
+
+> Owner decision 2026-10-25: deferred. Phases 1-3 do not depend on it, and it needs a person at the Linux desktop. Run it as the first task of phase 4.
 
 **Files:**
 - Create: `spikes/linux-input/`
@@ -210,8 +212,8 @@ git commit -m "spike: rolling re-transcription latency findings"
 - Modify: `docs/specs/2026-10-25-codevo-whisper-design.md` (sections 5.1-5.3, 6, 7, 10, 11)
 
 **Interfaces:**
-- Consumes: the five findings files.
-- Produces: spec v3 with open questions 1, 2 and 5 answered and section 6 defaults replaced by measured values.
+- Consumes: the four findings files from Tasks 1, 3, 4 and 5.
+- Produces: spec v3 with the macOS, transcribe.cpp, update and latency questions answered and section 6 defaults replaced by measured values. The Linux questions stay open until phase 4.
 
 - [ ] **Step 1: Update the spec** with decisions and numbers from the findings; move answered items out of section 11.
 - [ ] **Step 2: Owner review.** Present the diff to the owner; phase 1 starts after the OK.

@@ -239,11 +239,11 @@ The policy lives in `packages/audio` and is shared by the gateway and LocalEngin
 
 Each phase ends with lint, typecheck, tests, CodeRabbit review and the owner's OK. Plans live in `docs/plans/`.
 
-0. **Risk spikes (throwaway code, findings written back into this spec).** macOS hotkey/overlay/paste; Linux Wayland and X11 options; transcribe.cpp on macOS Metal; signed + notarized auto-update on both macOS architectures; rolling re-transcription latency with continuous speech and two clients.
+0. **Risk spikes (throwaway code, findings written back into this spec).** macOS hotkey/overlay/paste; transcribe.cpp on macOS Metal; signed + notarized auto-update on both macOS architectures; rolling re-transcription latency with continuous speech and two clients.
 1. **Protocol + server core.** Pairing token, IKpsk2 pairing, IK sessions, framing, vectors, adversarial tests, gateway with pre-auth limits, DeviceRegistry, CLI incl. revoke/rotate, STT sidecar + provisioning, compose, dev client, home-server smoke test.
 2. **Segmentation.** `packages/audio` policy (partials, commits, hard cut, overlap/dedup, fairness) wired into the gateway.
 3. **macOS desktop MVP.** Hotkey, capture, overlay, RemoteEngine, insertion with focus checks, tray, pairing UI (token paste), settings, history, hardening from 4.6.
-4. **Linux desktop.** Hotkeys, insertion matrix, reduced Wayland overlay, safeStorage backend handling.
+4. **Linux desktop.** Starts with the deferred Linux spike (Wayland and X11 hotkey and insertion options). Then hotkeys, insertion matrix, reduced Wayland overlay, safeStorage backend handling.
 5. **Local mode.** Engine binaries per platform, ModelManager, catalog with licenses, engine selection rules.
 6. **Release.** CI matrix, signing, notarization, auto-update tests, GHCR images, first public release.
 7. **Cleanup (Ollama).** Optional text cleanup with raw-text fallback.
