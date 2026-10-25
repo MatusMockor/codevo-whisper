@@ -1,3 +1,7 @@
 export { type Clock, systemClock } from './clock';
 export { PcmBuffer } from './pcm/pcm-buffer';
 export { decodePcm16le, msToSamples, PCM_BYTES_PER_SAMPLE, PCM_SAMPLE_RATE, samplesToMs } from './pcm/pcm-format';
+export { AdaptiveVad } from './vad/adaptive-vad';
+export { DEFAULT_VAD_CONFIG, type VadConfig, validateVadConfig } from './vad/vad-config';
+export type { VadFrame } from './vad/vad-frame';
+export type { VoiceActivityDetector } from './vad/voice-activity-detector';
