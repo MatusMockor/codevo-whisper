@@ -9,3 +9,5 @@ export type { Pause } from './segmentation/pause';
 export type { CutReason, Segment } from './segmentation/segment';
 export { DEFAULT_SEGMENT_CONFIG, type SegmentConfig, validateSegmentConfig } from './segmentation/segment-config';
 export { Segmenter } from './segmentation/segmenter';
+export { removeBoundaryDuplicates } from './dedup/remove-boundary-duplicates';
+export { wordsMatch } from './dedup/words-match';
