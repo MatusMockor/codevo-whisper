@@ -4,9 +4,17 @@ Branch `phase-2-protocol-server` (worktree `~/Developer/codevo-whisper-phase2`),
 
 ## Summary
 
-All 10 implementation tasks are done, plus fixes for six security findings from the automated review. `pnpm lint`, `pnpm typecheck` and `pnpm test` pass after every commit. At the end: TESTS_PLACEHOLDER
+All 10 implementation tasks are done, plus fixes for 9 security findings from the automated reviews (5 from the controller's review, 4 from gpt-6.1-sol). `pnpm lint`, `pnpm typecheck` and `pnpm test` pass after every commit. At the end the whole workspace has 515 passing tests and 1 skipped (the skipped one is from phase 1 desktop). Phase 2 packages:
 
-What is still open: the smoke test on the home server. `192.168.1.110` did not answer during the session (SSH and ping timed out while the rest of the LAN responded). All other parts of Task 10 were checked locally with Docker (see Task 10).
+| Package | Tests |
+|---|---|
+| `packages/protocol` | 85 |
+| `apps/server` | 91 |
+| `apps/stt` | 17 |
+| `tools/dev-client` | 7 |
+| `packages/stt-runner` (phase 1, reused) | 14 |
+
+The home server smoke test passed end to end: build, provision, healthy services, `127.0.0.1:8787` only, pairing over an SSH tunnel, the exact Slovak transcript, and `unknown_device` after revoke.
 
 ## Per task
 
@@ -59,8 +67,8 @@ Built from scratch per Noise rev 34 sections 5 and 9, on top of `@noble/curves` 
 
 ### Task 7 - Encrypted gateway sessions (`5f91614`, replay fix `72a2652`)
 
-- `ws` with `perMessageDeflate: false` and `maxPayload: 65536`. Text frames close with 1003, oversized frames with 1009.
-- Per connection: a pre-auth limiter slot (64 pending in total, 4 pending per IP, 8 connections per IP), then a handshake deadline (5 s), then the opening frame, then IK or IKpsk2 as responder.
+- `ws` with `perMessageDeflate: false`, `maxPayload: 65536` and `maxFragments: 1`. Text frames close with 1003, oversized frames with 1009, fragmented messages with 1008.
+- Per TCP connection, before the upgrade: a pre-auth limiter slot (64 pending in total, 4 pending per IP, 8 connections per IP) and a handshake deadline (5 s). Then the opening frame and IK or IKpsk2 as responder.
 - An unknown device key closes the connection with `unknown_device` before the server's handshake reply. Handshake payloads must be empty.
 - Session flow: `ready`, `start`, `audio`*, `finish`, `final` per 25 s chunk (`segmentId` from 0), `done`. Order is enforced, a second dictation per connection is allowed after `done`, and `cancel` drops the audio and aborts the queued jobs of that dictation. Sessions are closed after 600 s (`session_expired`, checked against the injected clock on every message and by a timer). More than 600 s of audio gives `too_long`. Above 300 s of buffered audio the server sends `flow { paused: true }`, and `paused: false` once the buffer is released.
 - Error codes are mapped to WebSocket close codes 4000 + index (`closeCodeFor` / `errorCodeForClose` in the protocol package). After the handshake the error is also sent encrypted.
@@ -106,6 +114,13 @@ Built from scratch per Noise rev 34 sections 5 and 9, on top of `@noble/curves` 
 4. `db7d693`: the admin socket had default permissions until `chmod`. Now its directory must be owned by the gateway user with mode 0700 (startup fails otherwise) and the socket is created under umask 0177. Tests in `admin-server.test.ts`.
 5. `9267a12`: a client that aborted mid-body could crash the STT sidecar through an unhandled rejection. Now `readPcm` returns `aborted`, request and response errors are handled and the single-flight slot is always released. The same `void promise` pattern was fixed in the gateway (connection, session start, dictation) and in the admin server. Tests: `survives a client that resets the socket mid-body`, `closes the connection instead of crashing when the device registry cannot be read`.
 
+6. `38375d1` (gpt-6.1-sol): a channel kept processing messages while its socket was closing, so audio or `finish` after a revoke could still reach the STT. The channel now becomes terminal on `fail`/`close` and runs its close listeners (session dispose, registry removal) right away. Test: `ignores messages that arrive after the server closed the session`.
+7. `38375d1` (gpt-6.1-sol): the pre-auth limits applied only after the WebSocket upgrade, so idle TCP connections or half-sent HTTP requests were not counted. Admission and the handshake deadline now apply per TCP connection, and HTTP header and request timeouts equal the deadline. Rejected WebSockets are terminated after a 2 s close grace period. Tests: `counts raw TCP connections before the upgrade and drops them at the deadline`, `limits concurrent connections per IP`.
+8. `38375d1` (gpt-6.1-sol): a pairing that was waiting for the operator survived rotate-key, and a later approval could add a device under the old key. rotate-key now bumps a pairing generation before it rotates, so such an approval fails with `pairing_closed`. Test: `rotate-key cancels a pairing that waits for approval`.
+9. `38375d1` (gpt-6.1-sol): fragmented WebSocket messages were reassembled and accepted. Now `maxFragments: 1`. Test: `rejects fragmented WebSocket messages`.
+
+The same commit also fixes a flaky sidecar test: the sidecar now drains an unread request body after an early 413, 415 or 503 reply (bounded by a 60 s request timeout) instead of resetting the connection.
+
 ## Deviations from the plan
 
 - **Branch instead of `main`**: commits go to `phase-2-protocol-server`, per the controller's instructions.
@@ -120,25 +135,33 @@ Built from scratch per Noise rev 34 sections 5 and 9, on top of `@noble/curves` 
 - **`TranscriptionQueue.enqueue(..., signal?)`**: an optional signal so `cancel` aborts only that dictation's jobs; `cancelDevice` stays for revoke. `size()` counts waiting jobs plus the running one.
 - **Wire-level choices the plan left open**:
   - Pre-handshake rejections close with WebSocket code 4000 + error index and the code as the close reason.
-  - Handshake timeout closes with 1008, connection limit with 1013, internal errors with 1011.
+  - Handshake timeout closes with 1008 and internal errors with 1011. Connections over the limit are dropped at TCP level.
 - **Server image**: the gateway and the sidecar are bundled with esbuild (`scripts/bundle.js`, root dev dependency `esbuild` 0.28.2) instead of `pnpm deploy --prod`. There is no `node_modules` in the runtime images, and `dist/provision.js` exists as the plan's compose command expects.
 - **STT build flags**: `-DBUILD_SHARED_LIBS=OFF` was added and the image checks `ldd` at build time, so the single copied binary has no missing libraries. The aivora build could not be compared because the server was unreachable.
 - **`--language` for `auto`**: the phase 1 `stt-runner` leaves out `--language` for `auto`. Kept as is.
-- **Fragmented WebSocket frames**: `ws` reassembles fragments up to `maxPayload` and does not expose a "reject fragmented" option. The 65,536-byte cap still bounds memory, but fragmented frames are not rejected explicitly.
 - **No test for messages before `ready`**: such messages are refused in code, but the only test possible without slowing a real collaborator was racy (it failed 1 run in 30), so it was dropped.
 
 ## Home server smoke test
 
-Not run. `codex@192.168.1.110` did not respond during the session: SSH timed out, and so did ping and a TCP probe on 3773, while the LAN router answered. SERVER_PLACEHOLDER
+`codex@192.168.1.110` was unreachable for the first part of the session and came back later. The full plan steps then ran on it at commit `38375d1`, as compose project `codevo-whisper` in `~/Developer/codevo-whisper`. Other containers were not touched (11 kept running). Details are in `docs/operations/server-setup.md`, "Overené".
 
-Checked locally instead (details in `docs/operations/server-setup.md`, "Overené"):
+1. `.env`: `VIDEO_GID=44`, `RENDER_GID=990`, `CW_PUBLIC_ENDPOINT=ws://127.0.0.1:8787`.
+2. Build OK. Provision downloaded and verified the model, and a second run reported it present. Both services `healthy`, the stt service on `vulkan`, `ss -ltn` showed only `127.0.0.1:8787`, core dumps disabled, data and socket files 0600 in 0700 directories.
+3. Pairing over the SSH tunnel: both fingerprints matched between the server CLI and the dev client. I compared them and answered `y` myself. Device `e255ea96`.
+4. The transcript matched the expected Slovak text exactly. The gateway reported 587 ms for 6.7 s of audio; client wall time was 0.9 s.
+5. After `revoke`: `unknown_device`.
 
-- Both images build.
-- Gateway container: the CLI works, and the files and directories have the expected permissions.
-- Pairing between the container CLI and the dev client: fingerprints matched on both sides.
-- `stt_unavailable` without an STT, `unknown_device` after `revoke`.
-- `compose config` resolves.
+The stack is still running on the server with no paired devices. The revoked dev identity remains in `~/.config/codevo-whisper-dev/identity.json` on the Mac.
+
+Before the server came back, the same flow was also checked locally with Docker Desktop (both image builds, container CLI, pairing, `stt_unavailable`, revoke).
 
 ## Reviews
 
-REVIEWS_PLACEHOLDER
+- **Controller's automated review**: 5 findings, all fixed (items 1-5 above).
+- **gpt-6.1-sol** (`codex exec -m gpt-6.1-sol -s read-only`, scope protocol, gateway, pairing, admin, spec section 4 as reference): no deviations in the Noise rev 34 logic (it replayed the vectors and 40,002 transport messages). 4 findings, all fixed (items 6-9).
+- **CodeRabbit** (`coderabbit review --agent --base main`): the first runs hit the shared free-tier rate limit; the third run completed with 4 minor findings, all accepted and fixed in `7bdba68`:
+  1. The report still had unfilled placeholders. Filled in.
+  2. `STT_BACKEND=cpu` still needs `/dev/dri`. Documented that CPU-only hosts must remove `devices` and `group_add`; the plan's compose layout is kept.
+  3. The dev client resolved relative WAV paths against the package directory. They are now resolved against `INIT_CWD`.
+  4. When storing an approved device failed, the operator was never notified and the CLI hung. The device now gets `pairing_closed` and the operator `failed`. Test: `tells the operator when the approved device cannot be stored`.
+- No CodeRabbit findings were rejected. The CodeRabbit run covered the branch up to `38375d1` and did not see the later commits.
