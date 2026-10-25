@@ -10,6 +10,7 @@ import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { abortWhenProcessSettles } from '../../../packages/stt-runner/test/support/late-abort';
 import { sha256Of, testEntry } from './model-fixtures';
 
 const MODEL_BODY = 'GGUF';
@@ -182,6 +183,13 @@ describe('LocalEngine', () => {
 
     await expect(engine().transcribe(secondStampedPcm(300), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
 
+    await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
+  });
+
+  it('returns no text when aborted after the last chunk finished', async () => {
+    const controller = abortWhenProcessSettles();
+
+    await expect(engine().transcribe(secondStampedPcm(1), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
   });
 

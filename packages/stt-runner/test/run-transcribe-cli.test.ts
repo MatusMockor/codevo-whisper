@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runTranscribeCli, type TranscribeCliOptions } from '../src/run-transcribe-cli';
 import { TranscribeCliError } from '../src/transcribe-cli-error';
 import { FAKE_CLI, readRecordedCalls } from './support/fake-cli';
+import { abortWhenProcessSettles } from './support/late-abort';
 
 let scratch: string;
 let argsFile: string;
@@ -136,6 +137,13 @@ describe('runTranscribeCli', () => {
     await expect(runTranscribeCli(options({ signal: controller.signal }))).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(isAlive(Number(await readFile(pidFile, 'utf8')))).toBe(false);
+  });
+
+  it('returns no text when aborted after the process finished', async () => {
+    const controller = abortWhenProcessSettles();
+
+    await expect(runTranscribeCli(options({ signal: controller.signal }))).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
   });
 
   it('does not start when already aborted', async () => {

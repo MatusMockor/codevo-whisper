@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -97,6 +97,47 @@ describe('HelperProcess', () => {
 
     expect(second).toBe(first);
     await expect.poll(() => isAlive(first)).toBe(false);
+  });
+
+  it('gives up once when the restarted helper crashes again', async () => {
+    const process = await started();
+    const giveUps: number[] = [];
+    process.onGiveUp(() => giveUps.push(1));
+
+    await expect(process.request('crash')).rejects.toThrow('helper-exited');
+    await process.request('ping');
+    expect(giveUps).toEqual([]);
+    await expect(process.request('crash')).rejects.toThrow('helper-exited');
+
+    await expect.poll(() => giveUps).toEqual([1]);
+  });
+
+  it('gives up when the restart dies before it is ready', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cw-helper-'));
+    const marker = join(dir, 'blocked');
+    helper = protocolHelper(2000, [`--exit-before-ready-if-exists=${marker}`]);
+    const giveUps: number[] = [];
+    helper.onGiveUp(() => giveUps.push(1));
+    await helper.start();
+    await writeFile(marker, '');
+
+    await expect(helper.request('crash')).rejects.toThrow('helper-exited');
+
+    await expect.poll(() => giveUps).toEqual([1]);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(giveUps).toEqual([1]);
+    await expect(helper.request('ping')).rejects.toThrow('helper-unavailable');
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('does not give up after a deliberate stop', async () => {
+    const process = await started();
+    const giveUps: number[] = [];
+    process.onGiveUp(() => giveUps.push(1));
+
+    await process.stop();
+
+    expect(giveUps).toEqual([]);
   });
 
   it('rejects requests after stop without restarting', async () => {

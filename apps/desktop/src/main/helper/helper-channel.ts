@@ -8,4 +8,5 @@ export interface HelperChannel {
   request(cmd: string, args?: HelperArgs, timeoutMs?: number): Promise<HelperMessage>;
   onEvent(listener: (event: HelperMessage) => void): () => void;
   onRestart(listener: () => void): () => void;
+  onGiveUp(listener: () => void): () => void;
 }

@@ -47,19 +47,34 @@ describe('bindPasteLastShortcut', () => {
     expect(helper.clipboard).toBe('original');
   });
 
-  it('logs a failed paste instead of rejecting unhandled', async () => {
+  it('logs a paste the helper could not post and keeps the transcript on the clipboard', async () => {
     const channel = protocolHelper();
     processHelper = new HelperProcessInputHelper(channel);
     const lastTranscript = new LastTranscript();
     lastTranscript.set('previous');
     const logger = new RecordingLogger();
-    bindPasteLastShortcut(processHelper, new InsertionService(processHelper, await loadedSettings(), lastTranscript, immediate), logger);
+    bindPasteLastShortcut(processHelper, new InsertionService(processHelper, await loadedSettings(), lastTranscript, immediate, logger), logger);
     await processHelper.start();
 
     await channel.request('emit', { event: { event: 'shortcut', name: 'paste-last' } });
 
-    await expect.poll(() => logger.errors.map((entry) => entry.message)).toEqual(['Paste last transcript failed']);
+    await expect.poll(() => logger.infos).toEqual([{ message: 'Paste last transcript', detail: 'copied-paste-failed' }]);
     expect(String(logger.errors[0]?.error)).toContain('paste-failed:no-event-source');
+  });
+
+  it('logs a failing insertion instead of rejecting unhandled', async () => {
+    const channel = protocolHelper();
+    processHelper = new HelperProcessInputHelper(channel);
+    const lastTranscript = new LastTranscript();
+    lastTranscript.set('previous');
+    const logger = new RecordingLogger();
+    bindPasteLastShortcut(processHelper, new InsertionService(processHelper, await loadedSettings(), lastTranscript, immediate, logger), logger);
+    await processHelper.start();
+    await channel.request('respond-next', { cmd: 'secure-input', response: { error: 'gone' } });
+
+    await channel.request('emit', { event: { event: 'shortcut', name: 'paste-last' } });
+
+    await expect.poll(() => logger.errors.map((entry) => entry.message)).toEqual(['Paste last transcript failed']);
     expect(logger.infos).toEqual([]);
   });
 });

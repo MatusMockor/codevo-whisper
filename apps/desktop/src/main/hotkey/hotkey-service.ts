@@ -15,6 +15,7 @@ export class HotkeyService {
   private active = false;
   private paused = false;
   private permitted = false;
+  private readonly unsubscribers: Array<() => void>;
 
   constructor(
     private readonly helper: InputHelper,
@@ -26,8 +27,10 @@ export class HotkeyService {
     this.guard = new ResetGuard(helper, power, clock);
     this.starts = new Listeners(logger, 'Hotkey start listener failed');
     this.stops = new Listeners(logger, 'Hotkey stop listener failed');
-    helper.onKey((event) => this.handleKey(event));
-    settings.onChange((next, previous) => this.handleSettings(next, previous));
+    this.unsubscribers = [
+      helper.onKey((event) => this.handleKey(event)),
+      settings.onChange((next, previous) => this.handleSettings(next, previous)),
+    ];
   }
 
   async start(): Promise<void> {
@@ -55,6 +58,18 @@ export class HotkeyService {
 
   resume(): void {
     this.paused = false;
+  }
+
+  stopForLimit(): void {
+    this.finish('max-duration');
+  }
+
+  dispose(): void {
+    this.finish('cancelled');
+    this.permitted = false;
+    for (const unsubscribe of this.unsubscribers.splice(0)) {
+      unsubscribe();
+    }
   }
 
   private handleKey(event: KeyEvent): void {

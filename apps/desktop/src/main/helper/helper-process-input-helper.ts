@@ -135,9 +135,11 @@ export class HelperProcessInputHelper implements InputHelper {
       listener(reason);
     });
     const unsubscribeRestarts = this.channel.onRestart(() => listener('helper-restarted'));
+    const unsubscribeGiveUps = this.channel.onGiveUp(() => listener('helper-died'));
     return () => {
       unsubscribeEvents();
       unsubscribeRestarts();
+      unsubscribeGiveUps();
     };
   }
 

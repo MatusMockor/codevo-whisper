@@ -61,10 +61,12 @@ export class LocalEngine implements TranscriptionEngine {
     const texts: string[] = [];
     for (const chunk of chunkPcm(pcm)) {
       const text = await this.transcribeChunk(chunk, model, language, signal);
+      signal.throwIfAborted();
       if (text.length > 0) {
         texts.push(text);
       }
     }
+    signal.throwIfAborted();
     return texts.join(' ');
   }
 

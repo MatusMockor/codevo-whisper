@@ -327,6 +327,40 @@ describe('ModelManager', () => {
     await expect(models.verify('alpha')).resolves.toBe('ok');
   });
 
+  it('download of a scanned ready file verifies it instead of trusting the size', async () => {
+    serve('alpha');
+    serve('beta');
+    await mkdir(modelsDir, { recursive: true });
+    await writeFile(join(modelsDir, 'alpha.gguf'), payload);
+    await writeFile(join(modelsDir, 'beta.gguf'), randomBytes(PAYLOAD_BYTES));
+    const models = manager();
+
+    await models.download('alpha');
+    await models.download('beta');
+
+    expect(server.requests.map((request) => request.path)).toEqual([modelUrlPath('beta')]);
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'ready' });
+    expect(stateOf(models, 'beta')).toMatchObject({ status: 'ready' });
+    await expect(readFile(join(modelsDir, 'beta.gguf'))).resolves.toEqual(payload);
+  });
+
+  it('startup verification checks every scanned ready file', async () => {
+    await mkdir(modelsDir, { recursive: true });
+    await writeFile(join(modelsDir, 'alpha.gguf'), payload);
+    await writeFile(join(modelsDir, 'beta.gguf'), randomBytes(PAYLOAD_BYTES));
+    await settings.update({ localModelId: 'beta' });
+    const models = manager();
+    const seen: string[] = [];
+    models.onChange((states) => seen.push(states.map((state) => `${state.id}:${state.status}`).join(',')));
+
+    await models.verifyReady();
+
+    expect(seen).toEqual(['alpha:ready,beta:broken']);
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'ready' });
+    expect(stateOf(models, 'beta')).toMatchObject({ status: 'broken' });
+    expect(server.requests).toEqual([]);
+  });
+
   it('notices a model removed from disk', async () => {
     serve('alpha');
     const models = manager();

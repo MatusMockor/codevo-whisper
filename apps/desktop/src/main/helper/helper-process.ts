@@ -43,12 +43,14 @@ export class HelperProcess implements HelperChannel {
   private child: ChildProcessWithoutNullStreams | null = null;
   private restartsLeft = 0;
   private stopping = false;
+  private gaveUp = false;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
   private readonly logger: Logger;
   private readonly timeoutMs: number;
   private readonly events: Listeners<HelperMessage>;
   private readonly restarts: Listeners<void>;
+  private readonly giveUps: Listeners<void>;
 
   constructor(
     private readonly command: HelperCommand,
@@ -58,6 +60,7 @@ export class HelperProcess implements HelperChannel {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.events = new Listeners(this.logger, 'Input helper event listener failed');
     this.restarts = new Listeners(this.logger, 'Input helper restart listener failed');
+    this.giveUps = new Listeners(this.logger, 'Input helper give-up listener failed');
   }
 
   async start(): Promise<void> {
@@ -66,6 +69,7 @@ export class HelperProcess implements HelperChannel {
       return;
     }
     this.stopping = false;
+    this.gaveUp = false;
     this.restartsLeft = 0;
     this.live = this.spawnChild();
     await this.live;
@@ -105,6 +109,10 @@ export class HelperProcess implements HelperChannel {
 
   onRestart(listener: () => void): () => void {
     return this.restarts.add(listener);
+  }
+
+  onGiveUp(listener: () => void): () => void {
+    return this.giveUps.add(listener);
   }
 
   private spawnChild(): Promise<ChildProcessWithoutNullStreams> {
@@ -192,6 +200,7 @@ export class HelperProcess implements HelperChannel {
     if (this.restartsLeft <= 0) {
       this.logger.error('Input helper exited and stays stopped', exit);
       this.live = unavailable();
+      this.giveUp();
       return;
     }
     this.restartsLeft -= 1;
@@ -203,7 +212,18 @@ export class HelperProcess implements HelperChannel {
     this.live = this.spawnChild();
     this.live.then(
       () => this.restarts.emit(),
-      (error: unknown) => this.logger.error('Input helper restart failed', error),
+      (error: unknown) => {
+        this.logger.error('Input helper restart failed', error);
+        this.giveUp();
+      },
     );
+  }
+
+  private giveUp(): void {
+    if (this.gaveUp || this.stopping) {
+      return;
+    }
+    this.gaveUp = true;
+    this.giveUps.emit();
   }
 }

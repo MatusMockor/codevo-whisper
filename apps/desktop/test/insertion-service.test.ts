@@ -3,16 +3,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
+import { HelperProcessInputHelper } from '../src/main/helper/helper-process-input-helper';
 import type { AppTarget } from '../src/main/helper/input-helper';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import type { Settings } from '../src/shared/settings';
+import { protocolHelper } from './protocol-helper';
 import { RecordingLogger } from './recording-logger';
 
 const TEXT_EDIT: AppTarget = { bundleId: 'com.apple.TextEdit', pid: 100, name: 'TextEdit', windowId: 1 };
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
 const HELD = { control: true, command: true, option: false, shift: false };
+const PROTOCOL_TARGET: AppTarget = { bundleId: 'com.apple.TextEdit', pid: 42, name: 'TextEdit', windowId: 7 };
 
 type Setup = {
   helper?: Partial<FakeInputHelperState>;
@@ -21,14 +24,28 @@ type Setup = {
 };
 
 let dir: string;
+let processHelper: HelperProcessInputHelper | null = null;
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'cw-insertion-'));
 });
 
 afterEach(async () => {
+  await processHelper?.stop();
+  processHelper = null;
   await rm(dir, { recursive: true, force: true });
 });
+
+async function protocolService() {
+  const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
+  await settings.load();
+  const channel = protocolHelper();
+  processHelper = new HelperProcessInputHelper(channel);
+  await processHelper.start();
+  const logger = new RecordingLogger();
+  const service = new InsertionService(processHelper, settings, new LastTranscript(), () => Promise.resolve(), logger);
+  return { channel, logger, service };
+}
 
 async function prepared(setup: Setup = {}) {
   const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
@@ -41,8 +58,9 @@ async function prepared(setup: Setup = {}) {
     sleeps.push(ms);
     await setup.onSleep?.(ms, helper);
   };
-  const service = new InsertionService(helper, settings, lastTranscript, sleep);
-  return { helper, lastTranscript, sleeps, service };
+  const logger = new RecordingLogger();
+  const service = new InsertionService(helper, settings, lastTranscript, sleep, logger);
+  return { helper, lastTranscript, sleeps, service, logger };
 }
 
 describe('InsertionService', () => {
@@ -141,6 +159,58 @@ describe('InsertionService', () => {
     expect(pasting.helper.pasted).toEqual([]);
     expect(pasting.helper.clipboard).toBe('original');
     expect(copying.helper.clipboard).toBe('original');
+  });
+
+  it('logs the reason of a clipboard write failure it handles', async () => {
+    const { logger, service } = await prepared({ helper: { clipboardWriteFails: true } });
+
+    await service.insert('dictated', TEXT_EDIT);
+
+    expect(logger.errors.map((entry) => entry.message)).toEqual(['The clipboard could not be written, restoring the saved clipboard']);
+    expect(String(logger.errors[0]?.error)).toContain('clipboard-write-failed:set-string-failed');
+  });
+
+  it('keeps the transcript on the clipboard when the paste cannot be posted', async () => {
+    const { logger, service } = await protocolService();
+
+    const outcome = await service.insert('dictated', PROTOCOL_TARGET);
+
+    expect(outcome).toBe('copied-paste-failed');
+    expect(logger.errors.map((entry) => entry.message)).toEqual(['The paste failed, the transcript stays on the clipboard']);
+    expect(String(logger.errors[0]?.error)).toContain('paste-failed:no-event-source');
+  });
+
+  it('returns a copy outcome when restoring the clipboard after the paste fails', async () => {
+    const { channel, logger, service } = await protocolService();
+    await channel.request('respond-next', { cmd: 'paste', response: { posted: true } });
+    await channel.request('respond-next', { cmd: 'clipboard-restore', response: { error: 'pasteboard-busy' } });
+
+    const outcome = await service.insert('dictated', PROTOCOL_TARGET);
+
+    expect(outcome).toBe('copied-paste-failed');
+    expect(String(logger.errors[0]?.error)).toContain('helper-error:clipboard-restore:pasteboard-busy');
+  });
+
+  it('copy last puts the last transcript on the clipboard without pasting', async () => {
+    const { helper, lastTranscript, service } = await prepared();
+    lastTranscript.set('previous');
+
+    const outcome = await service.copyLast();
+
+    expect(outcome).toBe('copied');
+    expect(helper.clipboard).toBe('previous');
+    expect(helper.pasted).toEqual([]);
+  });
+
+  it('copy last reports a missing transcript or a failed clipboard write', async () => {
+    const empty = await prepared();
+    const failing = await prepared({ helper: { clipboardWriteFails: true } });
+    failing.lastTranscript.set('previous');
+
+    expect(await empty.service.copyLast()).toBe('no-transcript');
+    expect(await failing.service.copyLast()).toBe('failed-clipboard-write');
+    expect(empty.helper.clipboard).toBe('original');
+    expect(failing.helper.clipboard).toBe('original');
   });
 
   it('runs one insertion at a time so clipboard restores do not interleave', async () => {

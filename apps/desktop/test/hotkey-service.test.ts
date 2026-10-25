@@ -201,6 +201,40 @@ describe('HotkeyService', () => {
     expect(events).toEqual(['start', 'stop:cancelled']);
   });
 
+  it('stops with max-duration when the recording limit is reached', async () => {
+    const { service, helper, events } = await started();
+
+    service.stopForLimit();
+    helper.pressKey('down', 63);
+    service.stopForLimit();
+    helper.pressKey('up', 63);
+
+    expect(events).toEqual(['start', 'stop:max-duration']);
+  });
+
+  it('stops a dead helper session immediately instead of at the limit', async () => {
+    const { helper, events } = await started();
+
+    helper.pressKey('down', 63);
+    helper.loseInput('helper-died');
+
+    expect(events).toEqual(['start', 'stop:input-lost']);
+  });
+
+  it('dispose cancels the active session and stops reacting to keys and settings', async () => {
+    const { service, settings, helper, power, events } = await started();
+
+    helper.pressKey('down', 63);
+    service.dispose();
+    helper.pressKey('up', 63);
+    helper.pressKey('down', 63);
+    await settings.update({ hotkey: RIGHT_CONTROL });
+
+    expect(events).toEqual(['start', 'stop:cancelled']);
+    expect(helper.listening).toEqual([63]);
+    expect(power.listenerCount()).toBe(0);
+  });
+
   it('does nothing while no hotkey is configured', async () => {
     const { helper, events } = await started({ settings: { hotkey: null } });
     const listened = [...helper.listening];

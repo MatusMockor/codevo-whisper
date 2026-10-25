@@ -59,6 +59,11 @@ if (firstRunMarker && !existsSync(firstRunMarker)) {
   process.exit(3);
 }
 
+const blockedMarker = process.argv.find((arg) => arg.startsWith('--exit-before-ready-if-exists='))?.split('=')[1];
+if (blockedMarker && existsSync(blockedMarker)) {
+  process.exit(4);
+}
+
 createInterface({ input: process.stdin })
   .on('line', (line) => respond(JSON.parse(line)))
   .on('close', () => process.exit(0));

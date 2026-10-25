@@ -58,6 +58,8 @@ export async function runTranscribeCli(options: TranscribeCliOptions): Promise<s
       timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       signal: options.signal,
     });
-    return readTranscript(output, MAX_OUTPUT_BYTES);
+    const text = await readTranscript(output, MAX_OUTPUT_BYTES);
+    options.signal?.throwIfAborted();
+    return text;
   });
 }

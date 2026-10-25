@@ -56,8 +56,11 @@ export class ModelManager implements ActiveModel {
     if (this.running !== null) {
       return this.running.done;
     }
-    if (this.board.get(id)?.status === 'ready') {
+    if (this.board.get(id)?.status === 'ready' && (await this.verify(id)) === 'ok') {
       return;
+    }
+    if (this.running !== null) {
+      return this.download(id);
     }
     const controller = new AbortController();
     const done = this.runDownload(entry, controller.signal).finally(() => {
@@ -106,6 +109,20 @@ export class ModelManager implements ActiveModel {
     const result = await this.check(entry);
     this.applyVerification(entry, result);
     return result;
+  }
+
+  async verifyReady(): Promise<void> {
+    const activeId = this.activeEntry()?.id;
+    const ready = this.board
+      .snapshot()
+      .filter((state) => state.status === 'ready')
+      .map((state) => state.id);
+    const activeFirst = [...ready.filter((id) => id === activeId), ...ready.filter((id) => id !== activeId)];
+    for (const id of activeFirst) {
+      await this.verify(id).catch((error: unknown) => {
+        this.logger.error(`Verification of model ${id} failed`, error);
+      });
+    }
   }
 
   activeModelPath(): Promise<string | null> {

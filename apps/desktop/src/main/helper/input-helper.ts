@@ -14,7 +14,7 @@ export type ModifierFlags = { control: boolean; command: boolean; option: boolea
 
 export type ShortcutName = 'paste-last';
 
-export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted';
+export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted' | 'helper-died';
 
 export interface InputHelper {
   start(): Promise<void>;

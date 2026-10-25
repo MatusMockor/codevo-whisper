@@ -122,6 +122,18 @@ describe('HelperProcessInputHelper', () => {
     await expect.poll(() => reasons).toEqual(['tap-reenabled', 'tap-error', 'helper-restarted']);
   });
 
+  it('reports the helper as dead when it stays down after its restart', async () => {
+    const { channel, helper } = await started();
+    const reasons: InputLostReason[] = [];
+    helper.onInputLost((reason) => reasons.push(reason));
+
+    await expect(channel.request('crash')).rejects.toThrow('helper-exited');
+    await expect.poll(() => reasons).toEqual(['helper-restarted']);
+    await expect(channel.request('crash')).rejects.toThrow('helper-exited');
+
+    await expect.poll(() => reasons).toEqual(['helper-restarted', 'helper-died']);
+  });
+
   it('listens again after the helper restarts', async () => {
     const { channel, helper } = await started();
     await helper.listen([61, 63]);
