@@ -1,5 +1,6 @@
 import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
 import { fileURLToPath } from 'node:url';
+import type { PageId } from '../../shared/pages';
 import { loadSource } from './load-source';
 import { rendererSource } from './renderer-source';
 
@@ -12,7 +13,7 @@ function windowChrome(): BrowserWindowConstructorOptions {
   return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 } };
 }
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(page: PageId = 'home'): BrowserWindow {
   const window = new BrowserWindow({
     title: APP_TITLE,
     width: 980,
@@ -32,6 +33,6 @@ export function createMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     window.show();
   });
-  void loadSource(window, rendererSource());
+  void loadSource(window, rendererSource(), page === 'home' ? '' : page);
   return window;
 }

@@ -1,0 +1,142 @@
+import { Menu, Tray } from 'electron';
+import type { AudioCapture } from '../audio/audio-capture';
+import type { AudioDevice } from '../audio/device-resolver';
+import type { ActiveModel } from '../engines/active-model';
+import type { LastTranscript } from '../insertion/last-transcript';
+import type { Logger } from '../logging/logger';
+import type { SessionCoordinator } from '../session/session-coordinator';
+import type { SettingsStore } from '../settings/settings-store';
+import type { OverlayState } from '../../shared/overlay-contract';
+import { SPIN_FRAME_MS, TrayIcons } from './tray-icons';
+import { trayMenuTemplate, type TrayMenuActions, type TrayMenuModel } from './tray-menu-template';
+import { IDLE, nextActivity, statusLine, trayIconKind, type TrayActivity, type TrayIconKind } from './tray-status';
+
+const DEVICE_LIST_TIMEOUT_MS = 800;
+
+export type TrayMenuDeps = {
+  coordinator: Pick<SessionCoordinator, 'pasteLast' | 'copyLast' | 'pause' | 'resume' | 'isPaused'>;
+  capture: Pick<AudioCapture, 'listDevices'>;
+  settings: Pick<SettingsStore, 'get' | 'update'>;
+  lastTranscript: Pick<LastTranscript, 'get'>;
+  models: Pick<ActiveModel, 'activeLanguageHint'>;
+  openApp(): void;
+  openSettings(): void;
+  quit(): void;
+  logger: Logger;
+};
+
+export class TrayMenu {
+  private tray: Tray | null = null;
+  private activity: TrayActivity = IDLE;
+  private devices: AudioDevice[] = [];
+  private spinner: NodeJS.Timeout | null = null;
+  private frame = 0;
+  private shownKind: TrayIconKind = 'idle';
+  private readonly icons = new TrayIcons();
+
+  constructor(private readonly deps: TrayMenuDeps) {}
+
+  create(): void {
+    const tray = new Tray(this.icons.image('idle'));
+    tray.setToolTip('Codevo Whisper');
+    tray.on('click', () => this.popUp());
+    tray.on('right-click', () => this.popUp());
+    this.tray = tray;
+  }
+
+  reflect(state: OverlayState): void {
+    this.activity = nextActivity(this.activity, state);
+    this.refreshIcon();
+  }
+
+  destroy(): void {
+    this.stopSpinner();
+    this.tray?.destroy();
+    this.tray = null;
+  }
+
+  private popUp(): void {
+    this.freshDevices()
+      .then((devices) => {
+        this.devices = devices;
+        this.tray?.popUpContextMenu(Menu.buildFromTemplate(trayMenuTemplate(this.model(), this.actions())));
+      })
+      .catch((error: unknown) => {
+        this.deps.logger.error('The tray menu could not be opened', error);
+      });
+  }
+
+  private freshDevices(): Promise<AudioDevice[]> {
+    const listed = this.deps.capture.listDevices().catch((error: unknown) => {
+      this.deps.logger.error('The microphones could not be listed for the tray menu', error);
+      return this.devices;
+    });
+    const fallback = new Promise<AudioDevice[]>((resolve) => {
+      setTimeout(() => resolve(this.devices), DEVICE_LIST_TIMEOUT_MS);
+    });
+    return Promise.race([listed, fallback]);
+  }
+
+  private model(): TrayMenuModel {
+    const settings = this.deps.settings.get();
+    const paused = this.deps.coordinator.isPaused();
+    return {
+      status: statusLine(this.activity, paused, settings),
+      lastTranscript: this.deps.lastTranscript.get(),
+      paused,
+      devices: this.devices,
+      microphone: settings.microphone,
+      language: settings.language,
+      autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
+    };
+  }
+
+  private actions(): TrayMenuActions {
+    const { coordinator, settings, logger } = this.deps;
+    const report = (message: string) => (error: unknown) => logger.error(message, error);
+    return {
+      copyLast: () => void coordinator.copyLast().catch(report('Copying the last transcript from the tray failed')),
+      pasteLast: () => void coordinator.pasteLast().catch(report('Pasting the last transcript from the tray failed')),
+      togglePause: () => this.togglePause(),
+      chooseMicrophone: (microphone) => void settings.update({ microphone }).catch(report('The microphone could not be saved')),
+      chooseLanguage: (language) => void settings.update({ language }).catch(report('The language could not be saved')),
+      openApp: () => this.deps.openApp(),
+      openSettings: () => this.deps.openSettings(),
+      quit: () => this.deps.quit(),
+    };
+  }
+
+  private togglePause(): void {
+    const { coordinator } = this.deps;
+    const toggle = coordinator.isPaused() ? () => coordinator.resume() : () => coordinator.pause();
+    toggle();
+    this.refreshIcon();
+  }
+
+  private refreshIcon(): void {
+    const kind = trayIconKind(this.activity, this.deps.coordinator.isPaused());
+    if (kind === this.shownKind) {
+      return;
+    }
+    this.shownKind = kind;
+    if (kind !== 'processing') {
+      this.stopSpinner();
+      this.tray?.setImage(this.icons.image(kind));
+      return;
+    }
+    this.tray?.setImage(this.icons.image('processing', this.frame));
+    this.spinner = setInterval(() => {
+      this.frame += 1;
+      this.tray?.setImage(this.icons.image('processing', this.frame));
+    }, SPIN_FRAME_MS);
+  }
+
+  private stopSpinner(): void {
+    if (this.spinner === null) {
+      return;
+    }
+    clearInterval(this.spinner);
+    this.spinner = null;
+    this.frame = 0;
+  }
+}

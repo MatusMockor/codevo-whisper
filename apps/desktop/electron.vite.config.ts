@@ -10,7 +10,7 @@ export default defineConfig({
   preload: {
     build: {
       rolldownOptions: {
-        input: { index: source('./src/preload/index.ts'), capture: source('./src/preload/capture.ts') },
+        input: { index: source('./src/preload/index.ts'), capture: source('./src/preload/capture.ts'), overlay: source('./src/preload/overlay.ts') },
         output: { format: 'cjs', entryFileNames: '[name].cjs' },
       },
     },
@@ -19,7 +19,11 @@ export default defineConfig({
     plugins: [react(), devContentSecurityPolicy()],
     build: {
       rolldownOptions: {
-        input: { index: source('./src/renderer/index.html'), capture: source('./src/renderer/capture/capture.html') },
+        input: {
+          index: source('./src/renderer/index.html'),
+          capture: source('./src/renderer/capture/capture.html'),
+          overlay: source('./src/renderer/overlay/overlay.html'),
+        },
       },
     },
   },

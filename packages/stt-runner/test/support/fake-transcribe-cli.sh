@@ -16,6 +16,10 @@ if [[ -n "${FAKE_CLI_ARGS_FILE:-}" ]]; then
   printf -- '--\n' >> "$FAKE_CLI_ARGS_FILE"
 fi
 
+if [[ -n "${FAKE_CLI_DELAY_S:-}" ]]; then
+  sleep "$FAKE_CLI_DELAY_S"
+fi
+
 case "${FAKE_CLI_MODE:-text}" in
   text)
     printf '  %s \n' "${FAKE_CLI_TEXT:-ahoj svet}" > "$output"

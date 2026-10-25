@@ -1,3 +1,4 @@
+import type { PageId } from './pages';
 import type { Settings } from './settings';
 
 export type IpcInvokeApi = {
@@ -7,6 +8,7 @@ export type IpcInvokeApi = {
 
 export type IpcEvents = {
   'settings-changed': Settings;
+  'open-page': PageId;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -24,4 +26,5 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
   'settings-changed': 'settings:changed',
+  'open-page': 'window:open-page',
 });

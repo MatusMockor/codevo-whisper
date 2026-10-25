@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { panelId, Sidebar, tabId } from './components/Sidebar';
-import { PAGES, type PageId } from './navigation';
+import { pageFromHash, PAGES, type PageId } from './navigation';
 
 function pageLabel(page: PageId): string {
   return PAGES.find((definition) => definition.id === page)?.label ?? '';
 }
 
 export function App() {
-  const [selected, setSelected] = useState<PageId>('home');
+  const [selected, setSelected] = useState<PageId>(() => pageFromHash(window.location.hash));
+
+  useEffect(() => window.codevo.on('open-page', setSelected), []);
 
   return (
     <div className="shell">

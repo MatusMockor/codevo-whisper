@@ -3,16 +3,18 @@ import { fileURLToPath } from 'node:url';
 
 export type RendererSource = { kind: 'dev-server'; url: string } | { kind: 'file'; path: string };
 
-export type RendererPage = 'main' | 'capture';
+export type RendererPage = 'main' | 'capture' | 'overlay';
 
 const PAGE_PATHS: { readonly [P in RendererPage]: string } = Object.freeze({
   main: 'index.html',
   capture: 'capture/capture.html',
+  overlay: 'overlay/overlay.html',
 });
 
 const DEV_SERVER_PATHS: { readonly [P in RendererPage]: string } = Object.freeze({
   main: '',
   capture: PAGE_PATHS.capture,
+  overlay: PAGE_PATHS.overlay,
 });
 
 export function rendererSource(page: RendererPage = 'main'): RendererSource {

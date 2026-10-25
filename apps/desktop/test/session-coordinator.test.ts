@@ -1,0 +1,352 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LocalEngine } from '../src/main/engines/local-engine';
+import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
+import type { AppTarget } from '../src/main/helper/input-helper';
+import { HotkeyService } from '../src/main/hotkey/hotkey-service';
+import { InsertionService } from '../src/main/insertion/insertion-service';
+import { LastTranscript } from '../src/main/insertion/last-transcript';
+import { ModelManager } from '../src/main/models/model-manager';
+import { SessionCoordinator } from '../src/main/session/session-coordinator';
+import { SettingsStore } from '../src/main/settings/settings-store';
+import type { OverlayState } from '../src/shared/overlay-contract';
+import type { Settings } from '../src/shared/settings';
+import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FakePowerEvents } from './fake-power-events';
+import { InProcessCapture, stampedPcm } from './in-process-capture';
+import { testEntry } from './model-fixtures';
+import { RecordingLogger } from './recording-logger';
+
+const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
+const MODEL_BODY = 'GGUF';
+const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
+const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
+
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string };
+
+type Harness = Awaited<ReturnType<typeof prepared>>;
+
+let scratch: string;
+let argsFile: string;
+let coordinator: SessionCoordinator | null = null;
+
+beforeEach(async () => {
+  scratch = await mkdtemp(join(tmpdir(), 'cw-session-'));
+  argsFile = join(scratch, 'args.txt');
+  vi.stubEnv('FAKE_CLI_ARGS_FILE', argsFile);
+  vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
+});
+
+afterEach(async () => {
+  coordinator?.dispose();
+  coordinator = null;
+  vi.unstubAllEnvs();
+  await rm(scratch, { recursive: true, force: true });
+});
+
+async function prepared(setup: Setup = {}) {
+  const logger = new RecordingLogger();
+  const settings = new SettingsStore(join(scratch, 'settings.json'), logger);
+  await settings.load();
+  await settings.update({ hotkey: FN, localModelId: 'tiny', ...setup.settings });
+  const modelsDir = join(scratch, 'models');
+  await mkdir(modelsDir, { recursive: true });
+  await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
+  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
+  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_CLI, models, settings, arch: 'arm64' });
+  const helper = new FakeInputHelper({ clipboard: 'original', ...setup.helper });
+  const power = new FakePowerEvents();
+  const hotkey = new HotkeyService(helper, settings, power, () => Date.now(), logger);
+  await hotkey.start();
+  const capture = new InProcessCapture();
+  const lastTranscript = new LastTranscript();
+  const insertion = new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger);
+  const states: OverlayState[] = [];
+  const settingsOpened: string[] = [];
+  coordinator = new SessionCoordinator({
+    hotkey,
+    capture,
+    engine,
+    insertion,
+    lastTranscript,
+    helper,
+    settings,
+    overlay: (state) => states.push(state),
+    openSettings: () => settingsOpened.push('settings'),
+    logger,
+  });
+  coordinator.start();
+  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir };
+}
+
+async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
+  const starts = harness.capture.starts.length;
+  harness.helper.pressKey('down', FN.keycode);
+  await expect.poll(() => harness.capture.starts.length).toBe(starts + 1);
+  harness.capture.speak(stampedPcm(marker));
+}
+
+async function dictate(harness: Harness, marker: number): Promise<void> {
+  await pressAndSpeak(harness, marker);
+  harness.helper.pressKey('up', FN.keycode);
+}
+
+function kinds(states: OverlayState[]): string[] {
+  return states.map((state) => state.kind).filter((kind, index, all) => kind !== all[index - 1]);
+}
+
+function lastVisible(states: OverlayState[]): OverlayState | undefined {
+  return states.filter((state) => state.kind !== 'hidden').at(-1);
+}
+
+describe('SessionCoordinator', () => {
+  it('records, transcribes and inserts', async () => {
+    const harness = await prepared();
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    const [first] = harness.states;
+    expect(first).toEqual({ kind: 'recording', elapsedMs: expect.any(Number) as number, level: 0, language: 'SK' });
+    expect(first?.kind === 'recording' && first.elapsedMs < 100).toBe(true);
+    expect(harness.states.some((state) => state.kind === 'recording' && state.level === 0.2)).toBe(true);
+    expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.capture.starts).toEqual([{ deviceId: null, label: null }]);
+    const [call] = await readRecordedCalls(argsFile);
+    expect(call?.[call.indexOf('--language') + 1]).toBe('sk');
+    await expect.poll(() => harness.states.at(-1), { timeout: 3000 }).toEqual({ kind: 'hidden' });
+  });
+
+  it('shows the fallback microphone notice', async () => {
+    const harness = await prepared({ settings: { microphone: { deviceId: 'airpods-id', label: 'AirPods Pro' } } });
+
+    await dictate(harness, 3);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(3)]);
+    const recordings = harness.states.filter((state) => state.kind === 'recording');
+    expect(recordings.at(-1)).toMatchObject({ fallbackDevice: 'AirPods Pro', level: 0.2 });
+    expect(harness.capture.starts).toEqual([{ deviceId: 'airpods-id', label: 'AirPods Pro' }]);
+  });
+
+  it('shows no-model error and opens settings action', async () => {
+    const harness = await prepared({ settings: { localModelId: null } });
+
+    await dictate(harness, 5);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+
+    harness.coordinator.act('open-settings');
+
+    expect(harness.settingsOpened).toEqual(['settings']);
+  });
+
+  it('stops the microphone as soon as the model turns out to be broken', async () => {
+    const harness = await prepared();
+    await writeFile(join(harness.modelsDir, 'tiny.gguf'), 'XXXX');
+
+    await pressAndSpeak(harness, 5);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'open-settings' });
+    expect(harness.capture.recording).toBe(false);
+    harness.helper.pressKey('up', FN.keycode);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(harness.helper.pasted).toEqual([]);
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+  });
+
+  it('shows an error when the transcription program is missing', async () => {
+    const harness = await prepared({ binary: join(scratch, 'missing-transcribe-cli') });
+
+    await dictate(harness, 5);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({
+      kind: 'error',
+      message: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
+    });
+    expect(harness.helper.pasted).toEqual([]);
+  });
+
+  it('a new session while the previous one is transcribing keeps both results', async () => {
+    vi.stubEnv('FAKE_CLI_DELAY_S', '0.4');
+    const harness = await prepared();
+
+    await dictate(harness, 7);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
+    await dictate(harness, 9);
+
+    await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7), ONE_SECOND_TEXT(9)]);
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(9));
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    const firstProcessing = harness.states.findIndex((state) => state.kind === 'processing');
+    const secondStart = harness.states.findIndex((state, index) => index > firstProcessing && state.kind === 'recording');
+    const secondProcessing = harness.states.findIndex((state, index) => index > secondStart && state.kind === 'processing');
+    expect(harness.states.slice(secondStart, secondProcessing).every((state) => state.kind === 'recording')).toBe(true);
+    expect(kinds(harness.states.slice(secondProcessing))).toEqual(['processing', 'inserted']);
+  });
+
+  it('blocked insertion keeps the text as last transcript', async () => {
+    const harness = await prepared();
+
+    await pressAndSpeak(harness, 4);
+    harness.helper.frontmostApp = NOTES;
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'focus' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(4));
+
+    harness.coordinator.act('copy-last');
+
+    await expect.poll(() => harness.helper.clipboard).toBe(ONE_SECOND_TEXT(4));
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'copied' });
+  });
+
+  it('secure input blocks the paste and keeps the text', async () => {
+    const harness = await prepared();
+
+    await pressAndSpeak(harness, 4);
+    harness.helper.secureInputEnabled = true;
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'secure' });
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(4));
+  });
+
+  it('paste-last shortcut inserts the last transcript', async () => {
+    const harness = await prepared();
+    harness.helper.pressPasteLast();
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Zatiaľ nemáte žiadny prepis' });
+
+    harness.lastTranscript.set('previous');
+    harness.helper.pressPasteLast();
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['previous']);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    await expect(harness.coordinator.pasteLast()).resolves.toBe('pasted');
+    expect(harness.helper.pasted).toEqual(['previous', 'previous']);
+  });
+
+  it('copy-only outcomes say Skopírované and failures show an error', async () => {
+    const harness = await prepared({ settings: { insertion: 'clipboard' } });
+
+    await dictate(harness, 6);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'copied' });
+    expect(harness.helper.clipboard).toBe(ONE_SECOND_TEXT(6));
+    await harness.settings.update({ insertion: 'paste' });
+    harness.helper.clipboardWriteFails = true;
+
+    await dictate(harness, 8);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Text sa nepodarilo skopírovať do schránky' });
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(8));
+  });
+
+  it('discards the audio on lock, suspend, lost input and pause', async () => {
+    const harness = await prepared();
+    const interruptions: Array<() => void> = [
+      () => harness.power.emit('lock-screen'),
+      () => harness.power.emit('suspend'),
+      () => harness.helper.loseInput('helper-died'),
+      () => harness.coordinator.pause(),
+    ];
+
+    for (const interrupt of interruptions) {
+      harness.coordinator.resume();
+      await pressAndSpeak(harness, 2);
+      interrupt();
+      await expect.poll(() => harness.capture.recording).toBe(false);
+      await expect.poll(() => harness.states.at(-1)).toEqual({ kind: 'hidden' });
+      harness.helper.pressKey('up', FN.keycode);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+    expect(harness.coordinator.isPaused()).toBe(true);
+    harness.helper.pressKey('down', FN.keycode);
+    expect(harness.capture.starts).toHaveLength(4);
+  });
+
+  it('the 10 minute limit stops the session and transcribes what was recorded', async () => {
+    const harness = await prepared();
+
+    await pressAndSpeak(harness, 5);
+    harness.capture.reachLimit();
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(5)]);
+    expect(harness.states).toContainEqual({ kind: 'processing', notice: 'limit-reached' });
+    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => harness.capture.starts).toHaveLength(2);
+  });
+
+  it('reports a microphone that cannot start and inserts nothing', async () => {
+    const harness = await prepared();
+    harness.capture.failNextStart = true;
+
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    harness.helper.pressKey('up', FN.keycode);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+  });
+
+  it('reports a microphone failure that arrives after the key was released', async () => {
+    const harness = await prepared();
+    harness.capture.failNextStart = true;
+    harness.capture.failureDelayMs = 100;
+
+    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+  });
+
+  it('reports a failed transcription and silence without inserting', async () => {
+    const harness = await prepared();
+
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.helper.pressKey('up', FN.keycode);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
+
+    vi.stubEnv('FAKE_CLI_MODE', 'fail');
+    await dictate(harness, 3);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+  });
+
+  it('dispose aborts a running transcription and inserts nothing', async () => {
+    vi.stubEnv('FAKE_CLI_MODE', 'hang');
+    const harness = await prepared();
+
+    await dictate(harness, 3);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
+    harness.coordinator.dispose();
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(lastVisible(harness.states)).toEqual({ kind: 'processing' });
+  });
+});
