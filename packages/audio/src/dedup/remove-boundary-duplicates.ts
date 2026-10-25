@@ -1,5 +1,5 @@
 import { normalizeWord } from './normalize-word';
-import { normalizedWordsMatch } from './words-match';
+import { endingsDifferOnly, normalizedWordsMatch } from './words-match';
 
 type Token = { raw: string; word: string };
 
@@ -13,6 +13,9 @@ function tokenize(text: string): Token[] {
 
 function overlapMatches(previous: string[], next: string[], length: number): boolean {
   const offset = previous.length - length;
+  if (length === 1) {
+    return endingsDifferOnly(previous[offset] ?? '', next[0] ?? '');
+  }
   for (let index = 0; index < length; index += 1) {
     if (!normalizedWordsMatch(previous[offset + index] ?? '', next[index] ?? '')) {
       return false;

@@ -10,6 +10,7 @@ type Lane<T> = {
 
 export class FairJobQueue<T extends { job: TranscriptionJob }> {
   private readonly lanes = new Map<string, Lane<T>>();
+  private readonly runningIn = new Map<T, Lane<T>>();
   private lastFinalDevice: string | undefined;
   private lastPartialDevice: string | undefined;
 
@@ -30,7 +31,8 @@ export class FairJobQueue<T extends { job: TranscriptionJob }> {
   }
 
   complete(entry: T): void {
-    const lane = this.lanes.get(entry.job.deviceId);
+    const lane = this.runningIn.get(entry);
+    this.runningIn.delete(entry);
     if (lane === undefined) {
       return;
     }
@@ -79,6 +81,7 @@ export class FairJobQueue<T extends { job: TranscriptionJob }> {
     }
     this.lastFinalDevice = deviceId;
     lane.runningFinals += 1;
+    this.runningIn.set(entry, lane);
     return entry;
   }
 
@@ -92,6 +95,7 @@ export class FairJobQueue<T extends { job: TranscriptionJob }> {
     this.lastPartialDevice = deviceId;
     lane.partial = undefined;
     lane.runningPartials += 1;
+    this.runningIn.set(entry, lane);
     return entry;
   }
 

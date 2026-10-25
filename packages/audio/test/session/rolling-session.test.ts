@@ -162,6 +162,22 @@ describe('RollingSession', () => {
     ]);
   });
 
+  it('a throwing event listener rejects finish instead of leaking an unhandled rejection', async () => {
+    const { clock, open } = harness(new ImmediateTranscriber());
+    const listenerError = new Error('overlay crashed');
+    const { session } = open('a', true, {
+      onEvent: () => {
+        throw listenerError;
+      },
+    });
+
+    await feed(clock, [session], speech, 0, 32000);
+    const error: unknown = await session.finish().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(SegmentFailedError);
+    expect(error).toMatchObject({ segmentId: 0, cause: listenerError });
+  });
+
   it('push after finish throws', async () => {
     const { clock, open } = harness(new ImmediateTranscriber());
     const { session } = open('a', false);

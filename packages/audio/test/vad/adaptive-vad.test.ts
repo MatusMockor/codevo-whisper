@@ -68,5 +68,7 @@ describe('AdaptiveVad', () => {
     expect(() => validateVadConfig({ ...DEFAULT_VAD_CONFIG, frameMs: 10 })).toThrow(RangeError);
     expect(() => validateVadConfig({ ...DEFAULT_VAD_CONFIG, releaseRatio: 0.6 })).toThrow(RangeError);
     expect(() => validateVadConfig({ ...DEFAULT_VAD_CONFIG, onsetRatio: 0 })).toThrow(RangeError);
+    expect(() => validateVadConfig({ ...DEFAULT_VAD_CONFIG, silenceDb: Number.NaN })).toThrow(RangeError);
+    expect(() => validateVadConfig({ ...DEFAULT_VAD_CONFIG, floorWindowMs: Number.POSITIVE_INFINITY })).toThrow(RangeError);
   });
 });

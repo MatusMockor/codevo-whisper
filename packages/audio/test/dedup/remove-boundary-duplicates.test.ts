@@ -35,6 +35,11 @@ describe('removeBoundaryDuplicates', () => {
     expect(removeBoundaryDuplicates('a potom zahodíme', 'zahodím.', 4)).toBe('');
   });
 
+  it('a single-word overlap only matches when the words differ in the ending', () => {
+    expect(removeBoundaryDuplicates('all right', 'night falls', 4)).toBe('night falls');
+    expect(removeBoundaryDuplicates('potom to zahodíme.', 'zahodím a hotovo', 4)).toBe('a hotovo');
+  });
+
   it('keeps the next text when the previous one is empty', () => {
     expect(removeBoundaryDuplicates('', 'nový text', 4)).toBe('nový text');
   });

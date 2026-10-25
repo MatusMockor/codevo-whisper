@@ -61,6 +61,15 @@ describe('PcmBuffer', () => {
     expect([...buffer.slice(79998, 80000)]).toEqual([...rampBytes(79998, 2)]);
   });
 
+  it('rejects fractional sample positions without changing the buffer', () => {
+    const buffer = new PcmBuffer();
+    buffer.append(rampBytes(0, 10));
+
+    expect(() => buffer.discardBefore(0.5)).toThrow(RangeError);
+    expect(() => buffer.slice(0, 1.5)).toThrow(RangeError);
+    expect([...buffer.slice(0, 2)]).toEqual([...rampBytes(0, 2)]);
+  });
+
   it('slice before startSample throws RangeError', () => {
     const buffer = new PcmBuffer();
     buffer.append(rampBytes(0, 100));

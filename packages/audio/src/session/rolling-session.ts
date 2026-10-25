@@ -88,7 +88,12 @@ export class RollingSession {
     const pcm = this.buffer.slice(segment.startSample, segment.endSample);
     this.buffer.discardBefore(this.segmenter.openStartSample);
     const job = { deviceId: this.options.deviceId, kind: 'final' as const, segmentId: segment.id, revision, pcm };
-    this.finals.push(this.options.submitter.submit(job).then((outcome) => this.onFinal(segment.id, outcome)));
+    this.finals.push(
+      this.options.submitter
+        .submit(job)
+        .then((outcome) => this.onFinal(segment.id, outcome))
+        .catch((error: unknown) => this.recordFailure(segment.id, error)),
+    );
   }
 
   private onFinal(segmentId: number, outcome: JobOutcome): void {
@@ -100,7 +105,7 @@ export class RollingSession {
       return;
     }
     if (outcome.status === 'failed') {
-      this.failure ??= { segmentId, error: outcome.error };
+      this.recordFailure(segmentId, outcome.error);
     }
     this.emit(this.assembler.skipFinal(segmentId));
   }
@@ -121,15 +126,24 @@ export class RollingSession {
     const leadInSamples = this.segmenter.openLeadInSamples;
     const revision = this.assembler.nextPartialRevision(segmentId);
     const pcm = this.buffer.slice(start, this.buffer.endSample);
-    void this.options.submitter.submit({ deviceId: this.options.deviceId, kind: 'partial', segmentId, revision, pcm }).then((outcome) => {
-      if (this.state === 'cancelled' || outcome.status !== 'done') {
-        return;
-      }
-      const event = this.assembler.acceptPartial(segmentId, revision, outcome.text, leadInSamples);
-      if (event !== undefined) {
-        this.emit([event]);
-      }
-    });
+    void this.options.submitter
+      .submit({ deviceId: this.options.deviceId, kind: 'partial', segmentId, revision, pcm })
+      .then((outcome) => this.onPartial(segmentId, revision, leadInSamples, outcome))
+      .catch((error: unknown) => this.recordFailure(segmentId, error));
+  }
+
+  private onPartial(segmentId: number, revision: number, leadInSamples: number, outcome: JobOutcome): void {
+    if (this.state === 'cancelled' || outcome.status !== 'done') {
+      return;
+    }
+    const event = this.assembler.acceptPartial(segmentId, revision, outcome.text, leadInSamples);
+    if (event !== undefined) {
+      this.emit([event]);
+    }
+  }
+
+  private recordFailure(segmentId: number, error: unknown): void {
+    this.failure ??= { segmentId, error };
   }
 
   private complete(resolve: (text: string) => void, reject: (error: Error) => void): void {

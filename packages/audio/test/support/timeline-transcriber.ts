@@ -20,21 +20,27 @@ function inflect(word: string): string {
 
 export class TimelineTranscriber implements SegmentTranscriber {
   private readonly offsets = new Map<string, number>();
+  private readonly ambiguous = new Set<string>();
 
   constructor(
     source: Int16Array,
     private readonly blockSamples = 4800,
   ) {
-    for (let offset = source.length - KEY_SAMPLES; offset >= 0; offset -= 1) {
-      this.offsets.set(source.subarray(offset, offset + KEY_SAMPLES).join(','), offset);
+    for (let offset = 0; offset + KEY_SAMPLES <= source.length; offset += 1) {
+      const key = source.subarray(offset, offset + KEY_SAMPLES).join(',');
+      if (this.offsets.has(key)) {
+        this.ambiguous.add(key);
+      }
+      this.offsets.set(key, offset);
     }
   }
 
   transcribe(pcm: Uint8Array): Promise<string> {
     const samples = decodePcm16le(pcm);
-    const offset = this.offsets.get(samples.subarray(0, KEY_SAMPLES).join(',')) ?? -1;
-    if (offset < 0) {
-      return Promise.reject(new Error('audio not found in the timeline source'));
+    const key = samples.subarray(0, KEY_SAMPLES).join(',');
+    const offset = this.offsets.get(key);
+    if (offset === undefined || this.ambiguous.has(key)) {
+      return Promise.reject(new Error('job audio does not map to one position in the timeline source'));
     }
     const words = this.blocksIn(offset, offset + samples.length).map(wordFor);
     const first = words[0];

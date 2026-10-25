@@ -25,6 +25,9 @@ function isRatio(value: number): boolean {
 }
 
 export function validateVadConfig(config: VadConfig): VadConfig {
+  if (!Object.values(config).every((value) => Number.isFinite(value))) {
+    throw new RangeError('VAD settings must be finite numbers');
+  }
   if (config.frameMs < 20 || config.frameMs > 30) {
     throw new RangeError(`VAD frame must be 20-30 ms, got ${config.frameMs}`);
   }

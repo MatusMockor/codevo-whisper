@@ -2,6 +2,12 @@ import { decodePcm16le, PCM_BYTES_PER_SAMPLE } from './pcm-format';
 
 const INITIAL_CAPACITY_BYTES = 64 * 1024;
 
+function assertSamplePosition(sample: number): void {
+  if (!Number.isSafeInteger(sample)) {
+    throw new RangeError(`PCM sample position must be an integer, got ${sample}`);
+  }
+}
+
 export class PcmBuffer {
   private bytes = new Uint8Array(INITIAL_CAPACITY_BYTES);
   private usedBytes = 0;
@@ -28,6 +34,8 @@ export class PcmBuffer {
   }
 
   slice(fromSample: number, toSample: number): Uint8Array {
+    assertSamplePosition(fromSample);
+    assertSamplePosition(toSample);
     if (fromSample < this.firstSample || toSample > this.endSample || fromSample > toSample) {
       throw new RangeError(`PCM range ${fromSample}-${toSample} is outside ${this.firstSample}-${this.endSample}`);
     }
@@ -35,6 +43,7 @@ export class PcmBuffer {
   }
 
   discardBefore(sample: number): void {
+    assertSamplePosition(sample);
     const target = Math.min(Math.max(sample, this.firstSample), this.endSample);
     const dropBytes = this.offsetOf(target);
     this.bytes.copyWithin(0, dropBytes, this.usedBytes);

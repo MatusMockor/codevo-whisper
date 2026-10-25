@@ -148,5 +148,8 @@ describe('Segmenter', () => {
     expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, minSegmentMs: 16000 })).toThrow(RangeError);
     expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, overlapMs: 10000 })).toThrow(RangeError);
     expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, settledPauseMs: 100 })).toThrow(RangeError);
+    expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, overlapMs: -100 })).toThrow(RangeError);
+    expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, preRollMs: Number.NaN })).toThrow(RangeError);
+    expect(() => validateSegmentConfig({ ...DEFAULT_SEGMENT_CONFIG, targetMs: Number.NaN })).toThrow(RangeError);
   });
 });

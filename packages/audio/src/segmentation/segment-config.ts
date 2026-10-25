@@ -19,6 +19,12 @@ export const DEFAULT_SEGMENT_CONFIG: SegmentConfig = {
 };
 
 export function validateSegmentConfig(config: SegmentConfig): SegmentConfig {
+  if (!Object.values(config).every((value) => Number.isFinite(value))) {
+    throw new RangeError('Segment durations must be finite numbers');
+  }
+  if (config.overlapMs < 0 || config.preRollMs < 0) {
+    throw new RangeError('Segment overlap and pre-roll must not be negative');
+  }
   if (config.minPauseMs <= 0 || config.settledPauseMs < config.minPauseMs) {
     throw new RangeError('Segment pauses need 0 < minPauseMs <= settledPauseMs');
   }

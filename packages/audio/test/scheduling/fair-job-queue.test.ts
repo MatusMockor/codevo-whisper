@@ -128,6 +128,22 @@ describe('FairJobQueue', () => {
     expect(queue.offer(entry('a', 'partial'))).toEqual([]);
   });
 
+  it('completing a job of a removed device does not touch the new lane of that device', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('a', 'final'));
+    const old = queue.take();
+    queue.removeDevice('a');
+    queue.offer(entry('a', 'final'));
+    queue.take();
+    if (old !== undefined) {
+      queue.complete(old);
+    }
+    const partial = entry('a', 'partial');
+
+    expect(old).toBeDefined();
+    expect(queue.offer(partial)).toEqual([{ entry: partial, reason: 'finalizing' }]);
+  });
+
   it('removeDevice cancels queued jobs and keeps other devices', () => {
     const queue = new FairJobQueue<Entry>();
     const final = entry('a', 'final');
