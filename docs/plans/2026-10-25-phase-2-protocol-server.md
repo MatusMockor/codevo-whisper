@@ -1,4 +1,4 @@
-# Phase 1 - Protocol + Server Core Implementation Plan
+# Phase 2 - Protocol + Server Core Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 24 LTS, pnpm 10.34.5, TypeScript (strict, ESM), Vitest, ESLint flat config, `@noble/curves`, `@noble/ciphers`, `@noble/hashes`, `ws`, `qrcode`, Docker Compose, transcribe.cpp `8facde6fcd8fb9caa585a5788ab450df6e8ec7db`.
 
-**Spec:** `docs/specs/2026-10-25-codevo-whisper-design.md` (sections 3, 4, 8, 9, 12 phase 1). Phase 0 findings in `docs/spikes/` take precedence where they changed the spec.
+**Spec:** `docs/specs/2026-10-25-codevo-whisper-design.md` (sections 3, 4, 8, 9, 12 phase 2). Phase 0 findings in `docs/spikes/` take precedence where they changed the spec.
 
 ## Global Constraints
 
