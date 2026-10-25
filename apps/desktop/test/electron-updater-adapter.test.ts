@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ElectronUpdaterAdapter, type UpdaterLike, type UpdaterLogger } from '../src/main/updates/electron-updater-adapter';
 import { loadElectronUpdater } from '../src/main/updates/load-electron-updater';
 import { RecordingLogger } from './recording-logger';
@@ -90,6 +90,27 @@ describe('ElectronUpdaterAdapter', () => {
 
     await expect(installing).rejects.toThrow('Code signature did not pass validation');
     expect(updater.installs).toEqual([[false, true]]);
+  });
+
+  it('gives up on an install that neither restarts the app nor fails within two minutes', async () => {
+    vi.useFakeTimers();
+    try {
+      const { updater, adapter } = harness();
+      const installing = adapter.install();
+      const outcome = installing.then(
+        () => 'resolved',
+        (error: unknown) => String(error),
+      );
+
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(updater.listenerCount('error')).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await outcome).toBe('Error: The update did not restart the app in time');
+      expect(updater.listenerCount('error')).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('logs an updater error that no call is waiting for instead of throwing', () => {

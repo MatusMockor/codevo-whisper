@@ -23,11 +23,13 @@ export type UpdaterLike = {
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
   on(event: 'error', listener: ErrorListener): unknown;
   on(event: 'download-progress', listener: ProgressListener): unknown;
-  once(event: 'error', listener: ErrorListener): unknown;
+  removeListener(event: 'error', listener: ErrorListener): unknown;
   removeListener(event: 'download-progress', listener: ProgressListener): unknown;
 };
 
 const LOG_PREFIX = 'electron-updater';
+
+const INSTALL_TIMEOUT_MS = 120_000;
 
 function updaterLogger(logger: Logger): UpdaterLogger {
   return {
@@ -69,7 +71,13 @@ export class ElectronUpdaterAdapter implements AppUpdater {
 
   install(): Promise<void> {
     return new Promise((_resolve, reject) => {
-      this.updater.once('error', reject);
+      const fail: ErrorListener = (error) => {
+        clearTimeout(timer);
+        this.updater.removeListener('error', fail);
+        reject(error);
+      };
+      const timer = setTimeout(() => fail(new Error('The update did not restart the app in time')), INSTALL_TIMEOUT_MS);
+      this.updater.on('error', fail);
       this.updater.quitAndInstall(false, true);
     });
   }
