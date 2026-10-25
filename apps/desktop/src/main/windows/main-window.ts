@@ -1,5 +1,6 @@
 import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
 import { fileURLToPath } from 'node:url';
+import { loadSource } from './load-source';
 import { rendererSource } from './renderer-source';
 
 const APP_TITLE = 'Codevo Whisper';
@@ -9,14 +10,6 @@ function windowChrome(): BrowserWindowConstructorOptions {
     return {};
   }
   return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 } };
-}
-
-function loadRenderer(window: BrowserWindow): Promise<void> {
-  const source = rendererSource();
-  if (source.kind === 'dev-server') {
-    return window.loadURL(source.url);
-  }
-  return window.loadFile(source.path);
 }
 
 export function createMainWindow(): BrowserWindow {
@@ -39,6 +32,6 @@ export function createMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     window.show();
   });
-  void loadRenderer(window);
+  void loadSource(window, rendererSource());
   return window;
 }
