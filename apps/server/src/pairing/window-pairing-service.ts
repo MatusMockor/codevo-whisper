@@ -24,6 +24,7 @@ export type WindowPairingDeps = {
 };
 
 type PairingWindow = {
+  serverKey: KeyPair;
   secret: Uint8Array;
   expiresAt: number;
   ttlMs: number;
@@ -36,20 +37,34 @@ type PairingWindow = {
 export class WindowPairingService implements PairingService {
   private window: PairingWindow | null = null;
   private generation = 0;
+  private rotating = false;
 
   constructor(private readonly deps: WindowPairingDeps) {}
 
   open(operator: PairingOperator, ttlMs = DEFAULT_PAIRING_TTL_MS): { token: string; expiresAt: number } {
+    if (this.rotating) {
+      throw new Error('the server key rotation is in progress, try again in a moment');
+    }
     this.close();
+    const serverKey = this.deps.serverKey();
     const secret = createPairingSecret();
     const expiresAt = this.deps.clock() + ttlMs;
     const timer = setTimeout(() => this.expire(window), ttlMs);
     timer.unref();
-    const window: PairingWindow = { secret, expiresAt, ttlMs, operator, timer, failures: new Map(), totalFailures: 0 };
+    const window: PairingWindow = { serverKey, secret, expiresAt, ttlMs, operator, timer, failures: new Map(), totalFailures: 0 };
     this.window = window;
     operator.onDisconnect(() => this.discard(window));
-    const token = encodePairingToken({ serverPublicKey: this.deps.serverKey().publicKey, secret, endpoint: this.deps.endpoint });
+    const token = encodePairingToken({ serverPublicKey: serverKey.publicKey, secret, endpoint: this.deps.endpoint });
     return { token, expiresAt };
+  }
+
+  beginRotation(): void {
+    this.rotating = true;
+    this.close();
+  }
+
+  endRotation(): void {
+    this.rotating = false;
   }
 
   isOpen(): boolean {
@@ -105,7 +120,7 @@ export class WindowPairingService implements PairingService {
       window.operator.notify({ event: 'abandoned' });
       return;
     }
-    if (this.generation !== generation) {
+    if (this.generation !== generation || this.rotating || this.deps.serverKey() !== window.serverKey) {
       channel.fail('pairing_closed');
       window.operator.notify({ event: 'expired' });
       return;
