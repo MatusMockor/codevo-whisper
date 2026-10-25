@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the v prefix, for example 1.2.0
+        required: true
+        type: string
+      publish:
+        description: Create and publish the GitHub release (off = build, notarize and verify only)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: scripts/release/resolve-version.sh
+
+  checks:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build-mac:
+    needs: [version, checks]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    env:
+      ARCH: ${{ matrix.arch }}
+      VERSION: ${{ needs.version.outputs.version }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      NOTARY_TIMEOUT: 150m
+      STAGE_DIR: apps/desktop/release/stage/${{ matrix.arch }}
+      DIST_DIR: apps/desktop/release/dist/${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install build tools
+        run: command -v ninja || brew install ninja
+      - name: Import the Developer ID certificate
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: scripts/release/import-certificate.sh
+      - name: Write the App Store Connect API key
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+        run: scripts/release/write-api-key.sh
+      - name: Build native binaries
+        run: scripts/release/build-native.sh "$ARCH"
+      - name: Sign native binaries
+        run: scripts/release/sign-native.sh "$ARCH"
+      - name: Build the desktop bundle
+        run: pnpm --filter @codevo-whisper/desktop build
+      - name: Package and sign the app
+        run: scripts/release/package-app.sh "$ARCH" "$VERSION"
+      - name: Notarize and staple the app
+        run: |
+          source scripts/release/mac-app-path.sh
+          scripts/release/notarize-app.sh "$(mac_app_path "$STAGE_DIR" "$ARCH")"
+      - name: Build DMG and ZIP from the stapled app
+        run: scripts/release/package-distributables.sh "$ARCH" "$VERSION"
+      - name: Notarize and staple the DMG
+        run: scripts/release/notarize-dmg.sh "$DIST_DIR/codevo-whisper-$VERSION-$ARCH-mac.dmg"
+      - name: Release gates
+        run: |
+          source scripts/release/mac-app-path.sh
+          app="$(mac_app_path "$STAGE_DIR" "$ARCH")"
+          scripts/release/verify-signature.sh "$app" "$ARCH"
+          scripts/release/verify-notarization.sh "$app" "$DIST_DIR/codevo-whisper-$VERSION-$ARCH-mac.dmg"
+          node scripts/release/verify-fuses.ts "$app" apps/desktop/electron-builder.yml
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mac-${{ matrix.arch }}
+          path: ${{ env.DIST_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/codevo-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+
+  publish:
+    needs: [version, build-mac]
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @codevo-whisper/scripts
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: mac-*
+          path: artifacts
+      - name: Merge and verify the update feed
+        run: scripts/release/assemble-mac-feed.sh artifacts feed
+      - name: Draft, re-verify and publish the release
+        run: scripts/release/publish-github-release.sh "$VERSION" feed

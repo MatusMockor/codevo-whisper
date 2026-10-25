@@ -1,0 +1,9 @@
+version: 1.2.0
+files:
+  - url: codevo-whisper-1.2.0-x64-mac.zip
+    sha512: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb==
+    size: 102
+    blockMapSize: 12
+path: codevo-whisper-1.2.0-x64-mac.zip
+sha512: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb==
+releaseDate: '2026-10-25T11:00:00.000Z'
