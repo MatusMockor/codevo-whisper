@@ -6,6 +6,7 @@ import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
 import type { SessionCoordinator } from '../session/session-coordinator';
 import type { SettingsStore } from '../settings/settings-store';
+import type { UpdateService } from '../updates/update-service';
 import type { OverlayState } from '../../shared/overlay-contract';
 import { SPIN_FRAME_MS, TrayIcons } from './tray-icons';
 import { trayMenuTemplate, type TrayMenuActions, type TrayMenuModel } from './tray-menu-template';
@@ -19,6 +20,7 @@ export type TrayMenuDeps = {
   settings: Pick<SettingsStore, 'get' | 'update'>;
   lastTranscript: Pick<LastTranscript, 'get'>;
   models: Pick<ActiveModel, 'activeLanguageHint'>;
+  updates: Pick<UpdateService, 'status' | 'install'>;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -89,6 +91,8 @@ export class TrayMenu {
       microphone: settings.microphone,
       language: settings.language,
       autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
+      readyUpdate: this.readyUpdate(),
+      installingUpdate: this.installingUpdate(),
     };
   }
 
@@ -104,10 +108,39 @@ export class TrayMenu {
       openApp: () => this.deps.openApp(),
       openSettings: () => this.deps.openSettings(),
       quit: () => this.deps.quit(),
+      installUpdate: () => this.installUpdate(),
     };
   }
 
+  private readyUpdate(): string | null {
+    const phase = this.deps.updates.status().phase;
+    return phase.kind === 'ready' ? phase.version : null;
+  }
+
+  private installingUpdate(): boolean {
+    const { kind } = this.deps.updates.status().phase;
+    return kind === 'installing' || kind === 'stalled';
+  }
+
+  private installUpdate(): void {
+    this.deps.updates
+      .install()
+      .then((outcome) => {
+        if (outcome === 'restarting') {
+          return;
+        }
+        this.deps.logger.info('The update was not installed from the tray', { outcome });
+      })
+      .catch((error: unknown) => {
+        this.deps.logger.error('Installing the update from the tray failed', error);
+      });
+  }
+
   private togglePause(): void {
+    if (this.installingUpdate()) {
+      this.deps.logger.info('Dictation stays paused while the update installs', null);
+      return;
+    }
     const { coordinator } = this.deps;
     const toggle = coordinator.isPaused() ? () => coordinator.resume() : () => coordinator.pause();
     toggle();

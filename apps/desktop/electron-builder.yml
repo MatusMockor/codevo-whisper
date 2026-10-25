@@ -8,6 +8,7 @@ directories:
 files:
   - out/**
   - '!out/main/fake-input-helper-*.js'
+  - '!out/main/fake-app-updater-*.js'
   - package.json
 extraResources:
   - from: resources/model-catalog.json
@@ -49,6 +50,7 @@ mac:
   notarize: false
   extendInfo:
     NSMicrophoneUsageDescription: Codevo Whisper potrebuje mikrofón na diktovanie. Mikrofón je zapnutý iba počas diktovania.
+    ElectronSquirrelPreventDowngrades: true
 dmg:
   sign: true
   writeUpdateInfo: false

@@ -32,3 +32,7 @@ From the repository root:
 - `pnpm --filter @codevo-whisper/desktop test:e2e` - build the desktop app and run the Playwright Electron tests
 
 If your shell exports `ELECTRON_RUN_AS_NODE`, Electron starts as plain Node. The `dev` and `test:e2e` scripts unset it; unset it yourself when you launch Electron any other way.
+
+## Updates
+
+The desktop app checks GitHub Releases in the background and downloads a new version; it installs only after you click "Reštartovať a aktualizovať" (Nastavenia > Systém or the tray menu). macOS updates are accepted only when signed by the same Developer ID team (U574W69TH6) and bundle ID. Linux AppImage updates are verified only by HTTPS and the sha512 checksum from the same release (no publisher signature); deb installs show a notice with a download link instead of updating themselves. Details: `docs/operations/release.md`.

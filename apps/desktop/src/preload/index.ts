@@ -7,6 +7,7 @@ import type { ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionsStatus } from '../shared/permissions';
 import type { Settings } from '../shared/settings';
 import type { DayStats } from '../shared/stats';
+import type { InstallOutcome, UpdateStatus } from '../shared/updates';
 
 function subscribe<E extends IpcEventName>(event: E, listener: IpcEventListener<E>): () => void {
   if (!Object.hasOwn(EVENT_CHANNELS, event)) {
@@ -47,6 +48,10 @@ const api: IpcApi = {
   getMicrophones: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMicrophones) as Promise<AudioDevice[]>,
   startMicrophoneMeter: (microphone) => ipcRenderer.invoke(INVOKE_CHANNELS.startMicrophoneMeter, microphone) as Promise<void>,
   stopMicrophoneMeter: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMicrophoneMeter) as Promise<void>,
+  getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,
+  checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,
+  installUpdate: () => ipcRenderer.invoke(INVOKE_CHANNELS.installUpdate) as Promise<InstallOutcome>,
+  openUpdateDownload: () => ipcRenderer.invoke(INVOKE_CHANNELS.openUpdateDownload) as Promise<void>,
   on: subscribe,
 };
 

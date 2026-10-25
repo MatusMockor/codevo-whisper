@@ -51,3 +51,9 @@ export function validateMicrophone(input: unknown): MicrophoneSetting {
   }
   return input;
 }
+
+export function rejectArguments(args: readonly unknown[]): void {
+  if (args.length > 0) {
+    throw new IpcValidationError('Unexpected arguments');
+  }
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Switch } from '../components/Switch';
 import { SettingsGroup, SettingsRow } from './SettingsGroup';
+import { UpdateRow } from './UpdateRow';
 import { saveSettings } from './use-settings';
 
 type ResetState = 'idle' | 'confirm' | 'done' | 'failed';
@@ -52,6 +53,7 @@ export function SystemSection({ launchAtLogin }: { launchAtLogin: boolean }) {
         <Switch label="Spustiť po prihlásení" checked={launchAtLogin} onChange={(checked) => saveSettings({ launchAtLogin: checked })} />
       </SettingsRow>
       <ResetStats />
+      <UpdateRow />
     </SettingsGroup>
   );
 }
