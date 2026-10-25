@@ -65,7 +65,7 @@ test.describe('settings api', () => {
 
   test('rejects an invalid patch and keeps the settings', async () => {
     const outcome = await page.evaluate(async () => {
-      const patch = JSON.parse('{"engineOrder":["server"]}') as Partial<Settings>;
+      const patch = JSON.parse('{"engineOrder":["server","server"]}') as Partial<Settings>;
       try {
         await window.codevo.updateSettings(patch);
         return 'accepted';

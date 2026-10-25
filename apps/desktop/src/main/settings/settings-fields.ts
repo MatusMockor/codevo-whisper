@@ -1,4 +1,4 @@
-import { HOTKEY_KEYCODES, type Settings } from '../../shared/settings';
+import { HOTKEY_KEYCODES, isEngineOrder, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 
@@ -50,16 +50,12 @@ function isMicrophone(value: unknown): value is Settings['microphone'] {
   return isNullableText(value['deviceId']) && isNullableText(value['label']);
 }
 
-function isPhaseOneEngineOrder(value: unknown): value is Settings['engineOrder'] {
-  return Array.isArray(value) && value.length === 1 && value[0] === 'local';
-}
-
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   hotkey: isHotkey,
   mode: oneOf(['hold', 'toggle']),
   language: oneOf(['sk', 'en', 'cs', 'auto']),
   microphone: isMicrophone,
-  engineOrder: isPhaseOneEngineOrder,
+  engineOrder: isEngineOrder,
   localModelId: isNullableText,
   insertion: oneOf(['paste', 'clipboard']),
   overlay: oneOf(['indicator']),

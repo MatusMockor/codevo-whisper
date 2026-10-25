@@ -42,8 +42,14 @@ describe('validateSettingsPatch', () => {
     expect(() => validateSettingsPatch({ hotkey: { keycode: 62, label: 'Pravý ⌃ Control', modifiers: 1 } })).toThrow(IpcValidationError);
   });
 
-  it('rejects engineOrder containing server in this phase', () => {
-    for (const engineOrder of [['server'], ['local', 'server'], ['server', 'local'], [], ['local', 'local']]) {
+  it('accepts the four engine orders', () => {
+    for (const engineOrder of [['local'], ['server'], ['server', 'local'], ['local', 'server']]) {
+      expect(validateSettingsPatch({ engineOrder })).toEqual({ engineOrder });
+    }
+  });
+
+  it('rejects any other engine order', () => {
+    for (const engineOrder of [[], ['server', 'server'], ['local', 'local'], ['cloud'], ['local', 'server', 'local'], 'server', [null]]) {
       expect(() => validateSettingsPatch({ engineOrder })).toThrow(IpcValidationError);
     }
   });

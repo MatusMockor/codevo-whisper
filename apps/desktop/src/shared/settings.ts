@@ -12,6 +12,20 @@ export type MicrophoneSetting = { deviceId: string | null; label: string | null 
 
 export type EngineId = 'local' | 'server';
 
+export const ENGINE_ORDERS: ReadonlyArray<ReadonlyArray<EngineId>> = Object.freeze([
+  Object.freeze(['local'] as const),
+  Object.freeze(['server'] as const),
+  Object.freeze(['server', 'local'] as const),
+  Object.freeze(['local', 'server'] as const),
+]);
+
+export function isEngineOrder(value: unknown): value is Array<EngineId> {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  return ENGINE_ORDERS.some((order) => order.length === value.length && order.every((engine, index) => engine === value[index]));
+}
+
 export type InsertionMode = 'paste' | 'clipboard';
 
 export type OverlayMode = 'indicator' | 'live';
