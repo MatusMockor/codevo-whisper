@@ -23,7 +23,7 @@
 - Tests: real collaborators. The only fakes allowed are the STT HTTP service (fake server implementing the contract above) and the `transcribe-cli` binary (fake executable script).
 - Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Docker image builds only in Task 9 and Task 10 where the image is the deliverable.
 - No code comments. Guard clauses, no `else`. Small focused files, interfaces for swappable parts (repositories, STT client, clock).
-- Commits go to branch `phase-1-protocol-server`; push and PR only after the owner's OK.
+- Commit after every task directly to `main` (owner's decision). Push to GitHub only after the owner's OK.
 
 ## Review Focus
 
@@ -51,7 +51,6 @@
 - [ ] **Step 5: Commit**
 
 ```bash
-git checkout -b phase-1-protocol-server
 git add -A
 git commit -m "chore: monorepo scaffold"
 ```
@@ -318,4 +317,4 @@ git commit -m "chore: monorepo scaffold"
 - [ ] **Step 1:** `coderabbit review --agent --base main`; fix valid findings, note rejected ones for the PR.
 - [ ] **Step 2:** Security review of `packages/protocol` and `apps/server/src/gateway` + `src/pairing` by gpt-6.1-sol (`codex exec -m gpt-6.1-sol -s read-only`), with the spec section 4 as the reference. Fix valid findings.
 - [ ] **Step 3:** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 4:** Owner OK, then push the branch and open the PR.
+- [ ] **Step 4:** Owner OK, then push `main`.
