@@ -175,6 +175,25 @@ describe('FairJobQueue', () => {
     expect(queue.stats()).toEqual({ sessions: 1, lanes: 1 });
   });
 
+  it('removeQueued drops only queued jobs and keeps the running one accounted', () => {
+    const queue = new FairJobQueue<Entry>();
+    queue.offer(entry('a', 'partial', 's'));
+    const running = takeDefined(queue);
+    const queuedFinal = entry('a', 'final', 's');
+    queue.offer(queuedFinal);
+    const other = entry('b', 'final', 'other');
+    queue.offer(other);
+
+    expect(queue.removeQueued('s')).toEqual([{ entry: queuedFinal, reason: 'cancelled' }]);
+    expect(queue.offer(entry('a', 'partial', 's'))).toMatchObject([{ reason: 'partial-in-flight' }]);
+    queue.releaseSession('s');
+    expect(queue.stats().sessions).toBe(2);
+    queue.complete(running);
+    expect(drain(queue)).toEqual([other]);
+    queue.releaseSession('other');
+    expect(queue.stats()).toEqual({ sessions: 0, lanes: 0 });
+  });
+
   it('removeSession prunes lanes left empty', () => {
     const queue = new FairJobQueue<Entry>();
     queue.offer(entry('a', 'final', 'first'));

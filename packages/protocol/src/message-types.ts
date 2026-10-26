@@ -17,7 +17,7 @@ export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'start'; sessionId: string; language: Language }
+  | { type: 'start'; sessionId: string; language: Language; partials?: boolean }
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }
   | { type: 'cancel' }

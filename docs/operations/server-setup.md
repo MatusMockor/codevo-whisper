@@ -3,7 +3,7 @@
 The server is a Docker Compose project with two services:
 
 - `gateway` - the encrypted WebSocket endpoint for paired devices, the admin socket and the `codevo-whisper` CLI. It is the only service that publishes a port, on `127.0.0.1:8787` by default.
-- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on `/dev/dri`). Internal only, reachable from the gateway as `http://stt:8001`.
+- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is mounted read-only; provisioning runs as the separate `stt-provision` service.
 
 The gateway stores only its static key (`/data/server-key.json`, mode 0600) and the device registry (`/data/devices.json`) in the `cw-data` volume. Audio and transcripts stay in memory. Core dumps are disabled in both containers (`ulimits.core: 0`) and logs contain only device ids, sizes, durations and error codes. Swap is outside the app's control; disable it or encrypt it if that matters to you.
 
@@ -11,6 +11,15 @@ The gateway stores only its static key (`/data/server-key.json`, mode 0600) and 
 
 - Linux host with Docker Engine and the Compose plugin.
 - A GPU with Vulkan support exposed as `/dev/dri` (tested target: AMD RX 7800 XT with Mesa RADV). `STT_BACKEND=cpu` works without a GPU, but slower. On a host without `/dev/dri`, remove the `devices` and `group_add` entries of the `stt` service in `compose.yaml`, because the container does not start without the device.
+
+Only the render node of the GPU that should run the model is passed into the container. Find it by the GPU's PCI address:
+
+```bash
+lspci | grep -i -E 'vga|display'   # e.g. 03:00.0 ... Navi 32 [Radeon RX 7700 XT / 7800 XT]
+ls -l /dev/dri/by-path/            # pci-0000:03:00.0-render -> ../renderD128
+```
+
+Set `STT_RENDER_DEVICE` to that node (default `/dev/dri/renderD128`). It appears in the container as `/dev/dri/renderD128`, so Vulkan sees only that GPU, even on hosts with an integrated GPU next to the discrete one.
 - About 1.3 GB of disk for the model and about 1 GB for the images.
 
 ## Install
@@ -19,7 +28,7 @@ The gateway stores only its static key (`/data/server-key.json`, mode 0600) and 
 git clone <repository> ~/Developer/codevo-whisper
 cd ~/Developer/codevo-whisper
 cp infrastructure/compose/.env.example infrastructure/compose/.env
-getent group video render
+getent group render
 ```
 
 Set in `infrastructure/compose/.env`:
@@ -29,8 +38,11 @@ Set in `infrastructure/compose/.env`:
 | `CW_BIND` | Host address the gateway port is published on. `127.0.0.1` (default) or the WireGuard/Tailscale address. Never `0.0.0.0` on a machine reachable from the internet. |
 | `CW_PORT` | Host port, default `8787`. |
 | `CW_PUBLIC_ENDPOINT` | The `ws://` or `wss://` URL devices use; it is written into pairing tokens. |
-| `VIDEO_GID`, `RENDER_GID` | Numeric GIDs of the host `video` and `render` groups (from `getent group video render`), so the non-root `stt` user can open `/dev/dri`. |
+| `RENDER_GID` | Numeric GID of the host `render` group (from `getent group render`), so the non-root `stt` user can open the render node. `VIDEO_GID` is no longer needed. |
+| `STT_RENDER_DEVICE` | Host render node of the GPU, default `/dev/dri/renderD128` (see above). |
+| `STT_MEM_LIMIT`, `STT_CPUS`, `GATEWAY_MEM_LIMIT`, `GATEWAY_CPUS` | Container limits, defaults `4g`, `4`, `512m`, `2`. Both services also run with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem, PID limits (stt 128, gateway 64) and `nofile` limits (stt 1024, gateway 4096). |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
+| `STT_ENGINE` | `worker` (default) keeps the model loaded in one resident `cw-stt-worker` process; `cli` starts `transcribe-cli` for every call (the phase 2 behaviour; measured on the RX 7800 XT at about 550 ms against 120 ms per call for 12 s of audio). |
 | `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
 
 ## Build, provision, start
@@ -38,7 +50,7 @@ Set in `infrastructure/compose/.env`:
 ```bash
 COMPOSE="docker compose -f infrastructure/compose/compose.yaml"
 $COMPOSE build
-$COMPOSE run --rm stt node dist/provision.js
+$COMPOSE --profile provision run --rm stt-provision
 $COMPOSE up -d
 $COMPOSE ps
 ss -ltn | grep 8787
@@ -87,7 +99,7 @@ $COMPOSE logs -f gateway
 $COMPOSE logs -f stt
 ```
 
-The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `chunks`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup and engine error status codes. Neither logs audio or text.
+The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`) and engine error status codes. Neither logs audio or text.
 
 ## Reaching the gateway from other networks
 
@@ -114,9 +126,10 @@ The per-address limit relies on the source address. Behind an SSH tunnel, Cloudf
 ```bash
 pnpm --filter dev-client start pair "<token>" --name "MacBook dev"
 pnpm --filter dev-client start transcribe sample.wav --language sk
+pnpm --filter dev-client start transcribe sample.wav --language sk --live
 ```
 
-The WAV file must be PCM16 mono 16 kHz. A relative path is resolved against the directory you run `pnpm` from. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
+Without `--live` the client sends the first 120 s of the file at once and the rest in real time (the gateway accepts at most a 180 s burst and then 1.25 x real time per device). With `--live` it asks for live partials (Živý text), sends 100 ms frames in real time and prints every partial (`~ [segment rRevision] text`) and final (`= [segment] text`) before the whole text. The WAV file must be PCM16 mono 16 kHz. A relative path is resolved against the directory you run `pnpm` from. If the server key changes, the client refuses to overwrite the pinned key; delete the identity file and pair again.
 
 ## Overené
 

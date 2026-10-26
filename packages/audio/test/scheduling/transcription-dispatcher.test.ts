@@ -20,6 +20,35 @@ function markers(engine: ControllableTranscriber): number[] {
 }
 
 describe('TranscriptionDispatcher', () => {
+  it('counts queued and running jobs as pending', async () => {
+    const { dispatcher, engine } = setup();
+    expect(dispatcher.pendingJobs()).toBe(0);
+    void dispatcher.submit(job('a', 'final', 1));
+    void dispatcher.submit(job('b', 'final', 2));
+
+    expect(dispatcher.pendingJobs()).toBe(2);
+    engine.call(0).resolve('');
+    await flush();
+    expect(dispatcher.pendingJobs()).toBe(1);
+    engine.call(1).resolve('');
+    await dispatcher.whenIdle();
+    expect(dispatcher.pendingJobs()).toBe(0);
+  });
+
+  it('dropQueued settles queued jobs as dropped and lets the running call finish', async () => {
+    const { dispatcher, engine } = setup();
+    const running = dispatcher.submit(job('a', 'partial', 1, 's'));
+    const queued = dispatcher.submit(job('a', 'final', 2, 's'));
+
+    dispatcher.dropQueued('s');
+    await expect(queued).resolves.toEqual({ status: 'dropped', reason: 'cancelled' });
+    expect(engine.call(0).signal.aborted).toBe(false);
+    engine.call(0).resolve('hotovo');
+    await expect(running).resolves.toEqual({ status: 'done', text: 'hotovo' });
+    await dispatcher.whenIdle();
+    expect(engine.calls).toHaveLength(1);
+  });
+
   it('runs one call at a time', async () => {
     const { dispatcher, engine } = setup();
     const first = dispatcher.submit(job('a', 'final', 1));

@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises';
-import { CliTranscriber } from './cli-transcriber';
 import { loadSttConfig } from './config';
+import { createTranscriber } from './create-transcriber';
 import { startSttServer } from './server';
 
 const config = loadSttConfig(process.env);
@@ -13,16 +13,23 @@ const modelPresent = await access(config.model).then(
   () => false,
 );
 if (!modelPresent) {
-  log('model_missing', { model: config.model, hint: 'docker compose run --rm stt node dist/provision.js' });
+  log('model_missing', { model: config.model, hint: 'docker compose --profile provision run --rm stt-provision' });
   process.exit(1);
 }
 
-const transcriber = new CliTranscriber({ binary: config.binary, model: config.model, backend: config.backend, threads: config.threads });
+const transcriber = createTranscriber(config);
 const server = await startSttServer({ transcriber, port: config.port, host: config.host, onError: (status) => log('engine_error', { status }) });
-log('listening', { port: config.port, backend: config.backend });
+log('listening', { port: config.port, backend: config.backend, engine: config.engine });
+void transcriber.warmUp().then(
+  () => log('engine_ready', { engine: config.engine }),
+  () => log('engine_warmup_failed', { engine: config.engine }),
+);
 
 const shutdown = (): void => {
-  void server.stop().then(() => process.exit(0));
+  void server
+    .stop()
+    .then(() => transcriber.close())
+    .then(() => process.exit(0));
 };
 process.once('SIGTERM', shutdown);
 process.once('SIGINT', shutdown);

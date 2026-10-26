@@ -1,13 +1,13 @@
-import type { ClientMessage, Language } from '@codevo-whisper/protocol';
+import type { ClientMessage } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
-import { BYTES_PER_SECOND } from '../stt/chunk-audio';
-import type { TranscriptionQueue } from '../stt/transcription-queue';
-import { AudioBuffer } from './audio-buffer';
+import type { GatewayDispatcher } from '../stt/gateway-context';
 import { logDictation } from './dictation-log';
+import { Dictation, type DictationResult } from './dictation';
 import type { DeviceAudioBudget } from './device-audio-budget';
+import { FlowControl } from './flow-control';
+import type { IngestionLimiter } from './ingestion-limiter';
 import {
   CLOSE_INTERNAL_ERROR,
-  FLOW_PAUSE_SECONDS,
   MAX_AUDIO_SECONDS,
   MAX_SESSION_HARD_MS,
   MAX_SESSION_MS,
@@ -15,30 +15,37 @@ import {
   MIN_AUDIO_FRAME_BYTES,
 } from './limits';
 import { MessageRateLimiter } from './message-rate-limiter';
+import { BYTES_PER_SECOND } from './pcm';
 import type { SecureChannel } from './secure-channel';
-import { transcribeDictation } from './transcribe-dictation';
 
-export type SessionDeps = { queue: TranscriptionQueue; clock: () => number; logger: Logger; budget: DeviceAudioBudget };
+export type SessionDeps = {
+  dispatcher: GatewayDispatcher;
+  clock: () => number;
+  logger: Logger;
+  budget: DeviceAudioBudget;
+  ingestion: IngestionLimiter;
+};
+
+type StartMessage = Extract<ClientMessage, { type: 'start' }>;
 
 type State =
   | { kind: 'idle' }
-  | { kind: 'recording'; sessionId: string; language: Language; startedAt: number }
-  | { kind: 'finishing'; sessionId: string; controller: AbortController };
+  | { kind: 'recording'; dictation: Dictation; startedAt: number }
+  | { kind: 'finishing'; dictation: Dictation; startedAt: number };
 
 type Handlers = { [K in ClientMessage['type']]: (message: Extract<ClientMessage, { type: K }>) => void };
 
 export class SessionHandler {
   private state: State = { kind: 'idle' };
-  private readonly audio = new AudioBuffer();
-  private paused = false;
   private shortFrameSeen = false;
   private reservedBytes = 0;
   private readonly rate: MessageRateLimiter;
+  private readonly flow: FlowControl;
   private readonly connectedAt: number;
   private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
-    start: (message) => this.onStart(message.sessionId, message.language),
+    start: (message) => this.onStart(message),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),
     cancel: () => this.onCancel(),
@@ -52,6 +59,7 @@ export class SessionHandler {
   ) {
     this.connectedAt = deps.clock();
     this.rate = new MessageRateLimiter(deps.clock, MESSAGE_RATE);
+    this.flow = new FlowControl(channel, () => deps.ingestion.availableSeconds(deviceId), deps.ingestion.limits);
     this.timers = [
       setTimeout(() => this.expireIfIdle(), MAX_SESSION_MS + 1),
       setTimeout(() => this.channel.fail('session_expired'), MAX_SESSION_HARD_MS + 1),
@@ -74,12 +82,21 @@ export class SessionHandler {
     handler(message);
   }
 
-  private onStart(sessionId: string, language: Language): void {
+  private onStart(message: StartMessage): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
       return;
     }
-    this.state = { kind: 'recording', sessionId, language, startedAt: this.deps.clock() };
+    const dictation = new Dictation({
+      sessionId: message.sessionId,
+      deviceId: this.deviceId,
+      language: message.language,
+      partials: message.partials === true,
+      dispatcher: this.deps.dispatcher,
+      clock: this.deps.clock,
+      channel: this.channel,
+    });
+    this.state = { kind: 'recording', dictation, startedAt: this.deps.clock() };
     this.shortFrameSeen = false;
   }
 
@@ -93,16 +110,18 @@ export class SessionHandler {
       return;
     }
     this.shortFrameSeen = pcm.length < MIN_AUDIO_FRAME_BYTES;
-    if ((this.audio.bytes() + pcm.length) / BYTES_PER_SECOND > MAX_AUDIO_SECONDS || !this.deps.budget.reserve(this.deviceId, pcm.length)) {
+    const { dictation } = this.state;
+    if ((dictation.audioBytes + pcm.length) / BYTES_PER_SECOND > MAX_AUDIO_SECONDS || !this.deps.budget.reserve(this.deviceId, pcm.length)) {
       this.channel.fail('too_long');
       return;
     }
     this.reservedBytes += pcm.length;
-    this.audio.append(pcm);
-    if (!this.paused && this.audio.seconds() > FLOW_PAUSE_SECONDS) {
-      this.paused = true;
-      this.channel.send({ type: 'flow', paused: true });
+    if (!this.deps.ingestion.take(this.deviceId, pcm.length)) {
+      this.channel.fail('bad_message', 'audio rate exceeded');
+      return;
     }
+    dictation.push(pcm);
+    this.flow.update();
   }
 
   private onFinish(): void {
@@ -110,20 +129,11 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    const { sessionId, language, startedAt } = this.state;
-    const audioSeconds = this.audio.seconds();
-    const controller = new AbortController();
-    const finishing: State = { kind: 'finishing', sessionId, controller };
+    const { dictation, startedAt } = this.state;
+    const finishing: State = { kind: 'finishing', dictation, startedAt };
     this.state = finishing;
-    const request = { deviceId: this.deviceId, sessionId, pcm: this.audio.take(), language, signal: controller.signal };
-    const transcription = transcribeDictation(this.deps.queue, this.channel, request).then((outcome) => {
-      logDictation(this.deps.logger, {
-        deviceId: this.deviceId,
-        audioSeconds,
-        chunks: outcome.chunks,
-        durationMs: this.deps.clock() - startedAt,
-        result: outcome.result,
-      });
+    const transcription = dictation.finish().then((result) => {
+      this.log(dictation, startedAt, result);
       if (this.state === finishing) {
         this.becomeIdle();
       }
@@ -135,21 +145,27 @@ export class SessionHandler {
     if (this.state.kind === 'idle') {
       return;
     }
-    if (this.state.kind === 'finishing') {
-      this.state.controller.abort();
-    }
-    this.channel.send({ type: 'done', sessionId: this.state.sessionId });
+    const { dictation } = this.state;
+    dictation.cancel();
+    this.channel.send({ type: 'done', sessionId: dictation.sessionId });
     this.becomeIdle();
+  }
+
+  private log(dictation: Dictation, startedAt: number, result: DictationResult): void {
+    const { audioBytes, finals, partials } = dictation.stats();
+    logDictation(this.deps.logger, {
+      deviceId: this.deviceId,
+      audioSeconds: audioBytes / BYTES_PER_SECOND,
+      finals,
+      partials,
+      durationMs: this.deps.clock() - startedAt,
+      result,
+    });
   }
 
   private becomeIdle(): void {
     this.state = { kind: 'idle' };
-    this.audio.clear();
     this.releaseBudget();
-    if (this.paused) {
-      this.paused = false;
-      this.channel.send({ type: 'flow', paused: false });
-    }
     this.expireIfIdle();
   }
 
@@ -171,11 +187,11 @@ export class SessionHandler {
 
   private dispose(): void {
     this.timers.forEach((timer) => clearTimeout(timer));
-    if (this.state.kind === 'finishing') {
-      this.state.controller.abort();
+    this.flow.dispose();
+    if (this.state.kind !== 'idle') {
+      this.state.dictation.cancel();
     }
     this.state = { kind: 'idle' };
-    this.audio.clear();
     this.releaseBudget();
   }
 }

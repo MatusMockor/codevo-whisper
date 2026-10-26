@@ -8,3 +8,4 @@ export {
   type TranscribeLanguage,
 } from './run-transcribe-cli';
 export { TranscribeCliError, type TranscribeCliFailure } from './transcribe-cli-error';
+export { ResidentTranscriber, type ResidentTranscriberOptions, type WorkerCall } from './worker/resident-transcriber';

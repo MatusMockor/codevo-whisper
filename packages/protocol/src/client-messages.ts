@@ -2,6 +2,7 @@ import { badMessage } from './errors';
 import {
   assertOnlyKeys,
   parseJsonObject,
+  readBoolean,
   readChoice,
   readString,
   type JsonObject,
@@ -34,15 +35,25 @@ function decodeAudio(body: Uint8Array): ClientMessage {
   return { type: 'audio', pcm: Uint8Array.from(body) };
 }
 
+type StartMessage = Extract<ClientMessage, { type: 'start' }>;
+
+function decodeStart(object: JsonObject): StartMessage {
+  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials']);
+  const start: StartMessage = {
+    type: 'start',
+    sessionId: readString(object, 'sessionId', { maxChars: MAX_IDENTIFIER_CHARS, pattern: IDENTIFIER_PATTERN }),
+    language: readChoice(object, 'language', LANGUAGES),
+  };
+  if (object.partials === undefined) {
+    return start;
+  }
+  return { ...start, partials: readBoolean(object, 'partials') };
+}
+
 function decodeJson(object: JsonObject): JsonClientMessage {
   const type = readChoice(object, 'type', JSON_TYPES);
   if (type === 'start') {
-    assertOnlyKeys(object, ['type', 'sessionId', 'language']);
-    return {
-      type,
-      sessionId: readString(object, 'sessionId', { maxChars: MAX_IDENTIFIER_CHARS, pattern: IDENTIFIER_PATTERN }),
-      language: readChoice(object, 'language', LANGUAGES),
-    };
+    return decodeStart(object);
   }
   if (type === 'pair-request') {
     assertOnlyKeys(object, ['type', 'deviceName']);

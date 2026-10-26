@@ -29,6 +29,8 @@ describe('client messages', () => {
   const messages: ClientMessage[] = [
     { type: 'hello' },
     { type: 'start', sessionId: '3f1c2a9e-0b4e-4d8a-a651-f03c9d6e27a4', language: 'sk' },
+    { type: 'start', sessionId: 'live', language: 'cs', partials: true },
+    { type: 'start', sessionId: 'quiet', language: 'en', partials: false },
     { type: 'audio', pcm: new Uint8Array([1, 2, 3, 4]) },
     { type: 'finish' },
     { type: 'cancel' },
@@ -75,6 +77,25 @@ describe('client messages', () => {
     expectBadMessage(() => decodeClientMessage(json({ type: 'pair-request', deviceName: '   ' })));
     expectBadMessage(() => decodeClientMessage(json({ type: 'pair-request', deviceName: 'Mac\u001b[2J' })));
     expectBadMessage(() => decodeClientMessage(json({ type: 'pair-request', deviceName: 'Mac\nBook' })));
+  });
+
+  it('decodes a start without partials as a message without the field', () => {
+    const decoded = decodeClientMessage(json({ type: 'start', sessionId: 'abc', language: 'sk' }));
+
+    expect(decoded).toEqual({ type: 'start', sessionId: 'abc', language: 'sk' });
+    expect(Object.keys(decoded)).not.toContain('partials');
+  });
+
+  it('omits partials from the encoded start when it is not set', () => {
+    const frame = encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'sk' });
+
+    expect(new TextDecoder().decode(frame.subarray(1))).toBe('{"type":"start","sessionId":"abc","language":"sk"}');
+  });
+
+  it('rejects a partials flag that is not a boolean', () => {
+    ['yes', 1, null, {}, []].forEach((partials) => {
+      expectBadMessage(() => decodeClientMessage(json({ type: 'start', sessionId: 'abc', language: 'sk', partials })));
+    });
   });
 
   it('rejects a language outside the four values', () => {

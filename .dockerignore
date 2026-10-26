@@ -11,3 +11,4 @@ docs
 infrastructure/compose/.env
 **/*.p8
 **/*.p12
+native/stt-worker/work

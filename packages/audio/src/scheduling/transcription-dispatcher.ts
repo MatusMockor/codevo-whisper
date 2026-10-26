@@ -53,6 +53,10 @@ export class TranscriptionDispatcher<TContext = TranscriptionContext> implements
     }
   }
 
+  dropQueued(sessionId: string): void {
+    this.settleDropped(this.queue.removeQueued(sessionId));
+  }
+
   attach(deviceId: string, partials: boolean): string {
     this.sessionCounter += 1;
     const sessionId = `${deviceId}#${this.sessionCounter}`;
@@ -63,6 +67,10 @@ export class TranscriptionDispatcher<TContext = TranscriptionContext> implements
   detach(sessionId: string): void {
     this.sessions.delete(sessionId);
     this.queue.releaseSession(sessionId);
+  }
+
+  pendingJobs(): number {
+    return this.queue.size + this.running.size;
   }
 
   queueStats(): QueueStats {

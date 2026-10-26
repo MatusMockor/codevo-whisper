@@ -1,10 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import { beginSession, LANGUAGES, type Language } from '@codevo-whisper/protocol';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { beginSession, LANGUAGES, type Language, type ServerMessage } from '@codevo-whisper/protocol';
+import { pacedFrames, type PacingOptions } from './audio-pacer';
 import type { IdentityStore } from './identity-store';
 import { SecureSocket } from './secure-socket';
 import { readPcmFromWav } from './wav-reader';
 
-const FRAME_BYTES = 32_000;
+export type TranscribeOptions = { language: string; live: boolean };
+
+const LIVE_PACING: PacingOptions = { frameMs: 100, burstSeconds: 0 };
+const FILE_PACING: PacingOptions = { frameMs: 1000, burstSeconds: 120 };
 
 function languageOf(value: string): Language {
   const language = LANGUAGES.find((candidate) => candidate === value);
@@ -14,19 +19,32 @@ function languageOf(value: string): Language {
   return language;
 }
 
-async function collect(socket: SecureSocket, sessionId: string, print: (line: string) => void): Promise<number> {
+function printLive(message: ServerMessage, print: (line: string) => void): void {
+  if (message.type === 'partial') {
+    print(`~ [${message.segmentId} r${message.revision}] ${message.text}`);
+    return;
+  }
+  if (message.type === 'final') {
+    print(`= [${message.segmentId}] ${message.text}`);
+  }
+}
+
+async function collect(socket: SecureSocket, sessionId: string, live: boolean, print: (line: string) => void): Promise<number> {
   const segments: string[] = [];
   for (;;) {
     const message = await socket.next();
     if ('sessionId' in message && message.sessionId !== sessionId) {
       continue;
     }
+    if (live) {
+      printLive(message, print);
+    }
     if (message.type === 'final') {
       segments[message.segmentId] = message.text;
       continue;
     }
     if (message.type === 'done') {
-      print(segments.join(' ').trim());
+      print(segments.filter((text) => text.length > 0).join(' ').trim());
       return 0;
     }
     if (message.type === 'error') {
@@ -36,14 +54,29 @@ async function collect(socket: SecureSocket, sessionId: string, print: (line: st
   }
 }
 
-export async function transcribe(store: IdentityStore, file: string, languageText: string, print: (line: string) => void): Promise<number> {
+async function stream(socket: SecureSocket, pcm: Uint8Array, pacing: PacingOptions, signal: AbortSignal): Promise<void> {
+  const startedAt = performance.now();
+  for (const frame of pacedFrames(pcm, pacing)) {
+    const waitMs = startedAt + frame.atMs - performance.now();
+    if (waitMs > 0) {
+      await sleep(waitMs, undefined, { signal }).catch(() => undefined);
+    }
+    if (signal.aborted) {
+      return;
+    }
+    socket.send({ type: 'audio', pcm: frame.pcm });
+  }
+  socket.send({ type: 'finish' });
+}
+
+export async function transcribe(store: IdentityStore, file: string, options: TranscribeOptions, print: (line: string) => void): Promise<number> {
   const identity = await store.load();
   if (identity === null) {
     print('Zariadenie nie je spárované, spustite najprv "pair".');
     return 1;
   }
   const pcm = readPcmFromWav(new Uint8Array(await readFile(file)));
-  const language = languageOf(languageText);
+  const language = languageOf(options.language);
   const socket = await SecureSocket.connect(identity.endpoint, beginSession(identity.deviceKey, identity.serverPublicKey));
   socket.send({ type: 'hello' });
   const ready = await socket.next();
@@ -53,12 +86,11 @@ export async function transcribe(store: IdentityStore, file: string, languageTex
     return 1;
   }
   const sessionId = crypto.randomUUID();
-  socket.send({ type: 'start', sessionId, language });
-  for (let offset = 0; offset < pcm.length; offset += FRAME_BYTES) {
-    socket.send({ type: 'audio', pcm: pcm.subarray(offset, offset + FRAME_BYTES) });
-  }
-  socket.send({ type: 'finish' });
-  const exitCode = await collect(socket, sessionId, print);
+  socket.send({ type: 'start', sessionId, language, ...(options.live ? { partials: true } : {}) });
+  const stopped = new AbortController();
+  const result = collect(socket, sessionId, options.live, print).finally(() => stopped.abort());
+  await stream(socket, pcm, options.live ? LIVE_PACING : FILE_PACING, stopped.signal);
+  const exitCode = await result;
   socket.close();
   return exitCode;
 }

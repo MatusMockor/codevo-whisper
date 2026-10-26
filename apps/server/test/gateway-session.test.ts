@@ -1,12 +1,14 @@
 import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { connect, type Socket } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { streamLogger } from '../src/logging/logger';
 import { startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
+import { sendInChunks, type ManualClock } from './support/paced-audio';
 import { pcmSeconds } from './support/pcm';
 import { sendAudio } from './support/send-audio';
+import { continuousSpeech, speech } from './support/speech';
 import { startHarness, type Harness } from './support/server-harness';
 import { createTempDir } from './support/temp-dir';
 import { connectSession, openSocket, runHandshake, type TestSession } from './support/test-client';
@@ -45,6 +47,21 @@ async function expectBadMessageClose(session: TestSession): Promise<void> {
   expect((await session.closed).code).toBe(4000);
 }
 
+async function nextOfType<T extends ServerMessage['type']>(session: TestSession, type: T): Promise<Extract<ServerMessage, { type: T }>> {
+  for (;;) {
+    const message = await session.next();
+    if (message.type === type) {
+      return message as Extract<ServerMessage, { type: T }>;
+    }
+  }
+}
+
+async function skipFinals(session: TestSession, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    expect(await session.next()).toMatchObject({ type: 'final', text: '' });
+  }
+}
+
 async function collectUntilDone(session: TestSession): Promise<ServerMessage[]> {
   const messages: ServerMessage[] = [];
   for (;;) {
@@ -57,6 +74,16 @@ async function collectUntilDone(session: TestSession): Promise<ServerMessage[]> 
 }
 
 describe('gateway sessions', () => {
+  it('announces the server package version in ready', async () => {
+    const manifest = JSON.parse(await readFile(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string };
+    const server = await start();
+    const device = await server.addDevice();
+    const session = await connectSession(server.url, device, server.serverKey.publicKey);
+
+    expect(manifest.version).toBe('0.2.0');
+    expect(await session.next()).toEqual({ type: 'ready', serverVersion: manifest.version });
+  });
+
   it('transcribes a session end to end', async () => {
     const server = await start();
     const session = await readySession(server);
@@ -72,16 +99,17 @@ describe('gateway sessions', () => {
     expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
   });
 
-  it('splits long audio into 25 s chunks', async () => {
+  it('cuts continuous speech into engine calls of at most 25 s', async () => {
     const server = await start();
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'en' });
-    sendAudio(session, pcmSeconds(60));
+    sendAudio(session, continuousSpeech(60));
     session.send({ type: 'finish' });
 
     const messages = await collectUntilDone(session);
     expect(messages.map((message) => (message.type === 'final' ? message.segmentId : message.type))).toEqual([0, 1, 2, 'done']);
-    expect(fake.requests.map((request) => request.bytes)).toEqual([800_000, 800_000, 320_000]);
+    expect(fake.requests.map((request) => request.bytes)).toEqual([800_000, 800_000, 384_000]);
+    expect(fake.requests.every((request) => request.language === 'en')).toBe(true);
   });
 
   it('accepts a new dictation after done', async () => {
@@ -234,17 +262,26 @@ describe('gateway sessions', () => {
     await waitUntil(() => lines.some((line) => line.includes('"result":"cancelled"')));
   });
 
-  it('caps outbound transcript text at the protocol limit', async () => {
+  it('passes transcript text at the protocol limit and rejects longer STT text', async () => {
+    let text = 'á'.repeat(16_000);
     await fake.close();
-    fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text: 'á'.repeat(20_000) } }) });
+    fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text } }) });
     const server = await start();
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
     sendAudio(session, pcmSeconds(1));
     session.send({ type: 'finish' });
-
     const [final] = await collectUntilDone(session);
     expect(final?.type === 'final' ? [...final.text].length : 0).toBe(16_000);
+
+    text = 'á'.repeat(16_001);
+    session.send({ type: 'start', sessionId: 's2', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 's2', segmentId: 0, text: '' },
+      { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 's2' },
+    ]);
   });
 
   it('reports stt_unavailable', async () => {
@@ -256,7 +293,32 @@ describe('gateway sessions', () => {
     sendAudio(session, pcmSeconds(1));
     session.send({ type: 'finish' });
 
+    expect(await session.next()).toEqual({ type: 'final', sessionId: 's1', segmentId: 0, text: '' });
     expect(await session.next()).toMatchObject({ type: 'error', code: 'stt_unavailable', sessionId: 's1' });
+  });
+
+  it('answers a dictation shorter than 20 ms with done and no STT call', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    session.send({ type: 'audio', pcm: new Uint8Array(100) });
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toEqual([{ type: 'done', sessionId: 's1' }]);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('reports busy when the STT engine answers 503', async () => {
+    await fake.close();
+    fake = await startFakeSttServer({ respond: () => ({ status: 503, body: { error: 'busy' } }) });
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toEqual({ type: 'final', sessionId: 's1', segmentId: 0, text: '' });
+    expect(await session.next()).toMatchObject({ type: 'error', code: 'busy', sessionId: 's1' });
   });
 
   it('cancel drops buffered audio', async () => {
@@ -342,18 +404,18 @@ describe('gateway sessions', () => {
     expect(await session.next()).toMatchObject({ type: 'error', code: 'session_expired' });
   });
 
-  it('closes even a busy session at the hard limit', async () => {
+  it('closes even a recording session at the hard limit', async () => {
     let now = 1_000_000;
     const server = await start({ clock: () => now });
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
-    sendAudio(session, pcmSeconds(301));
-    expect(await session.next()).toEqual({ type: 'flow', paused: true });
+    sendAudio(session, speech(16));
+    expect(await session.next()).toMatchObject({ type: 'final', segmentId: 0 });
     now += 1_800_001;
     sendAudio(session, pcmSeconds(1));
 
     expect(await session.next()).toMatchObject({ type: 'error', code: 'session_expired' });
-    expect(fake.requests).toHaveLength(0);
+    expect(fake.requests).toHaveLength(1);
   });
 
   it('rejects audio frames shorter than 20 ms unless they are the last one', async () => {
@@ -388,19 +450,20 @@ describe('gateway sessions', () => {
   });
 
   it('caps the audio one device can buffer across its sessions', async () => {
-    const server = await start();
+    const clock: ManualClock = { now: 1_000_000 };
+    const server = await start({ clock: () => clock.now });
     const device = await server.addDevice();
     const first = await connectSession(server.url, device, server.serverKey.publicKey);
     const second = await connectSession(server.url, device, server.serverKey.publicKey);
     expect(await first.next()).toMatchObject({ type: 'ready' });
     expect(await second.next()).toMatchObject({ type: 'ready' });
     first.send({ type: 'start', sessionId: 'a', language: 'sk' });
-    sendAudio(first, pcmSeconds(301));
-    expect(await first.next()).toEqual({ type: 'flow', paused: true });
+    await sendInChunks(first, pcmSeconds(301), { clock });
+    await skipFinals(first, 12);
     second.send({ type: 'start', sessionId: 'b', language: 'sk' });
-    sendAudio(second, pcmSeconds(300));
+    await sendInChunks(second, pcmSeconds(300), { clock });
 
-    expect(await second.next()).toMatchObject({ type: 'error', code: 'too_long' });
+    expect(await nextOfType(second, 'error')).toMatchObject({ code: 'too_long' });
   });
 
   it('rejects a text frame and an oversized frame', async () => {
@@ -422,26 +485,14 @@ describe('gateway sessions', () => {
     expect((await garbage.inbox.closed).code).toBe(4000);
   });
 
-  it('signals flow pause when buffered audio exceeds 300 s', async () => {
-    const server = await start();
-    const session = await readySession(server);
-    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
-    sendAudio(session, pcmSeconds(301));
-
-    expect(await session.next()).toEqual({ type: 'flow', paused: true });
-    session.send({ type: 'cancel' });
-    expect(await session.next()).toEqual({ type: 'done', sessionId: 's1' });
-    expect(await session.next()).toEqual({ type: 'flow', paused: false });
-  });
-
   it('rejects more than 600 s of audio with too_long', async () => {
-    const server = await start();
+    const clock: ManualClock = { now: 1_000_000 };
+    const server = await start({ clock: () => clock.now });
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
-    sendAudio(session, pcmSeconds(601));
+    await sendInChunks(session, pcmSeconds(601), { clock });
 
-    expect(await session.next()).toEqual({ type: 'flow', paused: true });
-    expect(await session.next()).toMatchObject({ type: 'error', code: 'too_long' });
+    expect(await nextOfType(session, 'error')).toMatchObject({ code: 'too_long' });
     expect(fake.requests).toHaveLength(0);
   });
 
@@ -546,8 +597,8 @@ describe('gateway sessions', () => {
     const session = await readySession(server);
     const [device] = await server.devices.list();
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
-    sendAudio(session, pcmSeconds(301));
-    expect(await session.next()).toEqual({ type: 'flow', paused: true });
+    sendAudio(session, pcmSeconds(26));
+    await skipFinals(session, 1);
     server.gateway.sessions.closeDevice(device?.id ?? '', 'revoked');
     session.send({ type: 'finish' });
 

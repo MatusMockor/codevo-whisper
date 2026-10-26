@@ -6,6 +6,7 @@ export type FakeSttResponse = { status: number; body: unknown };
 export type FakeSttBehaviour = {
   respond?: (pcm: Uint8Array, language: string) => FakeSttResponse;
   delayMs?: number;
+  delayFor?: (pcm: Uint8Array) => number;
 };
 
 export type FakeSttServer = {
@@ -77,7 +78,7 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     requests.push({ language, bytes: pcm.length });
     active += 1;
     maxActive = Math.max(maxActive, active);
-    const completed = await wait(behaviour.delayMs ?? 0, response);
+    const completed = await wait(behaviour.delayFor?.(pcm) ?? behaviour.delayMs ?? 0, response);
     active -= 1;
     if (!completed) {
       aborted += 1;
