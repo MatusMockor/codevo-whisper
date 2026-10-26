@@ -1,4 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { appWindows } from './app-windows';
 import { startExternalSite, type ExternalSite } from './external-site';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
@@ -45,7 +46,7 @@ test('the real window denies window.open', async () => {
   await page.waitForTimeout(SETTLE_MS);
 
   expect(popupBlocked).toBe(true);
-  expect(app.windows()).toHaveLength(1);
+  expect(appWindows(app)).toHaveLength(1);
   expect(external.requestCount()).toBe(0);
 });
 

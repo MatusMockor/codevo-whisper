@@ -1,16 +1,24 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
+import { isCapturePage } from './app-windows';
 import { createUserDataDir, FAKE_DEVICE_ARGS, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks; levelCount: number };
 
-type TimedRecording = { bytes: number; startedAt: number; firstAudioAt: number; stoppedAt: number; fallback: boolean; deviceLabel: string };
+type TimedRecording = { bytes: number; calledAt: number; startedAt: number; stoppedAt: number; settledAt: number; fallback: boolean; deviceLabel: string };
 
 type StreamWindow = Window & { capturedStreams: MediaStream[] };
 
+type LiveObjectType = 'AudioContext' | 'MediaStream';
+
 const RECORD_MS = 1000;
+const WARM_UP_MS = 300;
 const BYTES_PER_MS = 32;
 const LEVEL_INTERVAL_MS = 50;
+const END_SLACK_MS = 100;
+const START_SLACK_MS = 100;
+const LEVEL_TOLERANCE = 2;
+const SETTLE_MS = 750;
 const SYSTEM_DEFAULT = { deviceId: null, label: null };
 
 let app: ElectronApplication;
@@ -20,7 +28,7 @@ async function openCapturePage(): Promise<Page> {
   await app.evaluate(async () => {
     await (globalThis as unknown as HookGlobal).codevoE2e.capture.listDevices();
   });
-  const page = app.windows().find((candidate) => candidate.url().endsWith('/capture/capture.html'));
+  const page = app.windows().find(isCapturePage);
   expect(page).toBeDefined();
   const capture = page as Page;
   await capture.evaluate(() => {
@@ -54,6 +62,42 @@ function levelCount(): Promise<number> {
   return app.evaluate(() => (globalThis as unknown as HookGlobal).levelCount);
 }
 
+function record(recordMs: number): Promise<TimedRecording> {
+  return app.evaluate(
+    async (_electron, { chosen, duration }) => {
+      const audio = (globalThis as unknown as HookGlobal).codevoE2e.capture;
+      const calledAt = performance.now();
+      const started = await audio.start(chosen);
+      const startedAt = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, duration));
+      const stoppedAt = performance.now();
+      const bytes = (await audio.stop()).byteLength;
+      const settledAt = performance.now();
+      return { bytes, calledAt, startedAt, stoppedAt, settledAt, fallback: started.fallback, deviceLabel: started.deviceLabel };
+    },
+    { chosen: SYSTEM_DEFAULT, duration: recordMs },
+  );
+}
+
+async function liveObjects(page: Page, type: LiveObjectType): Promise<number> {
+  const cdp = await page.context().newCDPSession(page);
+  const prototype = await cdp.send('Runtime.evaluate', { expression: `${type}.prototype` });
+  expect(prototype.result.objectId).toBeDefined();
+  const instances = await cdp.send('Runtime.queryObjects', { prototypeObjectId: prototype.result.objectId ?? '' });
+  expect(instances.objects.objectId).toBeDefined();
+  const count = await cdp.send('Runtime.callFunctionOn', {
+    objectId: instances.objects.objectId ?? '',
+    functionDeclaration: 'function () { return this.length; }',
+    returnByValue: true,
+  });
+  await cdp.detach();
+  return Number(count.result.value);
+}
+
+async function openedAudio(page: Page): Promise<{ contexts: number; streams: number }> {
+  return { contexts: await liveObjects(page, 'AudioContext'), streams: await liveObjects(page, 'MediaStream') };
+}
+
 function launchWith(chromiumArgs: readonly string[]): void {
   test.beforeEach(async () => {
     userDataDir = await createUserDataDir();
@@ -82,38 +126,47 @@ function requestMedia(constraints: MediaStreamConstraints): Promise<string> {
 test.describe('with Chromium fake media', () => {
   launchWith(FAKE_MEDIA_ARGS);
 
-  test('records 16 kHz PCM16 for the time audio was flowing and releases the microphone', async () => {
+  test('loads the capture page once the main window is shown, without opening the microphone', async () => {
+    const main = await app.firstWindow();
+    expect(isCapturePage(main)).toBe(false);
+
+    await expect.poll(() => app.windows().some(isCapturePage)).toBe(true);
+    const capture = app.windows().find(isCapturePage) as Page;
+    await capture.waitForLoadState('load');
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+
+    expect(await openedAudio(capture)).toEqual({ contexts: 0, streams: 0 });
+    await app.evaluate((_electron, chosen) => (globalThis as unknown as HookGlobal).codevoE2e.capture.startMeter(chosen), SYSTEM_DEFAULT);
+    expect(await openedAudio(capture)).toEqual({ contexts: 1, streams: 1 });
+    await app.evaluate(() => (globalThis as unknown as HookGlobal).codevoE2e.capture.stopMeter());
+  });
+
+  test('records 16 kHz PCM16 from the moment start resolves and releases the microphone', async () => {
     const capture = await openCapturePage();
     await countLevels();
 
-    const recording: TimedRecording = await app.evaluate(
-      async (_electron, { chosen, recordMs }) => {
-        const audio = (globalThis as unknown as HookGlobal).codevoE2e.capture;
-        let firstAudioAt = 0;
-        const unsubscribe = audio.onLevel(() => {
-          firstAudioAt ||= Date.now();
-        });
-        const started = await audio.start(chosen);
-        const startedAt = Date.now();
-        await new Promise((resolve) => setTimeout(resolve, recordMs));
-        const stoppedAt = Date.now();
-        const bytes = (await audio.stop()).byteLength;
-        unsubscribe();
-        return { bytes, startedAt, firstAudioAt, stoppedAt, fallback: started.fallback, deviceLabel: started.deviceLabel };
-      },
-      { chosen: SYSTEM_DEFAULT, recordMs: RECORD_MS },
-    );
-    const flowingMs = recording.stoppedAt - recording.firstAudioAt + LEVEL_INTERVAL_MS;
-    test.info().annotations.push({ type: 'start-latency-ms', description: String(recording.firstAudioAt - recording.startedAt) });
+    const recording = await record(RECORD_MS);
+    const recordedMs = recording.bytes / BYTES_PER_MS;
+    test.info().annotations.push({ type: 'missing-start-ms', description: String(recording.stoppedAt - recording.startedAt - recordedMs) });
 
     expect(recording.fallback).toBe(false);
     expect(recording.deviceLabel).not.toBe('');
-    expect(recording.firstAudioAt).toBeGreaterThan(0);
-    expect(recording.bytes).toBeGreaterThanOrEqual(flowingMs * BYTES_PER_MS * 0.9);
-    expect(recording.bytes).toBeLessThanOrEqual(flowingMs * BYTES_PER_MS * 1.1);
     expect(recording.bytes % 2).toBe(0);
-    expect(await levelCount()).toBeGreaterThanOrEqual(10);
+    expect(recording.bytes).toBeGreaterThanOrEqual((recording.stoppedAt - recording.startedAt - START_SLACK_MS) * BYTES_PER_MS);
+    expect(recording.bytes).toBeLessThanOrEqual((recording.settledAt - recording.calledAt + END_SLACK_MS) * BYTES_PER_MS);
+    expect(Math.abs((await levelCount()) - Math.floor(recordedMs / LEVEL_INTERVAL_MS))).toBeLessThanOrEqual(LEVEL_TOLERANCE);
     expect(await trackStates(capture)).toEqual(['audio:ended']);
+  });
+
+  test('a recording right after another one also records from the moment start resolves', async () => {
+    const capture = await openCapturePage();
+
+    await record(WARM_UP_MS);
+    const recording = await record(RECORD_MS);
+    test.info().annotations.push({ type: 'missing-start-ms', description: String(recording.stoppedAt - recording.startedAt - recording.bytes / BYTES_PER_MS) });
+
+    expect(recording.bytes).toBeGreaterThanOrEqual((recording.stoppedAt - recording.startedAt - START_SLACK_MS) * BYTES_PER_MS);
+    expect(await trackStates(capture)).toEqual(['audio:ended', 'audio:ended']);
   });
 
   test('lists the inputs and falls back to the system default for a missing device', async () => {

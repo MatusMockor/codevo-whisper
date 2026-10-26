@@ -1,5 +1,6 @@
 import { app, powerMonitor, session, shell } from 'electron';
 import { join } from 'node:path';
+import { prewarmWhenShown } from '../audio/capture-prewarm';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
 import type { InputHelper } from '../helper/input-helper';
@@ -182,6 +183,7 @@ export function composeApplication(logger: Logger): Application {
       () => settingsServices.dispose(),
       () => server.dispose(),
       () => updates.dispose(),
+      prewarmWhenShown(mainWindow, captureWindow),
     );
     exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake, loadUpdater: loadAutoUpdater });
     void startInput(helper, hotkey, logger).then(() => {

@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type IpcMainEvent, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, type IpcMainEvent, type WebContents } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { CAPTURE_CHANNELS, type CaptureRequest, type RawAudioDevice } from '../../shared/capture-contract';
 import { Listeners } from '../helper/listeners';
@@ -41,6 +41,7 @@ function destroy(window: BrowserWindow): void {
 export class CaptureWindow implements CaptureHost {
   private window: BrowserWindow | null = null;
   private ready: Promise<WebContents> | null = null;
+  private quitting = false;
   private readonly requests = new CaptureRequests();
   private readonly frames: Listeners<Uint8Array>;
   private readonly levels: Listeners<number>;
@@ -53,6 +54,9 @@ export class CaptureWindow implements CaptureHost {
     this.frames = new Listeners(logger, 'A capture frame listener failed');
     this.levels = new Listeners(logger, 'A capture level listener failed');
     this.devices = new Listeners(logger, 'A capture device listener failed');
+    app.once('before-quit', () => {
+      this.quitting = true;
+    });
     this.listen(CAPTURE_CHANNELS.reply, (payload) => {
       this.requests.settle(parseReply(payload));
     });
@@ -93,10 +97,17 @@ export class CaptureWindow implements CaptureHost {
     return promise;
   }
 
-  watchDevices(): void {
+  prewarm(): void {
+    if (this.quitting) {
+      return;
+    }
     this.ensure().catch((error: unknown) => {
       this.logger.error('The capture window could not be opened', error);
     });
+  }
+
+  watchDevices(): void {
+    this.prewarm();
   }
 
   discard(): void {
@@ -123,6 +134,9 @@ export class CaptureWindow implements CaptureHost {
   private ensure(): Promise<WebContents> {
     if (this.ready !== null) {
       return this.ready;
+    }
+    if (this.quitting) {
+      return Promise.reject(new Error('The app is quitting'));
     }
     const window = createHiddenWindow();
     const contents = window.webContents;

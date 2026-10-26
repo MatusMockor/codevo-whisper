@@ -5,6 +5,8 @@ import workletUrl from './pcm-worklet.ts?worker&url';
 
 const FLUSH_TIMEOUT_MS = 1000;
 
+const SINKLESS_CONTEXT: AudioContextOptions & { sinkId: { type: 'none' } } = { sinkId: { type: 'none' } };
+
 type WorkletMessage = { type: 'frame'; pcm: Uint8Array } | { type: 'level'; rms: number } | { type: 'flushed'; pcm: Uint8Array };
 
 function audioConstraints(deviceId: string | null): MediaTrackConstraints {
@@ -58,7 +60,7 @@ export class MicrophoneSession {
       (id) => navigator.mediaDevices.getUserMedia({ audio: audioConstraints(id), video: false }),
       deviceId,
     );
-    const context = new AudioContext();
+    const context = new AudioContext(SINKLESS_CONTEXT);
     try {
       return new MicrophoneSession(stream, context, await connect(stream, context, mode), sink, fallback);
     } catch (error) {
