@@ -13,6 +13,8 @@ import { WindowPairingService } from './pairing/window-pairing-service';
 import { HttpSttClient } from './stt/http-stt-client';
 import type { GatewayDispatcher } from './stt/gateway-context';
 import { SttSegmentTranscriber } from './stt/stt-segment-transcriber';
+import { DeviceGuardedTranscriber } from './stt/device-guarded-transcriber';
+import { ENGINE_GUARD_LIMITS } from './gateway/limits';
 
 export type ServerOptions = {
   clock?: () => number;
@@ -36,7 +38,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const keys = await ServerKeyHolder.load(new ServerKeyStore(config.dataDir));
   const devices = new FileDeviceRepository(config.dataDir);
   const stt = new HttpSttClient(config.sttUrl);
-  const dispatcher: GatewayDispatcher = new TranscriptionDispatcher({ transcriber: new SttSegmentTranscriber(stt), clock: { now: clock } });
+  const transcriber = new DeviceGuardedTranscriber(new SttSegmentTranscriber(stt), clock, ENGINE_GUARD_LIMITS);
+  const dispatcher: GatewayDispatcher = new TranscriptionDispatcher({ transcriber, clock: { now: clock } });
   const pairing = new WindowPairingService({ serverKey: () => keys.current(), endpoint: config.publicEndpoint, devices, clock });
   const gateway = await startGateway({
     config,

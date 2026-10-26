@@ -5,6 +5,10 @@ export const MAX_AUDIO_SECONDS = 600;
 export const MIN_AUDIO_FRAME_BYTES = 640;
 export const MESSAGE_RATE = { burst: 1000, perSecond: 200 } as const;
 export const MAX_WS_PAYLOAD = 65_536;
+export const ENGINE_GUARD_LIMITS = {
+  inferences: { capacity: 30, perSecond: 4 },
+  aborts: { capacity: 5, perSecond: 1 / 60 },
+} as const;
 export const INGESTION_LIMITS = { burstSeconds: 180, realTimeFactor: 1.25, pauseBelowSeconds: 30, resumeAboveSeconds: 60 } as const;
 
 export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4 } as const;

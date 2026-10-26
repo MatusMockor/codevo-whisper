@@ -269,3 +269,64 @@ describe('audio ingestion limit', () => {
     expect(await nextOfType(second, 'error')).toMatchObject({ code: 'bad_message', message: 'audio rate exceeded' });
   });
 });
+
+describe('engine protection', () => {
+  it('retries a 503 from the sidecar once so busy does not reach the client', async () => {
+    let calls = 0;
+    const { server, stt } = await start({
+      respond: () => {
+        calls += 1;
+        return calls === 1 ? { status: 503, body: { error: 'busy' } } : { status: 200, body: { text: 'alfa' } };
+      },
+    });
+    const { session } = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, speech(1));
+    session.send({ type: 'finish' });
+
+    expect(await session.next()).toEqual({ type: 'final', sessionId: 's1', segmentId: 0, text: 'alfa' });
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 's1' });
+    expect(stt.requests).toHaveLength(2);
+  });
+
+  it('caps the inferences one device can start and leaves other devices alone', async () => {
+    const { server, stt } = await start({ respond: () => ({ status: 200, body: { text: 'alfa' } }) });
+    const noisy = await readySession(server, 'A');
+    const quiet = await readySession(server, 'B');
+    for (let index = 0; index < 30; index += 1) {
+      noisy.session.send({ type: 'start', sessionId: `n${index}`, language: 'sk' });
+      sendAudio(noisy.session, speech(0.5));
+      noisy.session.send({ type: 'finish' });
+      expect(await nextOfType(noisy.session, 'done')).toEqual({ type: 'done', sessionId: `n${index}` });
+    }
+    noisy.session.send({ type: 'start', sessionId: 'over', language: 'sk' });
+    sendAudio(noisy.session, speech(0.5));
+    noisy.session.send({ type: 'finish' });
+    quiet.session.send({ type: 'start', sessionId: 'q', language: 'sk' });
+    sendAudio(quiet.session, speech(0.5));
+    quiet.session.send({ type: 'finish' });
+
+    expect(await nextOfType(noisy.session, 'error')).toMatchObject({ code: 'busy', sessionId: 'over' });
+    expect(await nextOfType(quiet.session, 'done')).toEqual({ type: 'done', sessionId: 'q' });
+    expect(stt.requests).toHaveLength(31);
+  });
+
+  it('stops forwarding aborts of a device that keeps cancelling running calls', async () => {
+    const { server, stt } = await start({ respond: () => ({ status: 200, body: { text: 'alfa' } }), delayMs: 300 });
+    const { session } = await readySession(server);
+    for (let index = 0; index < 6; index += 1) {
+      session.send({ type: 'start', sessionId: `c${index}`, language: 'sk' });
+      sendAudio(session, speech(0.5));
+      session.send({ type: 'finish' });
+      await waitUntil(() => stt.requests.length === index + 1);
+      session.send({ type: 'cancel' });
+      expect(await nextOfType(session, 'done')).toEqual({ type: 'done', sessionId: `c${index}` });
+    }
+    session.send({ type: 'start', sessionId: 'last', language: 'sk' });
+    sendAudio(session, speech(0.5));
+    session.send({ type: 'finish' });
+
+    expect(await nextOfType(session, 'done')).toEqual({ type: 'done', sessionId: 'last' });
+    expect(stt.aborted()).toBe(5);
+  });
+});
