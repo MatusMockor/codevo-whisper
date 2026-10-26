@@ -21,6 +21,7 @@ Public open-source project, released as signed builds.
 - Real streaming ASR models. Live text uses rolling re-transcription (section 6).
 - Hiding traffic metadata. Network observers can still see addresses, timing and message sizes.
 - Transcript history. Nothing is stored; only the last transcript lives in memory.
+- LLM text cleanup. The STT model's own punctuation is used as is, to keep latency low.
 
 ## 2. Decisions already made
 
@@ -58,7 +59,6 @@ Public open-source project, released as signed builds.
 │ gateway (Node/TS), published on 127.0.0.1 or the VPN address only            │
 │   WebSocket ── PreAuthLimiter ── SecureChannel ── DeviceRegistry              │
 │   SessionManager ── SegmentPolicy ── TranscriptionQueue ── SttClient ──► stt  │
-│   optional TextCleanup ──► Ollama                                            │
 │   CLI: codevo-whisper pair | devices | revoke | rotate-key | status          │
 │ stt sidecar: transcribe.cpp / whisper.cpp, GPU via /dev/dri, internal only    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -79,7 +79,7 @@ Monorepo (pnpm workspaces):
 
 ### 4.1 What "end-to-end" means here
 
-The two ends are the user's device and the user's own gateway. Everything between them (Wi-Fi, ISP, VPN provider, Cloudflare) sees only ciphertext plus metadata (addresses, timing, sizes). The gateway decrypts because it must transcribe. Gateway -> STT and gateway -> Ollama traffic stays on the server host.
+The two ends are the user's device and the user's own gateway. Everything between them (Wi-Fi, ISP, VPN provider, Cloudflare) sees only ciphertext plus metadata (addresses, timing, sizes). The gateway decrypts because it must transcribe. Gateway -> STT traffic stays on the server host.
 
 ### 4.2 Pairing
 
@@ -169,7 +169,7 @@ Clipboard fallback is the only behaviour guaranteed everywhere. `ydotool` is doc
 
 ### 5.4 Session and engines
 
-- `DictationSession` state machine: `idle -> recording -> finishing -> cleaning (optional) -> inserting -> done | error`. Owns cancel, timeouts and recovery: on any failure the text recognised so far is kept as the last transcript and offered for copying.
+- `DictationSession` state machine: `idle -> recording -> finishing -> inserting -> done | error`. Owns cancel, timeouts and recovery: on any failure the text recognised so far is kept as the last transcript and offered for copying.
 - `TranscriptionEngine` (Strategy): `RemoteEngine` and `LocalEngine` with one interface (`start / pushAudio / finish / cancel`, events `partial` and `final` with segment ids and revisions).
 - Engine selection happens before recording starts, never mid-session. Order is configurable (e.g. server, then local). Switching from local to remote must be explicitly allowed by the user. A missing local model never triggers a download.
 - If the server drops mid-session, the client keeps a bounded audio buffer (up to 2 minutes) and can retry the whole session once on reconnect; segment ids prevent duplicate text.
@@ -211,10 +211,6 @@ Phase 0 measurements (`docs/spikes/rolling-latency.md`, `docs/spikes/transcribe-
 - Acceptance: one device partial p95 <= 0.8 s, end of speech to final text p50 <= 1.0 s and p95 <= 1.3 s; two devices p95 <= 1.3 s per device, no busy error reaching a client.
 
 The policy lives in `packages/audio` and is shared by the gateway and LocalEngine.
-
-### Optional cleanup
-
-"Uhladiť text" sends the final text to Ollama with a fixed prompt (punctuation, fillers, capitalization, no rewording), with a time limit and only that text as context. Off by default. The raw text is kept as the last transcript and the overlay offers "Vrátiť pôvodný" after insertion. If cleanup fails or times out, the raw text is inserted. On the server the gateway reaches the host Ollama via an explicit `host.docker.internal` / host-gateway mapping documented in compose.
 
 ## 7. Local mode and model management
 
@@ -282,4 +278,3 @@ Order changed 2026-10-25 (owner decision): the macOS app with local mode comes f
 3. **Segmentation and live text.** `packages/audio` policy with the phase 0 numbers, partials for Živý text in both engines, fairness on the server.
 4. **Linux desktop.** Starts with the deferred Linux spike. Then hotkeys, insertion matrix, reduced Wayland overlay, safeStorage backend handling.
 5. **Release.** CI matrix, signing, notarization, auto-update tests, GHCR images, first public release.
-6. **Cleanup (Ollama).** Optional text cleanup with raw-text fallback.

@@ -204,9 +204,6 @@ section.block:first-of-type{margin-top:56px}
 .orb.rec .ic{stroke-width:2}
 .orb.proc{background:rgba(255,255,255,.08)}
 .orb.proc svg{width:18px;height:18px;animation:spin 1.8s cubic-bezier(.55,.1,.45,.9) infinite}
-.orb.smooth{box-shadow:inset 0 0 0 2px rgba(255,255,255,.14)}
-.orb.smooth::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--lamp-hi);border-left-color:var(--lamp);animation:spin 1.4s linear infinite}
-.orb.smooth .ic{width:12px;height:12px;color:var(--lamp-hi)}
 .orb.done{background:var(--ok);color:#06301C;animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
 .orb.done .ic{stroke-width:2.4}
 .orb.err{background:rgba(240,106,90,.2);color:#FF9A8D}
@@ -233,15 +230,8 @@ section.block:first-of-type{margin-top:56px}
 .w.t{color:var(--ov-ink-t)}
 .w.in{animation:wIn .45s ease-out}
 .w.fix .wt{animation:wFix 1.1s ease-out}
-.w.drop .wt{text-decoration:line-through;text-decoration-color:var(--lamp);text-decoration-thickness:1.5px;color:var(--ov-ink-t);transition:color .3s}
-.w.gone{display:inline-block;max-width:0!important;opacity:0;overflow:hidden;white-space:nowrap;vertical-align:bottom;transition:max-width .4s ease,opacity .3s}
-.w.drop{display:inline-block;max-width:4em;white-space:nowrap;vertical-align:bottom}
-.p.on{animation:pIn 1.4s ease-out forwards}
 @keyframes wIn{from{opacity:0;filter:blur(3px)}}
 @keyframes wFix{0%{color:var(--lamp-hi)}100%{color:inherit}}
-@keyframes pIn{0%{opacity:0;color:var(--lamp)}25%{opacity:1;color:var(--lamp)}100%{color:var(--ov-ink)}}
-.ov-body.smoothing::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(240,162,58,.16) 50%,transparent 70%);background-size:250% 100%;animation:sweep 1.3s linear infinite;pointer-events:none}
-@keyframes sweep{from{background-position:120% 0}to{background-position:-130% 0}}
 
 .ov.dyn{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);width:min(470px,90%);transition:width .45s cubic-bezier(.3,1.2,.4,1),opacity .35s,transform .35s;z-index:4}
 .ov.dyn .ov-body{max-height:0;opacity:0;transition:max-height .45s cubic-bezier(.3,1,.4,1),opacity .3s}
@@ -252,8 +242,8 @@ section.block:first-of-type{margin-top:56px}
 .ov.dyn[data-s=rec] .x-time{display:inline}
 .ov.dyn[data-s=rec] .x-lock{display:inline-flex}
 .ov.dyn[data-s=rec][data-mode=toggle] .x-stop{display:grid}
-.ov.dyn:is([data-s=proc],[data-s=smooth],[data-s=done]) .x-status{display:block}
-.ov.dyn:is([data-s=rec],[data-s=proc],[data-s=smooth]) .x-chip{display:inline-block}
+.ov.dyn:is([data-s=proc],[data-s=done]) .x-status{display:block}
+.ov.dyn:is([data-s=rec],[data-s=proc]) .x-chip{display:inline-block}
 .ov.dyn[data-s=done] .x-undo{display:inline-flex}
 .ov.dyn[data-s=done]{width:262px}
 .ov.dyn[data-s=idle]{width:58px;border-radius:8px}
@@ -263,12 +253,12 @@ section.block:first-of-type{margin-top:56px}
 .ov.ind{width:var(--pill-w,300px);border-radius:999px}
 .tile-stage .ov.ind{width:min(100% - 36px,var(--pill-w,300px))}
 .gnome .ov.ind{width:var(--pill-w,300px)}
-.ov.ind .ov-bar,.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc],[data-s=smooth]) .ov-bar{height:40px;gap:9px;padding:0 14px 0 8px}
+.ov.ind .ov-bar,.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc]) .ov-bar{height:40px;gap:9px;padding:0 14px 0 8px}
 .ov.ind .orb,.ov.dyn[data-view=ind] .orb{width:24px;height:24px}
 .ov.ind .wave,.ov.dyn[data-view=ind] .wave{height:20px}
 .ov.dyn[data-view=ind] .ov-body{display:none}
 .ov.dyn[data-view=ind] .x-wave i:nth-child(even){display:none}
-.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc],[data-s=smooth]){width:310px;border-radius:999px}
+.ov.dyn[data-view=ind]:is([data-s=rec],[data-s=proc]){width:310px;border-radius:999px}
 .ov.dyn[data-view=ind][data-mode=toggle][data-s=rec]{width:340px}
 
 .demo-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:32px;align-items:center;margin-top:18px}
@@ -287,7 +277,6 @@ section.block:first-of-type{margin-top:56px}
 .phases li.on{color:var(--ink);font-weight:600}
 .phases li.on i{background:var(--lamp);box-shadow:0 0 0 4px var(--lamp-soft)}
 .phases li.past i{background:var(--ink-3);box-shadow:none}
-.phases li.skip{opacity:.4;text-decoration:line-through}
 
 .states{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
 .tile{display:flex;flex-direction:column;gap:12px;margin:0}
@@ -607,7 +596,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.2-2.1 5.6-5 6.6-2.9-1-5-3.4-5-6.6v-4z"/><path d="M5.8 8l1.6 1.6 3-3.2"/></symbol>
   <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 4.5v4.2M8 11.3h.01"/></symbol>
   <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
-  <symbol id="i-sparkle" viewBox="0 0 16 16"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l1.8 1.8M10.2 10.2L12 12M12 4l-1.8 1.8M5.8 10.2L4 12"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 16 16"><path d="M1.8 6a9 9 0 0 1 12.4 0M4 8.5a6 6 0 0 1 8 0M6.2 11a3 3 0 0 1 3.6 0"/><circle cx="8" cy="13.2" r=".6"/></symbol>
   <symbol id="i-battery" viewBox="0 0 16 16"><rect x="1.5" y="5" width="11.5" height="6" rx="1.6"/><path d="M14.5 7v2"/><rect x="3" y="6.5" width="7" height="3" rx=".6" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-cc" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="4" rx="2"/><rect x="2" y="9" width="12" height="4" rx="2"/><circle cx="5" cy="5" r=".8"/><circle cx="11" cy="11" r=".8"/></symbol>
@@ -666,7 +654,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
         <button type="button" data-mode="toggle" aria-pressed="false">Prepínací režim</button>
       </div>
       <span class="lbl-switch"><span id="demoViewLbl">Zobrazenie</span><span class="seg" role="group" aria-labelledby="demoViewLbl"><button type="button" data-view="ind" aria-pressed="true">Indikátor</button><button type="button" data-view="live" aria-pressed="false">Živý text</button></span></span>
-      <span class="lbl-switch"><button type="button" class="switch" role="switch" aria-checked="true" id="demoSmooth" aria-labelledby="demoSmoothLbl"></button><span id="demoSmoothLbl">Uhladiť text</span></span>
     </div>
     <button type="button" class="btn" id="replay"><svg class="ic"><use href="#i-replay"/></svg>Prehrať znova</button>
   </div>
@@ -775,7 +762,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       <li data-p="idle"><i></i>Pripravené</li>
       <li data-p="rec"><i></i>Nahrávam</li>
       <li data-p="proc"><i></i>Spracúvam</li>
-      <li data-p="smooth"><i></i>Uhladzujem</li>
       <li data-p="done"><i></i>Vložené</li>
     </ol>
   </div>
@@ -969,7 +955,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
               <div><dt>Odozva</dt><dd><span id="lat">38</span> ms</dd></div>
               <div><dt>Model</dt><dd>Parakeet Ultra · RX 7800 XT</dd></div>
               <div><dt>Rýchlosť prepisu</dt><dd>7 s reči za 0,4 s</dd></div>
-              <div><dt>Uhladzovanie</dt><dd>Ollama, beží</dd></div>
             </dl>
             <ul class="routes" aria-label="Cesty k serveru">
               <li><b><i></i>Domáca sieť</b><span>Mimo dosahu, nie ste doma</span></li>
@@ -1031,7 +1016,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
                   <label><input type="radio" name="ins" checked><div><b>Vložiť do aktívnej aplikácie</b><span>Text sa objaví na mieste kurzora. Obsah schránky sa po vložení vráti späť.</span></div></label>
                   <label><input type="radio" name="ins"><div><b>Iba skopírovať do schránky</b><span>Vložíte si ho sami cez ⌘V, keď budete chcieť.</span></div></label>
                 </div>
-                <div class="srow"><div class="t"><b>Uhladiť text</b><span>Lokálny model cez Ollama na vašom serveri doplní interpunkciu a vyhodí vatové slová. Pridá asi 0,6 s.</span></div><button type="button" class="switch" role="switch" aria-checked="true" aria-label="Uhladiť text"></button></div>
               </div>
             </div>
             <div class="sgroup">
@@ -1231,7 +1215,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     waves.push({ bars, source });
   };
 
-  const demo = { tok: 0, mode: 'hold', view: 'ind', smooth: true, level: 0, speaking: false, timer: null };
+  const demo = { tok: 0, mode: 'hold', view: 'ind', level: 0, speaking: false, timer: null };
   mountWave($('#demoWave'), 38, () => demo.level);
   $$('[data-wave="speech"]').forEach(el => {
     const seed = Number(el.dataset.seed || 0);
@@ -1279,13 +1263,9 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     [22, ['potom', 'to', 'môžeme']],
     [25, ['mergnúť']]
   ];
-  const PUNCT = [[1, ','], [7, ','], [11, ','], [25, '.']];
-  const DROP = 8;
-  const SMOOTH_TEXT = 'Ahoj Peter, pozrel som si ten pull request, vyzerá to dobre, len by som ešte doplnil testy na párovanie zariadení a potom to môžeme mergnúť.';
   const RAW_TEXT = R.join(' ');
 
   const ov = $('#demoOv');
-  const body = $('#demoBody');
   const wordsEl = $('#demoWords');
   const statusEl = $('#demoStatus');
   const timeEl = $('#demoTime');
@@ -1299,9 +1279,8 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   const sendBtn = $('#sendBtn');
   const chatMsgs = $('#chatMsgs');
   const phaseItems = $$('#phases li');
-  const ORDER = ['idle', 'rec', 'proc', 'smooth', 'done'];
+  const ORDER = ['idle', 'rec', 'proc', 'done'];
 
-  let confirmedEls = [];
   let tentEls = [];
   let prev = { c: 0, t: [] };
 
@@ -1311,9 +1290,7 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     const wt = document.createElement('span');
     wt.className = 'wt';
     wt.textContent = txt;
-    const p = document.createElement('span');
-    p.className = 'p';
-    w.append(wt, p, document.createTextNode(' '));
+    w.append(wt, document.createTextNode(' '));
     return w;
   };
 
@@ -1327,7 +1304,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
       if (was !== undefined && was !== R[i]) cls += ' fix';
       const el = makeWord(R[i], cls);
       wordsEl.appendChild(el);
-      confirmedEls[i] = el;
       requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('t')));
     }
     tent.forEach((word, j) => {
@@ -1347,14 +1323,12 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     phaseItems.forEach((li, i) => {
       li.classList.toggle('on', i === idx);
       li.classList.toggle('past', i < idx);
-      li.classList.toggle('skip', li.dataset.p === 'smooth' && !demo.smooth);
     });
   };
 
   const ORB = {
     rec: ['orb rec', '<svg class="ic"><use href="#i-mic"/></svg>'],
     proc: ['orb proc', '<svg aria-hidden="true"><use href="#mark-color"/></svg>'],
-    smooth: ['orb smooth', '<svg class="ic"><use href="#i-sparkle"/></svg>'],
     done: ['orb done', '<svg class="ic"><use href="#i-check"/></svg>'],
     idle: ['orb rec', '<svg class="ic"><use href="#i-mic"/></svg>']
   };
@@ -1391,10 +1365,8 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     stopTimer();
     demo.speaking = false;
     wordsEl.textContent = '';
-    confirmedEls = [];
     tentEls = [];
     prev = { c: 0, t: [] };
-    body.classList.remove('smoothing');
     setOv('idle');
     ov.dataset.mode = demo.mode;
     ov.dataset.view = demo.view;
@@ -1410,31 +1382,8 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     hint('Kurzor je v okne chatu. Codevo Whisper čaká.');
   };
 
-  const smoothText = async tok => {
-    body.classList.add('smoothing');
-    await wait(380, tok);
-    const drop = confirmedEls[DROP];
-    drop.classList.add('drop');
-    await wait(520, tok);
-    drop.classList.add('gone');
-    await wait(260, tok);
-    const first = confirmedEls[0];
-    first.querySelector('.wt').textContent = 'Ahoj';
-    first.classList.remove('fix');
-    void first.offsetWidth;
-    first.classList.add('fix');
-    for (const [i, mark] of PUNCT) {
-      const p = confirmedEls[i].querySelector('.p');
-      p.textContent = mark;
-      p.classList.add('on');
-      await wait(170, tok);
-    }
-    await wait(520, tok);
-    body.classList.remove('smoothing');
-  };
-
   const insertText = () => {
-    composeText.textContent = demo.smooth ? SMOOTH_TEXT : RAW_TEXT;
+    composeText.textContent = RAW_TEXT;
     composePh.hidden = true;
     composeText.classList.remove('flash');
     void composeText.offsetWidth;
@@ -1492,12 +1441,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     await wait(420, tok);
     renderSnap(26, []);
     await wait(380, tok);
-    if (demo.smooth) {
-      setOv('smooth', 'Uhladzujem text');
-      setPhase('smooth');
-      hint('Ollama na serveri dopĺňa interpunkciu a vyhadzuje vatové slová');
-      await (demo.view === 'live' ? smoothText(tok) : wait(900, tok));
-    }
     insertText();
     setOv('done', 'Vložené do #backend');
     setPhase('done');
@@ -1530,12 +1473,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
     $$('button[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     restart();
   }));
-  const smoothSw = $('#demoSmooth');
-  smoothSw.addEventListener('click', () => {
-    demo.smooth = smoothSw.getAttribute('aria-checked') !== 'true';
-    smoothSw.setAttribute('aria-checked', String(demo.smooth));
-    restart();
-  });
   $('#replay').addEventListener('click', restart);
 
   if (!reduced) restart();
@@ -1548,7 +1485,6 @@ footer.page{margin-top:120px;padding-bottom:56px;padding-top:24px;border-top:1px
   }
 
   $$('.switch').forEach(sw => {
-    if (sw.id === 'demoSmooth') return;
     sw.addEventListener('click', () => sw.setAttribute('aria-checked', String(sw.getAttribute('aria-checked') !== 'true')));
   });
 
