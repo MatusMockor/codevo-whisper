@@ -1,6 +1,7 @@
 import { generateKeyPair, type ClientMessage } from '@codevo-whisper/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EngineDictation, Preparation } from '../src/main/engines/transcription-engine';
+import type { DictationOptions, EngineDictation, Preparation, TranscriptUpdate } from '../src/main/engines/transcription-engine';
+import { MAX_SEGMENT_ID } from '../src/main/remote/remote-dictation';
 import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import { acceptSession, startResponder, type ResponderSession, type ScriptedResponder } from './support/scripted-responder';
@@ -31,33 +32,71 @@ async function scripted(script: (session: ResponderSession, message: ClientMessa
   return new RemoteEngine({ connector, observer: silentObserver });
 }
 
-async function startDictation(engine: RemoteEngine): Promise<EngineDictation> {
+async function startDictation(engine: RemoteEngine, extra: Partial<DictationOptions> = {}): Promise<EngineDictation> {
   const preparation = await engine.prepare();
   expect(preparation).toMatchObject({ ready: true });
-  return (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'en', signal: new AbortController().signal });
+  return (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'en', signal: new AbortController().signal, ...extra });
 }
 
+function ownAndForeignResults(session: ResponderSession, message: ClientMessage): void {
+  if (message.type === 'start') {
+    const { sessionId } = message;
+    session.send({ type: 'final', sessionId: 'old-session', segmentId: 0, text: 'cudzí text' });
+    session.send({ type: 'partial', sessionId: 'old-session', segmentId: 0, revision: 4, text: 'cudzí návrh' });
+    session.send({ type: 'partial', sessionId, segmentId: 0, revision: 1, text: 'tentatívne' });
+    session.send({ type: 'final', sessionId, segmentId: 1, text: 'druhý' });
+    session.send({ type: 'final', sessionId, segmentId: 0, text: 'prvý' });
+    finishWith.set(session, sessionId);
+    return;
+  }
+  if (message.type === 'finish') {
+    session.send({ type: 'done', sessionId: 'old-session' });
+    session.send({ type: 'done', sessionId: finishWith.get(session) ?? '' });
+  }
+}
+
+const finishWith = new WeakMap<ResponderSession, string>();
+
 describe('RemoteDictation protocol handling', () => {
-  it('ignores partials and results of other sessions', async () => {
-    let sessionId = '';
-    const engine = await scripted((session, message) => {
-      if (message.type === 'start') {
-        sessionId = message.sessionId;
-        session.send({ type: 'final', sessionId: 'old-session', segmentId: 0, text: 'cudzí text' });
-        session.send({ type: 'partial', sessionId, segmentId: 0, revision: 1, text: 'tentatívne' });
-        session.send({ type: 'final', sessionId, segmentId: 1, text: 'druhý' });
-        session.send({ type: 'final', sessionId, segmentId: 0, text: 'prvý' });
-        return;
-      }
-      if (message.type === 'finish') {
-        session.send({ type: 'done', sessionId: 'old-session' });
-        session.send({ type: 'done', sessionId });
-      }
-    });
-    const dictation = await startDictation(engine);
+  it('surfaces partials and finals of its own session in Živý text and ignores other sessions', async () => {
+    const engine = await scripted(ownAndForeignResults);
+    const updates: TranscriptUpdate[] = [];
+    const dictation = await startDictation(engine, { partials: true, onTranscript: (update) => updates.push(update) });
     dictation.push(new Uint8Array(3200));
 
     expect(await dictation.finish()).toBe('prvý druhý');
+    expect(updates).toEqual([
+      { type: 'partial', segmentId: 0, revision: 1, text: 'tentatívne' },
+      { type: 'final', segmentId: 1, text: 'druhý' },
+      { type: 'final', segmentId: 0, text: 'prvý' },
+    ]);
+  });
+
+  it('surfaces finals but never partials in Indikátor mode', async () => {
+    const engine = await scripted(ownAndForeignResults);
+    const updates: TranscriptUpdate[] = [];
+    const dictation = await startDictation(engine, { onTranscript: (update) => updates.push(update) });
+    dictation.push(new Uint8Array(3200));
+
+    expect(await dictation.finish()).toBe('prvý druhý');
+    expect(updates).toEqual([
+      { type: 'final', segmentId: 1, text: 'druhý' },
+      { type: 'final', segmentId: 0, text: 'prvý' },
+    ]);
+  });
+
+  it('rejects a partial for a segment far beyond any real dictation', async () => {
+    const engine = await scripted((session, message) => {
+      if (message.type === 'start') {
+        session.send({ type: 'partial', sessionId: message.sessionId, segmentId: MAX_SEGMENT_ID + 1, revision: 1, text: 'priveľa' });
+      }
+    });
+    const updates: TranscriptUpdate[] = [];
+    const dictation = await startDictation(engine, { partials: true, onTranscript: (update) => updates.push(update) });
+    dictation.push(new Uint8Array(3200));
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'protocol' });
+    expect(updates).toEqual([]);
   });
 
   it('holds audio and the finish while the server pauses the flow, also after the key was released', async () => {

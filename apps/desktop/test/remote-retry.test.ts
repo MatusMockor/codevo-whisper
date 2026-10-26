@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EngineDictation, Preparation } from '../src/main/engines/transcription-engine';
+import type { EngineDictation, Preparation, TranscriptUpdate } from '../src/main/engines/transcription-engine';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
@@ -24,7 +24,7 @@ afterEach(async () => {
 
 type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource; controller: AbortController };
 
-type SetupOptions = { keepAliveMs?: number; timeoutMs?: number };
+type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void };
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
@@ -38,7 +38,8 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal });
+  const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal, ...transcript });
   return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
@@ -75,6 +76,23 @@ describe('RemoteDictation retry', () => {
 
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBe(2);
+  });
+
+  it('tells the transcript listener to start over before it replays the recording after a drop', async () => {
+    const updates: TranscriptUpdate[] = [];
+    const { relay, dictation } = await setup({ ...bySize, delayMs: 200 }, {}, undefined, { onTranscript: (update) => updates.push(update) });
+    speak(dictation, 26 * SECOND);
+    const finished = dictation.finish();
+    await expect.poll(() => updates.some((update) => update.type === 'final' && update.text !== '')).toBe(true);
+
+    relay.dropAll();
+    const text = await finished;
+
+    const restart = updates.findIndex((update) => update.type === 'restart');
+    expect(restart).toBeGreaterThan(0);
+    expect(updates.filter((update) => update.type === 'restart')).toHaveLength(1);
+    const replayed = updates.slice(restart + 1).flatMap((update) => (update.type === 'final' && update.text !== '' ? [update.text] : []));
+    expect(replayed.join(' ')).toBe(text);
   });
 
   it('gives up after the second drop and keeps the best text so far', async () => {
