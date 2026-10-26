@@ -62,13 +62,13 @@ function record(recordMs: number): Promise<TimedRecording> {
   return app.evaluate(
     async (_electron, { chosen, duration }) => {
       const audio = (globalThis as unknown as HookGlobal).codevoE2e.capture;
-      const calledAt = Date.now();
+      const calledAt = performance.now();
       const started = await audio.start(chosen);
-      const startedAt = Date.now();
+      const startedAt = performance.now();
       await new Promise((resolve) => setTimeout(resolve, duration));
-      const stoppedAt = Date.now();
+      const stoppedAt = performance.now();
       const bytes = (await audio.stop()).byteLength;
-      const settledAt = Date.now();
+      const settledAt = performance.now();
       return { bytes, calledAt, startedAt, stoppedAt, settledAt, fallback: started.fallback, deviceLabel: started.deviceLabel };
     },
     { chosen: SYSTEM_DEFAULT, duration: recordMs },
