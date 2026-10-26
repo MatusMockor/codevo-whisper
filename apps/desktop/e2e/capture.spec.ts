@@ -12,7 +12,7 @@ const RECORD_MS = 1000;
 const WARM_UP_MS = 300;
 const BYTES_PER_MS = 32;
 const LEVEL_INTERVAL_MS = 50;
-const PCM_FRAME_MS = 100;
+const END_SLACK_MS = 100;
 const START_SLACK_MS = 100;
 const LEVEL_TOLERANCE = 2;
 const SYSTEM_DEFAULT = { deviceId: null, label: null };
@@ -115,7 +115,7 @@ test.describe('with Chromium fake media', () => {
     expect(recording.deviceLabel).not.toBe('');
     expect(recording.bytes % 2).toBe(0);
     expect(recording.bytes).toBeGreaterThanOrEqual((recording.stoppedAt - recording.startedAt - START_SLACK_MS) * BYTES_PER_MS);
-    expect(recording.bytes).toBeLessThanOrEqual((recording.settledAt - recording.calledAt + PCM_FRAME_MS) * BYTES_PER_MS);
+    expect(recording.bytes).toBeLessThanOrEqual((recording.settledAt - recording.calledAt + END_SLACK_MS) * BYTES_PER_MS);
     expect(Math.abs((await levelCount()) - Math.floor(recordedMs / LEVEL_INTERVAL_MS))).toBeLessThanOrEqual(LEVEL_TOLERANCE);
     expect(await trackStates(capture)).toEqual(['audio:ended']);
   });
