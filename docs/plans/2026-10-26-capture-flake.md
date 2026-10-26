@@ -45,3 +45,19 @@
 ### Task 2: Report
 
 - [ ] Write `docs/reports/2026-10-26-capture-flake-report.md` with the before/after start-to-first-sample latency (cold without window, cold with window, warm; idle and under stress), the answer whether the first ~200 ms of speech is lost, and the open item (pre-warming the capture window for the first recording after launch). Run the full desktop e2e and CodeRabbit, commit.
+
+## Review follow-ups (controller, after the first review)
+
+### Task 3: Rename the upper bound slack to `END_SLACK_MS` in `capture.spec.ts`
+
+### Task 4: Prepare the capture window once the main window is shown
+
+- `CaptureHost.prewarm(): void` (CaptureWindow reuses `ensure()`, only loads the page), `prewarmWhenShown(window: WindowActivity, host: Pick<CaptureHost, 'prewarm'>): () => void` in `src/main/audio/capture-prewarm.ts`, prewarms once on the first `onActivityChange(true)`. Wired in `compose.ts` (one disposer line).
+- Failing tests first: `test/capture-prewarm.test.ts`; capture e2e "loads the capture page once the main window is shown, without opening the microphone" (0 AudioContext and 0 MediaStream objects in the page, 1 and 1 while the meter runs). `e2e/app-windows.ts` `appWindows(app)` without the capture page for the window counts in `launch.spec.ts` and `settings.spec.ts`.
+- Measure the first dictation after launch before and after.
+
+### Task 5: Opt-in 60 s capture check
+
+- `e2e/capture-long.spec.ts`, skipped unless `CW_E2E_LONG=1`: bytes against wall time (start and end slack 100 ms), frame arrival lag at most 400 ms, never ahead of the wall clock. Run under CPU stress; documented in README.
+
+### Task 6: Spec latency figures, report update
