@@ -1,7 +1,16 @@
 name: codevo-whisper
 
+x-hardening: &hardening
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
 services:
   gateway:
+    <<: *hardening
     build:
       context: ../..
       dockerfile: apps/server/Dockerfile
@@ -11,7 +20,6 @@ services:
       CW_BIND: 0.0.0.0
       CW_PORT: "8787"
       CW_STT_URL: http://stt:8001
-    read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
     ports:
@@ -19,13 +27,19 @@ services:
     volumes:
       - cw-data:/data
       - cw-run:/run/codevo-whisper
+    mem_limit: ${GATEWAY_MEM_LIMIT:-512m}
+    cpus: ${GATEWAY_CPUS:-2}
+    pids_limit: 64
     ulimits:
       core: 0
+      nofile:
+        soft: 4096
+        hard: 4096
     depends_on:
       - stt
-    restart: unless-stopped
 
   stt:
+    <<: *hardening
     build:
       context: ../..
       dockerfile: apps/stt/Dockerfile
@@ -35,19 +49,42 @@ services:
       STT_BACKEND: ${STT_BACKEND:-vulkan}
       STT_THREADS: ${STT_THREADS:-4}
       TMPDIR: /tmp
-    read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
     devices:
-      - /dev/dri:/dev/dri
+      - "${STT_RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128"
     group_add:
-      - "${VIDEO_GID:?set VIDEO_GID in .env}"
       - "${RENDER_GID:?set RENDER_GID in .env}"
     volumes:
-      - cw-models:/models
+      - cw-models:/models:ro
+    mem_limit: ${STT_MEM_LIMIT:-4g}
+    cpus: ${STT_CPUS:-4}
+    pids_limit: 128
     ulimits:
       core: 0
-    restart: unless-stopped
+      nofile:
+        soft: 1024
+        hard: 1024
+
+  stt-provision:
+    <<: *hardening
+    image: codevo-whisper-stt:local
+    profiles:
+      - provision
+    command: ["node", "dist/provision.js"]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - cw-models:/models
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 64
+    ulimits:
+      core: 0
+      nofile:
+        soft: 1024
+        hard: 1024
+    restart: "no"
 
 volumes:
   cw-data:

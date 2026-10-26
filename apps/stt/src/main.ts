@@ -13,7 +13,7 @@ const modelPresent = await access(config.model).then(
   () => false,
 );
 if (!modelPresent) {
-  log('model_missing', { model: config.model, hint: 'docker compose run --rm stt node dist/provision.js' });
+  log('model_missing', { model: config.model, hint: 'docker compose --profile provision run --rm stt-provision' });
   process.exit(1);
 }
 
