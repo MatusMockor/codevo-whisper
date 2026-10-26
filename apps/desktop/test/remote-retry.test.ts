@@ -5,6 +5,7 @@ import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remot
 import { ServerConnector } from '../src/main/remote/server-connector';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
+import { pcmBytes, timelineSpeech } from './support/timeline-audio';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
 
 const FRAME = 3200;
@@ -81,7 +82,10 @@ describe('RemoteDictation retry', () => {
   it('tells the transcript listener to start over before it replays the recording after a drop', async () => {
     const updates: TranscriptUpdate[] = [];
     const { relay, dictation } = await setup({ ...bySize, delayMs: 200 }, {}, undefined, { onTranscript: (update) => updates.push(update) });
-    speak(dictation, 26 * SECOND);
+    const speech = pcmBytes(timelineSpeech(26));
+    for (let offset = 0; offset < speech.byteLength; offset += FRAME) {
+      dictation.push(speech.subarray(offset, offset + FRAME));
+    }
     const finished = dictation.finish();
     await expect.poll(() => updates.some((update) => update.type === 'final' && update.text !== '')).toBe(true);
 
