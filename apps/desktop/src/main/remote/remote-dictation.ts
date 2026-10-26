@@ -1,5 +1,5 @@
 import type { ClientMessage, ServerMessage } from '@codevo-whisper/protocol';
-import { TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason } from '../engines/transcription-engine';
+import { TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason, type TranscriptUpdate } from '../engines/transcription-engine';
 import { AudioOutbox } from './audio-outbox';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { RetryBuffer } from './retry-buffer';
@@ -155,6 +155,7 @@ export class RemoteDictation implements EngineDictation {
 
   private handle(attempt: Attempt, message: ServerMessage): void {
     if (message.type === 'partial') {
+      this.showPartial(message.segmentId, message.revision, message.text);
       return;
     }
     if (message.type === 'final') {
@@ -172,6 +173,17 @@ export class RemoteDictation implements EngineDictation {
     this.fail(new RemoteFailure('protocol', `unexpected ${message.type} during a dictation`));
   }
 
+  private showPartial(segmentId: number, revision: number, text: string): void {
+    if (this.deps.options.partials !== true) {
+      return;
+    }
+    if (segmentId > MAX_SEGMENT_ID) {
+      this.fail(new RemoteFailure('protocol', 'the server sent a partial for a segment no dictation can have'));
+      return;
+    }
+    this.notify({ type: 'partial', segmentId, revision, text });
+  }
+
   private keepFinal(attempt: Attempt, segmentId: number, text: string): void {
     const textChars = attempt.textChars - (attempt.segments.get(segmentId)?.length ?? 0) + text.length;
     if (segmentId > MAX_SEGMENT_ID || textChars > MAX_TRANSCRIPT_CHARS) {
@@ -180,6 +192,11 @@ export class RemoteDictation implements EngineDictation {
     }
     attempt.segments.set(segmentId, text);
     attempt.textChars = textChars;
+    this.notify({ type: 'final', segmentId, text });
+  }
+
+  private notify(update: TranscriptUpdate): void {
+    this.deps.options.onTranscript?.(update);
   }
 
   private dropped(attempt: Attempt, failure: RemoteFailure): void {
@@ -281,6 +298,7 @@ export class RemoteDictation implements EngineDictation {
       this.fail(new RemoteFailure('connection-lost', 'the recording outgrew the retry buffer during the reconnect'));
       return;
     }
+    this.notify({ type: 'restart' });
     this.attempt = this.begin(ready.connection);
     this.paused = false;
     this.outbox.reset(this.retry.audio());

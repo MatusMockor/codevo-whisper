@@ -214,17 +214,25 @@ test.describe('settings page', () => {
     await expect(recorder).toContainText('Pravý ⌃ Control');
   });
 
-  test('the server engine orders and Živý text are visible but disabled with a note', async () => {
+  test('the server engine orders are visible but disabled with a note', async () => {
     const engine = page.getByRole('radiogroup', { name: 'Kde beží prepis' });
     await expect(engine.getByRole('radio')).toHaveCount(4);
     await expect(engine.getByRole('radio', { name: /^Lokálne/ }).first()).toBeChecked();
     await expect(engine.getByRole('radio', { name: /^Server/ }).first()).toBeDisabled();
     await expect(page.getByText('Najprv spárujte server na stránke Server.')).toBeVisible();
+  });
 
+  test('Živý text can be chosen next to the default indicator and is saved', async () => {
     const overlay = page.getByRole('group', { name: 'Zobrazenie panela' });
     await expect(overlay.getByRole('button', { name: 'Indikátor' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(overlay.getByRole('button', { name: 'Živý text' })).toBeDisabled();
-    await expect(row('Zobrazenie panela')).toContainText('Príde v ďalšej verzii');
+    await expect(row('Zobrazenie panela')).toContainText('Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.');
+    await expect(row('Zobrazenie panela')).not.toContainText('Príde v ďalšej verzii');
+
+    await overlay.getByRole('button', { name: 'Živý text' }).click();
+
+    await expect(overlay.getByRole('button', { name: 'Živý text' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(overlay.getByRole('button', { name: 'Indikátor' })).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.overlay))).toBe('live');
   });
 
   test('the model list shows the catalog with roles, sizes and downloads nothing by itself', async () => {
@@ -321,7 +329,7 @@ test.describe('settings page', () => {
     const tab = page.getByRole('tab', { name: 'Domov' });
     const button = page.getByRole('button', { name: 'Vynulovať štatistiky' });
     const segment = page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' });
-    const disabled = page.getByRole('group', { name: 'Zobrazenie panela' }).getByRole('button', { name: 'Živý text' });
+    const disabled = page.getByRole('radiogroup', { name: 'Kde beží prepis' }).locator('label').filter({ has: page.locator('input:disabled') }).first();
 
     expect(await cursor(tab)).toBe('pointer');
     expect(await cursor(button)).toBe('pointer');

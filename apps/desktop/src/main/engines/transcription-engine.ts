@@ -14,7 +14,12 @@ export type EngineUnavailableReason =
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
-export type DictationOptions = { language: Language; signal: AbortSignal; partials?: boolean };
+export type TranscriptUpdate =
+  | { type: 'partial'; segmentId: number; revision: number; text: string }
+  | { type: 'final'; segmentId: number; text: string }
+  | { type: 'restart' };
+
+export type DictationOptions = { language: Language; signal: AbortSignal; partials?: boolean; onTranscript?: (update: TranscriptUpdate) => void };
 
 export interface EngineDictation {
   push(pcm: Uint8Array): void;
@@ -42,7 +47,7 @@ export class EngineUnavailableError extends Error {
   }
 }
 
-export type EngineFailureReason = 'busy' | 'stt-unavailable' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol';
+export type EngineFailureReason = 'engine-failed' | 'busy' | 'stt-unavailable' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol';
 
 export class TranscriptionFailedError extends Error {
   override readonly name = 'TranscriptionFailedError';

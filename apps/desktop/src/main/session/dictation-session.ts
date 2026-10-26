@@ -1,6 +1,6 @@
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
-import type { EngineDictation, Preparation, PreparedEngine } from '../engines/transcription-engine';
+import type { DictationOptions, EngineDictation, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
 import { EngineUnavailableError, TranscriptionFailedError } from '../engines/transcription-engine';
 import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
@@ -9,9 +9,10 @@ import type { LastTranscript } from '../insertion/last-transcript';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
-import type { OverlayState } from '../../shared/overlay-contract';
+import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { Language, MicrophoneSetting } from '../../shared/settings';
 import { FrameRelay } from './frame-relay';
+import { LiveTranscript } from './live-transcript';
 import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError } from './overlay-messages';
 
 export type SessionOverlay = {
@@ -38,6 +39,8 @@ export type DictationSessionDeps = {
 
 type Phase = 'recording' | 'finishing' | 'done';
 
+type ProcessingNotice = Extract<OverlayState, { kind: 'processing' }>['notice'];
+
 const TRANSCRIBED_REASONS: ReadonlySet<StopReason> = new Set(['released', 'toggled', 'max-duration']);
 
 const NOT_READY: Preparation = { ready: false };
@@ -47,6 +50,9 @@ export class DictationSession {
   private readonly startedAt: number;
   private readonly language: Language;
   private readonly partials: boolean;
+  private readonly live: LiveTranscript | null;
+  private lastLevel = 0;
+  private notice: ProcessingNotice;
   private readonly microphone: MicrophoneSetting;
   private readonly controller = new AbortController();
   private fallbackDevice: string | null = null;
@@ -63,11 +69,12 @@ export class DictationSession {
     const { language, microphone, overlay } = deps.settings.get();
     this.language = language;
     this.partials = overlay === 'live';
+    this.live = this.partials ? new LiveTranscript() : null;
     this.microphone = microphone;
   }
 
   begin(): void {
-    this.showRecording(0);
+    this.showRecording();
     this.target = this.deps.helper.frontmost().catch((error: unknown) => {
       this.deps.logger.error('The insertion target could not be read', error);
       return null;
@@ -85,7 +92,8 @@ export class DictationSession {
     if (this.phase !== 'recording') {
       return;
     }
-    this.showRecording(Math.max(0, Math.min(1, rms)));
+    this.lastLevel = Math.max(0, Math.min(1, rms));
+    this.showRecording();
   }
 
   async finish(reason: StopReason): Promise<void> {
@@ -101,7 +109,8 @@ export class DictationSession {
       return;
     }
     this.phase = 'finishing';
-    this.deps.overlay.show(this, reason === 'max-duration' ? { kind: 'processing', notice: 'limit-reached' } : { kind: 'processing' });
+    this.notice = reason === 'max-duration' ? 'limit-reached' : undefined;
+    this.showProcessing();
     const pcm = await this.stopCapture();
     if (!(await this.opened)) {
       this.end(errorState(MESSAGES.microphone));
@@ -187,10 +196,32 @@ export class DictationSession {
       return this.dictation;
     }
     this.prepared = engine;
-    const dictation = engine.start({ language: this.language, signal: this.controller.signal, partials: this.partials });
+    const dictation = engine.start(this.dictationOptions());
     this.dictation = dictation;
     this.relay.attach(dictation);
     return dictation;
+  }
+
+  private dictationOptions(): DictationOptions {
+    const options: DictationOptions = { language: this.language, signal: this.controller.signal, partials: this.partials };
+    if (this.live === null) {
+      return options;
+    }
+    return { ...options, onTranscript: (update) => this.onTranscript(update) };
+  }
+
+  private onTranscript(update: TranscriptUpdate): void {
+    if (this.live === null) {
+      return;
+    }
+    this.live.apply(update);
+    if (this.phase === 'recording') {
+      this.showRecording();
+      return;
+    }
+    if (this.phase === 'finishing') {
+      this.showProcessing();
+    }
   }
 
   private releaseEngine(): void {
@@ -284,8 +315,21 @@ export class DictationSession {
     this.deps.overlay.flash(this, state);
   }
 
-  private showRecording(level: number): void {
-    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level, language: languageChip(this.language) } as const;
-    this.deps.overlay.show(this, this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice });
+  private showRecording(): void {
+    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, language: languageChip(this.language) } as const;
+    const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
+    this.deps.overlay.show(this, this.withLive(withDevice));
+  }
+
+  private showProcessing(): void {
+    const state = this.notice === undefined ? ({ kind: 'processing' } as const) : ({ kind: 'processing', notice: this.notice } as const);
+    this.deps.overlay.show(this, this.withLive(state));
+  }
+
+  private withLive<T extends OverlayState>(state: T): T | (T & { live: LiveText }) {
+    if (this.live === null) {
+      return state;
+    }
+    return { ...state, live: this.live.view() };
   }
 }

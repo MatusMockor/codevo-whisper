@@ -106,9 +106,11 @@ describe('validateMicrophone', () => {
 });
 
 describe('validateSettingsPatch and the overlay mode', () => {
-  it('rejects Živý text in this phase and accepts the indicator', () => {
-    expect(() => validateSettingsPatch({ overlay: 'live' })).toThrow(IpcValidationError);
+  it('accepts the indicator and Živý text and rejects anything else', () => {
+    expect(validateSettingsPatch({ overlay: 'live' })).toEqual({ overlay: 'live' });
     expect(validateSettingsPatch({ overlay: 'indicator' })).toEqual({ overlay: 'indicator' });
+    expect(() => validateSettingsPatch({ overlay: 'text' })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ overlay: null })).toThrow(IpcValidationError);
   });
 });
 

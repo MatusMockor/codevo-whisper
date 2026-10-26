@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EngineDictation, Preparation } from '../src/main/engines/transcription-engine';
+import type { EngineDictation, Preparation, TranscriptUpdate } from '../src/main/engines/transcription-engine';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { continuousSpeech } from '../../server/test/support/speech';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
+import { pcmBytes, timelineSpeech } from './support/timeline-audio';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
 
 const FRAME = 3200;
@@ -25,7 +26,7 @@ afterEach(async () => {
 
 type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource; controller: AbortController };
 
-type SetupOptions = { keepAliveMs?: number; timeoutMs?: number };
+type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void };
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
@@ -39,7 +40,8 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal });
+  const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal, ...transcript });
   return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
@@ -82,6 +84,26 @@ describe('RemoteDictation retry', () => {
 
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBe(2);
+  });
+
+  it('tells the transcript listener to start over before it replays the recording after a drop', async () => {
+    const updates: TranscriptUpdate[] = [];
+    const { relay, dictation } = await setup({ ...bySize, delayMs: 200 }, {}, undefined, { onTranscript: (update) => updates.push(update) });
+    const speech = pcmBytes(timelineSpeech(26));
+    for (let offset = 0; offset < speech.byteLength; offset += FRAME) {
+      dictation.push(speech.subarray(offset, offset + FRAME));
+    }
+    const finished = dictation.finish();
+    await expect.poll(() => updates.some((update) => update.type === 'final' && update.text !== '')).toBe(true);
+
+    relay.dropAll();
+    const text = await finished;
+
+    const restart = updates.findIndex((update) => update.type === 'restart');
+    expect(restart).toBeGreaterThan(0);
+    expect(updates.filter((update) => update.type === 'restart')).toHaveLength(1);
+    const replayed = updates.slice(restart + 1).flatMap((update) => (update.type === 'final' && update.text !== '' ? [update.text] : []));
+    expect(replayed.join(' ')).toBe(text);
   });
 
   it('gives up after the second drop and keeps the best text so far', async () => {

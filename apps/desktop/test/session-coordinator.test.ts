@@ -1,6 +1,8 @@
+import type { Clock } from '@codevo-whisper/audio';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
 import { EngineSelector } from '../src/main/engines/engine-selector';
@@ -25,13 +27,15 @@ import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
+import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
 const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
+const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/fake-timeline-cli.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -62,7 +66,8 @@ async function prepared(setup: Setup = {}) {
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
-  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_CLI, models, settings, arch: 'arm64' });
+  const engineClock = setup.engineClock === undefined ? {} : { clock: setup.engineClock };
+  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_CLI, models, settings, arch: 'arm64', ...engineClock });
   const helper = new FakeInputHelper({ clipboard: 'original', ...setup.helper });
   const power = new FakePowerEvents();
   const hotkey = new HotkeyService(helper, settings, power, setup.clock ?? (() => Date.now()), logger);
@@ -546,4 +551,54 @@ describe('SessionCoordinator', () => {
     expect(harness.lastTranscript.get()).toBeNull();
     expect(lastVisible(harness.states)).toEqual({ kind: 'processing' });
   });
+  it('shows the live transcript while recording and processing in Živý text and inserts the joined finals', async () => {
+    const samples = timelineSpeech(6);
+    await useTimeline(samples);
+    let now = 0;
+    const harness = await prepared({ binary: FAKE_TIMELINE_CLI, settings: { overlay: 'live' }, engineClock: { now: () => now } });
+
+    await speakTimeline(harness, samples, () => {
+      now += 1000;
+    });
+    await expect.poll(() => harness.states.some((state) => state.kind === 'recording' && (state.live?.tentative ?? '') !== '')).toBe(true);
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([expectedText(samples)]);
+    const recordings = harness.states.filter((state) => state.kind === 'recording');
+    expect(recordings.every((state) => state.live !== undefined)).toBe(true);
+    const processing = harness.states.filter((state) => state.kind === 'processing');
+    expect(processing.length).toBeGreaterThan(0);
+    expect(processing.every((state) => state.live !== undefined)).toBe(true);
+    expect(processing.at(-1)?.live).toEqual({ confirmed: expectedText(samples), tentative: '' });
+  });
+
+  it('never shows transcript text in Indikátor mode', async () => {
+    const samples = timelineSpeech(6);
+    await useTimeline(samples);
+    let now = 0;
+    const harness = await prepared({ binary: FAKE_TIMELINE_CLI, engineClock: { now: () => now } });
+
+    await speakTimeline(harness, samples, () => {
+      now += 1000;
+    });
+    harness.helper.pressKey('up', FN.keycode);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([expectedText(samples)]);
+    expect(harness.states.some((state) => 'live' in state)).toBe(false);
+  });
 });
+
+async function useTimeline(samples: Int16Array): Promise<void> {
+  await writeTimeline(join(scratch, 'source.pcm'), samples);
+  vi.stubEnv('FAKE_TIMELINE_SOURCE', join(scratch, 'source.pcm'));
+}
+
+async function speakTimeline(harness: Harness, samples: Int16Array, tick: () => void): Promise<void> {
+  harness.helper.pressKey('down', FN.keycode);
+  await expect.poll(() => harness.capture.starts.length).toBe(1);
+  for (const frame of secondFrames(samples)) {
+    tick();
+    harness.capture.speak(frame);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+}

@@ -4,10 +4,12 @@ export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 
 export type BlockedReason = 'focus' | 'secure';
 
+export type LiveText = { confirmed: string; tentative: string };
+
 export type OverlayState =
   | { kind: 'hidden' }
-  | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string }
-  | { kind: 'processing'; notice?: 'limit-reached' }
+  | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string; live?: LiveText }
+  | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText }
   | { kind: 'inserted'; appName: string }
   | { kind: 'copied' }
   | { kind: 'blocked'; reason: BlockedReason }

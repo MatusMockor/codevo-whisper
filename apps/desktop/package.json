@@ -14,6 +14,7 @@
     "test:e2e": "electron-vite build && env -u ELECTRON_RUN_AS_NODE playwright test"
   },
   "devDependencies": {
+    "@codevo-whisper/audio": "workspace:*",
     "@codevo-whisper/protocol": "workspace:*",
     "@codevo-whisper/stt-runner": "workspace:*",
     "@electron/fuses": "1.8.0",

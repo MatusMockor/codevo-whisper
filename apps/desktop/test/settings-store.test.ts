@@ -146,10 +146,12 @@ describe('SettingsStore', () => {
     expect(onDisk).toEqual({ ...DEFAULT_SETTINGS, language: 'en', mode: 'toggle' });
   });
 
-  it('loads a stored Živý text overlay as the indicator in this phase', async () => {
+  it('keeps a stored Živý text overlay and replaces an unknown one with the indicator', async () => {
     await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, overlay: 'live', mode: 'toggle' }));
+    expect(await new SettingsStore(file).load()).toEqual({ ...DEFAULT_SETTINGS, overlay: 'live', mode: 'toggle' });
 
-    expect(await new SettingsStore(file).load()).toEqual({ ...DEFAULT_SETTINGS, overlay: 'indicator', mode: 'toggle' });
+    await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, overlay: 'text' }));
+    expect((await new SettingsStore(file).load()).overlay).toBe('indicator');
   });
 
   it('keeps a stored server engine order', async () => {

@@ -1,20 +1,25 @@
-import { runTranscribeCli } from '@codevo-whisper/stt-runner';
+import { systemClock, TranscriptionDispatcher, type Clock, type SegmentConfig } from '@codevo-whisper/audio';
 import { access, constants } from 'node:fs/promises';
 import type { SettingsStore } from '../settings/settings-store';
 import type { Settings } from '../../shared/settings';
 import type { ActiveModel } from './active-model';
-import { chunkPcm } from './chunk-pcm';
 import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
-import { BufferedDictation } from './buffered-dictation';
-import { EngineUnavailableError, notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
+import { LocalDictation } from './local-dictation';
+import { TranscribeCliTranscriber, type LocalContext } from './transcribe-cli-transcriber';
+import { notReady, type DictationOptions, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
 
 const VERIFICATION_REASON = { missing: 'model-missing', broken: 'model-broken' } as const;
+
+export const LOCAL_CALL_TIMEOUT_MS = 60_000;
 
 export type LocalEngineDeps = {
   binary: string;
   models: ActiveModel;
   settings: Pick<SettingsStore, 'get'>;
   arch: LocalEngineArch;
+  clock?: Clock;
+  callTimeoutMs?: number;
+  segment?: Partial<SegmentConfig>;
 };
 
 async function isExecutable(file: string): Promise<boolean> {
@@ -29,9 +34,21 @@ async function isExecutable(file: string): Promise<boolean> {
 export class LocalEngine implements TranscriptionEngine {
   readonly id = 'local' as const;
 
-  private readonly threads = localThreads();
+  private readonly clock: Clock;
+  private readonly dispatcher: TranscriptionDispatcher<LocalContext>;
 
-  constructor(private readonly deps: LocalEngineDeps) {}
+  constructor(private readonly deps: LocalEngineDeps) {
+    this.clock = deps.clock ?? systemClock;
+    this.dispatcher = new TranscriptionDispatcher<LocalContext>({
+      transcriber: new TranscribeCliTranscriber({
+        binary: deps.binary,
+        backend: localBackend(deps.arch),
+        threads: localThreads(),
+        timeoutMs: deps.callTimeoutMs ?? LOCAL_CALL_TIMEOUT_MS,
+      }),
+      clock: this.clock,
+    });
+  }
 
   async isReady(): Promise<EngineReadiness> {
     if (!(await isExecutable(this.deps.binary))) {
@@ -55,50 +72,31 @@ export class LocalEngine implements TranscriptionEngine {
     if (!readiness.ready) {
       return notReady(readiness.reason);
     }
+    const model = await this.deps.models.activeModelPath();
+    if (model === null) {
+      return notReady('no-model');
+    }
     return {
       ready: true,
       engine: {
         id: this.id,
-        start: ({ language, signal }) => new BufferedDictation((pcm) => this.transcribe(pcm, language, signal)),
+        start: (options) => this.start(options, model),
         release: () => undefined,
       },
     };
   }
 
-  async transcribe(pcm: Uint8Array, language: Settings['language'], signal: AbortSignal): Promise<string> {
-    signal.throwIfAborted();
-    const model = await this.deps.models.activeModelPath();
-    if (model === null) {
-      throw new EngineUnavailableError('no-model');
-    }
-    if (this.needsLanguage(language)) {
-      throw new EngineUnavailableError('language-required');
-    }
-    const texts: string[] = [];
-    for (const chunk of chunkPcm(pcm)) {
-      const text = await this.transcribeChunk(chunk, model, language, signal);
-      signal.throwIfAborted();
-      if (text.length > 0) {
-        texts.push(text);
-      }
-    }
-    signal.throwIfAborted();
-    return texts.join(' ');
+  private start(options: DictationOptions, model: string): LocalDictation {
+    return new LocalDictation({
+      dispatcher: this.dispatcher,
+      clock: this.clock,
+      context: { language: options.language, model },
+      options,
+      ...(this.deps.segment === undefined ? {} : { segment: this.deps.segment }),
+    });
   }
 
   private needsLanguage(language: Settings['language']): boolean {
     return language === 'auto' && this.deps.models.activeLanguageHint() === 'required';
-  }
-
-  private transcribeChunk(pcm: Uint8Array, model: string, language: Settings['language'], signal: AbortSignal): Promise<string> {
-    return runTranscribeCli({
-      binary: this.deps.binary,
-      model,
-      backend: localBackend(this.deps.arch),
-      threads: this.threads,
-      language,
-      pcm,
-      signal,
-    });
   }
 }

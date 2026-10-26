@@ -57,7 +57,7 @@ export class Segmenter {
     const endedPause = this.pauses.observe(frame);
     const tail = frame.endSample - this.start;
     if (tail >= this.limits.hard) {
-      return this.cutAtLimit(frame.endSample);
+      return this.cutAtLimit(this.start + this.limits.hard);
     }
     if (tail < this.limits.target) {
       return undefined;

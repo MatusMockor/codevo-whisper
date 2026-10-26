@@ -42,6 +42,13 @@ describe('Segmenter', () => {
     expect(segmenter.openLeadInSamples).toBe(at(0.5));
   });
 
+  it('never lets a hard segment exceed 25 s when the segment does not start on a frame boundary', () => {
+    const { segments } = run([[true, 11000], [false, 300], [true, 4700], [true, 25000]]);
+
+    expect(segments[0]?.endSample).toBe(at(11.15));
+    expect(segments[1]).toMatchObject({ startSample: at(10.65), endSample: at(35.65), reason: 'hard' });
+  });
+
   it('cuts on a settled 500 ms silence without waiting for speech', () => {
     const { segments } = run([[true, 15500], [false, 500]]);
 

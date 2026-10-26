@@ -64,6 +64,41 @@ body {
   width: 380px;
 }
 
+.ov.live {
+  width: 380px;
+  border-radius: var(--radius-pill);
+}
+
+.ov.live.has-text {
+  border-radius: var(--radius-overlay);
+}
+
+.ov-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(3 * 1.45em + 16px);
+  overflow: hidden;
+  padding: 12px 18px 2px;
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+
+.ov-text .lines {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.w {
+  transition: color 0.45s;
+}
+
+.w.t {
+  color: var(--ov-ink-t);
+}
+
 .ov-bar {
   display: flex;
   align-items: center;
@@ -253,7 +288,8 @@ body {
   }
 
   .wave i,
-  .orb.rec {
+  .orb.rec,
+  .w {
     transition: none;
   }
 }

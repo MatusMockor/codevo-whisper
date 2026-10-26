@@ -3,7 +3,7 @@ import type { DictationMode, Language, OverlayMode, Settings } from '../../share
 import { HotkeyRecorder } from '../components/HotkeyRecorder';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { languageNote, languageOptions } from './language-options';
-import { ComingSoon, SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
 const MODES: ReadonlyArray<SegmentOption<DictationMode>> = [
@@ -18,7 +18,7 @@ const MODE_DESCRIPTIONS: Readonly<Record<DictationMode, string>> = {
 
 const OVERLAYS: ReadonlyArray<SegmentOption<OverlayMode>> = [
   { id: 'indicator', label: 'Indikátor' },
-  { id: 'live', label: 'Živý text', disabled: true },
+  { id: 'live', label: 'Živý text' },
 ];
 
 function LanguageSelect({ language, activeModel }: { language: Language; activeModel: ModelInfo | null }) {
@@ -53,14 +53,7 @@ export function DictationSection({ settings, activeModel }: { settings: Settings
       <SettingsRow title="Režim" description={MODE_DESCRIPTIONS[settings.mode]}>
         <SegmentedControl label="Režim klávesu" options={MODES} value={settings.mode} onChange={(mode) => saveSettings({ mode })} />
       </SettingsRow>
-      <SettingsRow
-        title="Zobrazenie panela"
-        description={
-          <>
-            Indikátor len ukazuje, že sa nahráva, a prepis je rýchlejší. Živý text: <ComingSoon />
-          </>
-        }
-      >
+      <SettingsRow title="Zobrazenie panela" description="Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.">
         <SegmentedControl label="Zobrazenie panela" options={OVERLAYS} value={settings.overlay} onChange={(overlay) => saveSettings({ overlay })} />
       </SettingsRow>
       <SettingsRow title="Jazyk" titleId="set-language" description={languageNote(activeModel)}>
