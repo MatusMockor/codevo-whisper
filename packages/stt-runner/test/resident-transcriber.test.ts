@@ -266,6 +266,13 @@ describe('ResidentTranscriber', () => {
     expect(Number(pidOf(after))).not.toBe(before);
   });
 
+  it('rejects a call with more than 30 s of audio and keeps serving', async () => {
+    const worker = create();
+
+    await expect(worker.transcribe({ pcm: pcm(480_001), language: 'sk' })).rejects.toBeInstanceOf(RangeError);
+    await expect(worker.transcribe({ pcm: pcm(480_000), language: 'sk' })).resolves.toMatch(/:sk:480000$/);
+  });
+
   it('a crash rejects the call in flight and the next call recovers', async () => {
     vi.stubEnv('FAKE_WORKER_CRASH_SAMPLES', '1234');
     const worker = create();

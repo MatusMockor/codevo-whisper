@@ -7,10 +7,32 @@ export type WorkerReply = { status: WorkerReplyStatus; text: string };
 
 const STATUSES: readonly WorkerReplyStatus[] = ['ok', 'failed', 'ready'];
 const HEADER_BYTES = 5;
+const LANGUAGE_TAGS: Readonly<Record<string, string>> = { sk: 'sk', en: 'en', cs: 'cs', auto: '' };
+const MAX_SAMPLES = 30 * 16_000;
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+function languageTag(language: TranscribeLanguage): Buffer {
+  const tag = Object.hasOwn(LANGUAGE_TAGS, language) ? LANGUAGE_TAGS[language] : undefined;
+  if (tag === undefined) {
+    throw new RangeError(`unsupported worker language ${JSON.stringify(language)}`);
+  }
+  return Buffer.from(tag, 'ascii');
+}
+
+function decodeText(bytes: Uint8Array): string {
+  try {
+    return utf8.decode(bytes);
+  } catch {
+    throw new TranscribeCliError('exit', 'transcribe worker sent invalid UTF-8');
+  }
+}
 
 export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Array): Uint8Array {
-  const tag = Buffer.from(language === 'auto' ? '' : language, 'ascii');
+  const tag = languageTag(language);
   const samples = Math.floor(pcm.length / 2);
+  if (samples > MAX_SAMPLES) {
+    throw new RangeError(`a worker request holds at most ${MAX_SAMPLES} samples`);
+  }
   const header = Buffer.alloc(1 + tag.length + 4);
   header[0] = tag.length;
   tag.copy(header, 1);
@@ -47,7 +69,7 @@ export class WorkerReplyReader {
     if (this.buffer.length < HEADER_BYTES + length) {
       return null;
     }
-    const text = this.buffer.subarray(HEADER_BYTES, HEADER_BYTES + length).toString('utf8');
+    const text = decodeText(this.buffer.subarray(HEADER_BYTES, HEADER_BYTES + length));
     this.buffer = this.buffer.subarray(HEADER_BYTES + length);
     return { status, text };
   }

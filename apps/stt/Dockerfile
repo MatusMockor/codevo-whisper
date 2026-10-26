@@ -10,16 +10,24 @@ RUN git init --quiet transcribe.cpp \
   && git -C transcribe.cpp checkout --quiet FETCH_HEAD \
   && test "$(git -C transcribe.cpp rev-parse HEAD)" = "${TRANSCRIBE_COMMIT}"
 COPY native/stt-worker /src/stt-worker
+RUN CC=gcc /src/stt-worker/test/run-tests.sh
 RUN cmake -S transcribe.cpp -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PROJECT_transcribe_INCLUDE=/src/stt-worker/stt-worker.cmake \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_C_FLAGS_RELEASE="-O2 -DNDEBUG" \
+    -DCMAKE_CXX_FLAGS_RELEASE="-O2 -DNDEBUG" \
+    -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE" \
+    -DCMAKE_CXX_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE" \
+    -DCMAKE_EXE_LINKER_FLAGS="-pie -Wl,-z,relro,-z,now,-z,noexecstack" \
     -DTRANSCRIBE_VULKAN=ON \
     -DTRANSCRIBE_BUILD_TESTS=OFF \
     -DGGML_NATIVE=OFF \
     -DBUILD_SHARED_LIBS=OFF \
   && cmake --build build --target transcribe-cli cw-stt-worker \
   && install -D -m 0755 build/bin/transcribe-cli /opt/transcribe/bin/transcribe-cli \
-  && install -D -m 0755 build/bin/cw-stt-worker /opt/transcribe/bin/cw-stt-worker
+  && install -D -m 0755 build/bin/cw-stt-worker /opt/transcribe/bin/cw-stt-worker \
+  && /src/stt-worker/check-elf-hardening.sh /opt/transcribe/bin/transcribe-cli /opt/transcribe/bin/cw-stt-worker
 
 FROM node:24-trixie-slim AS app
 WORKDIR /repo

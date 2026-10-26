@@ -107,6 +107,10 @@ export class ResidentTranscriber {
     if (isAborted(call.signal)) {
       return;
     }
+    const frame = this.encode(call, outcome);
+    if (frame === undefined) {
+      return;
+    }
     const worker = await this.acquire().catch((error: unknown) => {
       outcome.reject(asError(error));
       return undefined;
@@ -114,7 +118,16 @@ export class ResidentTranscriber {
     if (worker === undefined || isAborted(call.signal)) {
       return;
     }
-    await this.infer(worker, call, outcome);
+    await this.infer(worker, frame, call, outcome);
+  }
+
+  private encode(call: WorkerCall, outcome: Outcome): Uint8Array | undefined {
+    try {
+      return encodeWorkerRequest(call.language, call.pcm);
+    } catch (error) {
+      outcome.reject(asError(error));
+      return undefined;
+    }
   }
 
   private async acquire(): Promise<WorkerProcess> {
@@ -155,7 +168,7 @@ export class ResidentTranscriber {
     });
   }
 
-  private infer(worker: WorkerProcess, call: WorkerCall, outcome: Outcome): Promise<void> {
+  private infer(worker: WorkerProcess, frame: Uint8Array, call: WorkerCall, outcome: Outcome): Promise<void> {
     return new Promise<void>((release) => {
       const timers: NodeJS.Timeout[] = [];
       const finish = (): void => {
@@ -178,7 +191,7 @@ export class ResidentTranscriber {
         }, this.timeoutMs),
       );
       call.signal?.addEventListener('abort', onAbort, { once: true });
-      worker.request(encodeWorkerRequest(call.language, call.pcm)).then(
+      worker.request(frame).then(
         (text) => {
           this.backoff.reset();
           outcome.resolve(text.trim());
