@@ -30,6 +30,7 @@ From the repository root:
 - `pnpm test` - Vitest for every workspace member
 - `pnpm --filter @codevo-whisper/desktop dev` - run the desktop app with hot reload
 - `pnpm --filter @codevo-whisper/desktop test:e2e` - build the desktop app and run the Playwright Electron tests
+- `CW_E2E_LONG=1 pnpm --filter @codevo-whisper/desktop test:e2e e2e/capture-long.spec.ts` - also run the 60 s capture check (skipped by default; recorded audio against wall-clock time, best run under CPU load)
 
 If your shell exports `ELECTRON_RUN_AS_NODE`, Electron starts as plain Node. The `dev` and `test:e2e` scripts unset it; unset it yourself when you launch Electron any other way.
 
