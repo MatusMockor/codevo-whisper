@@ -1,5 +1,6 @@
 import { Listeners } from '../helper/listeners';
 import { consoleLogger, type Logger } from '../logging/logger';
+import { sanitizeInsertionText } from './sanitize-insertion-text';
 
 export class LastTranscript {
   private text: string | null = null;
@@ -10,8 +11,12 @@ export class LastTranscript {
   }
 
   set(text: string): void {
-    this.text = text;
-    this.listeners.emit(text);
+    const sanitized = sanitizeInsertionText(text);
+    if (sanitized === '') {
+      return;
+    }
+    this.text = sanitized;
+    this.listeners.emit(sanitized);
   }
 
   get(): string | null {

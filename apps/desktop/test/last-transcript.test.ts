@@ -21,4 +21,27 @@ describe('LastTranscript', () => {
     expect(last.get()).toBe('tretí');
     expect(logger.errors).toHaveLength(3);
   });
+
+  it('stores and announces only sanitized text', () => {
+    const last = new LastTranscript(new RecordingLogger());
+    const seen: string[] = [];
+    last.onChange((text) => seen.push(text));
+
+    last.set('Dobrý deň,\r\nďakujem\u001b[201~\u202e');
+
+    expect(last.get()).toBe('Dobrý deň, ďakujem[201~');
+    expect(seen).toEqual(['Dobrý deň, ďakujem[201~']);
+  });
+
+  it('ignores text that is empty after sanitizing and keeps the previous transcript', () => {
+    const last = new LastTranscript(new RecordingLogger());
+    const seen: string[] = [];
+    last.set('prvý');
+    last.onChange((text) => seen.push(text));
+
+    last.set(' \n\u0000\u200b ');
+
+    expect(last.get()).toBe('prvý');
+    expect(seen).toEqual([]);
+  });
 });

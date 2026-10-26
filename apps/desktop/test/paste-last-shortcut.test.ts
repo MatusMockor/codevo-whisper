@@ -47,6 +47,20 @@ describe('bindPasteLastShortcut', () => {
     expect(helper.clipboard).toBe('original');
   });
 
+  it('pastes the sanitized last transcript on the shortcut', async () => {
+    const helper = new FakeInputHelper({ clipboard: 'original' });
+    const lastTranscript = new LastTranscript();
+    lastTranscript.set('git status\ngit push --force\u001b[201~\u2067');
+    const logger = new RecordingLogger();
+    bindPasteLastShortcut(helper, new InsertionService(helper, await loadedSettings(), lastTranscript, immediate), logger);
+
+    helper.pressPasteLast();
+    await expect.poll(() => logger.infos).toEqual([{ message: 'Paste last transcript', detail: 'pasted' }]);
+
+    expect(helper.pasted).toEqual(['git status git push --force[201~']);
+    expect(helper.clipboard).toBe('original');
+  });
+
   it('logs a paste the helper could not post and keeps the transcript on the clipboard', async () => {
     const channel = protocolHelper();
     processHelper = new HelperProcessInputHelper(channel);

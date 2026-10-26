@@ -400,6 +400,31 @@ describe('SessionCoordinator', () => {
     expect(await harness.stats.days()).toEqual([]);
   });
 
+  it('inserts, stores and counts only the sanitized transcript', async () => {
+    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    vi.stubEnv('FAKE_CLI_TEXT', 'ahoj\n\u001b[201~svet\u202e\u200b');
+    const harness = await prepared();
+
+    await dictate(harness, 2);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['ahoj [201~svet']);
+    expect(harness.lastTranscript.get()).toBe('ahoj [201~svet');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+  });
+
+  it('treats a transcript with only control and invisible characters as silence', async () => {
+    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    vi.stubEnv('FAKE_CLI_TEXT', '\u001b\u200b\u202e\u0007\u2028');
+    const harness = await prepared();
+
+    await dictate(harness, 2);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
   it('keeps the last transcript and inserts when the statistics cannot be saved', async () => {
     await mkdir(join(scratch, 'stats.json'));
     const harness = await prepared();

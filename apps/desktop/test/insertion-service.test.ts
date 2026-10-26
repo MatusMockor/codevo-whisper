@@ -139,6 +139,51 @@ describe('InsertionService', () => {
     expect(helper.clipboard).toBe('original');
   });
 
+  it('pastes and restores sanitized text, never control or bidi characters', async () => {
+    const { helper, service } = await prepared();
+
+    const outcome = await service.insert(`echo ok\r\nrm -rf ~\u001b[201~\u0000 \u202eevil\u200b`, TEXT_EDIT);
+
+    expect(outcome).toBe('pasted');
+    expect(helper.pasted).toEqual(['echo ok rm -rf ~[201~ evil']);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('copies sanitized text when the setting asks for the clipboard', async () => {
+    const { helper, service } = await prepared({ settings: { insertion: 'clipboard' } });
+
+    expect(await service.insert('jeden\ndva\u2066', TEXT_EDIT)).toBe('copied-by-setting');
+    expect(helper.clipboard).toBe('jeden dva');
+  });
+
+  it('copies sanitized text when the focused element is not editable', async () => {
+    const { helper, service } = await prepared({ helper: { editable: false } });
+
+    expect(await service.insert('jeden\ndva\u2066', TEXT_EDIT)).toBe('copied-no-text-field');
+    expect(helper.clipboard).toBe('jeden dva');
+  });
+
+  it('skips text that is empty after sanitizing without touching the clipboard', async () => {
+    const { helper, sleeps, service } = await prepared();
+
+    const outcome = await service.insert(' \r\n\u001b\u200b\u202e ', TEXT_EDIT);
+
+    expect(outcome).toBe('nothing-to-insert');
+    expect(helper.pasted).toEqual([]);
+    expect(sleeps).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+
+  it('paste last and copy last deliver the sanitized last transcript', async () => {
+    const { helper, lastTranscript, service } = await prepared();
+    lastTranscript.set('predch\u00e1dzaj\u00faci\n\u001b[201~text\u200f');
+
+    expect(await service.copyLast()).toBe('copied');
+    expect(helper.clipboard).toBe('predchádzajúci [201~text');
+    expect(await service.pasteLast()).toBe('pasted');
+    expect(helper.pasted).toEqual(['predchádzajúci [201~text']);
+  });
+
   it('copies by setting', async () => {
     const { helper, sleeps, service } = await prepared({ settings: { insertion: 'clipboard' } });
 

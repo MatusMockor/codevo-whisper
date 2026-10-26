@@ -92,6 +92,7 @@ const INSERTION_STATES: Readonly<Record<InsertionOutcome, (appName: string) => O
   'blocked-secure-input': () => ({ kind: 'blocked', reason: 'secure' }),
   'blocked-modifiers-held': () => errorState(MESSAGES.modifiersHeld),
   'failed-clipboard-write': () => errorState(MESSAGES.clipboardFailed),
+  'nothing-to-insert': () => errorState(MESSAGES.nothingHeard),
 };
 
 export function insertionState(outcome: InsertionOutcome | null, appName: string): OverlayState {

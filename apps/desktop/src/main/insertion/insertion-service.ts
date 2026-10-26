@@ -5,6 +5,7 @@ import { writeClipboardOrRestore } from './guarded-clipboard';
 import type { LastTranscript } from './last-transcript';
 import { waitForShortcutRelease, type Sleep } from './modifier-release';
 import { isSameTarget } from './same-target';
+import { sanitizeInsertionText } from './sanitize-insertion-text';
 import { SerialQueue } from './serial-queue';
 
 export type InsertionOutcome =
@@ -15,7 +16,8 @@ export type InsertionOutcome =
   | 'blocked-focus-changed'
   | 'blocked-secure-input'
   | 'blocked-modifiers-held'
-  | 'failed-clipboard-write';
+  | 'failed-clipboard-write'
+  | 'nothing-to-insert';
 
 export type PasteLastOutcome = InsertionOutcome | 'no-transcript';
 
@@ -39,7 +41,7 @@ export class InsertionService {
   ) {}
 
   insert(text: string, target: AppTarget | null): Promise<InsertionOutcome> {
-    return this.queue.run(() => this.insertInto(text, target));
+    return this.queue.run(() => this.insertInto(sanitizeInsertionText(text), target));
   }
 
   pasteLast(): Promise<PasteLastOutcome> {
@@ -51,6 +53,9 @@ export class InsertionService {
   }
 
   private async insertInto(text: string, target: AppTarget | null): Promise<InsertionOutcome> {
+    if (text === '') {
+      return 'nothing-to-insert';
+    }
     if (this.copiesBySetting()) {
       return this.copy(text, 'copied-by-setting');
     }

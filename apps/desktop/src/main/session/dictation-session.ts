@@ -6,6 +6,7 @@ import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
 import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
+import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -272,7 +273,7 @@ export class DictationSession {
 
   private async transcribe(dictation: EngineDictation): Promise<string | null> {
     try {
-      return (await dictation.finish()).trim();
+      return sanitizeInsertionText(await dictation.finish());
     } catch (error) {
       if (this.controller.signal.aborted) {
         return null;
@@ -290,7 +291,7 @@ export class DictationSession {
     if (!(error instanceof TranscriptionFailedError)) {
       return errorState(MESSAGES.transcriptionFailed);
     }
-    const textSoFar = error.textSoFar.trim();
+    const textSoFar = sanitizeInsertionText(error.textSoFar);
     if (textSoFar !== '') {
       this.deps.lastTranscript.set(textSoFar);
     }
