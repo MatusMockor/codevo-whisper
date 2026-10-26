@@ -1,1 +1,3 @@
-export const SERVER_VERSION = '0.0.0';
+import manifest from '../package.json' with { type: 'json' };
+
+export const SERVER_VERSION: string = manifest.version;

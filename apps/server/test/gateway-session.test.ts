@@ -1,5 +1,5 @@
 import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { connect, type Socket } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -74,6 +74,16 @@ async function collectUntilDone(session: TestSession): Promise<ServerMessage[]> 
 }
 
 describe('gateway sessions', () => {
+  it('announces the server package version in ready', async () => {
+    const manifest = JSON.parse(await readFile(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string };
+    const server = await start();
+    const device = await server.addDevice();
+    const session = await connectSession(server.url, device, server.serverKey.publicKey);
+
+    expect(manifest.version).toBe('0.2.0');
+    expect(await session.next()).toEqual({ type: 'ready', serverVersion: manifest.version });
+  });
+
   it('transcribes a session end to end', async () => {
     const server = await start();
     const session = await readySession(server);
