@@ -23,7 +23,3 @@ export function SettingsRow({ title, titleId, description, children }: SettingsR
     </div>
   );
 }
-
-export function ComingSoon() {
-  return <span className="soon">Príde v ďalšej verzii</span>;
-}

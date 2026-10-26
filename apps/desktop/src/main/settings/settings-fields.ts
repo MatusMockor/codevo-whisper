@@ -58,7 +58,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   engineOrder: isEngineOrder,
   localModelId: isNullableText,
   insertion: oneOf(['paste', 'clipboard']),
-  overlay: oneOf(['indicator']),
+  overlay: oneOf(['indicator', 'live']),
   launchAtLogin: isBoolean,
   onboardingDone: isBoolean,
 });

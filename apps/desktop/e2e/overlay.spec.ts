@@ -69,6 +69,58 @@ test('overlay window is not focusable and shows the recording state from an inje
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);
 });
 
+test('Živý text shows confirmed words solid and tentative words lighter, grows upward and never takes focus', async () => {
+  const mainFocusedBefore = (await panelFlags()).mainFocused;
+  const recording = { kind: 'recording', elapsedMs: 4200, level: 0.6, language: 'SK' } as const;
+  await inject({ ...recording, live: { confirmed: '', tentative: '' } });
+  const overlay = await overlayPage();
+  const card = overlay.getByRole('status', { name: 'Nahrávam' });
+  await expect(card).toContainText('0:04');
+  await expect(overlay.locator('.ov-text')).toHaveCount(0);
+  const empty = await card.boundingBox();
+
+  await inject({ ...recording, live: { confirmed: 'ahoj Peter pozrel som si ten pull request vyzerá to', tentative: 'dobre len by' } });
+
+  const confirmed = overlay.locator('.ov-text .w:not(.t)');
+  const tentative = overlay.locator('.ov-text .w.t');
+  await expect(confirmed).toHaveText('ahoj Peter pozrel som si ten pull request vyzerá to');
+  await expect(tentative).toHaveText('dobre len by');
+  const color = (locator: typeof confirmed) => locator.evaluate((element) => getComputedStyle(element).color);
+  expect(await color(tentative)).not.toBe(await color(confirmed));
+  const oneLine = await card.boundingBox();
+  const text = await overlay.locator('.ov-text').boundingBox();
+  const bar = await card.locator('.ov-bar').boundingBox();
+  expect((text?.y ?? 0) + (text?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 1);
+  expect(Math.abs((oneLine?.y ?? 0) + (oneLine?.height ?? 0) - ((empty?.y ?? 0) + (empty?.height ?? 0)))).toBeLessThanOrEqual(1);
+  expect(oneLine?.y ?? 0).toBeLessThan(empty?.y ?? 0);
+
+  const long = Array.from({ length: 40 }, (_value, index) => `slovo${index}`).join(' ');
+  await inject({ ...recording, live: { confirmed: long, tentative: 'posledné slová' } });
+  await expect(tentative).toHaveText('posledné slová');
+  const full = await card.boundingBox();
+  expect(full?.y ?? 0).toBeLessThan(oneLine?.y ?? 0);
+  expect(full?.y ?? -1).toBeGreaterThanOrEqual(0);
+  expect((await overlay.locator('.ov-text').boundingBox())?.height ?? Infinity).toBeLessThanOrEqual(82);
+  await expect(overlay.locator('.ov-notice')).toHaveCount(0);
+
+  await inject({ kind: 'processing', live: { confirmed: 'ahoj Peter, pozrel som si ten pull request.', tentative: '' } });
+  await expect(overlay.getByText('Spracúvam')).toBeVisible();
+  await expect(confirmed).toHaveText('ahoj Peter, pozrel som si ten pull request.');
+  await expect(tentative).toHaveCount(0);
+
+  expect(await panelFlags()).toMatchObject({ focusable: false, visible: true, focused: false, mainFocused: mainFocusedBefore });
+});
+
+test('Živý text keeps the fallback notice inside the panel', async () => {
+  const long = Array.from({ length: 40 }, (_value, index) => `slovo${index}`).join(' ');
+  await inject({ kind: 'recording', elapsedMs: 1000, level: 0.2, language: 'SK', fallbackDevice: 'AirPods Pro', live: { confirmed: long, tentative: 'a ďalej' } });
+  const overlay = await overlayPage();
+
+  const notice = overlay.getByText('Mikrofón AirPods Pro nie je pripojený, používam predvolený');
+  await expect(notice).toBeVisible();
+  expect((await notice.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+});
+
 test('hiding clears the rendered state so the next show never flashes the previous result', async () => {
   await inject({ kind: 'inserted', appName: 'Notes' });
   const overlay = await overlayPage();
