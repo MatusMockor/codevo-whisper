@@ -80,7 +80,7 @@ The timer-driven silent sink kept pace with the microphone: no gaps and no drift
 - Both tests failed before the fix and pass after it. The capture spec with `--repeat-each 6` right after a fresh build under the 18-process CPU stress passed 48/48; the missing start was 2-13 ms against a 100 ms slack.
 - Pre-warm: `test/capture-prewarm.test.ts` (3 tests) and the capture e2e "loads the capture page once the main window is shown, without opening the microphone" both failed before the change.
 - Final checks: `pnpm lint` clean, `pnpm typecheck` clean, `pnpm test` 1064 passed and 1 skipped. Full desktop e2e right after a fresh build: 52 passed and 1 skipped (the opt-in 60 s check) at load average about 15, without stealing focus.
-- CodeRabbit: first round 1 finding (use a monotonic clock in the test helper), fixed. The second round after the follow-ups: see the end of this report.
+- CodeRabbit: first round 1 finding (use a monotonic clock in the test helper), fixed. The second round after the review follow-ups was rate-limited (free tier, 3 reviews used up); the controller runs CodeRabbit on the whole repo at the end.
 
 ## Deviations
 
