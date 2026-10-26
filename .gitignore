@@ -15,3 +15,4 @@ native/macos-helper/build/
 native/transcribe/work/
 .env
 native/stt-worker/work/
+.superpowers/
