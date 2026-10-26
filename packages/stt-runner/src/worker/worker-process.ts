@@ -18,6 +18,7 @@ export class WorkerProcess {
   private stderr = '';
   private started = false;
   private exited = false;
+  private stopped = false;
   private settleReady: { resolve: () => void; reject: (error: Error) => void } = { resolve: () => undefined, reject: () => undefined };
 
   constructor(command: WorkerCommand) {
@@ -45,11 +46,15 @@ export class WorkerProcess {
   }
 
   get alive(): boolean {
-    return !this.exited;
+    return !this.exited && !this.stopped;
+  }
+
+  get crashed(): boolean {
+    return this.exited && !this.stopped;
   }
 
   request(frame: Uint8Array): Promise<string> {
-    if (this.exited) {
+    if (!this.alive) {
       return Promise.reject(new TranscribeCliError('exit', 'transcribe worker is not running'));
     }
     return new Promise<string>((resolve, reject) => {
@@ -59,6 +64,7 @@ export class WorkerProcess {
   }
 
   kill(): void {
+    this.stopped = true;
     this.child.stdin.end();
     this.child.kill('SIGKILL');
   }

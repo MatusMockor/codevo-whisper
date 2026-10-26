@@ -6,10 +6,15 @@ const argsFile = process.env.FAKE_WORKER_ARGS_FILE;
 const delayMs = Number(process.env.FAKE_WORKER_DELAY_MS ?? '0');
 const crashSamples = Number(process.env.FAKE_WORKER_CRASH_SAMPLES ?? '-1');
 const slowSamples = Number(process.env.FAKE_WORKER_SLOW_SAMPLES ?? '-1');
+const slowMs = Number(process.env.FAKE_WORKER_SLOW_MS ?? '5000');
+const loadDelayMs = Number(process.env.FAKE_WORKER_LOAD_DELAY_MS ?? '0');
 const replyText = process.env.FAKE_WORKER_REPLY_TEXT;
 
 if (argsFile) {
   appendFileSync(argsFile, `${process.argv.slice(2).join(' ')}\n`);
+}
+if (process.env.FAKE_WORKER_SPAWNS_FILE) {
+  appendFileSync(process.env.FAKE_WORKER_SPAWNS_FILE, `${Date.now()}\n`);
 }
 
 function reply(status, text) {
@@ -47,7 +52,7 @@ function nextRequest() {
 }
 
 async function handle(request) {
-  await sleep(request.samples === slowSamples ? 5_000 : delayMs);
+  await sleep(request.samples === slowSamples ? slowMs : delayMs);
   if (request.samples === crashSamples) {
     process.exit(3);
   }
@@ -68,4 +73,4 @@ process.stdin.on('data', (chunk) => {
 process.stdin.on('end', () => {
   void busy.then(() => process.exit(0));
 });
-reply(2, '');
+setTimeout(() => reply(2, ''), loadDelayMs);
