@@ -2,6 +2,7 @@ import type { CaptureRequest, RawAudioDevice } from '../../shared/capture-contra
 
 export interface CaptureHost {
   request(request: CaptureRequest): Promise<unknown>;
+  prewarm(): void;
   watchDevices(): void;
   discard(): void;
   onFrame(listener: (pcm: Uint8Array) => void): () => void;

@@ -1,5 +1,6 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
+import { isCapturePage } from './app-windows';
 import { createUserDataDir, FAKE_DEVICE_ARGS, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks; levelCount: number };
@@ -8,6 +9,8 @@ type TimedRecording = { bytes: number; calledAt: number; startedAt: number; stop
 
 type StreamWindow = Window & { capturedStreams: MediaStream[] };
 
+type LiveObjectType = 'AudioContext' | 'MediaStream';
+
 const RECORD_MS = 1000;
 const WARM_UP_MS = 300;
 const BYTES_PER_MS = 32;
@@ -15,6 +18,7 @@ const LEVEL_INTERVAL_MS = 50;
 const END_SLACK_MS = 100;
 const START_SLACK_MS = 100;
 const LEVEL_TOLERANCE = 2;
+const SETTLE_MS = 750;
 const SYSTEM_DEFAULT = { deviceId: null, label: null };
 
 let app: ElectronApplication;
@@ -24,7 +28,7 @@ async function openCapturePage(): Promise<Page> {
   await app.evaluate(async () => {
     await (globalThis as unknown as HookGlobal).codevoE2e.capture.listDevices();
   });
-  const page = app.windows().find((candidate) => candidate.url().endsWith('/capture/capture.html'));
+  const page = app.windows().find(isCapturePage);
   expect(page).toBeDefined();
   const capture = page as Page;
   await capture.evaluate(() => {
@@ -75,6 +79,25 @@ function record(recordMs: number): Promise<TimedRecording> {
   );
 }
 
+async function liveObjects(page: Page, type: LiveObjectType): Promise<number> {
+  const cdp = await page.context().newCDPSession(page);
+  const prototype = await cdp.send('Runtime.evaluate', { expression: `${type}.prototype` });
+  expect(prototype.result.objectId).toBeDefined();
+  const instances = await cdp.send('Runtime.queryObjects', { prototypeObjectId: prototype.result.objectId ?? '' });
+  expect(instances.objects.objectId).toBeDefined();
+  const count = await cdp.send('Runtime.callFunctionOn', {
+    objectId: instances.objects.objectId ?? '',
+    functionDeclaration: 'function () { return this.length; }',
+    returnByValue: true,
+  });
+  await cdp.detach();
+  return Number(count.result.value);
+}
+
+async function openedAudio(page: Page): Promise<{ contexts: number; streams: number }> {
+  return { contexts: await liveObjects(page, 'AudioContext'), streams: await liveObjects(page, 'MediaStream') };
+}
+
 function launchWith(chromiumArgs: readonly string[]): void {
   test.beforeEach(async () => {
     userDataDir = await createUserDataDir();
@@ -102,6 +125,21 @@ function requestMedia(constraints: MediaStreamConstraints): Promise<string> {
 
 test.describe('with Chromium fake media', () => {
   launchWith(FAKE_MEDIA_ARGS);
+
+  test('loads the capture page once the main window is shown, without opening the microphone', async () => {
+    const main = await app.firstWindow();
+    expect(isCapturePage(main)).toBe(false);
+
+    await expect.poll(() => app.windows().some(isCapturePage)).toBe(true);
+    const capture = app.windows().find(isCapturePage) as Page;
+    await capture.waitForLoadState('load');
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+
+    expect(await openedAudio(capture)).toEqual({ contexts: 0, streams: 0 });
+    await app.evaluate((_electron, chosen) => (globalThis as unknown as HookGlobal).codevoE2e.capture.startMeter(chosen), SYSTEM_DEFAULT);
+    expect(await openedAudio(capture)).toEqual({ contexts: 1, streams: 1 });
+    await app.evaluate(() => (globalThis as unknown as HookGlobal).codevoE2e.capture.stopMeter());
+  });
 
   test('records 16 kHz PCM16 from the moment start resolves and releases the microphone', async () => {
     const capture = await openCapturePage();

@@ -5,6 +5,7 @@ export class FakeCaptureHost implements CaptureHost {
   readonly requests: CaptureRequest[] = [];
   devices: RawAudioDevice[] = [{ deviceId: 'built-in-id', label: 'MacBook Pro Microphone' }];
   startResult: unknown = { label: 'MacBook Pro Microphone', fallback: false };
+  prewarms = 0;
   private readonly frameListeners = new Set<(pcm: Uint8Array) => void>();
 
   request(request: CaptureRequest): Promise<unknown> {
@@ -16,6 +17,10 @@ export class FakeCaptureHost implements CaptureHost {
       return Promise.resolve(this.startResult);
     }
     return Promise.resolve(null);
+  }
+
+  prewarm(): void {
+    this.prewarms += 1;
   }
 
   watchDevices(): void {}

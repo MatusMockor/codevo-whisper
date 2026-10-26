@@ -1,4 +1,5 @@
 import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
+import { appWindows } from './app-windows';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Settings } from '../src/shared/settings';
@@ -99,7 +100,7 @@ test.describe('settings api', () => {
     await start();
 
     await expect(page).toHaveTitle('Codevo Whisper');
-    expect(app.windows()).toHaveLength(1);
+    expect(appWindows(app)).toHaveLength(1);
     expect(await page.evaluate(() => window.codevo.getSettings())).toEqual(DEFAULTS);
   });
 
