@@ -1,7 +1,9 @@
-import { ProtocolError, type Language } from '@codevo-whisper/protocol';
+import { MAX_TEXT_CHARS, ProtocolError, type Language } from '@codevo-whisper/protocol';
+import { readLimitedJson } from './read-limited-json';
 import type { SttClient, SttHealth, SttHealthCheck } from './stt-client';
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+export const DEFAULT_STT_TIMEOUT_MS = 40_000;
+export const MAX_STT_RESPONSE_BYTES = 128 * 1024;
 const HEALTH_TIMEOUT_MS = 2_000;
 
 function hasText(value: unknown): value is { text: string } {
@@ -19,23 +21,26 @@ function unavailable(message: string, cause?: unknown): ProtocolError {
 export class HttpSttClient implements SttClient, SttHealthCheck {
   constructor(
     private readonly baseUrl: string,
-    private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
+    private readonly timeoutMs = DEFAULT_STT_TIMEOUT_MS,
   ) {}
 
   async transcribe(pcm: Uint8Array, language: Language, signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
     const response = await this.post(pcm, language, signal);
     if (response.status === 503) {
+      await response.body?.cancel().catch(() => undefined);
       throw new ProtocolError('busy', 'the STT engine is busy');
     }
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       throw unavailable(`the STT engine answered ${response.status}`);
     }
-    const body: unknown = await response.json().catch((error: unknown) => {
-      throw unavailable('the STT engine sent invalid JSON', error);
-    });
+    const body = await readLimitedJson(response, MAX_STT_RESPONSE_BYTES);
     if (!hasText(body)) {
       throw unavailable('the STT engine sent no text');
+    }
+    if ([...body.text].length > MAX_TEXT_CHARS) {
+      throw unavailable('the STT engine sent more text than the protocol allows');
     }
     return body.text;
   }

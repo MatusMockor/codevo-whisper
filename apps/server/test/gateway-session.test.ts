@@ -252,17 +252,26 @@ describe('gateway sessions', () => {
     await waitUntil(() => lines.some((line) => line.includes('"result":"cancelled"')));
   });
 
-  it('caps outbound transcript text at the protocol limit', async () => {
+  it('passes transcript text at the protocol limit and rejects longer STT text', async () => {
+    let text = 'á'.repeat(16_000);
     await fake.close();
-    fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text: 'á'.repeat(20_000) } }) });
+    fake = await startFakeSttServer({ respond: () => ({ status: 200, body: { text } }) });
     const server = await start();
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
     sendAudio(session, pcmSeconds(1));
     session.send({ type: 'finish' });
-
     const [final] = await collectUntilDone(session);
     expect(final?.type === 'final' ? [...final.text].length : 0).toBe(16_000);
+
+    text = 'á'.repeat(16_001);
+    session.send({ type: 'start', sessionId: 's2', language: 'sk' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 's2', segmentId: 0, text: '' },
+      { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 's2' },
+    ]);
   });
 
   it('reports stt_unavailable', async () => {

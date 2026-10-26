@@ -109,8 +109,8 @@ describe('live dictation', () => {
     expect(stt.requests.every((request) => request.language === 'cs')).toBe(true);
   });
 
-  it('caps partial text at the protocol limit', async () => {
-    const { server } = await start({ respond: () => ({ status: 200, body: { text: 'á'.repeat(20_000) } }) });
+  it('passes partial text at the protocol limit', async () => {
+    const { server } = await start({ respond: () => ({ status: 200, body: { text: 'á'.repeat(MAX_TEXT_CHARS) } }) });
     const { session } = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk', partials: true });
     await streamPaced([session], speech(2), { clock, yieldMs: 3 });
