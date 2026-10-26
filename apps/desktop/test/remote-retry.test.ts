@@ -4,6 +4,7 @@ import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import { continuousSpeech } from '../../server/test/support/speech';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
 
@@ -48,6 +49,12 @@ function speak(dictation: EngineDictation, bytes: number): void {
   }
 }
 
+function talk(dictation: EngineDictation, pcm: Uint8Array): void {
+  for (let offset = 0; offset < pcm.length; offset += FRAME) {
+    dictation.push(pcm.subarray(offset, offset + FRAME));
+  }
+}
+
 const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('RemoteDictation retry', () => {
@@ -78,8 +85,8 @@ describe('RemoteDictation retry', () => {
   });
 
   it('gives up after the second drop and keeps the best text so far', async () => {
-    const { server, relay, dictation } = await setup({ ...bySize, delayMs: 200 });
-    speak(dictation, 26 * SECOND);
+    const { server, relay, dictation } = await setup({ respond: (pcm) => ({ status: 200, body: { text: pcm.length === 25 * SECOND ? 'prvá časť textu' : 'textu a koniec' } }), delayMs: 200 });
+    talk(dictation, continuousSpeech(26));
     const finished = dictation.finish();
     await expect.poll(() => server.stt.requests.length).toBe(2);
     await settle(50);
@@ -88,7 +95,7 @@ describe('RemoteDictation retry', () => {
 
     relay.dropAll();
 
-    await expect(finished).rejects.toMatchObject({ reason: 'connection-lost', textSoFar: 'úsek800000' });
+    await expect(finished).rejects.toMatchObject({ reason: 'connection-lost', textSoFar: 'prvá časť' });
     expect(relay.connections()).toBe(2);
   });
 

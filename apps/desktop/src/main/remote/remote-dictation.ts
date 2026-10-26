@@ -119,7 +119,7 @@ export class RemoteDictation implements EngineDictation {
     if (this.deps.options.partials !== true) {
       return start;
     }
-    return { ...start, partials: true } as ClientMessage;
+    return { ...start, partials: true };
   }
 
   private pump(): void {

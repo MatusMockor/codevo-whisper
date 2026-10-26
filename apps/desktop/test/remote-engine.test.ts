@@ -4,7 +4,9 @@ import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import type { RemoteFailureKind } from '../src/main/remote/remote-failure';
 import { ServerConnector, type ConnectionObserver } from '../src/main/remote/server-connector';
+import type { ServerOptions } from '../../server/src/app';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import { continuousSpeech, speech } from '../../server/test/support/speech';
 import { startTestGateway, type TestGateway } from './support/gateway';
 
 const FRAME = 3200;
@@ -36,40 +38,61 @@ async function prepared(remote: RemoteEngine): Promise<PreparedEngine> {
   return (preparation as Extract<Preparation, { ready: true }>).engine;
 }
 
-function speak(dictation: EngineDictation, bytes: number, frame = FRAME): void {
-  for (let offset = 0; offset < bytes; offset += frame) {
-    dictation.push(new Uint8Array(Math.min(frame, bytes - offset)).fill(7));
+function speak(dictation: EngineDictation, bytes: number): void {
+  for (let offset = 0; offset < bytes; offset += FRAME) {
+    dictation.push(new Uint8Array(Math.min(FRAME, bytes - offset)).fill(7));
   }
 }
 
-async function startWith(stt: FakeSttBehaviour): Promise<{ gateway: TestGateway; pairing: ServerPairing }> {
-  gateway = await startTestGateway({ stt });
+async function talkInRealTime(dictation: EngineDictation, pcm: Uint8Array, clock: { now: number }): Promise<void> {
+  for (let offset = 0; offset < pcm.length; offset += 10 * SECOND) {
+    talk(dictation, pcm.subarray(offset, offset + 10 * SECOND));
+    clock.now += 10_000;
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
+function talk(dictation: EngineDictation, pcm: Uint8Array): void {
+  for (let offset = 0; offset < pcm.length; offset += FRAME) {
+    dictation.push(pcm.subarray(offset, offset + FRAME));
+  }
+}
+
+async function startWith(stt: FakeSttBehaviour, server: ServerOptions = {}): Promise<{ gateway: TestGateway; pairing: ServerPairing }> {
+  gateway = await startTestGateway({ stt, server });
   return { gateway, pairing: await gateway.addDevice() };
 }
 
 const bySize: FakeSttBehaviour = { respond: (pcm) => ({ status: 200, body: { text: `úsek${pcm.length}` } }) };
 
 describe('RemoteEngine', () => {
-  it('streams the recording and joins the finals in segment order', async () => {
-    const { gateway: server, pairing } = await startWith(bySize);
+  it('streams the recording and joins the finals in segment order without repeating the overlap', async () => {
+    const { gateway: server, pairing } = await startWith({ respond: (pcm) => ({ status: 200, body: { text: pcm.length === 25 * SECOND ? 'ahoj toto je prvá časť' : 'časť a koniec diktátu' } }) });
     const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
 
-    speak(dictation, 26 * SECOND);
+    talk(dictation, continuousSpeech(26));
 
-    expect(await dictation.finish()).toBe('úsek800000 úsek32000');
+    expect(await dictation.finish()).toBe('ahoj toto je prvá časť a koniec diktátu');
     expect(server.stt.requests).toEqual([
-      { language: 'sk', bytes: 800000 },
-      { language: 'sk', bytes: 32000 },
+      { language: 'sk', bytes: 25 * SECOND },
+      { language: 'sk', bytes: 2 * SECOND },
     ]);
   });
 
   it('leaves empty finals out of the text', async () => {
-    const { pairing } = await startWith({ respond: (pcm) => ({ status: 200, body: { text: pcm.length === SECOND ? '' : 'prvý' } }) });
+    let calls = 0;
+    const { gateway: server, pairing } = await startWith({
+      respond: () => {
+        calls += 1;
+        return { status: 200, body: { text: calls === 1 ? 'prvá veta' : '' } };
+      },
+    });
     const dictation = (await prepared(engine(pairing))).start({ language: 'cs', signal: new AbortController().signal });
 
-    speak(dictation, 26 * SECOND);
+    talk(dictation, speech(26));
 
-    expect(await dictation.finish()).toBe('prvý');
+    expect(await dictation.finish()).toBe('prvá veta');
+    expect(server.stt.requests).toHaveLength(2);
   });
 
   it('is not ready without a pairing, while the server is down and after a revoke', async () => {
@@ -99,19 +122,20 @@ describe('RemoteEngine', () => {
   });
 
   it('keeps the text recognised before a later segment failed', async () => {
-    const { pairing } = await startWith({ respond: (pcm) => (pcm.length === SECOND ? { status: 500, body: {} } : { status: 200, body: { text: 'začiatok' } }) });
+    const { pairing } = await startWith({ respond: (pcm) => (pcm.length === 2 * SECOND ? { status: 500, body: {} } : { status: 200, body: { text: 'toto je začiatok' } }) });
     const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
 
-    speak(dictation, 26 * SECOND);
+    talk(dictation, continuousSpeech(26));
 
-    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: 'začiatok' });
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: 'toto je začiatok' });
   });
 
   it('reports a dictation longer than the server allows', async () => {
-    const { pairing } = await startWith(bySize);
+    const clock = { now: Date.now() };
+    const { pairing } = await startWith(bySize, { clock: () => clock.now });
     const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
 
-    speak(dictation, 601 * SECOND, SECOND);
+    await talkInRealTime(dictation, speech(601), clock);
 
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'too-long' });
   });

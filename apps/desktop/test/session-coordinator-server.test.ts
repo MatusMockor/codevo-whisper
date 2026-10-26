@@ -23,6 +23,7 @@ import { StatsStore } from '../src/main/stats/stats-store';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import { continuousSpeech } from '../../server/test/support/speech';
 import { FAKE_CLI } from '../../../packages/stt-runner/test/support/fake-cli';
 import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
@@ -91,10 +92,10 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   return { helper, capture, lastTranscript, states, opened, pairing, logger };
 }
 
-async function dictate(harness: Awaited<ReturnType<typeof prepared>>, marker: number, seconds = 1): Promise<void> {
+async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
   harness.helper.pressKey('down', FN.keycode);
   await expect.poll(() => harness.capture.recording).toBe(true);
-  harness.capture.speak(stampedPcm(marker, seconds));
+  harness.capture.speak(pcm);
   harness.helper.pressKey('up', FN.keycode);
 }
 
@@ -106,7 +107,7 @@ describe('SessionCoordinator with the server engine', () => {
   it('transcribes on the server when the order says Server', async () => {
     const harness = await prepared({ engineOrder: ['server'] }, { respond: () => ({ status: 200, body: { text: 'zo servera' } }) });
 
-    await dictate(harness, 4);
+    await dictate(harness, stampedPcm(4));
 
     await expect.poll(() => harness.helper.pasted).toEqual(['zo servera']);
     expect(gateway.stt.requests).toEqual([{ language: 'sk', bytes: 32000 }]);
@@ -116,7 +117,7 @@ describe('SessionCoordinator with the server engine', () => {
     const harness = await prepared({ engineOrder: ['server', 'local'] });
     await gateway.stop();
 
-    await dictate(harness, 6);
+    await dictate(harness, stampedPcm(6));
 
     await expect.poll(() => harness.helper.pasted).toEqual(['6:32000']);
     expect(gateway.stt.requests).toEqual([]);
@@ -125,7 +126,7 @@ describe('SessionCoordinator with the server engine', () => {
   it('uses the server when local is not ready and the order allows it', async () => {
     const harness = await prepared({ engineOrder: ['local', 'server'], localModelId: null }, { respond: () => ({ status: 200, body: { text: 'záložný server' } }) });
 
-    await dictate(harness, 2);
+    await dictate(harness, stampedPcm(2));
 
     await expect.poll(() => harness.helper.pasted).toEqual(['záložný server']);
   });
@@ -133,19 +134,19 @@ describe('SessionCoordinator with the server engine', () => {
   it('never sends audio to the server with the local order even without a model', async () => {
     const harness = await prepared({ engineOrder: ['local'], localModelId: null });
 
-    await dictate(harness, 2);
+    await dictate(harness, stampedPcm(2));
 
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.noModel });
     expect(gateway.stt.requests).toEqual([]);
   });
 
   it('keeps the text recognised before the server failed and offers to copy it', async () => {
-    const harness = await prepared({ engineOrder: ['server'] }, { respond: (pcm) => (pcm.length === 32000 ? { status: 500, body: {} } : { status: 200, body: { text: 'začiatok' } }) });
+    const harness = await prepared({ engineOrder: ['server'] }, { respond: (pcm) => (pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'toto je začiatok' } }) });
 
-    await dictate(harness, 3, 26);
+    await dictate(harness, continuousSpeech(26));
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
-    expect(harness.lastTranscript.get()).toBe('začiatok');
+    expect(harness.lastTranscript.get()).toBe('toto je začiatok');
     expect(harness.helper.pasted).toEqual([]);
   });
 
@@ -153,7 +154,7 @@ describe('SessionCoordinator with the server engine', () => {
     const opening = Promise.withResolvers<void>();
     const harness = await prepared({ engineOrder: ['server'] }, {}, opening.promise);
 
-    await dictate(harness, 4);
+    await dictate(harness, stampedPcm(4));
     await new Promise((resolve) => setTimeout(resolve, 50));
     coordinator?.dispose();
     opening.resolve();
@@ -168,7 +169,7 @@ describe('SessionCoordinator with the server engine', () => {
     const harness = await prepared({ engineOrder: ['server', 'local'] });
     await gateway.admin({ cmd: 'revoke', deviceId: harness.pairing.deviceId });
 
-    await dictate(harness, 4);
+    await dictate(harness, stampedPcm(4));
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverRepair, action: 'open-server' });
     expect(harness.helper.pasted).toEqual([]);
@@ -180,7 +181,7 @@ describe('SessionCoordinator with the server engine', () => {
     const harness = await prepared({ engineOrder: ['server'] }, { delayMs: 400, respond: () => ({ status: 200, body: { text: 'po aktualizácii' } }) });
     const guard = coordinatorDictationGuard({ coordinator: () => coordinator as SessionCoordinator, microphone: new WindowAudioCapture(new FakeCaptureHost(), harness.logger), meter: { stopMeter: () => Promise.resolve() }, logger: harness.logger });
 
-    await dictate(harness, 3);
+    await dictate(harness, stampedPcm(3));
     await expect.poll(() => gateway.stt.requests.length).toBe(1);
 
     expect(guard.isDictating()).toBe(true);
