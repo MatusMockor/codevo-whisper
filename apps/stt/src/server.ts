@@ -100,7 +100,8 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
       return;
     }
     if (request.method === 'GET' && url.pathname === '/health') {
-      reply(response, 200, { status: 'UP', busy: handler.isBusy() });
+      const ready = options.transcriber.ready();
+      reply(response, ready ? 200 : 503, { status: ready ? 'UP' : 'DOWN', busy: handler.isBusy() });
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {

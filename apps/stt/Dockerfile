@@ -50,6 +50,6 @@ ENV NODE_ENV=production \
   STT_PORT=8001
 USER node
 EXPOSE 8001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:8001/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "dist/main.js"]

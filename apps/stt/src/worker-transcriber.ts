@@ -12,6 +12,10 @@ export class WorkerTranscriber implements Transcriber {
     return this.worker.transcribe({ pcm, language, signal });
   }
 
+  ready(): boolean {
+    return this.worker.ready();
+  }
+
   warmUp(): Promise<void> {
     return this.worker.warmUp();
   }

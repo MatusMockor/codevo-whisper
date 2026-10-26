@@ -10,6 +10,10 @@ export class CliTranscriber implements Transcriber {
     return runTranscribeCli({ ...this.options, language, pcm, signal });
   }
 
+  ready(): boolean {
+    return true;
+  }
+
   warmUp(): Promise<void> {
     return Promise.resolve();
   }

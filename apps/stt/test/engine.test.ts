@@ -13,6 +13,19 @@ const FAKE_WORKER = fileURLToPath(new URL('../../../packages/stt-runner/test/sup
 let server: SttServer | undefined;
 let transcriber: Transcriber | undefined;
 
+function get(path: string): Promise<{ status: number; body: unknown }> {
+  const { port } = server?.address() as AddressInfo;
+  return new Promise((resolve, reject) => {
+    const outgoing = request({ host: '127.0.0.1', port, path, method: 'GET' }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('end', () => resolve({ status: response.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown }));
+    });
+    outgoing.on('error', reject);
+    outgoing.end();
+  });
+}
+
 function post(path: string, body: Uint8Array): Promise<{ status: number; text: string }> {
   const { port } = server?.address() as AddressInfo;
   return new Promise((resolve, reject) => {
@@ -47,6 +60,15 @@ describe('engine selection', () => {
     expect(first.status).toBe(200);
     expect(first.text).toMatch(/^\d+:sk:16000$/);
     expect(second.text).toBe(`${first.text.split(':')[0] ?? ''}:auto:3200`);
+  });
+
+  it('reports DOWN until the resident worker answered ready', async () => {
+    transcriber = createTranscriber({ ...loadSttConfig({}), workerBinary: FAKE_WORKER });
+    server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
+
+    expect(await get('/health')).toEqual({ status: 503, body: { status: 'DOWN', busy: false } });
+    await transcriber.warmUp();
+    expect(await get('/health')).toEqual({ status: 200, body: { status: 'UP', busy: false } });
   });
 
   it('keeps the per-call CLI engine available', () => {
