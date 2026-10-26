@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
 import type { InputHelper } from '../helper/input-helper';
+import { EngineSelector } from '../engines/engine-selector';
 import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
 import { HotkeyService } from '../hotkey/hotkey-service';
@@ -32,6 +33,7 @@ import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
 import { createInputHelper } from './input-helper-factory';
 import { createModels } from './model-wiring';
+import { createServerServices } from './server-wiring';
 import { createSettingsServices } from './settings-wiring';
 import { QuitGate, type QuitEvent } from './quit-gate';
 import { startInput } from './start-input';
@@ -105,7 +107,8 @@ export function composeApplication(logger: Logger): Application {
       logger,
       inputReady: input.promise,
     });
-    const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, window: mainWindow, logger });
+    const server = createServerServices({ settings, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
     const rearm = new HotkeyRearm(permissions, hotkey, logger);
@@ -128,6 +131,7 @@ export function composeApplication(logger: Logger): Application {
       models: models.manager,
       actions: settingsServices.actions,
       microphones: settingsServices.microphones,
+      server: server.service,
       source: rendererSource(),
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
@@ -139,7 +143,7 @@ export function composeApplication(logger: Logger): Application {
     const coordinator = new SessionCoordinator({
       hotkey,
       capture,
-      engine: models.engine,
+      engines: new EngineSelector([models.engine, server.engine]),
       insertion,
       lastTranscript,
       helper,
@@ -148,6 +152,7 @@ export function composeApplication(logger: Logger): Application {
       pause,
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
+      openServer: () => mainWindow.open('server'),
       logger,
     });
     const tray = new TrayMenu({
@@ -175,6 +180,7 @@ export function composeApplication(logger: Logger): Application {
       () => overlay.destroy(),
       () => home.dispose(),
       () => settingsServices.dispose(),
+      () => server.dispose(),
       () => updates.dispose(),
     );
     exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake, loadUpdater: loadAutoUpdater });

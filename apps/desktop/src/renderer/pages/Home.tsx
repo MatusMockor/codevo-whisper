@@ -11,13 +11,13 @@ import { liveValueOr, useLiveValue } from '../home/live-value';
 import { useLastTranscript } from '../home/use-last-transcript';
 import { useToday } from '../home/use-today';
 
-type HomeProps = { onOpenSettings: () => void };
+type HomeProps = { onOpenSettings: () => void; onOpenServer: () => void };
 
 const loadStatus = () => window.codevo.getStatus();
 
 const loadStats = () => window.codevo.getStats();
 
-export function Home({ onOpenSettings }: HomeProps) {
+export function Home({ onOpenSettings, onOpenServer }: HomeProps) {
   const [period, setPeriod] = useState<StatsPeriod>('today');
   const status = useLiveValue('status-changed', loadStatus);
   const stats = useLiveValue('stats-changed', loadStats);
@@ -28,7 +28,7 @@ export function Home({ onOpenSettings }: HomeProps) {
 
   return (
     <div className="home">
-      <StatusBanner status={status} onOpenSettings={onOpenSettings} />
+      <StatusBanner status={status} onOpenSettings={onOpenSettings} onOpenServer={onOpenServer} />
       <div className="stats-head">
         <h2 id="h-stats">Štatistiky</h2>
         <PeriodSwitch value={period} onChange={setPeriod} />

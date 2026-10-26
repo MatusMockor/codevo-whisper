@@ -1,4 +1,4 @@
-export const OVERLAY_ACTIONS = ['open-settings', 'copy-last'] as const;
+export const OVERLAY_ACTIONS = ['open-settings', 'copy-last', 'open-server'] as const;
 
 export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 
@@ -11,7 +11,7 @@ export type OverlayState =
   | { kind: 'inserted'; appName: string }
   | { kind: 'copied' }
   | { kind: 'blocked'; reason: BlockedReason }
-  | { kind: 'error'; message: string; action?: 'open-settings' };
+  | { kind: 'error'; message: string; action?: OverlayAction };
 
 export type OverlayBridge = {
   onState(listener: (state: OverlayState) => void): () => void;

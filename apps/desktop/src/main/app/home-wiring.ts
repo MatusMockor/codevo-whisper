@@ -4,6 +4,7 @@ import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
 import type { ModelManager } from '../models/model-manager';
 import type { PermissionsService } from '../permissions/permissions-service';
+import type { ServerService } from '../remote/server-service';
 import type { PauseState } from '../session/pause-state';
 import type { SettingsStore } from '../settings/settings-store';
 import { StatsStore } from '../stats/stats-store';
@@ -18,15 +19,17 @@ export type HomeWiringDeps = {
   permissions: Pick<PermissionsService, 'status'>;
   pause: PauseState;
   lastTranscript: Pick<LastTranscript, 'onChange'>;
+  server: Pick<ServerService, 'isPaired' | 'needsRepair' | 'onChange'>;
   window: MainWindowEvents;
   logger: Logger;
 };
 
 export type HomeServices = { stats: StatsStore; status: AppStatusService; dispose(): void };
 
-export function createHomeServices({ settings, models, permissions, pause, lastTranscript, window, logger }: HomeWiringDeps): HomeServices {
+export function createHomeServices({ settings, models, permissions, pause, lastTranscript, server, window, logger }: HomeWiringDeps): HomeServices {
   const stats = new StatsStore(join(app.getPath('userData'), STATS_FILE), undefined, logger);
-  const status = new AppStatusService({ settings, models, permissions, pause, logger });
+  const pairing = { isPaired: () => server.isPaired(), needsRepair: () => server.needsRepair(), onChange: (listener: () => void) => server.onChange(() => listener()) };
+  const status = new AppStatusService({ settings, models, permissions, pause, server: pairing, logger });
   status.start();
   const unsubscribers = [
     stats.onChange((days) => window.send('stats-changed', days)),

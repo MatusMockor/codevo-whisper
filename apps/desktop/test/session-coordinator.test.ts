@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
+import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
 import type { AppTarget } from '../src/main/helper/input-helper';
@@ -76,7 +77,7 @@ async function prepared(setup: Setup = {}) {
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
-    engine,
+    engines: new EngineSelector([engine]),
     insertion,
     lastTranscript,
     helper,
@@ -314,6 +315,16 @@ describe('SessionCoordinator', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+    expect(harness.capture.frameSubscribers).toBe(0);
+  });
+
+  it('stops listening for recording frames once a dictation ends', async () => {
+    const harness = await prepared();
+
+    await dictate(harness, 5);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(5)]);
+    expect(harness.capture.frameSubscribers).toBe(0);
   });
 
   it('reports a microphone failure that arrives after the key was released', async () => {

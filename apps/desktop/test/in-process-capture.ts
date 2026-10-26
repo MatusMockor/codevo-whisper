@@ -23,7 +23,9 @@ export class InProcessCapture implements AudioCapture {
   recording = false;
   metering: MicrophoneSetting | null = null;
   readonly starts: MicrophoneSetting[] = [];
+  frameSubscribers = 0;
   private frames: Uint8Array[] = [];
+  private readonly frameListeners = new Listeners<Uint8Array>(new RecordingLogger(), 'In-process frame listener failed');
   private readonly levels = new Listeners<number>(new RecordingLogger(), 'In-process level listener failed');
   private readonly limits = new Listeners<void>(new RecordingLogger(), 'In-process limit listener failed');
   private readonly recordingStops = new Listeners<void>(new RecordingLogger(), 'In-process recording stop listener failed');
@@ -72,11 +74,26 @@ export class InProcessCapture implements AudioCapture {
       return;
     }
     this.frames.push(pcm);
+    this.frameListeners.emit(pcm);
     this.levels.emit(level);
   }
 
   reachLimit(): void {
     this.limits.emit(undefined);
+  }
+
+  onFrame(listener: (pcm: Uint8Array) => void): () => void {
+    this.frameSubscribers += 1;
+    const remove = this.frameListeners.add(listener);
+    let removed = false;
+    return () => {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      this.frameSubscribers -= 1;
+      remove();
+    };
   }
 
   onLevel(listener: (rms: number) => void): () => void {

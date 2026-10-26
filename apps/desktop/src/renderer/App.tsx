@@ -14,7 +14,7 @@ function pageLabel(page: PageId): string {
 
 function PageContent({ page, onSelect }: { page: PageId; onSelect: (page: PageId) => void }) {
   if (page === 'home') {
-    return <Home onOpenSettings={() => onSelect('settings')} />;
+    return <Home onOpenSettings={() => onSelect('settings')} onOpenServer={() => onSelect('server')} />;
   }
   if (page === 'settings') {
     return <Settings />;

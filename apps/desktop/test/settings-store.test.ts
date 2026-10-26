@@ -65,7 +65,7 @@ describe('SettingsStore', () => {
         language: 'de',
         hotkey: { keycode: 12, label: 'Q' },
         microphone: { deviceId: 'usb-mic', label: 'USB Mic' },
-        engineOrder: ['server', 'local'],
+        engineOrder: ['server', 'server'],
         localModelId: 42,
         insertion: 'clipboard',
         overlay: 'fullscreen',
@@ -150,6 +150,12 @@ describe('SettingsStore', () => {
     await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, overlay: 'live', mode: 'toggle' }));
 
     expect(await new SettingsStore(file).load()).toEqual({ ...DEFAULT_SETTINGS, overlay: 'indicator', mode: 'toggle' });
+  });
+
+  it('keeps a stored server engine order', async () => {
+    await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, engineOrder: ['server', 'local'] }));
+
+    expect((await new SettingsStore(file).load()).engineOrder).toEqual(['server', 'local']);
   });
 
   it('does not let callers mutate the stored settings', async () => {

@@ -29,6 +29,7 @@ export class WindowAudioCapture implements AudioCapture {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly inFlight = new Set<Promise<unknown>>();
   private readonly levels: Listeners<number>;
+  private readonly frames: Listeners<Uint8Array>;
   private readonly devices: Listeners<AudioDevice[]>;
   private readonly limits: Listeners<void>;
   private readonly recordingStops: Listeners<void>;
@@ -40,6 +41,7 @@ export class WindowAudioCapture implements AudioCapture {
   ) {
     this.recording = new PcmRecording(recordingBytes(options.maxRecordingMs ?? MAX_RECORDING_MS));
     this.levels = new Listeners(logger, 'A microphone level listener failed');
+    this.frames = new Listeners(logger, 'A recording frame listener failed');
     this.devices = new Listeners(logger, 'A microphone list listener failed');
     this.limits = new Listeners(logger, 'A recording limit listener failed');
     this.recordingStops = new Listeners(logger, 'A recording stop listener failed');
@@ -73,6 +75,10 @@ export class WindowAudioCapture implements AudioCapture {
     const remove = this.devices.add(listener);
     this.host.watchDevices();
     return remove;
+  }
+
+  onFrame(listener: (pcm: Uint8Array) => void): () => void {
+    return this.frames.add(listener);
   }
 
   onLevel(listener: (rms: number) => void): () => void {
@@ -199,7 +205,16 @@ export class WindowAudioCapture implements AudioCapture {
   }
 
   private keep(pcm: Uint8Array): void {
-    if (this.mode !== 'record' || this.recording.append(pcm) !== 'limit-reached') {
+    if (this.mode !== 'record') {
+      return;
+    }
+    const before = this.recording.size();
+    const outcome = this.recording.append(pcm);
+    const kept = this.recording.size() - before;
+    if (kept > 0) {
+      this.frames.emit(pcm.subarray(0, kept));
+    }
+    if (outcome !== 'limit-reached') {
       return;
     }
     this.limits.emit(undefined);

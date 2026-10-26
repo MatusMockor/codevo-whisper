@@ -8,6 +8,7 @@ import type { InvokeHandlers } from './invoke-handlers';
 import { microphoneHandlers, type MicrophoneHandlerDeps } from './microphone-handlers';
 import { modelHandlers, type ModelHandlerDeps } from './model-handlers';
 import { permissionHandlers, type PermissionHandlerDeps } from './permission-handlers';
+import { serverHandlers, type ServerHandlerDeps } from './server-handlers';
 import { isTrustedSenderUrl } from './trusted-sender';
 import { updateHandlers, type UpdateHandlerDeps } from './update-handlers';
 import { IpcValidationError } from './validate';
@@ -16,6 +17,7 @@ export type IpcDependencies = CoreHandlerDeps &
   PermissionHandlerDeps &
   ModelHandlerDeps &
   MicrophoneHandlerDeps &
+  ServerHandlerDeps &
   UpdateHandlerDeps & {
     settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
     source: RendererSource;
@@ -27,6 +29,7 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...permissionHandlers(dependencies),
     ...modelHandlers(dependencies),
     ...microphoneHandlers(dependencies),
+    ...serverHandlers(dependencies),
     ...updateHandlers(dependencies),
   };
 }

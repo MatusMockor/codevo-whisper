@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('returns a valid patch', () => {
@@ -42,8 +42,14 @@ describe('validateSettingsPatch', () => {
     expect(() => validateSettingsPatch({ hotkey: { keycode: 62, label: 'Pravý ⌃ Control', modifiers: 1 } })).toThrow(IpcValidationError);
   });
 
-  it('rejects engineOrder containing server in this phase', () => {
-    for (const engineOrder of [['server'], ['local', 'server'], ['server', 'local'], [], ['local', 'local']]) {
+  it('accepts the four engine orders', () => {
+    for (const engineOrder of [['local'], ['server'], ['server', 'local'], ['local', 'server']]) {
+      expect(validateSettingsPatch({ engineOrder })).toEqual({ engineOrder });
+    }
+  });
+
+  it('rejects any other engine order', () => {
+    for (const engineOrder of [[], ['server', 'server'], ['local', 'local'], ['cloud'], ['local', 'server', 'local'], 'server', [null]]) {
       expect(() => validateSettingsPatch({ engineOrder })).toThrow(IpcValidationError);
     }
   });
@@ -103,6 +109,18 @@ describe('validateSettingsPatch and the overlay mode', () => {
   it('rejects Živý text in this phase and accepts the indicator', () => {
     expect(() => validateSettingsPatch({ overlay: 'live' })).toThrow(IpcValidationError);
     expect(validateSettingsPatch({ overlay: 'indicator' })).toEqual({ overlay: 'indicator' });
+  });
+});
+
+describe('validatePairingToken', () => {
+  it('passes a trimmed token string through', () => {
+    expect(validatePairingToken('  cw1:abc:def:ws%3A%2F%2Fhost  ')).toBe('cw1:abc:def:ws%3A%2F%2Fhost');
+  });
+
+  it('rejects non-strings, empty text and text longer than 1024 characters', () => {
+    for (const input of [null, 42, {}, '', '   ', 'x'.repeat(1025)]) {
+      expect(() => validatePairingToken(input)).toThrow(IpcValidationError);
+    }
   });
 });
 
