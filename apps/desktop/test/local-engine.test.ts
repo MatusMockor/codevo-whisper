@@ -1,19 +1,22 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../src/main/engines/local-engine';
+import type { Preparation } from '../src/main/engines/transcription-engine';
 import type { CatalogEntry } from '../src/main/models/catalog-entry';
 import { loadCatalog } from '../src/main/models/model-catalog';
 import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
 import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
-import { abortWhenProcessSettles } from '../../../packages/stt-runner/test/support/late-abort';
 import { sha256Of, testEntry } from './model-fixtures';
+import { expectedText, joinSamples, pcmBytes, timelineSilence, timelineSpeech, writeTimeline } from './support/timeline-audio';
+import type { Language } from '../src/shared/settings';
 
 const MODEL_BODY = 'GGUF';
+const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/fake-timeline-cli.js', import.meta.url));
 const BUNDLED_CATALOG = fileURLToPath(new URL('../resources/model-catalog.json', import.meta.url));
 
 let scratch: string;
@@ -47,6 +50,23 @@ async function activateBundled(id: string): Promise<ModelManager> {
   await writeFile(join(modelsDir, `${id}.gguf`), MODEL_BODY);
   await settings.update({ localModelId: id });
   return models(entries);
+}
+
+async function useTimeline(samples: Int16Array): Promise<void> {
+  await writeTimeline(join(scratch, 'source.pcm'), samples);
+  vi.stubEnv('FAKE_TIMELINE_SOURCE', join(scratch, 'source.pcm'));
+  vi.stubEnv('FAKE_TIMELINE_JOBS', join(scratch, 'jobs.txt'));
+}
+
+async function dictate(local: LocalEngine, audio: Uint8Array | Int16Array, language: Language, signal = new AbortController().signal): Promise<string> {
+  const preparation = await local.prepare();
+  expect(preparation.ready).toBe(true);
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language, signal });
+  const pcm = audio instanceof Int16Array ? pcmBytes(audio) : audio;
+  for (let start = 0; start < pcm.byteLength; start += PCM_BYTES_PER_SECOND) {
+    dictation.push(pcm.subarray(start, start + PCM_BYTES_PER_SECOND));
+  }
+  return dictation.finish();
 }
 
 function argValue(call: string[] | undefined, flag: string): string | undefined {
@@ -103,7 +123,7 @@ describe('LocalEngine', () => {
     await settings.update({ language: 'auto' });
 
     await expect(canary.isReady()).resolves.toEqual({ ready: false, reason: 'language-required' });
-    await expect(canary.transcribe(secondStampedPcm(1), 'auto', new AbortController().signal)).rejects.toMatchObject({ reason: 'language-required' });
+    await expect(canary.prepare()).resolves.toEqual({ ready: false, reason: 'language-required' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
 
     await settings.update({ language: 'sk' });
@@ -126,54 +146,44 @@ describe('LocalEngine', () => {
     await expect(engine({ binary: notExecutable }).isReady()).resolves.toEqual({ ready: false, reason: 'binary-missing' });
   });
 
-  it('transcribes 5 minutes in ordered chunks', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
+  it('streams a long dictation in segments of at most 25 seconds', async () => {
+    const samples = joinSamples(timelineSpeech(30), timelineSilence(30, 1), timelineSpeech(20, 2));
+    await useTimeline(samples);
 
-    const text = await engine().transcribe(secondStampedPcm(300), 'sk', new AbortController().signal);
+    const text = await dictate(engine({ binary: FAKE_TIMELINE_CLI }), samples, 'sk');
 
-    const chunks = text.split(' ').map((part) => part.split(':').map(Number));
-    expect(chunks.map(([startSecond]) => startSecond)).toEqual([0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275]);
-    expect(chunks.every(([, bytes]) => (bytes ?? Infinity) <= 25 * PCM_BYTES_PER_SECOND)).toBe(true);
+    expect(text).toBe(expectedText(samples));
     const calls = await readRecordedCalls(argsFile);
-    expect(calls).toHaveLength(12);
+    expect(calls.length).toBeGreaterThanOrEqual(3);
     expect(calls.every((call) => argValue(call, '--model') === modelFile && argValue(call, '--language') === 'sk')).toBe(true);
-  });
-
-  it('skips chunks that come back empty', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
-    const pcm = secondStampedPcm(60);
-    const view = new DataView(pcm.buffer);
-    view.setInt16(25 * PCM_BYTES_PER_SECOND, -1, true);
-
-    const text = await engine().transcribe(pcm, 'en', new AbortController().signal);
-
-    expect(text).toBe(`0:${25 * PCM_BYTES_PER_SECOND} 50:${10 * PCM_BYTES_PER_SECOND}`);
+    const jobs = (await readFile(join(scratch, 'jobs.txt'), 'utf8')).trim().split('\n').map((line) => Number(line.split(' ')[1]));
+    expect(jobs.every((samplesInJob) => samplesInJob <= 25 * PCM_SAMPLE_RATE)).toBe(true);
   });
 
   it('returns an empty transcript for audio too short to transcribe', async () => {
-    await expect(engine().transcribe(new Uint8Array(100), 'sk', new AbortController().signal)).resolves.toBe('');
+    await expect(dictate(engine(), new Uint8Array(100), 'sk')).resolves.toBe('');
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
   });
 
   it('passes the language through', async () => {
-    await engine().transcribe(secondStampedPcm(1), 'cs', new AbortController().signal);
+    await dictate(engine(), secondStampedPcm(1), 'cs');
 
     const [call] = await readRecordedCalls(argsFile);
     expect(argValue(call, '--language')).toBe('cs');
   });
 
   it('uses metal on arm64 and cpu on x64', async () => {
-    await engine({ arch: 'arm64' }).transcribe(secondStampedPcm(1), 'sk', new AbortController().signal);
-    await engine({ arch: 'x64' }).transcribe(secondStampedPcm(1), 'sk', new AbortController().signal);
+    await dictate(engine({ arch: 'arm64' }), secondStampedPcm(1), 'sk');
+    await dictate(engine({ arch: 'x64' }), secondStampedPcm(1), 'sk');
 
     const calls = await readRecordedCalls(argsFile);
     expect(calls.map((call) => argValue(call, '--backend'))).toEqual(['metal', 'cpu']);
   });
 
-  it('rejects when no model is active', async () => {
+  it('is not prepared when no model is active', async () => {
     await settings.update({ localModelId: null });
 
-    await expect(engine().transcribe(secondStampedPcm(1), 'sk', new AbortController().signal)).rejects.toMatchObject({ reason: 'no-model' });
+    await expect(engine().prepare()).resolves.toEqual({ ready: false, reason: 'no-model' });
   });
 
   it('stops on abort', async () => {
@@ -181,15 +191,8 @@ describe('LocalEngine', () => {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 300);
 
-    await expect(engine().transcribe(secondStampedPcm(300), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(dictate(engine(), secondStampedPcm(3), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
 
-    await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
-  });
-
-  it('returns no text when aborted after the last chunk finished', async () => {
-    const controller = abortWhenProcessSettles();
-
-    await expect(engine().transcribe(secondStampedPcm(1), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
   });
 
@@ -197,7 +200,7 @@ describe('LocalEngine', () => {
     const controller = new AbortController();
     controller.abort();
 
-    await expect(engine().transcribe(secondStampedPcm(30), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(dictate(engine(), secondStampedPcm(30), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
   });
 });

@@ -55,6 +55,7 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, ErrorState>> = 
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
+  'engine-failed': MESSAGES.transcriptionFailed,
   busy: MESSAGES.serverBusy,
   'stt-unavailable': MESSAGES.serverSttUnavailable,
   'too-long': MESSAGES.serverTooLong,
