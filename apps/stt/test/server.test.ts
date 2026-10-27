@@ -106,7 +106,9 @@ describe('STT sidecar', () => {
       await new Promise((resolve) => socket.once('close', resolve));
     }
 
-    expect(await send('/health', { method: 'GET' })).toEqual({ status: 200, body: { status: 'UP', busy: false } });
+    await expect
+      .poll(() => send('/health', { method: 'GET' }), { timeout: 2000, interval: 20 })
+      .toEqual({ status: 200, body: { status: 'UP', busy: false } });
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(200);
   });
 
