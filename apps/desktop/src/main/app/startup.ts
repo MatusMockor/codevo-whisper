@@ -5,7 +5,7 @@ export type StartupSteps = {
   fail(error: unknown): void;
 };
 
-export type Startup = { readonly started: Promise<void>; activate(): Promise<void> };
+export type Startup = { readonly started: Promise<void>; activate(): Promise<void>; reveal(): Promise<void> };
 
 export function createStartup(ready: Promise<void>, steps: StartupSteps): Startup {
   const initialized = ready.then(() => steps.initialize());
@@ -21,5 +21,6 @@ export function createStartup(ready: Promise<void>, steps: StartupSteps): Startu
   return {
     started,
     activate: () => initialized.then(openIfNone, () => undefined),
+    reveal: () => initialized.then(() => steps.openWindow(), () => undefined),
   };
 }

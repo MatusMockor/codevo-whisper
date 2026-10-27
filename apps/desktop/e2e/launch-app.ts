@@ -1,11 +1,14 @@
 import { _electron as electron, type ElectronApplication } from '@playwright/test';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Settings } from '../src/shared/settings';
 
 const mainEntry = fileURLToPath(new URL('../out/main/index.js', import.meta.url));
+const electronBinary = String(createRequire(import.meta.url)('electron'));
 
 export type LaunchOptions = { fakeHelper?: boolean; updateMode?: 'manual' };
 
@@ -40,4 +43,8 @@ export const FAKE_MEDIA_ARGS: readonly string[] = Object.freeze([...FAKE_DEVICE_
 
 export function launchApp(userDataDir: string, chromiumArgs: readonly string[] = FAKE_MEDIA_ARGS, options: LaunchOptions = {}): Promise<ElectronApplication> {
   return electron.launch({ args: [...chromiumArgs, mainEntry], env: electronEnv(userDataDir, options) });
+}
+
+export function spawnApp(userDataDir: string): ChildProcess {
+  return spawn(electronBinary, [mainEntry], { env: electronEnv(userDataDir, {}), stdio: 'ignore' });
 }

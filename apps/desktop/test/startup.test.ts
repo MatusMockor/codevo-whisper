@@ -81,4 +81,44 @@ describe('createStartup', () => {
     expect(steps.failures).toEqual([failure]);
     expect(steps.windows).toBe(0);
   });
+
+  it('reveals a window only after initialisation when a second instance starts during init', async () => {
+    const init = deferred();
+    const steps = new RecordingSteps(init);
+    const startup = createStartup(Promise.resolve(), steps);
+
+    const revealed = startup.reveal();
+    await Promise.resolve();
+    expect(steps.windows).toBe(0);
+    init.resolve();
+    await Promise.all([startup.started, revealed]);
+
+    expect(steps.events).toEqual(['initialize:start', 'initialize:done', 'window', 'window']);
+  });
+
+  it('reveals the existing window when a second instance starts', async () => {
+    const init = deferred();
+    const steps = new RecordingSteps(init);
+    const startup = createStartup(Promise.resolve(), steps);
+    init.resolve();
+    await startup.started;
+
+    await startup.reveal();
+
+    expect(steps.windows).toBe(2);
+  });
+
+  it('ignores a second instance after a failed initialisation', async () => {
+    const init = deferred();
+    const steps = new RecordingSteps(init);
+    const failure = new Error('EACCES');
+    const startup = createStartup(Promise.resolve(), steps);
+
+    const revealed = startup.reveal();
+    init.reject(failure);
+    await Promise.all([startup.started, revealed]);
+
+    expect(steps.failures).toEqual([failure]);
+    expect(steps.windows).toBe(0);
+  });
 });
