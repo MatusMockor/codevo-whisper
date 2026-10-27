@@ -9,5 +9,5 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 ditto -c -k --sequesterRsrc --keepParent "$app" "$work/app.zip"
 "$here/notary-wait.sh" "$("$here/notary-submit.sh" "$work/app.zip")"
-xcrun stapler staple "$app"
-xcrun stapler validate "$app"
+"$here/retry.sh" stapler xcrun stapler staple "$app"
+"$here/retry.sh" stapler xcrun stapler validate "$app"

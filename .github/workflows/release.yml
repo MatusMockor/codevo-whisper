@@ -65,7 +65,7 @@ jobs:
     needs: [version, checks]
     environment: release
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - arch: arm64

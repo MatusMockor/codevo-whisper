@@ -28,7 +28,7 @@ verify_app() {
   "$here/verify-binaries.sh" "$app" "$arch"
   node "$here/verify-fuses.ts" "$app" "$config"
   if [ "$require_notarization" = "1" ]; then
-    xcrun stapler validate "$app"
+    "$here/retry.sh" stapler xcrun stapler validate "$app"
   fi
 }
 

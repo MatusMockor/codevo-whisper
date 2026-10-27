@@ -8,5 +8,5 @@ source "$here/mac-app-path.sh"
 app="$(mac_app_path "$(mac_release_dir stage "$arch")" "$arch")"
 
 "$here/notary-wait.sh" "$(node "$here/notary-state-cli.ts" submission "$state" app)"
-xcrun stapler staple "$app"
-xcrun stapler validate "$app"
+"$here/retry.sh" stapler xcrun stapler staple "$app"
+"$here/retry.sh" stapler xcrun stapler validate "$app"

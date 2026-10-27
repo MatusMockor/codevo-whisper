@@ -9,5 +9,5 @@ source "$here/mac-app-path.sh"
 dmg="$(mac_release_dir dist "$arch")/codevo-whisper-$version-$arch-mac.dmg"
 
 "$here/notary-wait.sh" "$(node "$here/notary-state-cli.ts" submission "$state" dmg)"
-xcrun stapler staple "$dmg"
-xcrun stapler validate "$dmg"
+"$here/retry.sh" stapler xcrun stapler staple "$dmg"
+"$here/retry.sh" stapler xcrun stapler validate "$dmg"
