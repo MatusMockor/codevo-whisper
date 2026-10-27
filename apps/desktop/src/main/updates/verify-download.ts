@@ -1,18 +1,14 @@
 import { createHash } from 'node:crypto';
-import { constants, type Stats } from 'node:fs';
+import { constants } from 'node:fs';
 import { chmod, lstat, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { isOwnedDirectory, ownedByUs } from './file-ownership';
 
 const PRIVATE_DIR_MODE = 0o700;
 
-function ownedByUs(stats: Stats): boolean {
-  const uid = process.getuid?.();
-  return uid === undefined || stats.uid === uid;
-}
-
 async function makePrivate(dir: string): Promise<void> {
   const stats = await lstat(dir);
-  if (!stats.isDirectory() || stats.isSymbolicLink() || !ownedByUs(stats)) {
+  if (!isOwnedDirectory(stats)) {
     throw new Error('The update cache is not a private directory');
   }
   await chmod(dir, PRIVATE_DIR_MODE);

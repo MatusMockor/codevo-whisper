@@ -104,6 +104,39 @@ button {
   color: var(--lamp-ink);
 }
 
+.side-update {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  -webkit-app-region: no-drag;
+}
+
+.side-update.shown {
+  padding: 10px 12px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--lamp-soft);
+  box-shadow: inset 0 0 0 1px rgba(240, 162, 58, .35);
+}
+
+.side-update-text {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 1.4;
+}
+
+.side-update-note {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.side-update .btn {
+  justify-content: center;
+  height: 28px;
+}
+
 .main {
   display: flex;
   flex-direction: column;

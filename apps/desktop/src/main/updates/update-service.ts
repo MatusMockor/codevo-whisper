@@ -27,6 +27,7 @@ const CHECK_FAILURES: Readonly<Record<CheckOrigin, string>> = {
 export class UpdateService {
   private phase: UpdatePhase = { kind: 'idle', checked: false };
   private running: Promise<void> | null = null;
+  private searching = false;
   private origin: CheckOrigin = 'background';
   private readonly listeners: Listeners<UpdateStatus>;
 
@@ -73,8 +74,8 @@ export class UpdateService {
   }
 
   private run(origin: CheckOrigin): Promise<void> {
-    if (this.running !== null && this.phase.kind === 'checking') {
-      this.origin = origin === 'user' ? 'user' : this.origin;
+    if (this.running !== null && this.searching) {
+      this.join(origin);
       return this.running;
     }
     if (this.deps.mode === 'unsupported' || !CHECKABLE.has(this.phase.kind)) {
@@ -88,12 +89,23 @@ export class UpdateService {
     return running;
   }
 
-  private async execute(): Promise<void> {
-    const previous = this.phase;
+  private join(origin: CheckOrigin): void {
+    if (origin !== 'user' || this.origin === 'user') {
+      return;
+    }
+    this.origin = 'user';
     this.transition({ kind: 'checking' });
+  }
+
+  private async execute(): Promise<void> {
+    if (this.origin === 'user') {
+      this.transition({ kind: 'checking' });
+    }
+    this.searching = true;
     const found = await this.find();
+    this.searching = false;
     if (found === 'failed') {
-      this.transition(this.origin === 'background' ? previous : { kind: 'error', failed: 'check' });
+      this.failed();
       return;
     }
     if (found === null) {
@@ -106,6 +118,13 @@ export class UpdateService {
       return;
     }
     await this.download(found.version);
+  }
+
+  private failed(): void {
+    if (this.origin === 'background') {
+      return;
+    }
+    this.transition({ kind: 'error', failed: 'check' });
   }
 
   private async find(): Promise<AvailableUpdate | null | 'failed'> {

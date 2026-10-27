@@ -2,6 +2,7 @@ import { useRef, type KeyboardEvent } from 'react';
 import { PAGES, type PageId } from '../navigation';
 import { Logo } from './Logo';
 import { PageIcon } from './PageIcon';
+import { UpdateIndicator } from './UpdateIndicator';
 
 const STEP_BY_KEY: Partial<Record<string, number>> = { ArrowDown: 1, ArrowUp: -1 };
 
@@ -65,6 +66,7 @@ export function Sidebar({ selected, onSelect }: SidebarProps) {
           </button>
         ))}
       </div>
+      <UpdateIndicator />
     </aside>
   );
 }

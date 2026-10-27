@@ -254,6 +254,99 @@ describe('UpdateService', () => {
     expect(logger.errors.map((entry) => entry.message)).toEqual(['The update check failed']);
   });
 
+  it('a background check without an update does not show the search', async () => {
+    const { service, phases } = harness();
+
+    await service.checkInBackground();
+
+    expect(phases).toEqual([{ kind: 'idle', checked: true }]);
+  });
+
+  it('a background check shows nothing but the download it starts', async () => {
+    const { service, updater, phases } = harness();
+    updater.latest = '1.2.0';
+
+    await service.checkInBackground();
+
+    expect(phases).toEqual([
+      { kind: 'downloading', version: '1.2.0', percent: 0 },
+      { kind: 'downloading', version: '1.2.0', percent: 100 },
+      { kind: 'ready', version: '1.2.0' },
+    ]);
+  });
+
+  it('keeps an available update visible during later background checks', async () => {
+    const { service, updater, phases } = harness('manual');
+    updater.latest = '1.2.0';
+    await service.check();
+    phases.length = 0;
+
+    await service.checkInBackground();
+
+    expect(phases).toEqual([{ kind: 'available', version: '1.2.0' }]);
+  });
+
+  it('stays silent through repeated offline background checks and only logs them', async () => {
+    const { service, updater, logger, phases } = harness();
+    updater.checkFails = true;
+
+    await service.checkInBackground();
+    await service.checkInBackground();
+    await service.checkInBackground();
+
+    expect(phases).toEqual([]);
+    expect(service.status().phase).toEqual({ kind: 'idle', checked: false });
+    expect(logger.errors.map((entry) => entry.message)).toEqual([
+      'The background update check failed',
+      'The background update check failed',
+      'The background update check failed',
+    ]);
+  });
+
+  it('keeps a failed download visible when a later background check is offline', async () => {
+    const { service, updater, phases } = harness();
+    updater.latest = '1.2.0';
+    updater.downloadFails = true;
+    await service.check();
+    updater.checkFails = true;
+    phases.length = 0;
+
+    await service.checkInBackground();
+
+    expect(phases).toEqual([]);
+    expect(service.status().phase).toEqual({ kind: 'error', failed: 'download' });
+  });
+
+  it('shows the search once the user joins a background check', async () => {
+    const { service, phases, updater } = harness();
+
+    const background = service.checkInBackground();
+    const user = service.check();
+    const again = service.check();
+    await Promise.all([background, user, again]);
+
+    expect(updater.checks).toBe(1);
+    expect(phases).toEqual([{ kind: 'checking' }, { kind: 'idle', checked: true }]);
+  });
+
+  it('a background check while another background check runs does not search twice', async () => {
+    const { service, updater } = harness();
+
+    await Promise.all([service.checkInBackground(), service.checkInBackground()]);
+
+    expect(updater.checks).toBe(1);
+  });
+
+  it('background checks during an install neither search nor change the phase', async () => {
+    const { service, updater } = await readyHarness();
+    await service.install();
+
+    await service.checkInBackground();
+
+    expect(updater.checks).toBe(1);
+    expect(service.status().phase).toEqual({ kind: 'installing', version: '1.2.0' });
+  });
+
   it('stops notifying a removed listener', async () => {
     const { service } = harness();
     const seen: string[] = [];

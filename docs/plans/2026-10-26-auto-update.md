@@ -19,7 +19,7 @@ Why this over download-on-request: one user action instead of two, and the tray 
 ## Global Constraints
 
 - GitHub provider from `app-update.yml` (owner `MatusMockor`, repo `codevo-whisper`, public); no feed URL in code. Private repos out of scope.
-- Background check 30 s after start, then every 6 h. Never auto-install.
+- Background check 15 s after start, then every 4 minutes (owner decision 2026-10-27, same cadence as T3 Code). Background checks stay silent: no "checking" state, failures only logged. Never auto-install.
 - Linux: in-app only for AppImage (`APPIMAGE` env set); deb and every other Linux package: notice + link `https://github.com/MatusMockor/codevo-whisper/releases/latest`, never download or install (spec 10).
 - Unpackaged builds (dev, e2e without the fake): mode `unsupported`, no network.
 - Install never during an active dictation; quitting goes through `before-quit` / `QuitGate` (no `app.exit`).
@@ -87,9 +87,9 @@ Rules: check allowed from idle/available/error (otherwise returns current status
 **Interfaces:**
 - `type UpdaterLike` = the subset of electron-updater's `AppUpdater` used (`autoDownload`, `autoInstallOnAppQuit`, `allowDowngrade`, `logger`, `checkForUpdates()`, `downloadUpdate()`, `quitAndInstall(isSilent, isForceRunAfter)`, `on/removeListener` for `'error'` and `'download-progress'`).
 - `class ElectronUpdaterAdapter implements AppUpdater` `constructor(updater: UpdaterLike, logger: Logger)`: sets `autoDownload = false`, `autoInstallOnAppQuit = false`, `allowDowngrade = false`, routes the updater logger to `Logger`, registers a permanent `'error'` listener (logs). `check` maps `null` / `isUpdateAvailable === false` to `null`. `download` forwards `percent` from `download-progress` and removes its listener afterwards. `install` calls `quitAndInstall(false, true)` and rejects on the next `'error'`.
-- `class UpdateScheduler` `constructor(check: () => Promise<void>, timing = { initialDelayMs: 30_000, intervalMs: 6 * 60 * 60 * 1000 })`, `start()`, `dispose()`.
+- `class UpdateScheduler` `constructor(check: () => Promise<void>, timing = { initialDelayMs: 15_000, intervalMs: 4 * 60 * 1000 })`, `start()`, `dispose()`.
 
-- [ ] Step 1: failing adapter tests with an `EventEmitter`-based stand-in for electron-updater (third-party boundary): flags set on construction; check mapping; progress forwarded and listener removed; install rejects on a later `error`; an `error` with nothing pending is logged and does not throw. Scheduler tests with `vi.useFakeTimers()`: no check before 30 s, one at 30 s, next at 30 s + 6 h, none after `dispose()`.
+- [ ] Step 1: failing adapter tests with an `EventEmitter`-based stand-in for electron-updater (third-party boundary): flags set on construction; check mapping; progress forwarded and listener removed; install rejects on a later `error`; an `error` with nothing pending is logged and does not throw. Scheduler tests with `vi.useFakeTimers()`: no check before 15 s, one at 15 s, next at 15 s + 4 min, none after `dispose()`.
 - [ ] Step 2: run, FAIL. Step 3: implement. Step 4: PASS, lint, typecheck.
 - [ ] Step 5: commit `feat(desktop): electron-updater adapter and background update scheduler`.
 

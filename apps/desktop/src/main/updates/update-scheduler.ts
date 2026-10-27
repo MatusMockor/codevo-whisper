@@ -2,7 +2,7 @@ import type { Logger } from '../logging/logger';
 
 export type UpdateTiming = { initialDelayMs: number; intervalMs: number };
 
-export const UPDATE_TIMING: UpdateTiming = Object.freeze({ initialDelayMs: 30_000, intervalMs: 6 * 60 * 60 * 1000 });
+export const UPDATE_TIMING: UpdateTiming = Object.freeze({ initialDelayMs: 15_000, intervalMs: 4 * 60 * 1000 });
 
 export class UpdateScheduler {
   private first: NodeJS.Timeout | null = null;

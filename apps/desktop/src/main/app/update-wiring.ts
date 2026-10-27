@@ -1,10 +1,13 @@
 import { app } from 'electron';
+import { homedir } from 'node:os';
 import type { Logger } from '../logging/logger';
 import type { AppUpdater } from '../updates/app-updater';
 import type { DictationGuard } from '../updates/dictation-guard';
 import { ElectronUpdaterAdapter, type UpdaterLike } from '../updates/electron-updater-adapter';
 import { LazyAppUpdater } from '../updates/lazy-app-updater';
 import { readPackageType } from '../updates/package-type';
+import { PendingUpdatePruner } from '../updates/pending-update-pruner';
+import { appCacheBase, AppUpdateConfigCacheLocator } from '../updates/update-cache-dir';
 import { resolveUpdateMode } from '../updates/update-policy';
 import { UpdateScheduler } from '../updates/update-scheduler';
 import { UpdateService } from '../updates/update-service';
@@ -30,6 +33,16 @@ async function loadAdapter(mode: UpdateMode, logger: Logger): Promise<AppUpdater
   return new ElectronUpdaterAdapter(autoUpdater, logger, { installable: mode === 'in-app', createCancellationToken: () => new CancellationToken() });
 }
 
+async function pruneInstalledUpdate(logger: Logger): Promise<void> {
+  try {
+    const base = appCacheBase({ platform: process.platform, home: homedir(), xdgCacheHome: process.env['XDG_CACHE_HOME'] });
+    const locator = new AppUpdateConfigCacheLocator({ resourcesPath: process.resourcesPath, base });
+    await new PendingUpdatePruner({ locator, currentVersion: app.getVersion(), logger }).prune();
+  } catch (error) {
+    logger.warn('The update cache could not be cleaned', error);
+  }
+}
+
 function fakeUpdater(): UpdaterChoice {
   const fake = import('../updates/fake-app-updater').then(({ FakeAppUpdater }): AppUpdater => new FakeAppUpdater());
   const mode = process.env['CW_E2E_UPDATE_MODE'] === 'manual' ? 'manual' : 'in-app';
@@ -46,7 +59,8 @@ function electronUpdater(logger: Logger): UpdaterChoice {
   if (mode === 'unsupported') {
     return { updater: UNAVAILABLE_UPDATER, mode, fake: null, scheduled: false };
   }
-  return { updater: new LazyAppUpdater(() => loadAdapter(mode, logger)), mode, fake: null, scheduled: true };
+  const pruned = mode === 'in-app' ? pruneInstalledUpdate(logger) : Promise.resolve();
+  return { updater: new LazyAppUpdater(() => pruned.then(() => loadAdapter(mode, logger))), mode, fake: null, scheduled: true };
 }
 
 export function createUpdates({ e2e, dictation, send, logger }: UpdateWiringDeps): Updates {

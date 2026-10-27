@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { UpdateScheduler } from '../src/main/updates/update-scheduler';
+import { UPDATE_TIMING, UpdateScheduler } from '../src/main/updates/update-scheduler';
 import { RecordingLogger } from './recording-logger';
 
-const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const FIRST_MS = 15_000;
+
+const FOUR_MINUTES_MS = 4 * 60 * 1000;
 
 function counting(outcome: () => Promise<void> = () => Promise.resolve()) {
   const logger = new RecordingLogger();
@@ -23,19 +25,23 @@ afterEach(() => {
 });
 
 describe('UpdateScheduler', () => {
-  it('checks 30 seconds after the start and then every 6 hours', async () => {
+  it('uses the timing of a first check after 15 seconds and then every 4 minutes', () => {
+    expect(UPDATE_TIMING).toEqual({ initialDelayMs: FIRST_MS, intervalMs: FOUR_MINUTES_MS });
+  });
+
+  it('checks 15 seconds after the start and then every 4 minutes', async () => {
     const { scheduler, checks } = counting();
 
     scheduler.start();
-    await vi.advanceTimersByTimeAsync(29_999);
+    await vi.advanceTimersByTimeAsync(FIRST_MS - 1);
     expect(checks()).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
     expect(checks()).toBe(1);
-    await vi.advanceTimersByTimeAsync(SIX_HOURS_MS - 1);
+    await vi.advanceTimersByTimeAsync(FOUR_MINUTES_MS - 1);
     expect(checks()).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(checks()).toBe(2);
-    await vi.advanceTimersByTimeAsync(SIX_HOURS_MS);
+    await vi.advanceTimersByTimeAsync(FOUR_MINUTES_MS);
     expect(checks()).toBe(3);
     scheduler.dispose();
   });
@@ -45,7 +51,7 @@ describe('UpdateScheduler', () => {
 
     scheduler.start();
     scheduler.dispose();
-    await vi.advanceTimersByTimeAsync(SIX_HOURS_MS * 2);
+    await vi.advanceTimersByTimeAsync(FOUR_MINUTES_MS * 2);
 
     expect(checks()).toBe(0);
   });
@@ -54,9 +60,9 @@ describe('UpdateScheduler', () => {
     const { scheduler, checks } = counting();
 
     scheduler.start();
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(FIRST_MS);
     scheduler.dispose();
-    await vi.advanceTimersByTimeAsync(SIX_HOURS_MS * 2);
+    await vi.advanceTimersByTimeAsync(FOUR_MINUTES_MS * 2);
 
     expect(checks()).toBe(1);
   });
@@ -65,7 +71,7 @@ describe('UpdateScheduler', () => {
     const { scheduler, checks, logger } = counting(() => Promise.reject(new Error('offline')));
 
     scheduler.start();
-    await vi.advanceTimersByTimeAsync(30_000 + SIX_HOURS_MS);
+    await vi.advanceTimersByTimeAsync(FIRST_MS + FOUR_MINUTES_MS);
 
     expect(checks()).toBe(2);
     expect(logger.errors.map((entry) => entry.message)).toEqual(['The scheduled update check failed', 'The scheduled update check failed']);
@@ -77,7 +83,7 @@ describe('UpdateScheduler', () => {
 
     scheduler.start();
     scheduler.start();
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(FIRST_MS);
 
     expect(checks()).toBe(1);
     scheduler.dispose();
