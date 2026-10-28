@@ -188,7 +188,7 @@ export class LocalEngine implements TranscriptionEngine {
             return new LocalDictation({
               dispatcher: generation.dispatcher,
               clock: this.clock,
-              context: { language: options.language },
+              context: { language: options.language, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
               options: { ...options, signal: AbortSignal.any([options.signal, generation.retired.signal]) },
               onRecordingEnd: () => {
                 if (lease.revision !== this.revision) return;

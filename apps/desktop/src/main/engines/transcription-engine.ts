@@ -19,7 +19,7 @@ export type TranscriptUpdate =
   | { type: 'final'; segmentId: number; text: string }
   | { type: 'restart' };
 
-export type DictationOptions = { language: Language; signal: AbortSignal; partials?: boolean; onTranscript?: (update: TranscriptUpdate) => void };
+export type DictationOptions = { language: Language; vocabulary?: readonly string[]; signal: AbortSignal; partials?: boolean; onTranscript?: (update: TranscriptUpdate) => void };
 
 export interface EngineDictation {
   push(pcm: Uint8Array): void;

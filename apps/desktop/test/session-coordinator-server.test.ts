@@ -77,6 +77,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   const lastTranscript = new LastTranscript();
   const states: OverlayState[] = [];
   const opened: string[] = [];
+  const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
@@ -85,14 +86,14 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     lastTranscript,
     helper,
     settings,
-    stats: new StatsStore(join(scratch, 'stats.json'), undefined, logger),
+    stats,
     pause: new PauseState(logger),
     overlay: (state) => states.push(state),
     openServer: () => opened.push('server'),
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings };
+  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings, stats };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
@@ -107,6 +108,40 @@ function lastVisible(states: OverlayState[]): OverlayState | undefined {
 }
 
 describe('SessionCoordinator with the server engine', () => {
+  it('uses transcript preferences captured before settings change during a server session', async () => {
+    const harness = await prepared({ engineOrder: ['server'], customWords: ['Kumiba'], removeFillerWords: true, appendTrailingSpace: true }, { respond: () => ({ status: 200, body: { text: 'ehm, Kumba\n' } }) });
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(4));
+    await harness.settings.update({ language: 'en', customWords: ['Other'], removeFillerWords: false, appendTrailingSpace: false });
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.helper.pasted).toEqual(['Kumiba ']);
+    expect(harness.lastTranscript.get()).toBe('Kumiba ');
+    expect(gateway.stt.requests).toEqual([{ language: 'sk', bytes: 32000 }]);
+    coordinator?.act('copy-last');
+    await expect.poll(() => harness.helper.clipboard).toBe('Kumiba ');
+    await expect.poll(() => harness.stats.days()).toMatchObject([{ words: 1, dictations: 1 }]);
+  });
+
+  it('processes recovered server text with the same preferences without insertion or success stats', async () => {
+    const harness = await prepared({ engineOrder: ['server'], customWords: ['Kumiba'], removeFillerWords: true, appendTrailingSpace: true }, { respond: (pcm) => pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'ehm, Kumba' } } });
+    await dictate(harness, continuousSpeech(26));
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
+    expect(harness.lastTranscript.get()).toBe('Kumiba ');
+    expect(harness.helper.pasted).toEqual([]);
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it.each([false, true])('keeps the prior transcript for filler-only server output, recovery=%s', async (recovery) => {
+    const harness = await prepared({ engineOrder: ['server'], removeFillerWords: true, appendTrailingSpace: true }, { respond: (pcm) => recovery && pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'ehm, hmm!' } } });
+    harness.lastTranscript.set('previous');
+    await dictate(harness, recovery ? continuousSpeech(26) : stampedPcm(4));
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: recovery ? MESSAGES.serverSttUnavailable : MESSAGES.nothingHeard });
+    expect(lastVisible(harness.states)).not.toHaveProperty('action');
+    expect(harness.lastTranscript.get()).toBe('previous');
+    expect(harness.helper.pasted).toEqual([]);
+    expect(await harness.stats.days()).toEqual([]);
+  });
   it('transcribes on the server when the order says Server', async () => {
     const harness = await prepared({ engineOrder: ['server'] }, { respond: () => ({ status: 200, body: { text: 'zo servera' } }) });
 

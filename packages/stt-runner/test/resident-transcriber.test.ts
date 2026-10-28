@@ -83,6 +83,14 @@ afterEach(async () => {
 });
 
 describe('ResidentTranscriber', () => {
+  it('isolates consecutive non-ASCII, different and empty vocabularies in one worker', async () => {
+    vi.stubEnv('FAKE_WORKER_VOCABULARY', '1');
+    const worker = create();
+    expect(await worker.transcribe({ pcm: pcm(1), language: 'sk', vocabulary: ['Žilina', 'Kumiba'] })).toBe('["Žilina","Kumiba"]');
+    expect(await worker.transcribe({ pcm: pcm(1), language: 'en', vocabulary: ['Other'] })).toBe('["Other"]');
+    expect(await worker.transcribe({ pcm: pcm(1), language: 'auto', vocabulary: [] })).toBe('[]');
+    expect(await worker.transcribe({ pcm: pcm(1), language: 'cs' })).toBe('[]');
+  });
   it('keeps one worker process across calls and passes the language', async () => {
     const worker = create();
 

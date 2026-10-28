@@ -24,6 +24,7 @@ function freezeSettings(settings: Settings): Settings {
   Object.freeze(copy.hotkey);
   Object.freeze(copy.microphone);
   Object.freeze(copy.engineOrder);
+  Object.freeze(copy.customWords);
   return Object.freeze(copy);
 }
 

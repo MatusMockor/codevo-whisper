@@ -6,7 +6,6 @@ import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
 import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
-import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -15,6 +14,7 @@ import type { Language, MicrophoneSetting } from '../../shared/settings';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
 import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError } from './overlay-messages';
+import { processFinalTranscript, type TranscriptSettings } from './process-final-transcript';
 
 export type SessionOverlay = {
   show(session: DictationSession, state: OverlayState): void;
@@ -50,6 +50,7 @@ export class DictationSession {
   private phase: Phase = 'recording';
   private readonly startedAt: number;
   private readonly language: Language;
+  private readonly transcriptSettings: TranscriptSettings;
   private readonly partials: boolean;
   private readonly live: LiveTranscript | null;
   private lastLevel = 0;
@@ -67,8 +68,9 @@ export class DictationSession {
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
-    const { language, microphone, overlay } = deps.settings.get();
+    const { language, microphone, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
     this.language = language;
+    this.transcriptSettings = Object.freeze({ language, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
     this.partials = overlay === 'live';
     this.live = this.partials ? new LiveTranscript() : null;
     this.microphone = microphone;
@@ -211,7 +213,7 @@ export class DictationSession {
   }
 
   private dictationOptions(): DictationOptions {
-    const options: DictationOptions = { language: this.language, signal: this.controller.signal, partials: this.partials };
+    const options: DictationOptions = { language: this.language, vocabulary: this.transcriptSettings.customWords, signal: this.controller.signal, partials: this.partials };
     if (this.live === null) {
       return options;
     }
@@ -263,16 +265,16 @@ export class DictationSession {
   }
 
   private async transcribeAndInsert(transcription: Promise<string | null>, pcm: Uint8Array): Promise<void> {
-    const text = await transcription;
+    const rawText = await transcription;
     if (this.controller.signal.aborted) return;
-    if (text === null) {
+    if (rawText === null) {
       return;
     }
+    const text = this.finalize(rawText);
     if (text === '') {
       this.end(errorState(MESSAGES.nothingHeard));
       return;
     }
-    this.deps.lastTranscript.set(text);
     this.deps.transcribed(text, pcm);
     const target = await this.target;
     const outcome = await this.insert(text, target);
@@ -281,7 +283,7 @@ export class DictationSession {
 
   private async transcribe(dictation: EngineDictation): Promise<string | null> {
     try {
-      return sanitizeInsertionText(await dictation.finish());
+      return await dictation.finish();
     } catch (error) {
       if (this.controller.signal.aborted) {
         return null;
@@ -299,18 +301,21 @@ export class DictationSession {
     if (!(error instanceof TranscriptionFailedError)) {
       return errorState(MESSAGES.transcriptionFailed);
     }
-    const textSoFar = sanitizeInsertionText(error.textSoFar);
-    if (textSoFar !== '') {
-      this.deps.lastTranscript.set(textSoFar);
-    }
+    const textSoFar = this.finalize(error.textSoFar);
     return failureState(error.reason, textSoFar !== '');
+  }
+
+  private finalize(text: string): string {
+    const processed = processFinalTranscript({ text, settings: this.transcriptSettings });
+    if (processed !== '') this.deps.lastTranscript.set(processed, this.transcriptSettings);
+    return processed;
   }
 
   private insert(text: string, target: AppTarget | null): Promise<InsertionOutcome | null> {
     if (this.controller.signal.aborted) {
       return Promise.resolve(null);
     }
-    return this.deps.insertion.insert(text, target).catch((error: unknown) => {
+    return this.deps.insertion.insert(text, target, this.transcriptSettings).catch((error: unknown) => {
       this.deps.logger.error('The transcript could not be inserted', error);
       return null;
     });

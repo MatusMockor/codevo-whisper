@@ -27,7 +27,7 @@ function decodeText(bytes: Uint8Array): string {
   }
 }
 
-export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Array): Uint8Array {
+export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Array, vocabulary: readonly string[] = []): Uint8Array {
   const tag = languageTag(language);
   const samples = Math.floor(pcm.length / 2);
   if (samples > MAX_SAMPLES) {
@@ -37,7 +37,19 @@ export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Arra
   header[0] = tag.length;
   tag.copy(header, 1);
   header.writeUInt32LE(samples, 1 + tag.length);
-  return Buffer.concat([header, pcm.subarray(0, samples * 2)]);
+  const audio = pcm.subarray(0, samples * 2);
+  if (vocabulary.length === 0) return Buffer.concat([header, audio]);
+  if (vocabulary.length > 100) throw new RangeError('a worker request holds at most 100 vocabulary terms');
+  const terms = vocabulary.map((term) => {
+    const bytes = Buffer.from(term, 'utf8');
+    if (term.length === 0 || [...term].length > 64 || bytes.length > 256 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(term)) {
+      throw new RangeError('invalid worker vocabulary term');
+    }
+    const length = Buffer.alloc(2);
+    length.writeUInt16LE(bytes.length);
+    return Buffer.concat([length, bytes]);
+  });
+  return Buffer.concat([Buffer.from([255]), header, Buffer.from([terms.length]), ...terms, audio]);
 }
 
 export class WorkerReplyReader {

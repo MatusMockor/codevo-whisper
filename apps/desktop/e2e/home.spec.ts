@@ -139,6 +139,22 @@ test('copy writes the clipboard and the last transcript is empty after relaunch'
   expect(await page.evaluate(() => window.codevo.getLastTranscript())).toBeNull();
 });
 
+test('copy replays the exact safe trailing space after transcript preferences change', async () => {
+  await start();
+  const previousClipboard = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await app.evaluate(() => {
+      (globalThis as unknown as HookGlobal).codevoE2e.lastTranscript.set(' Žilina\r\n\u0000 ', { appendTrailingSpace: true });
+    });
+    await page.evaluate(() => window.codevo.updateSettings({ customWords: ['Other'], appendTrailingSpace: false }));
+    await expect.poll(() => page.evaluate(() => window.codevo.getLastTranscript())).toBe('Žilina ');
+    await page.locator('.last').getByRole('button', { name: 'Kopírovať', exact: true }).click();
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Žilina ');
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+  }
+});
+
 test('the last transcript card updates even when the statistics cannot be saved', async () => {
   await mkdir(join(userDataDir, 'stats.json'));
   await start();

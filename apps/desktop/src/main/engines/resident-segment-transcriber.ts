@@ -3,7 +3,7 @@ import type { ResidentTranscriber } from '@codevo-whisper/stt-runner';
 import type { Language } from '../../shared/settings';
 
 export const MIN_JOB_BYTES = 640;
-export type LocalContext = { language: Language };
+export type LocalContext = { language: Language; vocabulary?: readonly string[] };
 
 export class ResidentSegmentTranscriber implements SegmentTranscriber<LocalContext> {
   constructor(private readonly resident: ResidentTranscriber, private readonly startup: Promise<void> = Promise.resolve()) {}
@@ -15,6 +15,6 @@ export class ResidentSegmentTranscriber implements SegmentTranscriber<LocalConte
     if (job.pcm.byteLength < MIN_JOB_BYTES) {
       return Promise.resolve('');
     }
-    return this.startup.then(() => this.resident.transcribe({ pcm: job.pcm, language: job.context.language, signal }));
+    return this.startup.then(() => this.resident.transcribe({ pcm: job.pcm, language: job.context.language, ...(job.context.vocabulary === undefined ? {} : { vocabulary: job.context.vocabulary }), signal }));
   }
 }

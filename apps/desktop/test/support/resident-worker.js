@@ -16,7 +16,7 @@ function reply(status, text) {
 }
 let buffer = Buffer.alloc(0);
 let busy = Promise.resolve();
-async function handle(language, pcm) {
+async function handle(language, pcm, vocabulary) {
   const mode = env.CW_WORKER_CONTROL ? readFileSync(env.CW_WORKER_CONTROL, 'utf8') : env.FAKE_CLI_MODE;
   if (env.FAKE_CLI_ARGS_FILE) appendFileSync(env.FAKE_CLI_ARGS_FILE, `${[...args, '--language', language || 'auto'].join('\n')}\n--\n`);
   if (env.FAKE_CLI_PID_FILE) writeFileSync(env.FAKE_CLI_PID_FILE, String(process.pid));
@@ -36,7 +36,7 @@ async function handle(language, pcm) {
     text = timelineWords(source, offset, offset + job.length).join(' ');
     if (env.FAKE_TIMELINE_JOBS) appendFileSync(env.FAKE_TIMELINE_JOBS, `${offset} ${job.length}\n`);
   }
-  if (env.CW_WORKER_CALLS) appendFileSync(env.CW_WORKER_CALLS, `${JSON.stringify({ pid: process.pid, language, samples: pcm.length / 2, nonzero: pcm.some((byte) => byte !== 0), model })}\n`);
+  if (env.CW_WORKER_CALLS) appendFileSync(env.CW_WORKER_CALLS, `${JSON.stringify({ pid: process.pid, language, vocabulary, samples: pcm.length / 2, nonzero: pcm.some((byte) => byte !== 0), model })}\n`);
   if (offset >= Number(env.FAKE_CLI_HANG_FROM_SAMPLE ?? Infinity)) await sleep(30_000);
   await sleep(Number(env.CW_WORKER_DELAY_MS ?? 0));
   reply(env.CW_WORKER_FAIL === '1' ? 1 : 0, env.CW_WORKER_FAIL === '1' ? 'inference failed' : text);
@@ -44,15 +44,34 @@ async function handle(language, pcm) {
 process.stdin.on('data', (chunk) => {
   buffer = Buffer.concat([buffer, chunk]);
   while (buffer.length >= 1) {
-    const n = buffer[0];
-    if (buffer.length < 1 + n + 4) break;
-    const size = buffer.readUInt32LE(1 + n) * 2;
-    const end = 1 + n + 4 + size;
+    const extended = buffer[0] === 255;
+    const base = extended ? 1 : 0;
+    if (buffer.length < base + 1) break;
+    const n = buffer[base];
+    if (buffer.length < base + 1 + n + 4) break;
+    const size = buffer.readUInt32LE(base + 1 + n) * 2;
+    let start = base + 1 + n + 4;
+    const vocabulary = [];
+    if (extended) {
+      if (buffer.length < start + 1) break;
+      const count = buffer[start++];
+      let complete = true;
+      for (let index = 0; index < count; index++) {
+        if (buffer.length < start + 2) { complete = false; break; }
+        const length = buffer.readUInt16LE(start);
+        start += 2;
+        if (buffer.length < start + length) { complete = false; break; }
+        vocabulary.push(buffer.subarray(start, start + length).toString('utf8'));
+        start += length;
+      }
+      if (!complete) break;
+    }
+    const end = start + size;
     if (buffer.length < end) break;
-    const language = buffer.subarray(1, 1 + n).toString();
-    const pcm = buffer.subarray(1 + n + 4, end);
+    const language = buffer.subarray(base + 1, base + 1 + n).toString();
+    const pcm = buffer.subarray(start, end);
     buffer = buffer.subarray(end);
-    busy = busy.then(() => handle(language, pcm));
+    busy = busy.then(() => handle(language, pcm, vocabulary));
   }
 });
 process.stdin.on('end', () => void busy.then(() => process.exit(0)));

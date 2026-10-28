@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
+  it('accepts bounded custom words and rejects malformed transcript preferences', () => {
+    const patch = { customWords: ['Žilina', 'GPT-4', "O’Reilly", 'Node.js'], removeFillerWords: true, appendTrailingSpace: false };
+    expect(validateSettingsPatch(patch)).toEqual(patch);
+    expect(validateSettingsPatch({ customWords: ['a'.repeat(64)] })).toEqual({ customWords: ['a'.repeat(64)] });
+    for (const customWords of [null, 'word', [7], [''], ['two words'], ['a\u0000b'], ['a/b'], ['a@b'], ['a'.repeat(65)], Array.from({ length: 101 }, () => 'word')]) {
+      expect(() => validateSettingsPatch({ customWords })).toThrow(IpcValidationError);
+    }
+    expect(() => validateSettingsPatch({ removeFillerWords: 1 })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ appendTrailingSpace: 'true' })).toThrow(IpcValidationError);
+  });
   it.each(['hold', 'toggle', 'smart'])('accepts %s dictation mode at the IPC boundary', (mode) => {
     expect(validateSettingsPatch({ mode })).toEqual({ mode });
   });

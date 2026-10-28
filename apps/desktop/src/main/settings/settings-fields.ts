@@ -1,5 +1,5 @@
 import { parseHotkeySetting } from '../../shared/hotkey';
-import { isEngineOrder, type Settings } from '../../shared/settings';
+import { isCustomWords, isEngineOrder, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 
@@ -46,6 +46,9 @@ function isMicrophone(value: unknown): value is Settings['microphone'] {
 }
 
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
+  customWords: isCustomWords,
+  removeFillerWords: isBoolean,
+  appendTrailingSpace: isBoolean,
   hotkey: isHotkey,
   mode: oneOf(['hold', 'toggle', 'smart']),
   language: oneOf(['sk', 'en', 'cs', 'auto']),
