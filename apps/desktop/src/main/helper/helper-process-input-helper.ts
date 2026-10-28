@@ -16,6 +16,7 @@ import {
   requireBoolean,
 } from './helper-responses';
 import type { AppTarget, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import { Listeners } from './listeners';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
@@ -35,13 +36,26 @@ export class HelperProcessInputHelper implements InputHelper {
   private registration: Promise<void> = Promise.resolve();
   private recordingId = 0;
   private cancelRecording: (() => void) | null = null;
+  private pendingListen: { id: number; events: HotkeyEvent[] } | null = null;
+  private readonly hotkeys: Listeners<HotkeyEvent>;
 
   constructor(
     private readonly channel: HelperChannel,
     private readonly logger: Logger = consoleLogger,
   ) {
+    this.hotkeys = new Listeners(logger, 'Hotkey listener failed');
+    channel.onEvent((message) => {
+      const event = parseHotkeyEvent(message);
+      if (!event) return;
+      if (this.activeListenId !== null && message['listenId'] === this.activeListenId) {
+        this.hotkeys.emit(event);
+        return;
+      }
+      if (this.pendingListen !== null && message['listenId'] === this.pendingListen.id) this.pendingListen.events.push(event);
+    });
     channel.onRestart(() => {
       this.activeListenId = null;
+      this.pendingListen = null;
       this.cancelRecording?.();
       void this.relisten();
     });
@@ -54,6 +68,7 @@ export class HelperProcessInputHelper implements InputHelper {
   stop(): Promise<void> {
     this.hasListened = false;
     this.activeListenId = null;
+    this.pendingListen = null;
     this.cancelRecording?.();
     return this.channel.stop();
   }
@@ -102,15 +117,28 @@ export class HelperProcessInputHelper implements InputHelper {
     ensure(await this.channel.request('paste'), 'posted', 'paste-failed');
   }
 
-  listen(binding: HotkeyBinding | null): Promise<void> {
+  listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {
     this.desired = binding;
     this.hasListened = true;
     this.activeListenId = null;
     const listenId = ++this.listenId;
+    this.pendingListen = { id: listenId, events: [] };
+    const pending = this.pendingListen;
     const configure = this.registration.then(async () => {
       if (listenId !== this.listenId || !this.hasListened) return;
-      ensure(await this.channel.request('listen-start', { listenId, ...(binding ?? { kind: 'none' }) }), 'running', 'listen-failed');
-      if (listenId === this.listenId && this.hasListened) this.activeListenId = listenId;
+      try {
+        ensure(await this.channel.request('listen-start', { listenId, ...(binding ?? { kind: 'none' }) }), 'running', 'listen-failed');
+        if (listenId !== this.listenId || !this.hasListened) return;
+        this.activeListenId = listenId;
+        this.pendingListen = null;
+        onReady?.();
+        for (const event of pending.events) {
+          if (this.activeListenId !== listenId) break;
+          this.hotkeys.emit(event);
+        }
+      } finally {
+        if (this.pendingListen?.id === listenId) this.pendingListen = null;
+      }
     });
     this.registration = configure.catch(() => undefined);
     return configure;
@@ -130,11 +158,7 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   onHotkey(listener: (event: HotkeyEvent) => void): () => void {
-    return this.channel.onEvent((message) => {
-      if (this.activeListenId === null || message['listenId'] !== this.activeListenId) return;
-      const event = parseHotkeyEvent(message);
-      if (event) listener(event);
-    });
+    return this.hotkeys.add(listener);
   }
 
   onShortcut(listener: (name: ShortcutName) => void): () => void {

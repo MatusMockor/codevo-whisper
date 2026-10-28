@@ -3,6 +3,8 @@ import { createInterface } from 'node:readline';
 
 let binding = {};
 let recording = {};
+let deferListen = false;
+let deferredListen;
 const overrides = new Map();
 
 function send(message) {
@@ -24,8 +26,22 @@ const handlers = {
   },
   'listen-start': (id, args) => {
     binding = args;
-    send({ id, running: true });
+    const running = !process.argv.includes('--listen-rejected-with-edges');
+    const packet = [{ id, running }];
+    if (process.argv.includes('--listen-with-edges') || !running) {
+      packet.push({ event: 'hotkey', listenId: args.listenId, phase: 'down', ts: 1000 });
+      packet.push({ event: 'hotkey', listenId: args.listenId, phase: 'up', ts: 1300 });
+    }
+    const write = () => process.stdout.write(packet.map(message => JSON.stringify(message)).join('\n') + '\n');
+    if (deferListen) {
+      deferListen = false;
+      deferredListen = write;
+      return;
+    }
+    write();
   },
+  'listen-defer-next': (id) => { deferListen = true; send({ id }); },
+  'listen-finish': (id) => { deferredListen?.(); deferredListen = undefined; send({ id }); },
   'listen-state': (id) => send({ id, ...binding }),
   'record-key': (id, args) => {
     recording = args;

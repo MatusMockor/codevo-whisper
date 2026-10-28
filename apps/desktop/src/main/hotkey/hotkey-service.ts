@@ -61,8 +61,9 @@ export class HotkeyService {
     const binding: HotkeyBinding | null = hotkey === null ? null : hotkey.kind === 'key'
       ? { kind: 'key', keycode: hotkey.keycode, modifiers: hotkey.modifiers }
       : { kind: 'modifiers', keycodes: hotkey.keycodes };
-    await this.helper.listen(this.paused ? null : binding);
-    if (configuration === this.configuration && !this.disposed) this.permitted = true;
+    await this.helper.listen(this.paused ? null : binding, () => {
+      if (configuration === this.configuration && !this.disposed) this.permitted = true;
+    });
   }
 
   isArmed(): boolean {

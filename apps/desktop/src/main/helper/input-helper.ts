@@ -29,7 +29,7 @@ export interface InputHelper {
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;
   paste(): Promise<void>;
-  listen(binding: HotkeyBinding | null): Promise<void>;
+  listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void>;
   recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult>;
   onHotkey(listener: (event: HotkeyEvent) => void): () => void;
   onShortcut(listener: (name: ShortcutName) => void): () => void;

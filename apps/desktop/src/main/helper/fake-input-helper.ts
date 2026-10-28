@@ -139,11 +139,12 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve();
   }
 
-  listen(binding: HotkeyBinding | null): Promise<void> {
+  listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {
     if (this.listenFails) {
       return Promise.reject(new Error('tap-create-failed'));
     }
     this.listening = binding;
+    onReady?.();
     return Promise.resolve();
   }
 
