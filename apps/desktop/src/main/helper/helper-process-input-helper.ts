@@ -1,3 +1,4 @@
+import type { AutoSubmit } from '../../shared/settings';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger, type Logger } from '../logging/logger';
@@ -20,6 +21,7 @@ import { Listeners } from './listeners';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
+const TYPING_TIMEOUT_MS = 120_000;
 
 function ensure(message: HelperMessage, key: string, failure: string): void {
   if (isTrue(message, key)) {
@@ -115,6 +117,14 @@ export class HelperProcessInputHelper implements InputHelper {
 
   async paste(): Promise<void> {
     ensure(await this.channel.request('paste'), 'posted', 'paste-failed');
+  }
+
+  async typeText(text: string): Promise<void> {
+    ensure(await this.channel.request('type-text', { text }, TYPING_TIMEOUT_MS), 'posted', 'type-failed');
+  }
+
+  async submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void> {
+    ensure(await this.channel.request('submit', { mode }), 'posted', 'submit-failed');
   }
 
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {

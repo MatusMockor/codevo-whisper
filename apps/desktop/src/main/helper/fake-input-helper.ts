@@ -1,3 +1,4 @@
+import type { AutoSubmit } from '../../shared/settings';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
@@ -43,6 +44,8 @@ export class FakeInputHelper implements InputHelper {
   listenFails = false;
   listening: HotkeyBinding | null = null;
   readonly pasted: string[] = [];
+  readonly typed: string[] = [];
+  readonly submitted: Exclude<AutoSubmit, 'off'>[] = [];
   readonly requestedPermissions: PermissionKind[] = [];
   readonly recordTimeouts: number[] = [];
   private savedClipboard: string | null = null;
@@ -136,6 +139,16 @@ export class FakeInputHelper implements InputHelper {
 
   paste(): Promise<void> {
     this.pasted.push(this.clipboard);
+    return Promise.resolve();
+  }
+
+  typeText(text: string): Promise<void> {
+    this.typed.push(text);
+    return Promise.resolve();
+  }
+
+  submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void> {
+    this.submitted.push(mode);
     return Promise.resolve();
   }
 

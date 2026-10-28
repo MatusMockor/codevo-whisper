@@ -38,7 +38,7 @@ export function Settings() {
       <SettingsGroup title="Mikrofón">
         <MicrophonePicker microphone={value.microphone} onChange={(microphone) => saveSettings({ microphone })} />
       </SettingsGroup>
-      <InsertionSection insertion={value.insertion} />
+      <InsertionSection settings={value} />
       <TranscriptSection settings={value} />
       <SystemSection launchAtLogin={value.launchAtLogin} />
     </div>

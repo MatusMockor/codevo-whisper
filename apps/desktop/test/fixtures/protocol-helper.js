@@ -6,6 +6,7 @@ let recording = {};
 let deferListen = false;
 let deferredListen;
 const overrides = new Map();
+const operations = [];
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -56,6 +57,9 @@ const handlers = {
   'clipboard-save': (id) => send({ id, items: 1, types: ['public.utf8-plain-text'] }),
   'clipboard-write': (id) => send({ id, written: true }),
   'clipboard-restore': (id, args) => send({ id, restored: args.force === true || typeof args.expectedText === 'string' }),
+  'type-text': (id, args) => { operations.push({ cmd: 'type-text', text: args.text }); send({ id, posted: true }); },
+  submit: (id, args) => { operations.push({ cmd: 'submit', mode: args.mode }); send({ id, posted: true }); },
+  'output-state': (id) => send({ id, operations }),
   paste: (id) => send({ id, posted: false, reason: 'no-event-source' }),
 };
 

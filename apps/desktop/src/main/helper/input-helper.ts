@@ -1,3 +1,4 @@
+import type { AutoSubmit } from '../../shared/settings';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 
@@ -29,6 +30,8 @@ export interface InputHelper {
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;
   paste(): Promise<void>;
+  typeText(text: string): Promise<void>;
+  submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void>;
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void>;
   recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult>;
   onHotkey(listener: (event: HotkeyEvent) => void): () => void;

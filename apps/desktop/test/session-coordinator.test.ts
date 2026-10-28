@@ -127,6 +127,15 @@ function lastVisible(states: OverlayState[]): OverlayState | undefined {
 }
 
 describe('SessionCoordinator', () => {
+  it('shows partial submit failure as delivered text without offering text reinsertion', async () => {
+    const harness = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' } });
+    harness.lastTranscript.set('Žilina 🚀', { appendTrailingSpace: true });
+    harness.helper.submit = () => Promise.reject(new Error('submit timed out'));
+    expect(await harness.coordinator.pasteLast()).toBe('delivered-submit-failed');
+    expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Text bol vložený. Odoslanie sa nepodarilo potvrdiť. Skontrolujte aplikáciu pred opakovaním.' });
+    expect(harness.helper.typed).toEqual(['Žilina 🚀 ']);
+    expect(harness.lastTranscript.get()).toBe('Žilina 🚀 ');
+  });
   it('captures native vocabulary for an active local session and clears it on the next request', async () => {
     vi.stubEnv('CW_WORKER_CALLS', join(scratch, 'vocabulary-calls'));
     const harness = await prepared({ settings: { customWords: ['Žilina', 'Kumiba'], appendTrailingSpace: true } });
