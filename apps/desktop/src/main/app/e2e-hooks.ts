@@ -1,6 +1,7 @@
 import type { AudioCapture } from '../audio/audio-capture';
 import type { InputHelper } from '../helper/input-helper';
 import type { LastTranscript } from '../insertion/last-transcript';
+import type { RecordingDesktopShell } from '../system/desktop-shell';
 import type { AppUpdater } from '../updates/app-updater';
 import type { UpdaterLike } from '../updates/electron-updater-adapter';
 import type { OverlayState } from '../../shared/overlay-contract';
@@ -10,6 +11,7 @@ export type E2eHooks = {
   overlay: { show(state: OverlayState): void };
   lastTranscript: Pick<LastTranscript, 'set'>;
   helper: InputHelper;
+  shell?: RecordingDesktopShell | null;
   updater?: Promise<AppUpdater> | null;
   loadUpdater?: () => Promise<UpdaterLike>;
 };

@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Live } from '../home/live-value';
-import type { PermissionsStatus } from '../../shared/permissions';
+import type { PermissionsView } from './permissions-view';
 
 const POLL_MS = 1000;
-
-export type PermissionsView = PermissionsStatus & { hotkeyArmed: boolean };
 
 async function loadPermissions(): Promise<PermissionsView> {
   const status = await window.codevo.getPermissions();
   const hotkeyArmed = await window.codevo.isHotkeyArmed();
-  return { ...status, hotkeyArmed };
+  const guide = await window.codevo.getPermissionGuide();
+  return { ...status, ...guide, hotkeyArmed };
 }
 
 export function usePermissions(): { permissions: Live<PermissionsView>; refresh: () => void } {

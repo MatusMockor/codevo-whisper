@@ -14,6 +14,7 @@ import { InsertionService } from '../insertion/insertion-service';
 import { LastTranscript } from '../insertion/last-transcript';
 import { registerIpc } from '../ipc/register-ipc';
 import type { Logger } from '../logging/logger';
+import { AskedPermissionsStore } from '../permissions/asked-permissions-store';
 import { electronMicrophoneAccess } from '../permissions/electron-microphone-access';
 import { MACOS_PERMISSION_LINKS } from '../permissions/macos-permission-links';
 import { PermissionsService } from '../permissions/permissions-service';
@@ -23,6 +24,8 @@ import { installPermissionHandlers } from '../security/permissions';
 import { PauseState } from '../session/pause-state';
 import { SessionCoordinator } from '../session/session-coordinator';
 import { SettingsStore } from '../settings/settings-store';
+import { AppReveal } from '../system/app-reveal';
+import { RecordingDesktopShell, type DesktopShell } from '../system/desktop-shell';
 import { coordinatorDictationGuard } from '../updates/coordinator-dictation-guard';
 import { TrayMenu } from '../tray/tray-menu';
 import { MainWindowController } from '../windows/main-window-controller';
@@ -42,6 +45,7 @@ import { isE2eMode } from './test-mode';
 import { createUpdates, loadAutoUpdater } from './update-wiring';
 
 const SETTINGS_FILE = 'settings.json';
+const ASKED_PERMISSIONS_FILE = 'asked-permissions.json';
 
 export type Application = {
   initialize(): Promise<void>;
@@ -73,6 +77,8 @@ export function composeApplication(logger: Logger): Application {
   const disposers: Array<() => void> = [];
   const quitGate = new QuitGate(capture, () => app.quit(), logger);
   const allowShutdown = (): void => quitGate.systemShuttingDown();
+  const recordingShell = e2e ? new RecordingDesktopShell() : null;
+  const desktopShell: DesktopShell = recordingShell ?? shell;
 
   function disposeAll(): void {
     for (const dispose of disposers.splice(0)) {
@@ -104,7 +110,8 @@ export function composeApplication(logger: Logger): Application {
       helper,
       microphone: electronMicrophoneAccess,
       links: MACOS_PERMISSION_LINKS,
-      openUrl: (url) => shell.openExternal(url),
+      openUrl: (url) => desktopShell.openExternal(url),
+      asked: new AskedPermissionsStore(join(app.getPath('userData'), ASKED_PERMISSIONS_FILE), logger),
       logger,
       inputReady: input.promise,
     });
@@ -125,6 +132,7 @@ export function composeApplication(logger: Logger): Application {
       status: home.status,
       lastTranscript,
       permissions,
+      appReveal: new AppReveal({ platform: process.platform, executablePath: app.getPath('exe'), shell: desktopShell }),
       recorder: new KeyRecorder(helper),
       hotkey: { isArmed: () => rearm.settled().then(() => hotkey.isArmed()) },
       relaunch,
@@ -185,7 +193,7 @@ export function composeApplication(logger: Logger): Application {
       () => updates.dispose(),
       prewarmWhenShown(mainWindow, captureWindow),
     );
-    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, updater: updates.fake, loadUpdater: loadAutoUpdater });
+    exposeE2eHooks(e2e, { capture, overlay, lastTranscript, helper, shell: recordingShell, updater: updates.fake, loadUpdater: loadAutoUpdater });
     void startInput(helper, hotkey, logger).then(() => {
       input.resolve();
       home.status.refresh();

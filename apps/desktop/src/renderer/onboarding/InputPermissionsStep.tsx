@@ -1,26 +1,77 @@
 import { useState } from 'react';
 import type { Live } from '../home/live-value';
-import type { PermissionKind } from '../../shared/permissions';
-import type { PermissionsView } from '../settings/use-permissions';
+import type { InputPermissionKind } from '../../shared/permissions';
+import type { PermissionsView } from '../settings/permissions-view';
+import { inputPermissionAction, isGranted, offersManualAdd, relaunchReason, type InputPermissionAction, type RelaunchReason } from './input-permission-flow';
 import { PermissionRow } from './PermissionRow';
+
+type InputPermissionCopy = { kind: InputPermissionKind; title: string; description: string };
+
+const INPUT_PERMISSIONS: readonly InputPermissionCopy[] = [
+  { kind: 'input-monitoring', title: 'Monitorovanie vstupu', description: 'Aplikácia sleduje iba vybraný kláves, aby vedela, kedy diktujete.' },
+  { kind: 'accessibility', title: 'Prístupnosť', description: 'Umožní vložiť prepísaný text do aplikácie, v ktorej práve píšete.' },
+];
+
+const RELAUNCH_MESSAGES: Readonly<Record<RelaunchReason, string>> = {
+  pending: 'Ak ste monitorovanie vstupu už povolili a stav sa nezmenil, macOS ho uplatní až po reštarte aplikácie.',
+  unarmed: 'Monitorovanie vstupu je povolené, ale klávesová skratka zatiaľ nereaguje. macOS ju sprístupní po reštarte aplikácie.',
+};
 
 function grantLabel(granted: boolean): string {
   return granted ? 'Povolené' : 'Zatiaľ nepovolené';
 }
 
-function openPermission(kind: PermissionKind): void {
-  window.codevo
-    .requestPermission(kind)
-    .then(() => window.codevo.openPermissionSettings(kind))
-    .catch((error: unknown) => {
-      console.error(`Opening the ${kind} settings failed`, error);
-    });
+function runAction(kind: InputPermissionKind, action: InputPermissionAction): Promise<void> {
+  const run = action.run === 'request' ? window.codevo.requestPermission(kind) : window.codevo.openPermissionSettings(kind);
+  return run.catch((error: unknown) => {
+    console.error(`The ${kind} permission action failed`, error);
+  });
 }
 
-const RELAUNCH_MESSAGES = {
-  pending: 'Ak ste monitorovanie vstupu už povolili a stav sa nezmenil, macOS ho uplatní až po reštarte aplikácie.',
-  unarmed: 'Monitorovanie vstupu je povolené, ale klávesová skratka zatiaľ nereaguje. macOS ju sprístupní po reštarte aplikácie.',
-} as const;
+function ManualAddHint() {
+  return (
+    <div className="perm-manual">
+      <p>Ak tam Codevo Whisper nie je, kliknite v zozname na + a vyberte ju, alebo ju tam presuňte z Findera.</p>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          window.codevo.revealAppInFinder().catch((error: unknown) => {
+            console.error('Revealing the app in Finder failed', error);
+          });
+        }}
+      >
+        Zobraziť vo Finderi
+      </button>
+    </div>
+  );
+}
+
+function InputPermission({ copy, view, refresh }: { copy: InputPermissionCopy; view: PermissionsView; refresh: () => void }) {
+  const granted = isGranted(view, copy.kind);
+  const action = inputPermissionAction(view, copy.kind);
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <PermissionRow
+        title={copy.title}
+        description={copy.description}
+        granted={granted}
+        statusLabel={grantLabel(granted)}
+        actionLabel={action.label}
+        busy={busy}
+        onAction={() => {
+          setBusy(true);
+          void runAction(copy.kind, action).finally(() => {
+            setBusy(false);
+            refresh();
+          });
+        }}
+      />
+      {offersManualAdd(view, copy.kind) && <ManualAddHint />}
+    </>
+  );
+}
 
 function RelaunchNotice({ message }: { message: string }) {
   return (
@@ -41,37 +92,19 @@ function RelaunchNotice({ message }: { message: string }) {
   );
 }
 
-export function InputPermissionsStep({ permissions }: { permissions: Live<PermissionsView> }) {
-  const [askedForInput, setAskedForInput] = useState(false);
+export function InputPermissionsStep({ permissions, refresh }: { permissions: Live<PermissionsView>; refresh: () => void }) {
   if (permissions.kind !== 'ready') {
     return null;
   }
-  const { inputMonitoring, accessibility, hotkeyArmed } = permissions.value;
-  const needsRelaunch = (askedForInput && !inputMonitoring) || (inputMonitoring && !hotkeyArmed);
+  const reason = relaunchReason(permissions.value);
   return (
     <>
       <div className="sbox">
-        <PermissionRow
-          title="Monitorovanie vstupu"
-          description="Aplikácia sleduje iba vybraný kláves, aby vedela, kedy diktujete."
-          granted={inputMonitoring}
-          statusLabel={grantLabel(inputMonitoring)}
-          actionLabel="Otvoriť Nastavenia systému"
-          onAction={() => {
-            setAskedForInput(true);
-            openPermission('input-monitoring');
-          }}
-        />
-        <PermissionRow
-          title="Prístupnosť"
-          description="Umožní vložiť prepísaný text do aplikácie, v ktorej práve píšete."
-          granted={accessibility}
-          statusLabel={grantLabel(accessibility)}
-          actionLabel="Otvoriť Nastavenia systému"
-          onAction={() => openPermission('accessibility')}
-        />
+        {INPUT_PERMISSIONS.map((copy) => (
+          <InputPermission key={copy.kind} copy={copy} view={permissions.value} refresh={refresh} />
+        ))}
       </div>
-      {needsRelaunch && <RelaunchNotice message={inputMonitoring ? RELAUNCH_MESSAGES.unarmed : RELAUNCH_MESSAGES.pending} />}
+      {reason !== null && <RelaunchNotice message={RELAUNCH_MESSAGES[reason]} />}
     </>
   );
 }

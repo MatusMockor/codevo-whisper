@@ -1,6 +1,6 @@
 import type { Live } from '../home/live-value';
 import type { MicrophonePermission } from '../../shared/permissions';
-import type { PermissionsView } from '../settings/use-permissions';
+import type { PermissionsView } from '../settings/permissions-view';
 import { PermissionRow } from './PermissionRow';
 
 const STATUS_LABELS: Readonly<Record<MicrophonePermission, string>> = {

@@ -4,7 +4,7 @@ import type { AppStatus } from '../shared/app-status';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
 import type { AudioDevice } from '../shared/microphones';
 import type { ModelCatalogView, ModelState } from '../shared/models';
-import type { PermissionsStatus } from '../shared/permissions';
+import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
 import type { DayStats } from '../shared/stats';
@@ -37,6 +37,8 @@ const api: IpcApi = {
   getPermissions: () => ipcRenderer.invoke(INVOKE_CHANNELS.getPermissions) as Promise<PermissionsStatus>,
   requestPermission: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.requestPermission, kind) as Promise<void>,
   openPermissionSettings: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.openPermissionSettings, kind) as Promise<void>,
+  getPermissionGuide: () => ipcRenderer.invoke(INVOKE_CHANNELS.getPermissionGuide) as Promise<PermissionGuide>,
+  revealAppInFinder: () => ipcRenderer.invoke(INVOKE_CHANNELS.revealAppInFinder) as Promise<void>,
   relaunch: () => ipcRenderer.invoke(INVOKE_CHANNELS.relaunch) as Promise<void>,
   recordHotkey: () => ipcRenderer.invoke(INVOKE_CHANNELS.recordHotkey) as Promise<HotkeyRecordResult>,
   isHotkeyArmed: () => ipcRenderer.invoke(INVOKE_CHANNELS.isHotkeyArmed) as Promise<boolean>,

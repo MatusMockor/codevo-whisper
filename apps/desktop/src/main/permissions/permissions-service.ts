@@ -1,7 +1,8 @@
-import type { InputHelper, Permissions } from '../helper/input-helper';
+import type { InputHelper, PermissionKind as HelperPermissionKind, Permissions } from '../helper/input-helper';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
-import type { MicrophonePermission, PermissionKind, PermissionsStatus } from '../../shared/permissions';
+import type { InputPermissionKind, MicrophonePermission, PermissionKind, PermissionsStatus } from '../../shared/permissions';
+import type { AskedPermissions } from './asked-permissions-store';
 
 export interface MicrophoneAccess {
   status(): string;
@@ -17,11 +18,17 @@ export type PermissionsDeps = {
   microphone: MicrophoneAccess;
   links: Readonly<Record<PermissionKind, string>>;
   openUrl: OpenUrl;
+  asked: AskedPermissions;
   logger: Logger;
   inputReady?: Promise<void> | undefined;
 };
 
 const NO_INPUT_PERMISSIONS: Permissions = { listen: false, post: false, accessibility: false };
+
+const HELPER_PERMISSIONS: Readonly<Record<InputPermissionKind, HelperPermissionKind>> = Object.freeze({
+  'input-monitoring': 'listen',
+  accessibility: 'accessibility',
+});
 
 const DENIED_MEDIA_STATUSES: ReadonlySet<string> = new Set(['denied', 'restricted']);
 
@@ -63,7 +70,12 @@ export class PermissionsService {
       await this.deps.microphone.ask();
       return;
     }
-    await this.deps.helper.requestPermission(kind === 'input-monitoring' ? 'listen' : 'accessibility');
+    await this.deps.helper.requestPermission(HELPER_PERMISSIONS[kind]);
+    await this.deps.asked.remember(kind);
+  }
+
+  asked(): Promise<InputPermissionKind[]> {
+    return this.deps.asked.asked();
   }
 
   openSettings(kind: PermissionKind): Promise<void> {

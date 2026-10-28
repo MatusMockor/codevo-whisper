@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { HotkeyRearm } from '../src/main/hotkey/rearm-on-grant';
+import { AskedPermissionsStore } from '../src/main/permissions/asked-permissions-store';
 import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
 import { PermissionsService } from '../src/main/permissions/permissions-service';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -35,6 +36,7 @@ async function harness() {
     microphone: { status: () => 'granted', ask: () => Promise.resolve(true) },
     links: MACOS_PERMISSION_LINKS,
     openUrl: () => Promise.resolve(),
+    asked: new AskedPermissionsStore(join(dir, 'asked-permissions.json'), logger),
     logger,
   });
   const starts: string[] = [];

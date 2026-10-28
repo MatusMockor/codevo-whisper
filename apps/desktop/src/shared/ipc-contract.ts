@@ -3,7 +3,7 @@ import type { HotkeyRecordResult } from './hotkey-record';
 import type { AudioDevice } from './microphones';
 import type { ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
-import type { PermissionKind, PermissionsStatus } from './permissions';
+import type { PermissionGuide, PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
 import type { MicrophoneSetting, Settings } from './settings';
 import type { DayStats } from './stats';
@@ -19,6 +19,8 @@ export type IpcInvokeApi = {
   getPermissions(): Promise<PermissionsStatus>;
   requestPermission(kind: PermissionKind): Promise<void>;
   openPermissionSettings(kind: PermissionKind): Promise<void>;
+  getPermissionGuide(): Promise<PermissionGuide>;
+  revealAppInFinder(): Promise<void>;
   relaunch(): Promise<void>;
   recordHotkey(): Promise<HotkeyRecordResult>;
   isHotkeyArmed(): Promise<boolean>;
@@ -73,6 +75,8 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getPermissions: 'permissions:get',
   requestPermission: 'permissions:request',
   openPermissionSettings: 'permissions:open-settings',
+  getPermissionGuide: 'permissions:guide',
+  revealAppInFinder: 'app:reveal-in-finder',
   relaunch: 'app:relaunch',
   recordHotkey: 'hotkey:record',
   isHotkeyArmed: 'hotkey:armed',

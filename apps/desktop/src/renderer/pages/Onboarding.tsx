@@ -21,7 +21,7 @@ function StepBody({ step, settings }: { step: number; settings: Settings }) {
     return <MicrophoneStep permissions={permissions} refresh={refresh} />;
   }
   if (step === 1) {
-    return <InputPermissionsStep permissions={permissions} />;
+    return <InputPermissionsStep permissions={permissions} refresh={refresh} />;
   }
   if (step === 2) {
     return (

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import { ModelManager } from '../src/main/models/model-manager';
+import { AskedPermissionsStore } from '../src/main/permissions/asked-permissions-store';
 import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
 import { PermissionsService } from '../src/main/permissions/permissions-service';
 import { PauseState } from '../src/main/session/pause-state';
@@ -51,6 +52,7 @@ async function prepared() {
     },
     links: MACOS_PERMISSION_LINKS,
     openUrl: () => Promise.resolve(),
+    asked: new AskedPermissionsStore(join(scratch, 'asked-permissions.json'), logger),
     logger,
   });
   const pause = new PauseState(logger);

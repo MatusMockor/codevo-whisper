@@ -1,13 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import type { Permissions } from '../src/main/helper/input-helper';
+import { AskedPermissionsStore } from '../src/main/permissions/asked-permissions-store';
 import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission-links';
 import { PermissionsService, type MicrophoneAccess } from '../src/main/permissions/permissions-service';
 import type { PermissionsStatus } from '../src/shared/permissions';
 import { RecordingLogger } from './recording-logger';
 
+let dir: string;
+
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'cw-permissions-'));
+});
+
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+
 class UnavailableHelper extends FakeInputHelper {
   override permissions(): Promise<Permissions> {
+    return Promise.reject(new Error('helper is not running'));
+  }
+
+  override requestPermission(): Promise<void> {
     return Promise.reject(new Error('helper is not running'));
   }
 }
@@ -39,6 +57,7 @@ function service(helper: FakeInputHelper, microphone = new SystemMicrophone('gra
       opened.push(url);
       return Promise.resolve();
     },
+    asked: new AskedPermissionsStore(join(dir, 'asked-permissions.json'), logger),
     logger,
     inputReady,
   });
@@ -99,6 +118,30 @@ describe('PermissionsService', () => {
     expect(microphone.asked).toBe(1);
     expect(helper.requestedPermissions).toEqual(['listen', 'accessibility']);
     expect((await permissions.status()).microphone).toBe('granted');
+  });
+
+  it('remembers which input permissions it has asked for across instances', async () => {
+    const helper = new FakeInputHelper();
+    const { permissions } = service(helper, new SystemMicrophone('not-determined'));
+
+    expect(await permissions.asked()).toEqual([]);
+    await permissions.request('microphone');
+    await permissions.request('accessibility');
+    expect(await permissions.asked()).toEqual(['accessibility']);
+
+    await permissions.request('input-monitoring');
+    await permissions.request('accessibility');
+
+    expect(await permissions.asked()).toEqual(['input-monitoring', 'accessibility']);
+    expect(await service(new FakeInputHelper()).permissions.asked()).toEqual(['input-monitoring', 'accessibility']);
+  });
+
+  it('does not remember a request the helper failed to make', async () => {
+    const { permissions } = service(new UnavailableHelper());
+
+    await expect(permissions.request('input-monitoring')).rejects.toThrow('helper is not running');
+
+    expect(await permissions.asked()).toEqual([]);
   });
 
   it('opens the System Settings pane of each permission', async () => {
