@@ -8,6 +8,7 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
   const [recording, setRecording] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const currentId = useId();
+  const helpId = useId();
 
   function record(): void {
     if (recording) {
@@ -35,10 +36,11 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
 
   return (
     <div className="hk-wrap">
-      <button type="button" className="hk" data-rec={recording} aria-labelledby={`${labelledBy} ${currentId}`} aria-busy={recording} onClick={record}>
+      <button type="button" className="hk" data-rec={recording} aria-labelledby={`${labelledBy} ${currentId}`} aria-busy={recording} aria-describedby={helpId} onClick={record}>
         <span id={currentId}>{recording ? 'Stlačte novú skratku…' : (hotkey?.label ?? 'Nenastavená')}</span>
         <small>{hotkey === null ? 'Nastaviť' : 'Zmeniť'}</small>
       </button>
+      <p id={helpId} className="field-note">Stlačte skratku a uvoľnite všetky klávesy. Esc zruší záznam. Kombinácie s bežným klávesom vyžadujú povolenie Prístupnosť.</p>
       {message !== null && (
         <p className="field-note warn" role="alert">
           {message}

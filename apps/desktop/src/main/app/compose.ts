@@ -133,7 +133,7 @@ export function composeApplication(logger: Logger): Application {
       lastTranscript,
       permissions,
       appReveal: new AppReveal({ platform: process.platform, executablePath: app.getPath('exe'), shell: desktopShell }),
-      recorder: new KeyRecorder(helper),
+      recorder: new KeyRecorder(helper, hotkey),
       hotkey: { isArmed: () => rearm.settled().then(() => hotkey.isArmed()) },
       relaunch,
       catalog: models.catalog,

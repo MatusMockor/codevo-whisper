@@ -29,7 +29,7 @@ import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
-const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
+const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
@@ -108,14 +108,14 @@ async function prepared(setup: Setup = {}) {
 
 async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
   const starts = harness.capture.starts.length;
-  harness.helper.pressKey('down', FN.keycode);
+  harness.helper.emitHotkey('down');
   await expect.poll(() => harness.capture.starts.length).toBe(starts + 1);
   harness.capture.speak(stampedPcm(marker));
 }
 
 async function dictate(harness: Harness, marker: number): Promise<void> {
   await pressAndSpeak(harness, marker);
-  harness.helper.pressKey('up', FN.keycode);
+  harness.helper.emitHotkey('up');
 }
 
 function kinds(states: OverlayState[]): string[] {
@@ -183,7 +183,7 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'open-settings' });
     expect(harness.capture.recording).toBe(false);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(harness.helper.pasted).toEqual([]);
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
@@ -278,7 +278,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 4);
     harness.helper.frontmostApp = NOTES;
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'focus' });
     expect(harness.helper.pasted).toEqual([]);
@@ -296,7 +296,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 4);
     harness.helper.secureInputEnabled = true;
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'secure' });
     expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(4));
@@ -333,30 +333,32 @@ describe('SessionCoordinator', () => {
   });
 
   it('discards the audio on lock, suspend, lost input and pause', async () => {
-    const harness = await prepared();
-    const interruptions: Array<() => void> = [
-      () => harness.power.emit('lock-screen'),
-      () => harness.power.emit('suspend'),
-      () => harness.helper.loseInput('helper-died'),
-      () => harness.coordinator.pause(),
-    ];
-
-    for (const interrupt of interruptions) {
-      harness.coordinator.resume();
+    let totalStarts = 0;
+    for (const reason of ['lock', 'suspend', 'helper-died', 'pause'] as const) {
+      const harness = await prepared();
       await pressAndSpeak(harness, 2);
-      interrupt();
+      if (reason === 'lock') harness.power.emit('lock-screen');
+      if (reason === 'suspend') harness.power.emit('suspend');
+      if (reason === 'helper-died') harness.helper.loseInput('helper-died');
+      if (reason === 'pause') harness.coordinator.pause();
       await expect.poll(() => harness.capture.recording).toBe(false);
       await expect.poll(() => harness.states.at(-1)).toEqual({ kind: 'hidden' });
-      harness.helper.pressKey('up', FN.keycode);
+      harness.helper.emitHotkey('up');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(harness.helper.pasted).toEqual([]);
+      expect(harness.lastTranscript.get()).toBeNull();
+      await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+      expect(await harness.stats.days()).toEqual([]);
+      if (reason === 'pause') {
+        expect(harness.coordinator.isPaused()).toBe(true);
+        harness.helper.emitHotkey('down');
+      }
+      expect(harness.capture.starts).toHaveLength(1);
+      totalStarts += harness.capture.starts.length;
+      harness.coordinator.dispose();
+      harness.hotkey.dispose();
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(harness.helper.pasted).toEqual([]);
-    expect(harness.lastTranscript.get()).toBeNull();
-    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
-    expect(harness.coordinator.isPaused()).toBe(true);
-    harness.helper.pressKey('down', FN.keycode);
-    expect(harness.capture.starts).toHaveLength(4);
+    expect(totalStarts).toBe(4);
   });
 
   it('the 10 minute limit stops the session and transcribes what was recorded', async () => {
@@ -367,8 +369,8 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(5)]);
     expect(harness.states).toContainEqual({ kind: 'processing', notice: 'limit-reached' });
-    harness.helper.pressKey('up', FN.keycode);
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('up');
+    harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.starts).toHaveLength(2);
   });
 
@@ -376,9 +378,9 @@ describe('SessionCoordinator', () => {
     const harness = await prepared();
     harness.capture.failNextStart = true;
 
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
@@ -400,8 +402,8 @@ describe('SessionCoordinator', () => {
     harness.capture.failNextStart = true;
     harness.capture.failureDelayMs = 100;
 
-    harness.helper.pressKey('down', FN.keycode);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('down');
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -412,9 +414,9 @@ describe('SessionCoordinator', () => {
   it('reports a failed transcription and silence without inserting', async () => {
     const harness = await prepared();
 
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.recording).toBe(true);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
 
     await setWorkerMode('fail');
@@ -428,9 +430,9 @@ describe('SessionCoordinator', () => {
   it('records stats after a successful dictation and not after an empty or failed one', async () => {
     const harness = await prepared();
 
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.recording).toBe(true);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
     await setWorkerMode('fail');
     await dictate(harness, 3);
@@ -445,7 +447,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 4);
     harness.helper.frontmostApp = NOTES;
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'focus' });
     await expect.poll(() => harness.stats.days()).toEqual([{ date: today, words: 2, dictations: 2, seconds: 2 }]);
   });
@@ -522,7 +524,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 7);
     expect(harness.coordinator.isDictating()).toBe(true);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
     expect(harness.coordinator.isDictating()).toBe(true);
 
@@ -543,7 +545,7 @@ describe('SessionCoordinator', () => {
     expect(host.requests.at(-1)).toEqual({ type: 'stop' });
     expect(microphone.isBusy()).toBe(false);
     await expect(microphone.startMeter({ deviceId: null, label: null })).rejects.toThrow('The microphone is closed for an app update');
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     expect(guard.isDictating()).toBe(false);
     release();
 
@@ -564,14 +566,14 @@ describe('SessionCoordinator', () => {
 
   it.each([299, 300])('smart %i ms gesture completes normal transcription', async (duration) => {
     const harness = await prepared({ settings: { mode: 'smart' } });
-    harness.helper.pressKey('down', FN.keycode, 0);
+    harness.helper.emitHotkey('down', 0);
     await expect.poll(() => harness.capture.recording).toBe(true);
     harness.capture.speak(stampedPcm(6));
-    harness.helper.pressKey('up', FN.keycode, duration);
+    harness.helper.emitHotkey('up', duration);
     if (duration === 299) {
       expect(harness.capture.recording).toBe(true);
-      harness.helper.pressKey('down', FN.keycode, 1_000);
-      harness.helper.pressKey('up', FN.keycode, 1_300);
+      harness.helper.emitHotkey('down', 1_000);
+      harness.helper.emitHotkey('up', 1_300);
     }
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(6)]);
@@ -582,10 +584,10 @@ describe('SessionCoordinator', () => {
     const harness = await prepared({ settings: { mode: 'toggle' } });
 
     await pressAndSpeak(harness, 6);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     harness.capture.speak(stampedPcm(6));
     expect(harness.capture.recording).toBe(true);
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
 
     await expect.poll(() => harness.helper.pasted).toEqual(['6:64000']);
     expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
@@ -597,7 +599,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 5);
     now += 600_000;
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(5)]);
     expect(harness.states).toContainEqual({ kind: 'processing', notice: 'limit-reached' });
@@ -606,13 +608,13 @@ describe('SessionCoordinator', () => {
   it('in toggle mode the next press after a readiness error starts a new session', async () => {
     const harness = await prepared({ settings: { mode: 'toggle', localModelId: null } });
 
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
     await harness.settings.update({ localModelId: 'tiny' });
     await pressAndSpeak(harness, 4);
-    harness.helper.pressKey('up', FN.keycode);
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('up');
+    harness.helper.emitHotkey('down');
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(4)]);
     expect(harness.capture.starts).toHaveLength(2);
@@ -622,10 +624,10 @@ describe('SessionCoordinator', () => {
     const harness = await prepared({ settings: { mode: 'toggle' } });
     harness.capture.failNextStart = true;
 
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
     await pressAndSpeak(harness, 2);
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(2)]);
   });
@@ -665,7 +667,7 @@ describe('SessionCoordinator', () => {
       now += 1000;
     });
     await expect.poll(() => harness.states.some((state) => state.kind === 'recording' && (state.live?.tentative ?? '') !== '')).toBe(true);
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => harness.helper.pasted).toEqual([expectedText(samples)]);
     const recordings = harness.states.filter((state) => state.kind === 'recording');
@@ -685,7 +687,7 @@ describe('SessionCoordinator', () => {
     await speakTimeline(harness, samples, () => {
       now += 1000;
     });
-    harness.helper.pressKey('up', FN.keycode);
+    harness.helper.emitHotkey('up');
 
     await expect.poll(() => harness.helper.pasted).toEqual([expectedText(samples)]);
     expect(harness.states.some((state) => 'live' in state)).toBe(false);
@@ -698,7 +700,7 @@ async function useTimeline(samples: Int16Array): Promise<void> {
 }
 
 async function speakTimeline(harness: Harness, samples: Int16Array, tick: () => void): Promise<void> {
-  harness.helper.pressKey('down', FN.keycode);
+  harness.helper.emitHotkey('down');
   await expect.poll(() => harness.capture.starts.length).toBe(1);
   for (const frame of secondFrames(samples)) {
     tick();

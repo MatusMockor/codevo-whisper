@@ -1,5 +1,8 @@
+import { parseHotkeySetting, type HotkeyEvent } from '../../shared/hotkey';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+import { isReservedHotkey } from '../settings/hotkey-policy';
 import type { HelperMessage } from './helper-channel';
-import type { AppTarget, FocusedElement, InputLostReason, KeyEvent, ModifierFlags, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputLostReason, ModifierFlags, Permissions, ShortcutName } from './input-helper';
 
 const SHIFT_MASK = 0x20000;
 const CONTROL_MASK = 0x40000;
@@ -71,13 +74,13 @@ export function parseModifierFlags(message: HelperMessage): ModifierFlags {
   };
 }
 
-export function parseKeyEvent(message: HelperMessage): KeyEvent | null {
+export function parseHotkeyEvent(message: HelperMessage): HotkeyEvent | null {
   const phase = message['phase'];
-  const keycode = nullableInteger(message, 'keycode');
-  if (message['event'] !== 'key' || (phase !== 'down' && phase !== 'up') || keycode === null) {
+  const ts = message['ts'];
+  if (message['event'] !== 'hotkey' || (phase !== 'down' && phase !== 'up') || typeof ts !== 'number' || !Number.isSafeInteger(ts) || ts < 0) {
     return null;
   }
-  return { phase, keycode, ts: nullableInteger(message, 'ts') ?? Date.now() };
+  return { phase, ts };
 }
 
 export function parseShortcut(message: HelperMessage): ShortcutName | null {
@@ -89,11 +92,21 @@ export function parseInputLost(message: HelperMessage): InputLostReason | null {
   return event === 'tap-reenabled' || event === 'tap-error' ? event : null;
 }
 
-export function parseRecordedKey(message: HelperMessage): number | null {
-  if (message['event'] !== 'recorded' && message['event'] !== 'record-unsupported') {
-    return null;
+export function parseRecordedHotkey(message: HelperMessage): HotkeyRecordResult | null {
+  switch (message['event']) {
+    case 'record-unsupported': return 'unsupported';
+    case 'record-cancelled': return 'cancelled';
+    case 'record-timeout': return 'timeout';
+    case 'recorded': {
+      const binding = { ...message };
+      delete binding['event'];
+      delete binding['recordingId'];
+      delete binding['ts'];
+      const parsed = parseHotkeySetting(binding);
+      return parsed && !isReservedHotkey(parsed) ? parsed : 'unsupported';
+    }
+    default: return null;
   }
-  return nullableInteger(message, 'keycode');
 }
 
 export function failureReason(message: HelperMessage): string {

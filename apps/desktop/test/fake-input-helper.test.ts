@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
-import type { KeyEvent } from '../src/main/helper/input-helper';
+import type { HotkeyEvent } from '../src/shared/hotkey';
 
 describe('FakeInputHelper', () => {
   it('restores the saved clipboard only while it still holds the expected text', async () => {
@@ -44,21 +44,21 @@ describe('FakeInputHelper', () => {
     expect(helper.modifierQueries).toBe(2);
   });
 
-  it('emits only the keys it listens to', async () => {
+  it('emits logical edges only while configured', async () => {
     const helper = new FakeInputHelper();
-    const keys: KeyEvent[] = [];
-    helper.onKey((event) => keys.push(event));
+    const keys: HotkeyEvent[] = [];
+    helper.onHotkey((event) => keys.push(event));
 
-    await helper.listen([63]);
-    helper.pressKey('down', 61, 1);
-    helper.pressKey('down', 63, 2);
+    helper.emitHotkey('down', 1);
+    await helper.listen({ kind: 'modifiers', keycodes: [63] });
+    helper.emitHotkey('down', 2);
 
-    expect(keys).toEqual([{ phase: 'down', keycode: 63, ts: 2 }]);
+    expect(keys).toEqual([{ phase: 'down', ts: 2 }]);
   });
 
   it('answers the scripted OS state', async () => {
     const target = { bundleId: 'com.apple.Notes', pid: 9, name: 'Notes', windowId: null };
-    const helper = new FakeInputHelper({ frontmost: target, editable: false, role: 'AXList', secureInput: true, recordedKey: 58 });
+    const helper = new FakeInputHelper({ frontmost: target, editable: false, role: 'AXList', secureInput: true, recordedHotkey: { kind: 'modifiers', keycodes: [58], label: 'Ľavý ⌥ Option' } });
     const shortcuts: string[] = [];
     helper.onShortcut((name) => shortcuts.push(name));
 
@@ -67,7 +67,7 @@ describe('FakeInputHelper', () => {
     expect(await helper.frontmost()).toEqual(target);
     expect(await helper.focusedElement()).toEqual({ editable: false, role: 'AXList' });
     expect(await helper.secureInput()).toBe(true);
-    expect(await helper.recordKey(1000)).toBe(58);
+    expect(await helper.recordHotkey(1000)).toEqual({ kind: 'modifiers', keycodes: [58], label: 'Ľavý ⌥ Option' });
     expect(shortcuts).toEqual(['paste-last']);
   });
 });

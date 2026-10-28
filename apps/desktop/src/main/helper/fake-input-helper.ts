@@ -1,5 +1,7 @@
+import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, KeyPhase, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 export type FakeInputHelperState = {
@@ -11,7 +13,7 @@ export type FakeInputHelperState = {
   clipboardWriteFails: boolean;
   modifiers: ModifierFlags;
   permissions: Permissions;
-  recordedKey: number | null;
+  recordedHotkey: HotkeyRecordResult;
 };
 
 const DEFAULT_STATE: FakeInputHelperState = {
@@ -23,7 +25,7 @@ const DEFAULT_STATE: FakeInputHelperState = {
   clipboardWriteFails: false,
   modifiers: { control: false, command: false, option: false, shift: false },
   permissions: { listen: true, post: true, accessibility: true },
-  recordedKey: null,
+  recordedHotkey: 'timeout',
 };
 
 export class FakeInputHelper implements InputHelper {
@@ -36,15 +38,15 @@ export class FakeInputHelper implements InputHelper {
   modifiers: ModifierFlags;
   modifierQueries = 0;
   permissionState: Permissions;
-  recordedKey: number | null;
+  recordedHotkey: HotkeyRecordResult;
   running = false;
   listenFails = false;
-  listening: number[] = [];
+  listening: HotkeyBinding | null = null;
   readonly pasted: string[] = [];
   readonly requestedPermissions: PermissionKind[] = [];
   readonly recordTimeouts: number[] = [];
   private savedClipboard: string | null = null;
-  private readonly keys = new Listeners<KeyEvent>(consoleLogger, 'Fake key listener failed');
+  private readonly keys = new Listeners<HotkeyEvent>(consoleLogger, 'Fake key listener failed');
   private readonly shortcuts = new Listeners<ShortcutName>(consoleLogger, 'Fake shortcut listener failed');
   private readonly inputLosses = new Listeners<InputLostReason>(consoleLogger, 'Fake input lost listener failed');
 
@@ -58,7 +60,7 @@ export class FakeInputHelper implements InputHelper {
     this.clipboardWriteFails = initial.clipboardWriteFails;
     this.modifiers = { ...initial.modifiers };
     this.permissionState = { ...initial.permissions };
-    this.recordedKey = initial.recordedKey;
+    this.recordedHotkey = initial.recordedHotkey;
   }
 
   start(): Promise<void> {
@@ -68,7 +70,7 @@ export class FakeInputHelper implements InputHelper {
 
   stop(): Promise<void> {
     this.running = false;
-    this.listening = [];
+    this.listening = null;
     return Promise.resolve();
   }
 
@@ -137,20 +139,21 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve();
   }
 
-  listen(keycodes: number[]): Promise<void> {
+  listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {
     if (this.listenFails) {
       return Promise.reject(new Error('tap-create-failed'));
     }
-    this.listening = [...keycodes];
+    this.listening = binding;
+    onReady?.();
     return Promise.resolve();
   }
 
-  recordKey(timeoutMs: number): Promise<number | null> {
+  recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult> {
     this.recordTimeouts.push(timeoutMs);
-    return Promise.resolve(this.recordedKey);
+    return Promise.resolve(this.recordedHotkey);
   }
 
-  onKey(listener: (event: KeyEvent) => void): () => void {
+  onHotkey(listener: (event: HotkeyEvent) => void): () => void {
     return this.keys.add(listener);
   }
 
@@ -162,11 +165,8 @@ export class FakeInputHelper implements InputHelper {
     return this.inputLosses.add(listener);
   }
 
-  pressKey(phase: KeyPhase, keycode: number, ts = Date.now()): void {
-    if (!this.listening.includes(keycode)) {
-      return;
-    }
-    this.keys.emit({ phase, keycode, ts });
+  emitHotkey(phase: HotkeyEvent['phase'], ts = Date.now()): void {
+    if (this.listening !== null) this.keys.emit({ phase, ts });
   }
 
   pressPasteLast(): void {

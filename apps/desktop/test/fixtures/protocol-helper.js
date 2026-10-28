@@ -1,7 +1,10 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
-let keycodes = [];
+let binding = {};
+let recording = {};
+let deferListen = false;
+let deferredListen;
 const overrides = new Map();
 
 function send(message) {
@@ -22,11 +25,29 @@ const handlers = {
     send({ id });
   },
   'listen-start': (id, args) => {
-    keycodes = args.keycodes;
-    send({ id, running: true, keycodes });
+    binding = args;
+    const running = !process.argv.includes('--listen-rejected-with-edges');
+    const packet = [{ id, running }];
+    if (process.argv.includes('--listen-with-edges') || !running) {
+      packet.push({ event: 'hotkey', listenId: args.listenId, phase: 'down', ts: 1000 });
+      packet.push({ event: 'hotkey', listenId: args.listenId, phase: 'up', ts: 1300 });
+    }
+    const write = () => process.stdout.write(packet.map(message => JSON.stringify(message)).join('\n') + '\n');
+    if (deferListen) {
+      deferListen = false;
+      deferredListen = write;
+      return;
+    }
+    write();
   },
-  'listen-state': (id) => send({ id, keycodes }),
-  'record-key': (id) => send({ id, recording: true }),
+  'listen-defer-next': (id) => { deferListen = true; send({ id }); },
+  'listen-finish': (id) => { deferredListen?.(); deferredListen = undefined; send({ id }); },
+  'listen-state': (id) => send({ id, ...binding }),
+  'record-key': (id, args) => {
+    recording = args;
+    send({ id, recording: true });
+  },
+  'record-state': (id) => send({ id, ...recording }),
   permissions: (id) => send({ id, listenEvent: true, postEvent: false, accessibility: true }),
   frontmost: (id) => send({ id, pid: 42, bundleId: 'com.apple.TextEdit', name: 'TextEdit', windowId: 7 }),
   'focused-element': (id) => send({ id, editable: null, role: 'AXWebArea', reason: 'chromium-no-tree' }),

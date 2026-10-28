@@ -2,10 +2,11 @@ import { expect, test, type ElectronApplication, type Locator, type Page } from 
 import { appWindows } from './app-windows';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { HotkeyRecordResult } from '../src/shared/hotkey-record';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
-type FakeHelperGlobal = { codevoE2e: { helper: { recordedKey: number | null } } };
+type FakeHelperGlobal = { codevoE2e: { helper: { recordedHotkey: HotkeyRecordResult } } };
 
 const DEFAULTS: Settings = {
   hotkey: null,
@@ -163,10 +164,10 @@ function mainWindow(action: 'hide' | 'showInactive' | 'minimize' | 'restore'): P
   }, action);
 }
 
-function setRecordedKey(keycode: number): Promise<void> {
+function setRecordedHotkey(result: HotkeyRecordResult): Promise<void> {
   return app.evaluate((_electron, key) => {
-    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedKey = key;
-  }, keycode);
+    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedHotkey = key;
+  }, result);
 }
 
 test.describe('settings page', () => {
@@ -261,15 +262,15 @@ test.describe('settings page', () => {
     const recorder = row('Klávesová skratka').locator('.hk');
     await expect(recorder).toContainText('Nenastavená');
 
-    await setRecordedKey(62);
+    await setRecordedHotkey({ kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' });
     await recorder.click();
 
     await expect(recorder).toContainText('Pravý ⌃ Control');
-    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.hotkey))).toEqual({ keycode: 62, label: 'Pravý ⌃ Control' });
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.hotkey))).toEqual({ kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' });
 
-    await setRecordedKey(0);
+    await setRecordedHotkey('unsupported');
     await recorder.click();
-    await expect(row('Klávesová skratka').getByRole('alert')).toContainText('Tento kláves sa nedá použiť.');
+    await expect(row('Klávesová skratka').getByRole('alert')).toContainText('Túto skratku nemožno použiť.');
     await expect(recorder).toContainText('Pravý ⌃ Control');
   });
 

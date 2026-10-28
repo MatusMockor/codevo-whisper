@@ -8,18 +8,44 @@ describe('validateSettingsPatch', () => {
 
   it('returns a valid patch', () => {
     const patch = validateSettingsPatch({
-      hotkey: { keycode: 61, label: 'Pravý ⌥ Option' },
+      hotkey: { kind: 'modifiers', keycodes: [61], label: 'Pravý ⌥ Option' },
       microphone: { deviceId: null, label: null },
       engineOrder: ['local'],
       launchAtLogin: true,
     });
 
     expect(patch).toEqual({
-      hotkey: { keycode: 61, label: 'Pravý ⌥ Option' },
+      hotkey: { kind: 'modifiers', keycodes: [61], label: 'Pravý ⌥ Option' },
       microphone: { deviceId: null, label: null },
       engineOrder: ['local'],
       launchAtLogin: true,
     });
+  });
+
+  it('canonicalizes combo members and rejects malformed or legacy IPC bindings', () => {
+    expect(validateSettingsPatch({ hotkey: { kind: 'key', keycode: 2, modifiers: ['shift', 'alt'], label: '⌥⇧D' } })).toEqual({ hotkey: { kind: 'key', keycode: 2, modifiers: ['alt', 'shift'], label: '⌥⇧D' } });
+    expect(validateSettingsPatch({ hotkey: { kind: 'modifiers', keycodes: [59, 58], label: '⌃⌥' } })).toEqual({ hotkey: { kind: 'modifiers', keycodes: [58, 59], label: '⌃⌥' } });
+    for (const hotkey of [
+      { keycode: 62, label: 'old' },
+      { kind: 'modifiers', keycodes: [], label: 'empty' },
+      { kind: 'modifiers', keycodes: [58, 58], label: 'duplicate' },
+      { kind: 'key', keycode: 49, modifiers: [], label: 'bare' },
+      { kind: 'key', keycode: -1, modifiers: ['control'], label: 'negative' },
+      { kind: 'key', keycode: Number.MAX_SAFE_INTEGER + 1, modifiers: ['control'], label: 'unsafe' },
+      { kind: 'key', keycode: 49, modifiers: ['command'], label: 'unknown family' },
+      { kind: 'key', keycode: 49, modifiers: ['control', 'control'], label: 'duplicate' },
+      { kind: 'key', keycode: 49, modifiers: ['control'], label: 'x'.repeat(513) },
+    ]) expect(() => validateSettingsPatch({ hotkey })).toThrow(IpcValidationError);
+  });
+
+  it('rejects the Mac paste-last chord with or without Fn and allows distinct chords', () => {
+    for (const modifiers of [['control', 'meta'], ['control', 'meta', 'fn']]) {
+      expect(() => validateSettingsPatch({ hotkey: { kind: 'key', keycode: 9, modifiers, label: 'reserved' } }, 'darwin')).toThrow(IpcValidationError);
+    }
+    for (const modifiers of [['control', 'meta', 'alt'], ['control', 'meta', 'shift']]) {
+      expect(validateSettingsPatch({ hotkey: { kind: 'key', keycode: 9, modifiers, label: 'allowed' } }, 'darwin').hotkey).toBeDefined();
+    }
+    expect(validateSettingsPatch({ hotkey: { kind: 'key', keycode: 9, modifiers: ['control', 'meta'], label: 'local namespace' } }, 'linux').hotkey).toBeDefined();
   });
 
   it('accepts clearing the hotkey', () => {
@@ -43,7 +69,7 @@ describe('validateSettingsPatch', () => {
   });
 
   it('rejects a hotkey with extra properties', () => {
-    expect(() => validateSettingsPatch({ hotkey: { keycode: 62, label: 'Pravý ⌃ Control', modifiers: 1 } })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ hotkey: { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control', modifiers: 1 } })).toThrow(IpcValidationError);
   });
 
   it('accepts the four engine orders', () => {

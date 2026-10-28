@@ -1,6 +1,8 @@
+import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
 import type { MicrophoneSetting, Settings } from '../../shared/settings';
+import { isReservedHotkey } from '../settings/hotkey-policy';
 import { isPlainRecord, isSettingsKey, isValidField, SETTINGS_FIELDS } from '../settings/settings-fields';
 
 export class IpcValidationError extends Error {
@@ -11,7 +13,7 @@ const MAIN_OWNED_KEYS: ReadonlySet<keyof Settings> = new Set(['localModelId']);
 
 const MODEL_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
 
-export function validateSettingsPatch(input: unknown): Partial<Settings> {
+export function validateSettingsPatch(input: unknown, platform: NodeJS.Platform = process.platform): Partial<Settings> {
   if (!isPlainRecord(input)) {
     throw new IpcValidationError('Settings patch must be a plain object');
   }
@@ -25,6 +27,14 @@ export function validateSettingsPatch(input: unknown): Partial<Settings> {
     }
     if (!isValidField(key, value)) {
       throw new IpcValidationError(`Invalid value for settings key: ${key}`);
+    }
+    if (key === 'hotkey' && value !== null) {
+      const hotkey = parseHotkeySetting(value);
+      if (hotkey === undefined || isReservedHotkey(hotkey, platform)) {
+        throw new IpcValidationError('Invalid hotkey');
+      }
+      patch[key] = hotkey;
+      continue;
     }
     patch[key] = value;
   }

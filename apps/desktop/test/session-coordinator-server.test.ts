@@ -31,7 +31,7 @@ import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
 
-const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
+const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const silentObserver = { connected: () => undefined, failed: () => undefined };
 
@@ -96,10 +96,10 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
-  harness.helper.pressKey('down', FN.keycode);
+  harness.helper.emitHotkey('down');
   await expect.poll(() => harness.capture.recording).toBe(true);
   harness.capture.speak(pcm);
-  harness.helper.pressKey('up', FN.keycode);
+  harness.helper.emitHotkey('up');
 }
 
 function lastVisible(states: OverlayState[]): OverlayState | undefined {
@@ -131,7 +131,7 @@ describe('SessionCoordinator with the server engine', () => {
     vi.stubEnv('CW_WORKER_STARTS', join(scratch, 'starts'));
     const harness = await prepared({ engineOrder: ['server', 'local'] }, {}, gate.promise);
     await gateway.stop();
-    harness.helper.pressKey('down', FN.keycode);
+    harness.helper.emitHotkey('down');
     await expect.poll(() => readFile(join(scratch, 'starts'), 'utf8').catch(() => '')).not.toBe('');
     await harness.settings.update({ localModelId: null });
     gate.resolve();

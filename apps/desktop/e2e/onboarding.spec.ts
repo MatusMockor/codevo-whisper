@@ -1,6 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { HotkeyRecordResult } from '../src/shared/hotkey-record';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
@@ -9,7 +10,7 @@ type PairedEvent = { event: 'paired'; deviceId: string };
 
 type FakeHelperGlobal = {
   codevoE2e: {
-    helper: { recordedKey: number | null; requestedPermissions: string[]; permissionState: { listen: boolean; post: boolean; accessibility: boolean } };
+    helper: { recordedHotkey: HotkeyRecordResult; requestedPermissions: string[]; permissionState: { listen: boolean; post: boolean; accessibility: boolean } };
     shell: { opened: string[]; revealed: string[] };
   };
 };
@@ -96,7 +97,7 @@ async function recordHotkeyAndOpenEngineStep(): Promise<void> {
   await next();
   await expect(heading()).toHaveText('Klávesová skratka');
   await app.evaluate(() => {
-    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedKey = 62;
+    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedHotkey = { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' };
   });
   await page.locator('.hk').click();
   await expect(page.locator('.hk')).toContainText('Pravý ⌃ Control');

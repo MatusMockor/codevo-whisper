@@ -11,7 +11,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   },
   {
     title: 'Klávesová skratka',
-    lead: 'Stlačte kláves, ktorým budete diktovať. Na klávesnici Apple odporúčame Fn / 🌐, na iných klávesniciach pravý ⌃ Control alebo pravý ⌥ Option.',
+    lead: 'Zvoľte skratku na diktovanie, napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.',
   },
   {
     title: 'Kde bude bežať prepis',

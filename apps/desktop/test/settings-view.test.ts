@@ -107,7 +107,7 @@ describe('modelRow', () => {
 
 describe('hotkeyRecordMessage', () => {
   it('explains unsupported keys, timeouts and failures', () => {
-    expect(hotkeyRecordMessage('unsupported')).toBe('Tento kláves sa nedá použiť. Zvoľte Fn / 🌐, pravý ⌃ Control, ľavý alebo pravý ⌥ Option, alebo pravý ⌘ Command.');
+    expect(hotkeyRecordMessage('unsupported')).toBe('Túto skratku nemožno použiť. Zvoľte modifikátory alebo modifikátory s jedným klávesom. ⌃⌘V je vyhradená na vloženie posledného prepisu.');
     expect(hotkeyRecordMessage('timeout')).toBe('Nestlačili ste žiadny kláves. Skúste to znova.');
     expect(hotkeyRecordMessage('failed')).toBe('Kláves sa nepodarilo zaznamenať. Skontrolujte povolenie Monitorovanie vstupu.');
   });
@@ -156,4 +156,8 @@ describe('levelBars', () => {
     expect(levelBars(1, 24)).toBe(24);
     expect(levelBars(4, 24)).toBe(24);
   });
+});
+
+ it('treats recorder cancellation as neutral', () => {
+  expect(hotkeyRecordMessage('cancelled')).toBeNull();
 });

@@ -1,22 +1,16 @@
 import type { InputHelper } from '../helper/input-helper';
-import { HOTKEY_LABELS, isHotkeyKeycode } from '../../shared/hotkey-labels';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+import type { HotkeyService } from './hotkey-service';
 
 export type RecordResult = HotkeyRecordResult;
 
 const DEFAULT_RECORD_TIMEOUT_MS = 10_000;
 
 export class KeyRecorder {
-  constructor(private readonly helper: InputHelper) {}
+  constructor(private readonly helper: InputHelper, private readonly hotkey: Pick<HotkeyService, 'cancel'>) {}
 
-  async record(timeoutMs = DEFAULT_RECORD_TIMEOUT_MS): Promise<RecordResult> {
-    const keycode = await this.helper.recordKey(timeoutMs);
-    if (keycode === null) {
-      return 'timeout';
-    }
-    if (!isHotkeyKeycode(keycode)) {
-      return 'unsupported';
-    }
-    return { keycode, label: HOTKEY_LABELS[keycode] };
+  record(timeoutMs = DEFAULT_RECORD_TIMEOUT_MS): Promise<RecordResult> {
+    this.hotkey.cancel();
+    return this.helper.recordHotkey(timeoutMs);
   }
 }
