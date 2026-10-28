@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
+  it('accepts only the logical output methods, clipboard policies and submit modes', () => {
+    for (const insertion of ['paste', 'type', 'clipboard']) {
+      for (const clipboardPolicy of ['restore', 'leave']) {
+        for (const autoSubmit of ['off', 'enter', 'primary-enter']) {
+          const patch = { insertion, clipboardPolicy, autoSubmit };
+          expect(validateSettingsPatch(patch)).toEqual(patch);
+        }
+      }
+    }
+    for (const patch of [{ insertion: 'typing' }, { clipboardPolicy: 'clear' }, { autoSubmit: 'cmd-enter' }, { autoSubmit: true }]) {
+      expect(() => validateSettingsPatch(patch)).toThrow(IpcValidationError);
+    }
+  });
   it('accepts bounded custom words and rejects malformed transcript preferences', () => {
     const patch = { customWords: ['Žilina', 'GPT-4', "O’Reilly", 'Node.js'], removeFillerWords: true, appendTrailingSpace: false };
     expect(validateSettingsPatch(patch)).toEqual(patch);
@@ -97,7 +110,7 @@ describe('validateSettingsPatch', () => {
   it('rejects values outside the allowed enums', () => {
     expect(() => validateSettingsPatch({ mode: 'press' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ language: 'de' })).toThrow(IpcValidationError);
-    expect(() => validateSettingsPatch({ insertion: 'type' })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ insertion: 'typing' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ overlay: 'fullscreen' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ launchAtLogin: 'true' })).toThrow(IpcValidationError);
   });

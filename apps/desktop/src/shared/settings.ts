@@ -24,7 +24,11 @@ export function isEngineOrder(value: unknown): value is Array<EngineId> {
   return ENGINE_ORDERS.some((order) => order.length === value.length && order.every((engine, index) => engine === value[index]));
 }
 
-export type InsertionMode = 'paste' | 'clipboard';
+export type InsertionMode = 'paste' | 'type' | 'clipboard';
+
+export type ClipboardPolicy = 'restore' | 'leave';
+
+export type AutoSubmit = 'off' | 'enter' | 'primary-enter';
 
 export type LocalAcceleration = 'auto' | 'gpu' | 'cpu';
 
@@ -45,6 +49,8 @@ export type Settings = {
   localAcceleration: LocalAcceleration;
   localModelUnload: LocalModelUnload;
   insertion: InsertionMode;
+  clipboardPolicy: ClipboardPolicy;
+  autoSubmit: AutoSubmit;
   overlay: OverlayMode;
   launchAtLogin: boolean;
   onboardingDone: boolean;
@@ -63,6 +69,8 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   localAcceleration: 'auto',
   localModelUnload: 5,
   insertion: 'paste',
+  clipboardPolicy: 'restore',
+  autoSubmit: 'off',
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,

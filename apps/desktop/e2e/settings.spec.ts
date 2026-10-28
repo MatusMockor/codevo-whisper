@@ -21,6 +21,8 @@ const DEFAULTS: Settings = {
   localAcceleration: 'auto',
   localModelUnload: 5,
   insertion: 'paste',
+  clipboardPolicy: 'restore',
+  autoSubmit: 'off',
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,

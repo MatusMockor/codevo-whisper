@@ -19,6 +19,13 @@ afterEach(async () => {
 });
 
 describe('SettingsStore', () => {
+  it('migrates output defaults and persists direct typing preferences across reload', async () => {
+    await writeFile(file, JSON.stringify({ insertion: 'paste' }));
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ insertion: 'paste', clipboardPolicy: 'restore', autoSubmit: 'off' });
+    await store.update({ insertion: 'type', clipboardPolicy: 'leave', autoSubmit: 'primary-enter' });
+    expect(await new SettingsStore(file).load()).toMatchObject({ insertion: 'type', clipboardPolicy: 'leave', autoSubmit: 'primary-enter' });
+  });
   it('defaults, freezes and persists transcript preferences independently', async () => {
     const store = new SettingsStore(file);
     expect(await store.load()).toMatchObject({ customWords: [], removeFillerWords: false, appendTrailingSpace: false });
