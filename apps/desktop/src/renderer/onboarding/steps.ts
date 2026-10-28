@@ -14,8 +14,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     lead: 'Stlačte kláves, ktorým budete diktovať. Na klávesnici Apple odporúčame Fn / 🌐, na iných klávesniciach pravý ⌃ Control alebo pravý ⌥ Option.',
   },
   {
-    title: 'Model na prepis',
-    lead: 'Prepis beží priamo na tomto Macu. Model sa raz stiahne z Hugging Face a potom funguje aj bez internetu.',
+    title: 'Kde bude bežať prepis',
+    lead: 'Prepisovať môžete priamo na tomto Macu, aj bez internetu, alebo na vlastnom serveri, kam zvuk putuje zašifrovaný od začiatku do konca. Rozhodnúť sa môžete aj neskôr.',
   },
   {
     title: 'Vyskúšajte to',

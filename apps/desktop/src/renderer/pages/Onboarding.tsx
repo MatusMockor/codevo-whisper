@@ -4,19 +4,21 @@ import { HotkeyRecorder } from '../components/HotkeyRecorder';
 import { Logo } from '../components/Logo';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { MicrophoneStep } from '../onboarding/MicrophoneStep';
-import { ModelStep } from '../onboarding/ModelStep';
+import { initialEngineChoice, stickyEngineChoice, type EngineChoice } from '../onboarding/engine-choice';
+import { EngineStep } from '../onboarding/EngineStep';
 import { ONBOARDING_STEPS } from '../onboarding/steps';
 import { TryStep } from '../onboarding/TryStep';
-import { useModels } from '../settings/use-models';
+import { useModels, type Models } from '../settings/use-models';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { usePermissions } from '../settings/use-permissions';
 import { saveSettings } from '../settings/use-settings';
 
 const LAST_STEP = ONBOARDING_STEPS.length - 1;
 
-function StepBody({ step, settings }: { step: number; settings: Settings }) {
+type StepBodyProps = { step: number; settings: Settings; models: Models; choice: EngineChoice | null; onEngineChoice: (choice: EngineChoice) => void };
+
+function StepBody({ step, settings, models, choice, onEngineChoice }: StepBodyProps) {
   const { permissions, refresh } = usePermissions();
-  const models = useModels();
   if (step === 0) {
     return <MicrophoneStep permissions={permissions} refresh={refresh} />;
   }
@@ -34,14 +36,19 @@ function StepBody({ step, settings }: { step: number; settings: Settings }) {
     );
   }
   if (step === 3) {
-    return <ModelStep settings={settings} models={models} />;
+    return <EngineStep settings={settings} models={models} choice={choice} onChoose={onEngineChoice} />;
   }
-  const modelReady = models.states.some((state) => state.id === settings.localModelId && state.status === 'ready');
-  return <TryStep settings={settings} modelReady={modelReady} />;
+  return <TryStep settings={settings} choice={choice} />;
 }
 
 export function Onboarding({ settings }: { settings: Settings }) {
   const [step, setStep] = useState(0);
+  const models = useModels();
+  const [engineChoice, setEngineChoice] = useState<EngineChoice | null>(null);
+  const choice = stickyEngineChoice(engineChoice, initialEngineChoice(settings, models.states));
+  if (choice !== engineChoice) {
+    setEngineChoice(choice);
+  }
   const current = ONBOARDING_STEPS[step] ?? ONBOARDING_STEPS[0];
 
   return (
@@ -60,7 +67,7 @@ export function Onboarding({ settings }: { settings: Settings }) {
         <p className="ob-lead">{current?.lead}</p>
         <SaveErrorNotice />
         <div className="ob-body">
-          <StepBody step={step} settings={settings} />
+          <StepBody step={step} settings={settings} models={models} choice={choice} onEngineChoice={setEngineChoice} />
         </div>
         <div className="ob-nav">
           {step > 0 && (

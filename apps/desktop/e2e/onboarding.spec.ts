@@ -1,8 +1,11 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
+import { startLocalGateway, type LocalGateway } from './local-gateway';
+
+type PairedEvent = { event: 'paired'; deviceId: string };
 
 type FakeHelperGlobal = {
   codevoE2e: {
@@ -19,6 +22,7 @@ const DEFAULT_MODEL_NAME = process.arch === 'arm64' ? 'Parakeet Ultra' : 'Parake
 let app: ElectronApplication;
 let page: Page;
 let userDataDir: string;
+let gateway: LocalGateway | null = null;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS, { fakeHelper: true });
@@ -32,6 +36,8 @@ test.beforeEach(async () => {
 
 test.afterEach(async () => {
   await app.close();
+  await gateway?.close();
+  gateway = null;
   await removeUserDataDir(userDataDir);
 });
 
@@ -66,6 +72,36 @@ function revealedPaths(): Promise<string[]> {
 
 function permissionRow(title: string) {
   return page.locator('.perm', { hasText: title });
+}
+
+function engines() {
+  return page.getByRole('radiogroup', { name: 'Kde bude bežať prepis' });
+}
+
+function modelList() {
+  return page.getByRole('list', { name: 'Modely na prepis' });
+}
+
+async function savedSettings(): Promise<Settings> {
+  return JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as Settings;
+}
+
+async function expectNoModelDownload(): Promise<void> {
+  await expect(stat(join(userDataDir, 'models'))).rejects.toMatchObject({ code: 'ENOENT' });
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+}
+
+async function recordHotkeyAndOpenEngineStep(): Promise<void> {
+  await next();
+  await next();
+  await expect(heading()).toHaveText('Klávesová skratka');
+  await app.evaluate(() => {
+    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedKey = 62;
+  });
+  await page.locator('.hk').click();
+  await expect(page.locator('.hk')).toContainText('Pravý ⌃ Control');
+  await next();
+  await expect(heading()).toHaveText('Kde bude bežať prepis');
 }
 
 test('is shown on the first run instead of the main window', async () => {
@@ -130,34 +166,117 @@ test('step 2 asks macOS once, then only opens System Settings and offers the Fin
   expect(await requestedPermissions()).toEqual([]);
 });
 
-test('walks through the hotkey and the preselected recommended model, then is skipped after completion', async () => {
-  await next();
-  await next();
-  await expect(heading()).toHaveText('Klávesová skratka');
-  await app.evaluate(() => {
-    (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedKey = 62;
-  });
-  await page.locator('.hk').click();
-  await expect(page.locator('.hk')).toContainText('Pravý ⌃ Control');
+test('the engine step offers three choices, preselects none and moves on without downloading anything', async () => {
+  await recordHotkeyAndOpenEngineStep();
+  await expect(page.locator('.ob-lead')).toContainText('na vlastnom serveri');
+  await expect(engines().getByRole('radio')).toHaveCount(3);
+  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).not.toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na vlastnom serveri/ })).not.toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Nastavím neskôr/ })).not.toBeChecked();
+  await expect(modelList()).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Párovací token' })).toHaveCount(0);
 
+  await engines().getByRole('radio', { name: /^Nastavím neskôr/ }).check();
+  await expect(page.getByText('spárujete server na stránke Server')).toBeVisible();
   await next();
-  await expect(heading()).toHaveText('Model na prepis');
-  await expect(page.getByRole('radio', { name: DEFAULT_MODEL_NAME, exact: true })).toBeChecked();
-  await expect(page.getByRole('radio')).toHaveCount(4);
+  await expect(heading()).toHaveText('Vyskúšajte to');
+  await expect(page.getByText('Prepis zatiaľ nie je nastavený.')).toBeVisible();
+  await expect(page.getByText('Model sa ešte sťahuje')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dokončiť' }).click();
+
+  await expect(page.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
+  await expect.poll(async () => (await savedSettings()).onboardingDone).toBe(true);
+  expect((await savedSettings()).engineOrder).toEqual(['local']);
+  await expectNoModelDownload();
+});
+
+test('switching the engine quickly back to this Mac saves the local order', async () => {
+  await recordHotkeyAndOpenEngineStep();
+  await page.evaluate(() => {
+    const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="engine-choice"]')];
+    radios[1]?.click();
+    radios[0]?.click();
+  });
+  await page.evaluate(() => window.codevo.updateSettings({ mode: 'hold' }));
+  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
+  expect((await savedSettings()).engineOrder).toEqual(['local']);
+  await expect(modelList()).toBeVisible();
+  await expectNoModelDownload();
+});
+
+test('choosing this Mac drops a server fallback so audio never leaves the Mac', async () => {
+  await app.close();
+  await removeUserDataDir(userDataDir);
+  userDataDir = await createUserDataDir({ engineOrder: ['local', 'server'] });
+  await start();
+  await recordHotkeyAndOpenEngineStep();
+  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).not.toBeChecked();
+
+  await engines().getByRole('radio', { name: /^Na tomto Macu/ }).check();
+  await expect(modelList()).toBeVisible();
+  await expect.poll(async () => (await savedSettings()).engineOrder).toEqual(['local']);
+  await expectNoModelDownload();
+});
+
+test('choosing this Mac shows the preselected recommended model, then onboarding is skipped after completion', async () => {
+  await recordHotkeyAndOpenEngineStep();
+  await engines().getByRole('radio', { name: /^Na tomto Macu/ }).check();
+  await expect(modelList().getByRole('radio', { name: DEFAULT_MODEL_NAME, exact: true })).toBeChecked();
+  await expect(modelList().getByRole('radio')).toHaveCount(4);
   await expect(page.locator('.ob-model-actions').getByRole('button', { name: `Stiahnuť: ${DEFAULT_MODEL_NAME}` })).toBeVisible();
-  await page.getByRole('radio', { name: 'Canary 1B v2' }).check();
+  await modelList().getByRole('radio', { name: 'Canary 1B v2' }).check();
   await expect(page.locator('.ob-model-actions').getByRole('button', { name: 'Stiahnuť: Canary 1B v2' })).toBeVisible();
+  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
 
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
   await expect(page.locator('.ob-try')).toHaveText('Podržte Pravý ⌃ Control a povedzte niečo.');
+  await expect(page.getByText('Model sa ešte sťahuje alebo nie je vybraný.')).toBeVisible();
+  await page.getByRole('button', { name: 'Späť' }).click();
+  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
+  await next();
   await page.getByRole('button', { name: 'Dokončiť' }).click();
 
   await expect(page.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
-  await expect.poll(async () => (JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as Settings).onboardingDone).toBe(true);
+  await expect.poll(async () => (await savedSettings()).onboardingDone).toBe(true);
+  expect((await savedSettings()).engineOrder).toEqual(['local']);
+  await expectNoModelDownload();
 
   await app.close();
   await start();
   await expect(page.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
   await expect(page.getByText('Krok 1 z 5')).toHaveCount(0);
+});
+
+test('choosing an own server pairs it in place, saves the server order and never suggests a model download', async () => {
+  const server = await startLocalGateway();
+  gateway = server;
+  await recordHotkeyAndOpenEngineStep();
+  await engines().getByRole('radio', { name: /^Na vlastnom serveri/ }).check();
+  await expect(page.getByRole('heading', { name: 'Spárovať server' })).toBeVisible();
+  await expect(modelList()).toHaveCount(0);
+  await expect.poll(async () => (await savedSettings()).engineOrder).toEqual(['server']);
+
+  const window = await server.openPairingWindow();
+  await page.getByRole('textbox', { name: 'Párovací token' }).fill(window.token);
+  await page.getByRole('button', { name: 'Spárovať', exact: true }).click();
+  await window.admin.next();
+  window.admin.send({ decision: 'approve' });
+  const paired = (await window.admin.next()) as PairedEvent;
+  window.admin.close();
+  await expect(page.getByRole('status').filter({ hasText: 'Spárované so serverom' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Párovací token' })).toHaveCount(0);
+
+  await next();
+  await expect(heading()).toHaveText('Vyskúšajte to');
+  await expect(page.locator('.ob-try')).toHaveText('Podržte Pravý ⌃ Control a povedzte niečo.');
+  await expect(page.locator('.ob-body .field-note')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dokončiť' }).click();
+
+  await expect(page.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
+  await expect(page.locator('.banner')).toContainText('Všetko je pripravené.');
+  await expect(page.locator('.banner')).not.toContainText('Stiahnite si model na prepis reči.');
+  expect((await savedSettings()).engineOrder).toEqual(['server']);
+  expect(await server.admin({ cmd: 'devices' })).toMatchObject({ devices: [{ id: paired.deviceId }] });
+  await expectNoModelDownload();
 });
