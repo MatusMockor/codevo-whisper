@@ -7,7 +7,13 @@ static float samples[CW_MAX_SAMPLES];
 
 static void check_header(const struct cw_request_header * header, const uint8_t * frame) {
     const size_t language_bytes = strlen(header->language);
-    if (header->samples > CW_MAX_SAMPLES || header->header_bytes != (size_t) frame[0] + 5 || language_bytes != frame[0]) {
+    const size_t base = frame[0] == 0xff ? 1 : 0;
+    size_t header_bytes = base + language_bytes + 5;
+    if (base != 0) {
+        header_bytes += 1;
+        for (uint8_t index = 0; index < header->n_vocabulary; ++index) header_bytes += 2 + strlen(header->vocabulary[index]);
+    }
+    if (header->samples > CW_MAX_SAMPLES || header->n_vocabulary > CW_MAX_VOCABULARY || header->header_bytes != header_bytes || language_bytes != frame[base]) {
         abort();
     }
     if (language_bytes != 0 && strcmp(header->language, "sk") != 0 && strcmp(header->language, "en") != 0 && strcmp(header->language, "cs") != 0) {

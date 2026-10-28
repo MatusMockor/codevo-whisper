@@ -9,6 +9,9 @@ import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDat
 type FakeHelperGlobal = { codevoE2e: { helper: { recordedHotkey: HotkeyRecordResult } } };
 
 const DEFAULTS: Settings = {
+  customWords: [],
+  removeFillerWords: false,
+  appendTrailingSpace: false,
   hotkey: null,
   mode: 'smart',
   language: 'sk',
@@ -175,6 +178,42 @@ test.describe('settings page', () => {
     userDataDir = await createUserDataDir(ONBOARDED);
     await start();
     await openSettings();
+  });
+
+  test('transcript preferences validate drafts and persist explicit saves across relaunch', async () => {
+    const words = page.getByRole('textbox', { name: 'Vlastné slová', exact: true });
+    const save = page.getByRole('button', { name: 'Uložiť slová', exact: true });
+    await expect(words).toHaveValue('');
+    await expect(save).toBeDisabled();
+    await words.fill('two words');
+    await save.click();
+    await expect(words).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert')).toContainText('jedno slovo');
+    expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual([]);
+    await words.fill(' Kumiba \nŽilina\nKUMIBA\nZ\u030cilina');
+    expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual([]);
+    await save.click();
+    await expect(save).toBeDisabled();
+    await expect(words).toHaveValue('Kumiba\nŽilina');
+    for (const name of ['Odstrániť výplňové slová', 'Pridať medzeru na konci']) {
+      const toggle = page.getByRole('switch', { name, exact: true });
+      await expect(toggle).toHaveAttribute('aria-checked', 'false');
+      await toggle.focus();
+      await page.keyboard.press('Space');
+      await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    }
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ customWords: ['Kumiba', 'Žilina'], removeFillerWords: true, appendTrailingSpace: true });
+    await app.close();
+    await start();
+    await openSettings();
+    await expect(page.getByRole('textbox', { name: 'Vlastné slová', exact: true })).toHaveValue('Kumiba\nŽilina');
+    await expect(page.getByRole('switch', { name: 'Pridať medzeru na konci', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('switch', { name: 'Odstrániť výplňové slová', exact: true })).toHaveAttribute('aria-checked', 'true');
+    for (const width of [980, 760]) {
+      await page.setViewportSize({ width, height: 760 });
+      await page.getByRole('region', { name: 'Úprava prepisu' }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`transcript-settings-${width}.png`) });
+    }
   });
 
   test('smart is the default and persists after switching modes and relaunching', async () => {
@@ -355,6 +394,22 @@ test.describe('settings page', () => {
     expect(await levelWithin(1500)).toBe(false);
     await mainWindow('restore');
     await expect.poll(() => levelWithin(1500)).toBe(true);
+  });
+
+  test('transcript preferences keep an editable draft after a failed save', async () => {
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:update');
+      ipcMain.handle('settings:update', () => Promise.reject(new Error('disk full')));
+    });
+    const words = page.getByRole('textbox', { name: 'Vlastné slová', exact: true });
+    const save = page.getByRole('button', { name: 'Uložiť slová', exact: true });
+    await words.fill('Kumiba');
+    await save.click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Slová sa nepodarilo uložiť.' })).toBeVisible();
+    await expect(words).toBeEnabled();
+    await expect(words).toHaveValue('Kumiba');
+    await expect(save).toBeEnabled();
+    expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual([]);
   });
 
   test('a setting that cannot be saved shows an inline error', async () => {

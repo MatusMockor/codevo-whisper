@@ -1,6 +1,6 @@
 import { Listeners } from '../helper/listeners';
 import { consoleLogger, type Logger } from '../logging/logger';
-import { sanitizeInsertionText } from './sanitize-insertion-text';
+import { sanitizeInsertionText, type TextSpacing } from './sanitize-insertion-text';
 
 export class LastTranscript {
   private text: string | null = null;
@@ -10,8 +10,8 @@ export class LastTranscript {
     this.listeners = new Listeners(logger, 'A last transcript listener failed');
   }
 
-  set(text: string): void {
-    const sanitized = sanitizeInsertionText(text);
+  set(text: string, options?: TextSpacing): void {
+    const sanitized = sanitizeInsertionText(text, options);
     if (sanitized === '') {
       return;
     }

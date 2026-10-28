@@ -84,12 +84,29 @@ static void decodes_little_endian_pcm16(void) {
     CHECK(samples[3] == -1.0f / 32768.0f);
 }
 
+static void parses_extended_vocabulary_without_leaking_into_legacy_requests(void) {
+    const uint8_t bytes[] = { 255, 2, 's', 'k', 1, 0, 0, 0, 2, 7, 0, 197, 189, 'i', 'l', 'i', 'n', 'a', 2, 0, 'A', 'I' };
+    struct cw_request_header header;
+    for (size_t prefix = 0; prefix < sizeof bytes; ++prefix) {
+        CHECK(cw_parse_header(bytes, prefix, &header) == CW_PARSE_INCOMPLETE);
+    }
+    CHECK(cw_parse_header(bytes, sizeof bytes, &header) == CW_PARSE_OK);
+    CHECK(header.header_bytes == sizeof bytes);
+    CHECK(header.samples == 1);
+    CHECK(header.n_vocabulary == 2);
+    CHECK(strcmp(header.vocabulary[0], "Žilina") == 0);
+    CHECK(strcmp(header.vocabulary[1], "AI") == 0);
+    CHECK(parse("", 0, 1, &header) == CW_PARSE_OK);
+    CHECK(header.n_vocabulary == 0);
+}
+
 int main(void) {
     accepts_the_whitelisted_languages();
     rejects_other_languages_and_embedded_nul();
     bounds_the_sample_count();
     reports_incomplete_headers();
     decodes_little_endian_pcm16();
+    parses_extended_vocabulary_without_leaking_into_legacy_requests();
     if (failures > 0) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;

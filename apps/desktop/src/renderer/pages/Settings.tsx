@@ -6,6 +6,7 @@ import { LocalModelSection } from '../settings/LocalModelSection';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { SettingsGroup } from '../settings/SettingsGroup';
 import { SystemSection } from '../settings/SystemSection';
+import { TranscriptSection } from '../settings/TranscriptSection';
 import { useModels } from '../settings/use-models';
 import { saveSettings, useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
@@ -38,6 +39,7 @@ export function Settings() {
         <MicrophonePicker microphone={value.microphone} onChange={(microphone) => saveSettings({ microphone })} />
       </SettingsGroup>
       <InsertionSection insertion={value.insertion} />
+      <TranscriptSection settings={value} />
       <SystemSection launchAtLogin={value.launchAtLogin} />
     </div>
   );

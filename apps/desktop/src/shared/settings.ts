@@ -33,6 +33,9 @@ export type LocalModelUnload = 'never' | 'immediately' | 2 | 5 | 10 | 15 | 60;
 export type OverlayMode = 'indicator' | 'live';
 
 export type Settings = {
+  customWords: readonly string[];
+  removeFillerWords: boolean;
+  appendTrailingSpace: boolean;
   hotkey: HotkeySetting;
   mode: DictationMode;
   language: Language;
@@ -48,6 +51,9 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
+  customWords: Object.freeze([]),
+  removeFillerWords: false,
+  appendTrailingSpace: false,
   hotkey: null,
   mode: 'smart',
   language: 'sk',
@@ -61,3 +67,9 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   launchAtLogin: false,
   onboardingDone: false,
 });
+
+export function isCustomWords(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length <= 100 && value.every((word: unknown) =>
+    typeof word === 'string' && [...word].length <= 64 && new TextEncoder().encode(word).length <= 256 &&
+    /^[\p{L}\p{N}][\p{L}\p{M}\p{N}]*(?:['’.-][\p{L}\p{N}][\p{L}\p{M}\p{N}]*)*$/u.test(word));
+}

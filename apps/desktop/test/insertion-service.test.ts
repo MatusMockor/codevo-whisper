@@ -64,6 +64,17 @@ async function prepared(setup: Setup = {}) {
 }
 
 describe('InsertionService', () => {
+  it('delivers a safe explicit suffix and replays the stored bytes on copy and paste', async () => {
+    const { service, helper, lastTranscript } = await prepared();
+    expect(await service.insert(' Žilina\n\u001b[201~  ', TEXT_EDIT, { appendTrailingSpace: true })).toBe('pasted');
+    expect(helper.pasted).toEqual(['Žilina [201~ ']);
+    lastTranscript.set(' Žilina\n ', { appendTrailingSpace: true });
+    await service.copyLast();
+    expect(helper.clipboard).toBe('Žilina ');
+    await service.pasteLast();
+    expect(helper.pasted).toEqual(['Žilina [201~ ', 'Žilina ']);
+    expect(await service.insert('\n\u0000 ', TEXT_EDIT, { appendTrailingSpace: true })).toBe('nothing-to-insert');
+  });
   it('pastes into an editable field and restores the clipboard', async () => {
     const clipboardDuringWait: string[] = [];
     const { helper, sleeps, service } = await prepared({ onSleep: (_ms, fake) => void clipboardDuringWait.push(fake.clipboard) });

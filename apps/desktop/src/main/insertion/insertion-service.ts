@@ -5,7 +5,7 @@ import { writeClipboardOrRestore } from './guarded-clipboard';
 import type { LastTranscript } from './last-transcript';
 import { waitForShortcutRelease, type Sleep } from './modifier-release';
 import { isSameTarget } from './same-target';
-import { sanitizeInsertionText } from './sanitize-insertion-text';
+import { sanitizeInsertionText, type TextSpacing } from './sanitize-insertion-text';
 import { SerialQueue } from './serial-queue';
 
 export type InsertionOutcome =
@@ -40,8 +40,8 @@ export class InsertionService {
     private readonly logger: Logger = consoleLogger,
   ) {}
 
-  insert(text: string, target: AppTarget | null): Promise<InsertionOutcome> {
-    return this.queue.run(() => this.insertInto(sanitizeInsertionText(text), target));
+  insert(text: string, target: AppTarget | null, options?: TextSpacing): Promise<InsertionOutcome> {
+    return this.queue.run(() => this.insertInto(sanitizeInsertionText(text, options), target));
   }
 
   pasteLast(): Promise<PasteLastOutcome> {

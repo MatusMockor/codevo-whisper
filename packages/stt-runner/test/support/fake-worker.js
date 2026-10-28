@@ -37,21 +37,39 @@ function nextRequest() {
   if (buffer.length < 1) {
     return null;
   }
-  const languageLength = buffer[0];
-  if (buffer.length < 1 + languageLength + 4) {
+  const extended = buffer[0] === 255;
+  const base = extended ? 1 : 0;
+  if (buffer.length < base + 1) return null;
+  const languageLength = buffer[base];
+  if (buffer.length < base + 1 + languageLength + 4) {
     return null;
   }
-  const language = buffer.subarray(1, 1 + languageLength).toString('utf8');
-  const samples = buffer.readUInt32LE(1 + languageLength);
-  const total = 1 + languageLength + 4 + samples * 2;
+  const language = buffer.subarray(base + 1, base + 1 + languageLength).toString('utf8');
+  const samples = buffer.readUInt32LE(base + 1 + languageLength);
+  let end = base + 1 + languageLength + 4;
+  const vocabulary = [];
+  if (extended) {
+    if (buffer.length < end + 1) return null;
+    const count = buffer[end++];
+    for (let index = 0; index < count; index++) {
+      if (buffer.length < end + 2) return null;
+      const length = buffer.readUInt16LE(end);
+      end += 2;
+      if (buffer.length < end + length) return null;
+      vocabulary.push(buffer.subarray(end, end + length).toString('utf8'));
+      end += length;
+    }
+  }
+  const total = end + samples * 2;
   if (buffer.length < total) {
     return null;
   }
   buffer = buffer.subarray(total);
-  return { language, samples };
+  return { language, samples, vocabulary };
 }
 
 async function handle(request) {
+  if (process.env.FAKE_WORKER_VOCABULARY === '1') return reply(0, JSON.stringify(request.vocabulary));
   await sleep(request.samples === slowSamples ? slowMs : delayMs);
   if (request.samples === crashSamples) {
     process.exit(3);

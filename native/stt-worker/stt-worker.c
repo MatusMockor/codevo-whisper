@@ -132,11 +132,27 @@ static enum read_result read_request(struct request * request) {
     if (read_bytes(header, 1) != 1) {
         return READ_END;
     }
-    const size_t rest = (size_t) header[0] + 4;
-    if (read_bytes(header + 1, rest) != rest) {
+    const size_t base = header[0] == 0xff ? 1 : 0;
+    if (base != 0 && read_bytes(header + 1, 1) != 1) return READ_TRUNCATED;
+    const size_t rest = (size_t) header[base] + 4;
+    if (read_bytes(header + base + 1, rest) != rest) {
         return READ_TRUNCATED;
     }
-    if (cw_parse_header(header, 1 + rest, &request->header) != CW_PARSE_OK) {
+    size_t length = base + 1 + rest;
+    if (base != 0) {
+        if (read_bytes(header + length, 1) != 1) return READ_TRUNCATED;
+        const uint8_t count = header[length++];
+        if (count > CW_MAX_VOCABULARY) return READ_INVALID;
+        for (uint8_t index = 0; index < count; ++index) {
+            if (read_bytes(header + length, 2) != 2) return READ_TRUNCATED;
+            const size_t term_bytes = (size_t) header[length] | ((size_t) header[length + 1] << 8);
+            length += 2;
+            if (term_bytes == 0 || term_bytes > CW_MAX_TERM_BYTES) return READ_INVALID;
+            if (read_bytes(header + length, term_bytes) != term_bytes) return READ_TRUNCATED;
+            length += term_bytes;
+        }
+    }
+    if (cw_parse_header(header, length, &request->header) != CW_PARSE_OK) {
         return READ_INVALID;
     }
     const size_t pcm_bytes = (size_t) request->header.samples * 2;
@@ -151,6 +167,10 @@ static int answer(struct transcribe_session * session, const struct request * re
     struct transcribe_run_params run;
     transcribe_run_params_init(&run);
     run.language                   = request->header.language[0] == '\0' ? NULL : request->header.language;
+    if (request->header.n_vocabulary > 0 && transcribe_model_supports(transcribe_get_model(session), TRANSCRIBE_FEATURE_VOCABULARY)) {
+        run.vocabulary = request->header.vocabulary;
+        run.n_vocabulary = request->header.n_vocabulary;
+    }
     const transcribe_status status = transcribe_run(session, request->samples, (int) request->header.samples, &run);
     if (status != TRANSCRIBE_OK) {
         return write_reply(REPLY_FAILED, transcribe_status_string(status));

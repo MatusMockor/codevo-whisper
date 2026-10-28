@@ -11,6 +11,18 @@ function reply(status: number, body: Buffer): Buffer {
 }
 
 describe('worker frames', () => {
+  it('encodes non-ASCII per-request vocabulary and preserves empty legacy bytes', () => {
+    expect([...encodeWorkerRequest('sk', new Uint8Array([1, 2]), ['Žilina', 'AI'])]).toEqual([
+      255, 2, 115, 107, 1, 0, 0, 0, 2, 7, 0, 197, 189, 105, 108, 105, 110, 97, 2, 0, 65, 73, 1, 2,
+    ]);
+    expect([...encodeWorkerRequest('auto', new Uint8Array([9, 9]), [])]).toEqual([0, 1, 0, 0, 0, 9, 9]);
+  });
+
+  it('bounds vocabulary before sending a frame', () => {
+    for (const vocabulary of [Array.from({ length: 101 }, () => 'word'), ['a'.repeat(65)], ['a\u0000b'], ['a\nb'], [''], ['\ud800']]) {
+      expect(() => encodeWorkerRequest('en', new Uint8Array(2), vocabulary)).toThrow(RangeError);
+    }
+  });
   it('encodes the language, the sample count and the PCM', () => {
     expect([...encodeWorkerRequest('sk', new Uint8Array([1, 2, 3, 4]))]).toEqual([2, 0x73, 0x6b, 2, 0, 0, 0, 1, 2, 3, 4]);
     expect([...encodeWorkerRequest('auto', new Uint8Array([9, 9]))]).toEqual([0, 1, 0, 0, 0, 9, 9]);

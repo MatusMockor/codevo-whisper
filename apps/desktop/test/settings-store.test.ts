@@ -19,6 +19,17 @@ afterEach(async () => {
 });
 
 describe('SettingsStore', () => {
+  it('defaults, freezes and persists transcript preferences independently', async () => {
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ customWords: [], removeFillerWords: false, appendTrailingSpace: false });
+    const words = ['Kumiba', 'Žilina'];
+    await store.update({ customWords: words, removeFillerWords: true, appendTrailingSpace: true });
+    words.push('changed');
+    expect(await new SettingsStore(file).load()).toMatchObject({ customWords: ['Kumiba', 'Žilina'], removeFillerWords: true, appendTrailingSpace: true });
+    expect(Object.isFrozen(store.get().customWords)).toBe(true);
+    await writeFile(file, JSON.stringify({ customWords: ['two words'], removeFillerWords: true, appendTrailingSpace: 'yes' }));
+    expect(await new SettingsStore(file).load()).toMatchObject({ customWords: [], removeFillerWords: true, appendTrailingSpace: false });
+  });
   it('returns defaults for a missing file', async () => {
     const store = new SettingsStore(file);
 

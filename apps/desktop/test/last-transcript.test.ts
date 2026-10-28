@@ -3,6 +3,16 @@ import { LastTranscript } from '../src/main/insertion/last-transcript';
 import { RecordingLogger } from './recording-logger';
 
 describe('LastTranscript', () => {
+  it('stores and announces the explicitly suffixed sanitized transcript', () => {
+    const last = new LastTranscript();
+    const seen: string[] = [];
+    last.onChange((text) => seen.push(text));
+    last.set(' Žilina\r\n\u0000 ', { appendTrailingSpace: true });
+    expect(last.get()).toBe('Žilina ');
+    expect(seen).toEqual(['Žilina ']);
+    last.set(' \n ', { appendTrailingSpace: true });
+    expect(last.get()).toBe('Žilina ');
+  });
   it('notifies listeners about every new transcript and isolates failing listeners', () => {
     const logger = new RecordingLogger();
     const last = new LastTranscript(logger);

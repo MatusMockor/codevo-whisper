@@ -4,6 +4,11 @@ import { sanitizeInsertionText } from '../src/main/insertion/sanitize-insertion-
 const ESC = '\u001b';
 
 describe('sanitizeInsertionText', () => {
+  it('adds exactly one explicit safe trailing space only to nonempty sanitized text', () => {
+    expect(sanitizeInsertionText(' hi\r\nthere\u001b[201~  ', { appendTrailingSpace: true })).toBe('hi there[201~ ');
+    expect(sanitizeInsertionText(' \n\u0000 ', { appendTrailingSpace: true })).toBe('');
+    expect(sanitizeInsertionText('hi ', { appendTrailingSpace: false })).toBe('hi');
+  });
   it('keeps Slovak text with diacritics unchanged', () => {
     expect(sanitizeInsertionText('Dobrý deň, ďakujem')).toBe('Dobrý deň, ďakujem');
   });

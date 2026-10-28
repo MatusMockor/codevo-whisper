@@ -16,7 +16,7 @@ export type ResidentTranscriberOptions = {
   backoff?: BackoffOptions;
 };
 
-export type WorkerCall = { pcm: Uint8Array; language: TranscribeLanguage; signal?: AbortSignal };
+export type WorkerCall = { pcm: Uint8Array; language: TranscribeLanguage; vocabulary?: readonly string[]; signal?: AbortSignal };
 
 type Outcome = { resolve: (text: string) => void; reject: (error: Error) => void };
 
@@ -123,7 +123,7 @@ export class ResidentTranscriber {
 
   private encode(call: WorkerCall, outcome: Outcome): Uint8Array | undefined {
     try {
-      return encodeWorkerRequest(call.language, call.pcm);
+      return encodeWorkerRequest(call.language, call.pcm, call.vocabulary);
     } catch (error) {
       outcome.reject(asError(error));
       return undefined;
