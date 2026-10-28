@@ -29,6 +29,19 @@ describe('SettingsStore', () => {
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('defaults resident settings and persists every retention and acceleration option', async () => {
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ localAcceleration: 'auto', localModelUnload: 5, mode: 'smart' });
+    for (const localModelUnload of ['never', 'immediately', 2, 5, 10, 15, 60] as const) {
+      for (const localAcceleration of ['auto', 'gpu', 'cpu'] as const) {
+        await store.update({ localModelUnload, localAcceleration });
+        expect(await new SettingsStore(file).load()).toMatchObject({ localModelUnload, localAcceleration, mode: 'smart' });
+      }
+    }
+    await writeFile(file, JSON.stringify({ localAcceleration: 'vulkan', localModelUnload: '5' }));
+    expect(await new SettingsStore(file).load()).toMatchObject({ localAcceleration: 'auto', localModelUnload: 5 });
+  });
+
   it('returns defaults for a corrupt file', async () => {
     await writeFile(file, '{ not json');
     const store = new SettingsStore(file);

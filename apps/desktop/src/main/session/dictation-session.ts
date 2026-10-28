@@ -174,7 +174,13 @@ export class DictationSession {
 
   private async onPrepared(readiness: Preparation): Promise<void> {
     if (readiness.ready) {
-      this.adopt(readiness.engine);
+      try {
+        this.adopt(readiness.engine);
+      } catch (error) {
+        this.deps.logger.error('The prepared engine could not start', error);
+        this.abandon(this.failure(error));
+        await this.stopCapture();
+      }
       return;
     }
     if (this.phase !== 'recording') {

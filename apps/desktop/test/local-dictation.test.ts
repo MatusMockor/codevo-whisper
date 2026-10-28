@@ -5,13 +5,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalDictation, type LocalContext } from '../src/main/engines/local-dictation';
-import { TranscribeCliTranscriber } from '../src/main/engines/transcribe-cli-transcriber';
+import { ResidentTranscriber } from '@codevo-whisper/stt-runner';
+import { ResidentSegmentTranscriber } from '../src/main/engines/resident-segment-transcriber';
 import { TranscriptionFailedError, type TranscriptUpdate } from '../src/main/engines/transcription-engine';
 import type { Language } from '../src/shared/settings';
 import { readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
 import { expectedText, secondFrames, timelineSilence, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
-const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/fake-timeline-cli.js', import.meta.url));
+const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 const MODEL = '/models/alpha.gguf';
 const MAX_JOB_SAMPLES = 25 * 16_000;
 
@@ -33,6 +34,7 @@ type Started = { dictation: LocalDictation; updates: TranscriptUpdate[]; control
 
 let scratch: string;
 let clock: ManualClock;
+const residents: ResidentTranscriber[] = [];
 let dispatcher: TranscriptionDispatcher<LocalContext>;
 
 beforeEach(async () => {
@@ -44,14 +46,17 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await Promise.all(residents.splice(0).map((resident) => resident.close()));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
 });
 
 function useDispatcher(timeoutMs: number): void {
   clock = new ManualClock();
+  const resident = new ResidentTranscriber({ binary: FAKE_TIMELINE_CLI, model: MODEL, backend: 'cpu', threads: 2, timeoutMs, abortGraceMs: 100 });
+  residents.push(resident);
   dispatcher = new TranscriptionDispatcher<LocalContext>({
-    transcriber: new TranscribeCliTranscriber({ binary: FAKE_TIMELINE_CLI, backend: 'metal', threads: 2, timeoutMs }),
+    transcriber: new ResidentSegmentTranscriber(resident),
     clock,
   });
 }
@@ -148,7 +153,7 @@ describe('LocalDictation', () => {
     expect(partials(updates).some((update) => update.text.length > 0)).toBe(true);
   });
 
-  it('passes the language and the model of each session to transcribe-cli', async () => {
+  it('passes the language and the model of each session to the resident worker', async () => {
     const samples = timelineSpeech(4);
     await writeTimeline(join(scratch, 'source.pcm'), samples);
     const czech = start(false, 'cs');
@@ -200,7 +205,7 @@ describe('LocalDictation', () => {
     expect(expectedText(samples).startsWith(textSoFar)).toBe(true);
   });
 
-  it('never calls transcribe-cli for a recording shorter than 20 ms', async () => {
+  it('never sends resident requests for a recording shorter than 20 ms', async () => {
     await writeTimeline(join(scratch, 'source.pcm'), timelineSpeech(1));
     const { dictation } = start(false);
     dictation.push(new Uint8Array(600));

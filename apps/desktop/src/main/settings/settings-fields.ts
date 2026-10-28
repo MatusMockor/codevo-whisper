@@ -25,7 +25,7 @@ function isNullableText(value: unknown): value is string | null {
   return value === null || isText(value);
 }
 
-function oneOf<T extends string>(allowed: readonly T[]): (value: unknown) => value is T {
+function oneOf<T extends string | number>(allowed: readonly T[]): (value: unknown) => value is T {
   return (value: unknown): value is T => allowed.some((option) => option === value);
 }
 
@@ -57,6 +57,8 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   microphone: isMicrophone,
   engineOrder: isEngineOrder,
   localModelId: isNullableText,
+  localAcceleration: oneOf(['auto', 'gpu', 'cpu']),
+  localModelUnload: oneOf(['never', 'immediately', 2, 5, 10, 15, 60]),
   insertion: oneOf(['paste', 'clipboard']),
   overlay: oneOf(['indicator', 'live']),
   launchAtLogin: isBoolean,

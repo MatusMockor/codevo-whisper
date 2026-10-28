@@ -17,12 +17,13 @@ import { readWavPcm } from './wav-fixture';
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const ARCH = process.arch === 'x64' ? 'x64' : 'arm64';
-const BINARY = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'bin', ARCH, 'transcribe-cli');
+const BINARY = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'bin', ARCH, 'cw-stt-worker');
+const CLI_BINARY = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'bin', ARCH, 'transcribe-cli');
 const SAMPLE = join(REPO_ROOT, 'spikes', 'transcribe-macos', 'sample.wav');
 const LONG_SPEECH = join(REPO_ROOT, 'spikes', 'rolling-latency', '.data', 'speech16k.pcm');
 const MODEL = process.env['CW_REAL_MODEL'] === undefined ? null : resolve(REPO_ROOT, process.env['CW_REAL_MODEL']);
 const AVAILABLE = MODEL !== null && existsSync(MODEL) && existsSync(BINARY) && existsSync(SAMPLE);
-const LONG_AVAILABLE = AVAILABLE && existsSync(LONG_SPEECH);
+const LONG_AVAILABLE = AVAILABLE && existsSync(CLI_BINARY) && existsSync(LONG_SPEECH);
 
 const EXPECTED =
   'Ahoj, toto je skúška prepisu slovenskej reči na grafickej karte. Potrebujem skontrolovať náš editor a potom odoslať zmenu.';
@@ -76,7 +77,7 @@ async function measure(partials: boolean, pcm: Uint8Array): Promise<Measured> {
 async function batchMs(pcm: Uint8Array, model: string): Promise<number> {
   const startedAt = performance.now();
   for (let offset = 0; offset < pcm.byteLength; offset += 25 * PCM_BYTES_PER_SECOND) {
-    await runTranscribeCli({ binary: BINARY, model, backend: localBackend(ARCH), threads: localThreads(), language: 'sk', pcm: pcm.subarray(offset, offset + 25 * PCM_BYTES_PER_SECOND) });
+    await runTranscribeCli({ binary: CLI_BINARY, model, backend: localBackend(ARCH), threads: localThreads(), language: 'sk', pcm: pcm.subarray(offset, offset + 25 * PCM_BYTES_PER_SECOND) });
   }
   return Math.round(performance.now() - startedAt);
 }
@@ -85,13 +86,14 @@ function report(label: string, value: unknown): void {
   process.stderr.write(`[real-latency] ${label}: ${JSON.stringify(value)}\n`);
 }
 
-describe.skipIf(!AVAILABLE)('LocalEngine with the real transcribe-cli', () => {
+describe.skipIf(!AVAILABLE)('LocalEngine with the real resident worker', () => {
   beforeEach(async () => {
     scratch = await mkdtemp(join(tmpdir(), 'cw-real-engine-'));
     engine = await realEngine(MODEL ?? '');
   });
 
   afterEach(async () => {
+    await engine.dispose();
     await rm(scratch, { recursive: true, force: true });
   });
 

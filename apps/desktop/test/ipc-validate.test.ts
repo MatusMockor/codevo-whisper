@@ -140,3 +140,17 @@ describe('rejectArguments', () => {
     expect(() => rejectArguments([undefined])).toThrow(IpcValidationError);
   });
 });
+
+describe('resident settings IPC', () => {
+  it('accepts the specified retention and acceleration values only', () => {
+    for (const localModelUnload of ['never', 'immediately', 2, 5, 10, 15, 60]) {
+      expect(validateSettingsPatch({ localModelUnload })).toEqual({ localModelUnload });
+    }
+    for (const localAcceleration of ['auto', 'gpu', 'cpu']) {
+      expect(validateSettingsPatch({ localAcceleration })).toEqual({ localAcceleration });
+    }
+    for (const patch of [{ localModelUnload: 0 }, { localModelUnload: '5' }, { localModelUnload: 30 }, { localAcceleration: 'metal' }]) {
+      expect(() => validateSettingsPatch(patch)).toThrow(IpcValidationError);
+    }
+  });
+});

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,7 +24,7 @@ import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { continuousSpeech } from '../../server/test/support/speech';
-import { FAKE_CLI } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FAKE_WORKER } from './support/resident-fixture';
 import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
@@ -35,6 +35,7 @@ const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const silentObserver = { connected: () => undefined, failed: () => undefined };
 
+const locals: LocalEngine[] = [];
 let scratch: string;
 let gateway: TestGateway;
 let coordinator: SessionCoordinator | null = null;
@@ -48,6 +49,7 @@ beforeEach(async () => {
 afterEach(async () => {
   coordinator?.dispose();
   coordinator = null;
+  await Promise.all(locals.splice(0).map((local) => local.dispose()));
   vi.unstubAllEnvs();
   await gateway.close();
   await rm(scratch, { recursive: true, force: true });
@@ -64,7 +66,8 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
-  const local = new LocalEngine({ binary: FAKE_CLI, models, settings, arch: 'arm64' });
+  const local = new LocalEngine({ binary: FAKE_WORKER, models, settings, arch: 'arm64' });
+  locals.push(local);
   const connector = new ServerConnector({ pairings: { load: () => gate.then(() => pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
   const remote = new RemoteEngine({ connector, observer: silentObserver });
   const helper = new FakeInputHelper({ clipboard: 'original' });
@@ -89,7 +92,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states, opened, pairing, logger };
+  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
@@ -121,6 +124,20 @@ describe('SessionCoordinator with the server engine', () => {
 
     await expect.poll(() => harness.helper.pasted).toEqual(['6:32000']);
     expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('reports a retired eager local preparation after the primary connection fails without leaking capture', async () => {
+    const gate = Promise.withResolvers<void>();
+    vi.stubEnv('CW_WORKER_STARTS', join(scratch, 'starts'));
+    const harness = await prepared({ engineOrder: ['server', 'local'] }, {}, gate.promise);
+    await gateway.stop();
+    harness.helper.pressKey('down', FN.keycode);
+    await expect.poll(() => readFile(join(scratch, 'starts'), 'utf8').catch(() => '')).not.toBe('');
+    await harness.settings.update({ localModelId: null });
+    gate.resolve();
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error' });
+    await expect.poll(() => harness.capture.recording).toBe(false);
+    expect(harness.helper.pasted).toEqual([]);
   });
 
   it('uses the server when local is not ready and the order allows it', async () => {
