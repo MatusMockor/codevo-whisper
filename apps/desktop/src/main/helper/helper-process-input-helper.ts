@@ -34,6 +34,7 @@ function ensure(message: HelperMessage, key: string, failure: string): void {
 
 export class HelperProcessInputHelper implements InputHelper {
   private audioToken = 0;
+  private pendingAudioToken: number | null = null;
   private desired: HotkeyBinding | null = null;
   private hasListened = false;
   private listenId = 0;
@@ -77,20 +78,28 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async beginRecordingAudio(settings: RecordingAudioSettings): Promise<RecordingAudioLease> {
+    if (this.pendingAudioToken !== null) await this.endRecordingAudio(this.pendingAudioToken, false);
     if (!settings.muteWhileRecording && !settings.audioFeedback) return { finish: () => Promise.resolve() };
     if (this.platform !== 'darwin') throw new Error('recording-audio-unavailable');
     const token = ++this.audioToken;
-    const end = async (playStop: boolean): Promise<void> => {
-      ensure(await this.channel.request('recording-audio-end', { token, playStop }), 'ended', 'recording-audio-end-failed');
-    };
     try {
       ensure(await this.channel.request('recording-audio-begin', { token, mute: settings.muteWhileRecording, feedback: settings.audioFeedback, outputId: settings.feedbackOutputId ?? '', volume: settings.feedbackVolume }), 'begun', 'recording-audio-begin-failed');
     } catch (error) {
-      await end(false).catch((cleanup: unknown) => this.logger.error('Recording audio acquisition cleanup failed', cleanup));
+      await this.endRecordingAudio(token, false).catch((cleanup: unknown) => this.logger.error('Recording audio acquisition cleanup failed', cleanup));
       throw error;
     }
     let finishing: Promise<void> | undefined;
-    return { finish: ({ playStop }) => finishing ??= end(playStop) };
+    return { finish: ({ playStop }) => finishing ??= this.endRecordingAudio(token, playStop) };
+  }
+
+  private async endRecordingAudio(token: number, playStop: boolean): Promise<void> {
+    try {
+      ensure(await this.channel.request('recording-audio-end', { token, playStop }), 'ended', 'recording-audio-end-failed');
+      if (this.pendingAudioToken === token) this.pendingAudioToken = null;
+    } catch (error) {
+      this.pendingAudioToken = token;
+      throw error;
+    }
   }
 
   stop(): Promise<void> {

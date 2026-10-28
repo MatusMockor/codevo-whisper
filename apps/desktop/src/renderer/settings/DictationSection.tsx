@@ -5,6 +5,7 @@ import { SegmentedControl, type SegmentOption } from '../components/SegmentedCon
 import { languageNote, languageOptions } from './language-options';
 import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
+import { AudioFeedbackRows } from './AudioFeedbackRows';
 
 const MODES: ReadonlyArray<SegmentOption<DictationMode>> = [
   { id: 'smart', label: 'Inteligentný' },
@@ -61,6 +62,7 @@ export function DictationSection({ settings, activeModel }: { settings: Settings
       <SettingsRow title="Jazyk" titleId="set-language" description={languageNote(activeModel)}>
         <LanguageSelect language={settings.language} activeModel={activeModel} />
       </SettingsRow>
+      <AudioFeedbackRows settings={settings} />
     </SettingsGroup>
   );
 }

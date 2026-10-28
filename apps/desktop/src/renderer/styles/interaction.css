@@ -55,20 +55,20 @@ label:has(> input:disabled) {
   background: var(--press);
 }
 
-.switch:hover {
+.switch:not(:disabled):hover {
   box-shadow: inset 0 0 0 1px var(--ink-3);
 }
 
-.switch[aria-checked="true"]:hover {
+.switch[aria-checked="true"]:not(:disabled):hover {
   background: var(--lamp-hover);
   box-shadow: none;
 }
 
-.switch:active::after {
+.switch:not(:disabled):active::after {
   width: 21px;
 }
 
-.switch[aria-checked="true"]:active::after {
+.switch[aria-checked="true"]:not(:disabled):active::after {
   transform: translateX(13px);
 }
 

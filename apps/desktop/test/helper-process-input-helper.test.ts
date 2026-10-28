@@ -23,6 +23,20 @@ async function started(timeoutMs?: number): Promise<{ channel: HelperProcess; he
 }
 
 describe('HelperProcessInputHelper', () => {
+  it('retries unresolved restoration and blocks a later both-off recording until restored', async () => {
+    const { channel, helper } = await started();
+    const lease = await helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true });
+    await channel.request('respond-next', { cmd: 'recording-audio-end', response: { ended: false } });
+    await expect(lease.finish({ playStop: false })).rejects.toThrow('recording-audio-end-failed');
+    await channel.request('respond-next', { cmd: 'recording-audio-end', response: { ended: false } });
+    await expect(helper.beginRecordingAudio(DEFAULT_SETTINGS)).rejects.toThrow('recording-audio-end-failed');
+    const off = await helper.beginRecordingAudio(DEFAULT_SETTINGS);
+    await off.finish({ playStop: false });
+    expect((await channel.request('audio-state'))['operations']).toEqual([
+      { cmd: 'recording-audio-begin', token: 1, mute: true, feedback: false, outputId: '', volume: 50 },
+      { cmd: 'recording-audio-end', token: 1, playStop: false },
+    ]);
+  });
   it('does no audio work with both switches off and exposes unavailable production platforms', async () => {
     const { channel, helper } = await started();
     const lease = await helper.beginRecordingAudio(DEFAULT_SETTINGS);
