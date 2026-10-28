@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
 import type { AppStatus } from '../shared/app-status';
+import type { OutputAudioView } from '../shared/recording-audio';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
 import type { AudioDevice } from '../shared/microphones';
 import type { ModelCatalogView, ModelState } from '../shared/models';
@@ -28,6 +29,7 @@ function subscribe<E extends IpcEventName>(event: E, listener: IpcEventListener<
 }
 
 const api: IpcApi = {
+  getOutputAudio: () => ipcRenderer.invoke(INVOKE_CHANNELS.getOutputAudio) as Promise<OutputAudioView>,
   getSettings: () => ipcRenderer.invoke(INVOKE_CHANNELS.getSettings) as Promise<Settings>,
   updateSettings: (patch) => ipcRenderer.invoke(INVOKE_CHANNELS.updateSettings, patch) as Promise<Settings>,
   getStats: () => ipcRenderer.invoke(INVOKE_CHANNELS.getStats) as Promise<DayStats[]>,

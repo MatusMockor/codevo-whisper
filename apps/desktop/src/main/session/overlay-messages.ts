@@ -12,6 +12,7 @@ export const MESSAGES = Object.freeze({
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
   engineUnavailable: 'Prepis teraz nie je dostupný',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
+  recordingAudio: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.',
   transcriptionFailed: 'Prepis sa nepodaril',
   nothingHeard: 'Nezachytila sa žiadna reč',
   insertFailed: 'Text sa nepodarilo vložiť',

@@ -7,12 +7,17 @@ let deferListen = false;
 let deferredListen;
 const overrides = new Map();
 const operations = [];
+const audioOperations = [];
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
 const handlers = {
+  'output-audio': (id) => send({ id, kind: 'available', canMute: true, outputs: [{ id: 'speakers', label: 'Speakers' }] }),
+  'recording-audio-begin': (id, args) => { audioOperations.push({ cmd: 'recording-audio-begin', ...args }); send({ id, begun: true }); },
+  'recording-audio-end': (id, args) => { audioOperations.push({ cmd: 'recording-audio-end', ...args }); send({ id, ended: true }); },
+  'audio-state': (id) => send({ id, operations: audioOperations }),
   ping: (id) => send({ id, pong: true, pid: process.pid }),
   echo: (id, args) => setTimeout(() => send({ id, value: args.value }), args.delayMs ?? 0),
   silent: () => undefined,

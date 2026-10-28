@@ -11,6 +11,10 @@ import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDat
 type FakeHelperGlobal = { codevoE2e: { helper: FakeInputHelper; lastTranscript: Pick<LastTranscript, 'set'> } };
 
 const DEFAULTS: Settings = {
+  muteWhileRecording: false,
+  audioFeedback: false,
+  feedbackOutputId: null,
+  feedbackVolume: 50,
   customWords: [],
   removeFillerWords: false,
   appendTrailingSpace: false,

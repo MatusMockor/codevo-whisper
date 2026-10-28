@@ -1,4 +1,5 @@
 import type { AutoSubmit } from '../../shared/settings';
+import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
@@ -30,6 +31,9 @@ const DEFAULT_STATE: FakeInputHelperState = {
 };
 
 export class FakeInputHelper implements InputHelper {
+  outputAudio: OutputAudioView = { kind: 'available', canMute: true, outputs: [{ id: 'speakers', label: 'Reproduktory' }, { id: 'headphones', label: 'Slúchadlá' }] };
+  outputMuted = false;
+  readonly audioTrace: string[] = [];
   frontmostApp: AppTarget | null;
   editable: boolean | null;
   role: string | null;
@@ -69,6 +73,31 @@ export class FakeInputHelper implements InputHelper {
   start(): Promise<void> {
     this.running = true;
     return Promise.resolve();
+  }
+
+  getOutputAudio(): Promise<OutputAudioView> {
+    return Promise.resolve(this.outputAudio);
+  }
+
+  beginRecordingAudio(settings: RecordingAudioSettings): Promise<RecordingAudioLease> {
+    if (!settings.muteWhileRecording && !settings.audioFeedback) return Promise.resolve({ finish: () => Promise.resolve() });
+    const original = this.outputMuted;
+    if (settings.audioFeedback) this.audioTrace.push(`start:${settings.feedbackOutputId ?? 'default'}:${settings.feedbackVolume}`);
+    if (settings.muteWhileRecording) {
+      this.outputMuted = true;
+      this.audioTrace.push('mute');
+    }
+    let finished = false;
+    return Promise.resolve({ finish: ({ playStop }) => {
+      if (finished) return Promise.resolve();
+      finished = true;
+      if (settings.muteWhileRecording) {
+        this.outputMuted = original;
+        this.audioTrace.push(`restore:${original}`);
+      }
+      if (settings.audioFeedback && playStop) this.audioTrace.push(`stop:${settings.feedbackOutputId ?? 'default'}:${settings.feedbackVolume}`);
+      return Promise.resolve();
+    } });
   }
 
   stop(): Promise<void> {

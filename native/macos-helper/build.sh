@@ -11,6 +11,6 @@ esac
 
 mkdir -p "build/$arch"
 swiftc -O -swift-version 6 -target "$target-apple-macos13.0" \
-  -framework AppKit -framework Carbon -framework IOKit -framework ApplicationServices \
+  -framework AppKit -framework Carbon -framework IOKit -framework ApplicationServices -framework CoreAudio \
   Sources/*.swift -o "build/$arch/codevo-input-helper"
 echo "built $(pwd)/build/$arch/codevo-input-helper"

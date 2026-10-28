@@ -5,9 +5,20 @@ final class Commands {
     private static let defaultRecordTimeoutMs = 10_000
 
     private let pasteboard = Pasteboard()
+    private let recordingAudio = RecordingAudio()
 
-    func run(_ name: String, _ args: JSONObject) -> JSONObject {
+    func shutdown() async {
+        await recordingAudio.shutdown()
+    }
+
+    func run(_ name: String, _ args: JSONObject) async -> JSONObject {
         switch name {
+        case "output-audio":
+            return recordingAudio.inventory()
+        case "recording-audio-begin":
+            return await recordingAudio.begin(args)
+        case "recording-audio-end":
+            return await recordingAudio.end(args)
         case "ping":
             return ["pong": true, "pid": Int(ProcessInfo.processInfo.processIdentifier)]
         case "permissions":

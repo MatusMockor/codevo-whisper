@@ -11,6 +11,7 @@ import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { Language, MicrophoneSetting } from '../../shared/settings';
+import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
 import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError } from './overlay-messages';
@@ -27,7 +28,7 @@ export type DictationSessionDeps = {
   engines: Pick<EngineSelector, 'prepare'>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
-  helper: Pick<InputHelper, 'frontmost' | 'focusedElement'>;
+  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio'>;
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
@@ -65,6 +66,11 @@ export class DictationSession {
   private dictation: EngineDictation | null = null;
   private prepared: PreparedEngine | null = null;
   private unsubscribeFrames: () => void = () => undefined;
+  private readonly audioSettings: RecordingAudioSettings;
+  private audio: RecordingAudioLease | null = null;
+  private microphoneOpened = false;
+  private closing: Promise<Uint8Array> | null = null;
+  private shuttingDown = false;
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
@@ -74,6 +80,8 @@ export class DictationSession {
     this.partials = overlay === 'live';
     this.live = this.partials ? new LiveTranscript() : null;
     this.microphone = microphone;
+    const { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume } = deps.settings.get();
+    this.audioSettings = { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume };
   }
 
   begin(): void {
@@ -101,6 +109,7 @@ export class DictationSession {
 
   async finish(reason: StopReason): Promise<void> {
     if (this.phase !== 'recording') {
+      await this.stopCapture();
       return;
     }
     if (!TRANSCRIBED_REASONS.has(reason)) {
@@ -134,34 +143,43 @@ export class DictationSession {
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
 
-  cancel(): void {
-    const recording = this.phase === 'recording';
+  cancel(): Promise<void> {
+    this.shuttingDown = true;
     this.phase = 'done';
     this.controller.abort();
     this.releaseEngine();
-    if (!recording) {
-      return;
-    }
-    void this.stopCapture();
+    return this.stopCapture().then(() => undefined);
   }
 
   private async openMicrophone(): Promise<boolean> {
+    let acquiringAudio = true;
     try {
       const started = await this.deps.captureLane.run(async () => {
+        if (this.phase !== 'recording') return null;
+        this.audio = await this.deps.helper.beginRecordingAudio(this.audioSettings);
+        acquiringAudio = false;
+        if (this.phase !== 'recording') {
+          await this.finishAudio(false);
+          return null;
+        }
         this.unsubscribeFrames = this.deps.capture.onFrame((pcm) => this.relay.push(pcm));
         try {
-          return await this.deps.capture.start(this.microphone);
+          const started = await this.deps.capture.start(this.microphone);
+          this.microphoneOpened = true;
+          return started;
         } catch (error) {
           this.unsubscribeFrames();
+          await this.finishAudio(false);
           throw error;
         }
       });
+      if (started === null) return false;
       this.noteFallback(started.fallback);
       return true;
     } catch (error) {
       this.deps.logger.error('The microphone could not be started', error);
       if (this.phase === 'recording') {
-        this.abandon(errorState(MESSAGES.microphone));
+        this.abandon(errorState(acquiringAudio ? MESSAGES.recordingAudio : MESSAGES.microphone));
       }
       return false;
     }
@@ -247,21 +265,33 @@ export class DictationSession {
     this.controller.abort();
     this.releaseEngine();
     this.deps.abandon(this);
+    void this.stopCapture();
   }
 
   private stopCapture(): Promise<Uint8Array> {
-    return this.deps.captureLane
+    return this.closing ??= this.deps.captureLane
       .run(async () => {
+        let pcm: Uint8Array = new Uint8Array(0);
         try {
-          return await this.deps.capture.stop();
+          if (this.microphoneOpened) pcm = await this.deps.capture.stop();
+        } catch (error) {
+          this.deps.logger.error('The recording could not be stopped', error);
         } finally {
           this.unsubscribeFrames();
+          await this.finishAudio(this.microphoneOpened && !this.shuttingDown);
         }
-      })
-      .catch((error: unknown) => {
-        this.deps.logger.error('The recording could not be stopped', error);
-        return new Uint8Array(0);
+        return pcm;
       });
+  }
+
+  private async finishAudio(playStop: boolean): Promise<void> {
+    const audio = this.audio;
+    this.audio = null;
+    if (audio === null) return;
+    await audio.finish({ playStop }).catch((error: unknown) => {
+      this.deps.logger.error('The recording audio could not be restored', error);
+      this.deps.overlay.flash(this, errorState(MESSAGES.recordingAudio));
+    });
   }
 
   private async transcribeAndInsert(transcription: Promise<string | null>, pcm: Uint8Array): Promise<void> {
