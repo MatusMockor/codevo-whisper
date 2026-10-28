@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
+  it.each(['hold', 'toggle', 'smart'])('accepts %s dictation mode at the IPC boundary', (mode) => {
+    expect(validateSettingsPatch({ mode })).toEqual({ mode });
+  });
+
   it('returns a valid patch', () => {
     const patch = validateSettingsPatch({
       hotkey: { keycode: 61, label: 'Pravý ⌥ Option' },

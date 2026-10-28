@@ -7,11 +7,13 @@ import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
 const MODES: ReadonlyArray<SegmentOption<DictationMode>> = [
+  { id: 'smart', label: 'Inteligentný' },
   { id: 'hold', label: 'Podrž klávesu' },
   { id: 'toggle', label: 'Prepínanie' },
 ];
 
 const MODE_DESCRIPTIONS: Readonly<Record<DictationMode, string>> = {
+  smart: 'Krátke stlačenie zapne diktovanie, ďalšie ho ukončí. Pri podržaní aspoň 300 ms sa diktovanie ukončí uvoľnením klávesu.',
   hold: 'Nahráva sa, kým kláves držíte.',
   toggle: 'Prvé stlačenie začne nahrávať, druhé ukončí.',
 };

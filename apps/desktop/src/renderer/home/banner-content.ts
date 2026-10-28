@@ -8,7 +8,7 @@ export type BannerTarget = 'settings' | 'server';
 export type BannerContent = { kind: 'ready'; hotkeyLabel: string; verb: HotkeyVerb } | { kind: 'paused' } | { kind: 'action'; message: string; target: BannerTarget };
 
 export function hotkeyVerb(mode: DictationMode): HotkeyVerb {
-  return mode === 'toggle' ? 'Stlačte' : 'Podržte';
+  return mode === 'hold' ? 'Podržte' : 'Stlačte';
 }
 
 export const ACTION_MESSAGES = {

@@ -8,6 +8,7 @@ describe('bannerContent', () => {
   it('tells the user to hold the key in hold mode and press it in toggle mode', () => {
     expect(bannerContent(READY)).toEqual({ kind: 'ready', hotkeyLabel: 'Pravý ⌃ Control', verb: 'Podržte' });
     expect(bannerContent({ ...READY, mode: 'toggle' })).toEqual({ kind: 'ready', hotkeyLabel: 'Pravý ⌃ Control', verb: 'Stlačte' });
+    expect(bannerContent({ ...READY, mode: 'smart' })).toEqual({ kind: 'ready', hotkeyLabel: 'Pravý ⌃ Control', verb: 'Stlačte' });
   });
 
   it('asks for the missing step first', () => {
@@ -25,6 +26,6 @@ describe('bannerContent', () => {
   });
 
   it('names the verb for each mode', () => {
-    expect([hotkeyVerb('hold'), hotkeyVerb('toggle')]).toEqual(['Podržte', 'Stlačte']);
+    expect([hotkeyVerb('hold'), hotkeyVerb('toggle'), hotkeyVerb('smart')]).toEqual(['Podržte', 'Stlačte', 'Stlačte']);
   });
 });

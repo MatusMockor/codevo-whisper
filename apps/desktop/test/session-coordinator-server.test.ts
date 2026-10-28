@@ -59,7 +59,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   const logger = new RecordingLogger();
   const settings = new SettingsStore(join(scratch, 'settings.json'), logger);
   await settings.load();
-  await settings.update({ hotkey: FN, localModelId: 'tiny', ...settingsPatch });
+  await settings.update({ hotkey: FN, mode: 'hold', localModelId: 'tiny', ...settingsPatch });
   const modelsDir = join(scratch, 'models');
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);

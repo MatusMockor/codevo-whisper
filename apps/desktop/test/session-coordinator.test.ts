@@ -61,7 +61,7 @@ async function prepared(setup: Setup = {}) {
   const logger = new RecordingLogger();
   const settings = new SettingsStore(join(scratch, 'settings.json'), logger);
   await settings.load();
-  await settings.update({ hotkey: FN, localModelId: 'tiny', ...setup.settings });
+  await settings.update({ hotkey: FN, mode: 'hold', localModelId: 'tiny', ...setup.settings });
   const modelsDir = join(scratch, 'models');
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
@@ -497,6 +497,22 @@ describe('SessionCoordinator', () => {
     (await guard.suspend())();
 
     expect(harness.coordinator.isPaused()).toBe(true);
+  });
+
+  it.each([299, 300])('smart %i ms gesture completes normal transcription', async (duration) => {
+    const harness = await prepared({ settings: { mode: 'smart' } });
+    harness.helper.pressKey('down', FN.keycode, 0);
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(6));
+    harness.helper.pressKey('up', FN.keycode, duration);
+    if (duration === 299) {
+      expect(harness.capture.recording).toBe(true);
+      harness.helper.pressKey('down', FN.keycode, 1_000);
+      harness.helper.pressKey('up', FN.keycode, 1_300);
+    }
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(6)]);
+    expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
   });
 
   it('toggle mode records until the second press and then inserts', async () => {

@@ -25,6 +25,7 @@ describe('SettingsStore', () => {
     const loaded = await store.load();
 
     expect(loaded).toEqual(DEFAULT_SETTINGS);
+    expect(loaded.mode).toBe('smart');
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
   });
 
@@ -44,6 +45,20 @@ describe('SettingsStore', () => {
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
     expect(logger.errors).toHaveLength(1);
     expect(logger.errors[0]?.error).toMatchObject({ code: 'EISDIR' });
+  });
+
+  it.each(['hold', 'toggle', 'smart'] as const)('preserves saved %s mode across reloads', async (mode) => {
+    const store = new SettingsStore(file);
+    await store.load();
+    await store.update({ mode });
+
+    expect((await new SettingsStore(file).load()).mode).toBe(mode);
+  });
+
+  it.each([{}, { mode: 'invalid' }])('uses smart when mode is absent or invalid: %j', async (stored) => {
+    await writeFile(file, JSON.stringify(stored));
+
+    expect((await new SettingsStore(file).load()).mode).toBe('smart');
   });
 
   it('persists an update', async () => {

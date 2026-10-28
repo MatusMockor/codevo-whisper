@@ -230,7 +230,7 @@ test('choosing this Mac shows the preselected recommended model, then onboarding
 
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
-  await expect(page.locator('.ob-try')).toHaveText('Podržte Pravý ⌃ Control a povedzte niečo.');
+  await expect(page.locator('.ob-try')).toHaveText('Stlačte Pravý ⌃ Control a povedzte niečo.');
   await expect(page.getByText('Model sa ešte sťahuje alebo nie je vybraný.')).toBeVisible();
   await page.getByRole('button', { name: 'Späť' }).click();
   await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
@@ -269,7 +269,7 @@ test('choosing an own server pairs it in place, saves the server order and never
 
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
-  await expect(page.locator('.ob-try')).toHaveText('Podržte Pravý ⌃ Control a povedzte niečo.');
+  await expect(page.locator('.ob-try')).toHaveText('Stlačte Pravý ⌃ Control a povedzte niečo.');
   await expect(page.locator('.ob-body .field-note')).toHaveCount(0);
   await page.getByRole('button', { name: 'Dokončiť' }).click();
 
