@@ -64,10 +64,12 @@ test('banner shows the call to action or the hotkey label', async () => {
   }).toPass();
   await expect(banner().locator('kbd')).toHaveText(RIGHT_CONTROL.label);
 
-  await expect(async () => {
-    await pushStatus({ ...READY, mode: 'toggle' });
-    await expect(banner()).toHaveText('Všetko je pripravené. Stlačte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
-  }).toPass();
+  for (const mode of ['toggle', 'smart'] as const) {
+    await expect(async () => {
+      await pushStatus({ ...READY, mode });
+      await expect(banner()).toHaveText('Všetko je pripravené. Stlačte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
+    }).toPass();
+  }
 });
 
 test('tiles show values from seeded stats and switch periods', async () => {

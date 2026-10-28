@@ -97,10 +97,10 @@ describe('AppStatusService', () => {
   it('reports the hotkey, the active model, permissions and pause', async () => {
     const harness = await prepared();
 
-    expect(await harness.service.status()).toEqual({ hotkeyLabel: null, mode: 'hold', modelReady: false, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false });
+    expect(await harness.service.status()).toEqual({ hotkeyLabel: null, mode: 'smart', modelReady: false, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false });
 
     await harness.settings.update({ hotkey: FN, localModelId: 'tiny' });
-    await expect.poll(() => harness.changes.at(-1)).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'hold', modelReady: true, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false });
+    await expect.poll(() => harness.changes.at(-1)).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'smart', modelReady: true, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false });
 
     await harness.settings.update({ localModelId: 'other' });
     await expect.poll(() => harness.changes.at(-1)).toMatchObject({ modelReady: false });
@@ -112,7 +112,7 @@ describe('AppStatusService', () => {
     harness.service.refresh();
     await expect.poll(() => harness.changes.at(-1)).toMatchObject({ permissionsOk: false });
 
-    expect(await harness.service.status()).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'hold', modelReady: false, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: false, paused: true });
+    expect(await harness.service.status()).toEqual({ hotkeyLabel: 'Fn / 🌐', mode: 'smart', modelReady: false, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: false, paused: true });
   });
 
   it('requires input monitoring and accessibility and emits only real changes', async () => {

@@ -8,11 +8,13 @@ import { ResetGuard, type ResetReason } from './reset-guard';
 
 export type StopReason = 'released' | 'toggled' | 'cancelled' | ResetReason;
 
+type HotkeyState = { kind: 'idle' } | { kind: 'held' } | { kind: 'smart-pressed'; pressedAt: number } | { kind: 'latched' };
+
 export class HotkeyService {
   private readonly guard: ResetGuard;
   private readonly starts: Listeners<void>;
   private readonly stops: Listeners<StopReason>;
-  private active = false;
+  private state: HotkeyState = { kind: 'idle' };
   private paused = false;
   private permitted = false;
   private readonly unsubscribers: Array<() => void>;
@@ -85,45 +87,62 @@ export class HotkeyService {
     if (this.paused || hotkey?.keycode !== event.keycode) {
       return;
     }
-    if (this.active && this.guard.expired()) {
+    if (this.state.kind !== 'idle' && this.guard.expired()) {
       this.finish('max-duration');
       return;
     }
     if (event.phase === 'up') {
-      this.handleUp(mode);
+      this.handleUp(event.ts);
       return;
     }
-    this.handleDown(mode);
+    this.handleDown(mode, event.ts);
   }
 
-  private handleDown(mode: DictationMode): void {
-    if (!this.active) {
-      this.begin();
-      return;
+  private handleDown(mode: DictationMode, pressedAt: number): void {
+    if (this.state.kind === 'idle') {
+      switch (mode) {
+        case 'hold':
+          this.begin({ kind: 'held' });
+          return;
+        case 'toggle':
+          this.begin({ kind: 'latched' });
+          return;
+        case 'smart':
+          this.begin({ kind: 'smart-pressed', pressedAt });
+          return;
+      }
     }
-    if (mode === 'toggle') {
+    if (this.state.kind === 'latched') {
       this.finish('toggled');
     }
   }
 
-  private handleUp(mode: DictationMode): void {
-    if (mode !== 'hold') {
+  private handleUp(releasedAt: number): void {
+    if (this.state.kind === 'held') {
+      this.finish('released');
+      return;
+    }
+    if (this.state.kind !== 'smart-pressed') {
+      return;
+    }
+    if (releasedAt - this.state.pressedAt < 300) {
+      this.state = { kind: 'latched' };
       return;
     }
     this.finish('released');
   }
 
-  private begin(): void {
-    this.active = true;
+  private begin(nextState: Exclude<HotkeyState, { kind: 'idle' }>): void {
+    this.state = nextState;
     this.guard.arm((reason) => this.finish(reason));
     this.starts.emit();
   }
 
   private finish(reason: StopReason): void {
-    if (!this.active) {
+    if (this.state.kind === 'idle') {
       return;
     }
-    this.active = false;
+    this.state = { kind: 'idle' };
     this.guard.disarm();
     this.stops.emit(reason);
   }

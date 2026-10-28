@@ -4,7 +4,7 @@ export type HotkeyKeycode = (typeof HOTKEY_KEYCODES)[number];
 
 export type HotkeySetting = { keycode: HotkeyKeycode; label: string } | null;
 
-export type DictationMode = 'hold' | 'toggle';
+export type DictationMode = 'hold' | 'toggle' | 'smart';
 
 export type Language = 'sk' | 'en' | 'cs' | 'auto';
 
@@ -45,7 +45,7 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
   hotkey: null,
-  mode: 'hold',
+  mode: 'smart',
   language: 'sk',
   microphone: Object.freeze({ deviceId: null, label: null }),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,

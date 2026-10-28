@@ -52,7 +52,7 @@ function isMicrophone(value: unknown): value is Settings['microphone'] {
 
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   hotkey: isHotkey,
-  mode: oneOf(['hold', 'toggle']),
+  mode: oneOf(['hold', 'toggle', 'smart']),
   language: oneOf(['sk', 'en', 'cs', 'auto']),
   microphone: isMicrophone,
   engineOrder: isEngineOrder,

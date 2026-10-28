@@ -9,7 +9,7 @@ type FakeHelperGlobal = { codevoE2e: { helper: { recordedKey: number | null } } 
 
 const DEFAULTS: Settings = {
   hotkey: null,
-  mode: 'hold',
+  mode: 'smart',
   language: 'sk',
   microphone: { deviceId: null, label: null },
   engineOrder: ['local'],
@@ -174,6 +174,29 @@ test.describe('settings page', () => {
     await openSettings();
   });
 
+  test('smart is the default and persists after switching modes and relaunching', async () => {
+    const modes = page.getByRole('group', { name: 'Režim klávesu' });
+    const smart = modes.getByRole('button', { name: 'Inteligentný', exact: true });
+    await expect(smart).toHaveAttribute('aria-pressed', 'true');
+    await expect(row('Režim')).toContainText('Krátke stlačenie zapne diktovanie, ďalšie ho ukončí. Pri podržaní aspoň 300 ms sa diktovanie ukončí uvoľnením klávesu.');
+
+    for (const label of ['Podrž klávesu', 'Prepínanie']) {
+      const legacy = modes.getByRole('button', { name: label, exact: true });
+      await legacy.click();
+      await expect(legacy).toHaveAttribute('aria-pressed', 'true');
+    }
+    await smart.focus();
+    await page.keyboard.press('Enter');
+    await expect(smart).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.mode))).toBe('smart');
+    await expect.poll(async () => JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as unknown).toMatchObject({ mode: 'smart' });
+
+    await app.close();
+    await start();
+    await openSettings();
+    await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('changes to Režim, Jazyk, Vkladanie and Spustiť po prihlásení persist across a relaunch', async () => {
     await page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' }).click();
     await expect(row('Režim')).toContainText('Prvé stlačenie začne nahrávať, druhé ukončí.');
@@ -307,7 +330,7 @@ test.describe('settings page', () => {
     await page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' }).click();
 
     await expect(page.getByRole('alert').filter({ hasText: 'Zmenu sa nepodarilo uložiť.' })).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Podrž klávesu' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Inteligentný' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('Vynulovať štatistiky deletes the statistics after a confirmation', async () => {

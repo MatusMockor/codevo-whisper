@@ -33,7 +33,7 @@ async function started(setup: Setup = {}) {
   const logger = new RecordingLogger();
   const settings = new SettingsStore(join(dir, 'settings.json'), logger);
   await settings.load();
-  await settings.update({ hotkey: FN, ...setup.settings });
+  await settings.update({ hotkey: FN, mode: 'hold', ...setup.settings });
   const helper = new FakeInputHelper(setup.helper);
   const power = new FakePowerEvents();
   const service = new HotkeyService(helper, settings, power, setup.clock, logger);
@@ -45,6 +45,145 @@ async function started(setup: Setup = {}) {
 }
 
 describe('HotkeyService', () => {
+  it.each([0, 299])('smart starts immediately and latches a %i ms press until the next down', async (duration) => {
+    const { helper, events, service } = await started({ settings: { mode: 'smart' } });
+
+    helper.pressKey('down', 63, 0);
+    expect(events).toEqual(['start']);
+    helper.pressKey('up', 63, duration);
+    expect(events).toEqual(['start']);
+    helper.pressKey('down', 63, 1_000);
+    helper.pressKey('up', 63, 1_500);
+    expect(events).toEqual(['start', 'stop:toggled']);
+    helper.pressKey('down', 63, 2_000);
+    expect(events).toEqual(['start', 'stop:toggled', 'start']);
+    service.dispose();
+  });
+
+  it.each([300, 301])('smart releases a %i ms press using event timestamps', async (duration) => {
+    let now = 1_000;
+    const { helper, events } = await started({ settings: { mode: 'smart' }, clock: () => now });
+
+    helper.pressKey('down', 63, 0);
+    now += 10;
+    helper.pressKey('up', 63, duration);
+
+    expect(events).toEqual(['start', 'stop:released']);
+  });
+
+  it('smart ignores repeated downs without resetting the first press duration', async () => {
+    const { helper, events } = await started({ settings: { mode: 'smart' } });
+
+    helper.pressKey('down', 63, 0);
+    helper.pressKey('down', 63, 250);
+    expect(events).toEqual(['start']);
+    helper.pressKey('up', 63, 300);
+
+    expect(events).toEqual(['start', 'stop:released']);
+  });
+
+  it('smart waits for release without a classification timer and uses event time for a tap', async () => {
+    vi.useFakeTimers();
+    const { helper, events, service } = await started({ settings: { mode: 'smart' } });
+
+    helper.pressKey('up', 63, 0);
+    helper.pressKey('down', 63, 0);
+    vi.advanceTimersByTime(10_000);
+    expect(events).toEqual(['start']);
+    helper.pressKey('up', 63, 299);
+    expect(events).toEqual(['start']);
+    helper.pressKey('down', 63, 400);
+    expect(events).toEqual(['start', 'stop:toggled']);
+    service.dispose();
+  });
+
+  it('smart can cancel synchronously on start and accept a fresh tap after the trailing up', async () => {
+    const { helper, service, events } = await started({ settings: { mode: 'smart' } });
+    const unsubscribe = service.onStart(() => service.cancel());
+
+    helper.pressKey('down', 63, 0);
+    helper.pressKey('up', 63, 299);
+    expect(events).toEqual(['start', 'stop:cancelled']);
+    unsubscribe();
+    helper.pressKey('down', 63, 1_000);
+    helper.pressKey('up', 63, 1_299);
+    helper.pressKey('down', 63, 2_000);
+    helper.pressKey('up', 63, 2_300);
+
+    expect(events).toEqual(['start', 'stop:cancelled', 'start', 'stop:toggled']);
+  });
+
+  describe.each(['pressed', 'latched'])('smart %s resets', (phase) => {
+    it.each(['cancel', 'pause', 'mode', 'hotkey', 'clear', 'lock', 'suspend', 'input-lost', 'limit', 'dispose'] as const)('%s clears the gesture and ignores trailing release', async (reset) => {
+      const { helper, service, settings, power, events } = await started({ settings: { mode: 'smart' } });
+      helper.pressKey('down', 63, 0);
+      if (phase === 'latched') {
+        helper.pressKey('up', 63, 299);
+      }
+      let reason = 'cancelled';
+      switch (reset) {
+        case 'cancel': service.cancel(); break;
+        case 'pause': service.pause(); service.resume(); break;
+        case 'mode': await settings.update({ mode: 'hold' }); break;
+        case 'hotkey': await settings.update({ hotkey: RIGHT_CONTROL }); break;
+        case 'clear': await settings.update({ hotkey: null }); break;
+        case 'lock': power.emit('lock-screen'); reason = 'lock'; break;
+        case 'suspend': power.emit('suspend'); reason = 'suspend'; break;
+        case 'input-lost': helper.loseInput('helper-died'); reason = 'input-lost'; break;
+        case 'limit': service.stopForLimit(); reason = 'max-duration'; break;
+        case 'dispose': service.dispose(); break;
+      }
+      helper.pressKey('up', 63, 301);
+      service.cancel();
+      expect(events).toEqual(['start', `stop:${reason}`]);
+      await settings.update({ hotkey: FN, mode: 'smart' });
+      helper.pressKey('down', 63, 1_000);
+      expect(events).toEqual(reset === 'dispose' ? ['start', `stop:${reason}`] : ['start', `stop:${reason}`, 'start']);
+      service.dispose();
+    });
+
+    it('retains the original ten-minute deadline', async () => {
+      vi.useFakeTimers();
+      const { helper, events } = await started({ settings: { mode: 'smart' } });
+      helper.pressKey('down', 63, 0);
+      vi.advanceTimersByTime(599_999);
+      if (phase === 'latched') {
+        helper.pressKey('up', 63, 299);
+      }
+      expect(events).toEqual(['start']);
+      vi.advanceTimersByTime(1);
+      helper.pressKey('up', 63, 300);
+      expect(events).toEqual(['start', 'stop:max-duration']);
+    });
+
+    it('consumes the next key event when the deadline timer is late', async () => {
+      let now = 0;
+      const { helper, events, service } = await started({ settings: { mode: 'smart' }, clock: () => now });
+      helper.pressKey('down', 63, 0);
+      if (phase === 'latched') {
+        helper.pressKey('up', 63, 299);
+      }
+      now = 600_000;
+      helper.pressKey(phase === 'latched' ? 'down' : 'up', 63, 600_000);
+      helper.pressKey('up', 63, 600_001);
+      expect(events).toEqual(['start', 'stop:max-duration']);
+      helper.pressKey('down', 63, 601_000);
+      expect(events).toEqual(['start', 'stop:max-duration', 'start']);
+      service.dispose();
+    });
+
+    it('keeps recording across unrelated settings changes', async () => {
+      const { helper, events, settings, service } = await started({ settings: { mode: 'smart' } });
+      helper.pressKey('down', 63, 0);
+      if (phase === 'latched') {
+        helper.pressKey('up', 63, 299);
+      }
+      await settings.update({ language: 'en' });
+      expect(events).toEqual(['start']);
+      service.dispose();
+    });
+  });
+
   it('hold mode starts on down and stops on up', async () => {
     const { helper, events } = await started();
 
