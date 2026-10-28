@@ -190,6 +190,13 @@ describe('LocalEngine', () => {
     await expect(engine().prepare()).resolves.toEqual({ ready: false, reason: 'no-model' });
   });
 
+  it('applies the desktop call timeout while the resident is still loading', async () => {
+    vi.stubEnv('CW_WORKER_LOAD_MS', '400');
+    const startedAt = performance.now();
+    await expect(dictate(engine({ callTimeoutMs: 100 }), secondStampedPcm(1), 'sk')).rejects.toMatchObject({ reason: 'engine-failed' });
+    expect(performance.now() - startedAt).toBeLessThan(350);
+  });
+
   it('stops on abort', async () => {
     vi.stubEnv('FAKE_CLI_MODE', 'hang');
     const controller = new AbortController();

@@ -128,7 +128,8 @@ export class DictationSession {
       return;
     }
     const dictation = this.startDictation(readiness.engine);
-    await this.deps.pipeline.run(() => this.transcribeAndInsert(dictation, pcm));
+    const transcription = this.transcribe(dictation);
+    await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
 
   cancel(): void {
@@ -261,8 +262,9 @@ export class DictationSession {
       });
   }
 
-  private async transcribeAndInsert(dictation: EngineDictation, pcm: Uint8Array): Promise<void> {
-    const text = await this.transcribe(dictation);
+  private async transcribeAndInsert(transcription: Promise<string | null>, pcm: Uint8Array): Promise<void> {
+    const text = await transcription;
+    if (this.controller.signal.aborted) return;
     if (text === null) {
       return;
     }

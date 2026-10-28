@@ -30,6 +30,11 @@ fi
 
 cmake -S "$src" -B "$build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PROJECT_transcribe_INCLUDE="$(cd ../stt-worker && pwd)/stt-worker.cmake" \
+  -DTRANSCRIBE_BUILD_SHARED=OFF \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_C_FLAGS="-fstack-protector-strong" \
+  -DCMAKE_CXX_FLAGS="-fstack-protector-strong" \
   -DCMAKE_OSX_ARCHITECTURES="$target" \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
   -DTRANSCRIBE_METAL=ON \
@@ -38,9 +43,11 @@ cmake -S "$src" -B "$build" -G Ninja \
   -DTRANSCRIBE_BUILD_TESTS=OFF \
   -DGGML_NATIVE=OFF
 
-cmake --build "$build" --target transcribe-cli
+cmake --build "$build" --target transcribe-cli cw-stt-worker --parallel 6
 
 mkdir -p "$dest"
-cp "$build/bin/transcribe-cli" "$dest/transcribe-cli.tmp"
-mv -f "$dest/transcribe-cli.tmp" "$dest/transcribe-cli"
-echo "built $dest/transcribe-cli"
+for name in transcribe-cli cw-stt-worker; do
+  cp "$build/bin/$name" "$dest/$name.tmp"
+  mv -f "$dest/$name.tmp" "$dest/$name"
+  echo "built $dest/$name"
+done

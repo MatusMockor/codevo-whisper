@@ -15,3 +15,5 @@ sign() {
 
 sign "$bin/codevo-input-helper" app.codevo.whisper.input-helper
 sign "$bin/transcribe-cli" app.codevo.whisper.transcribe-cli
+
+sign "$bin/cw-stt-worker" app.codevo.whisper.stt-worker

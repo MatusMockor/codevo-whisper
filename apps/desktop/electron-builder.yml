@@ -17,6 +17,7 @@ extraResources:
     to: bin/${arch}
     filter:
       - transcribe-cli
+      - cw-stt-worker
       - codevo-input-helper
 asar: true
 npmRebuild: false

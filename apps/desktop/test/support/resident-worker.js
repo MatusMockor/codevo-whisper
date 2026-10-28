@@ -36,7 +36,7 @@ async function handle(language, pcm) {
     text = timelineWords(source, offset, offset + job.length).join(' ');
     if (env.FAKE_TIMELINE_JOBS) appendFileSync(env.FAKE_TIMELINE_JOBS, `${offset} ${job.length}\n`);
   }
-  if (env.CW_WORKER_CALLS) appendFileSync(env.CW_WORKER_CALLS, `${JSON.stringify({ pid: process.pid, language, samples: pcm.length / 2, model })}\n`);
+  if (env.CW_WORKER_CALLS) appendFileSync(env.CW_WORKER_CALLS, `${JSON.stringify({ pid: process.pid, language, samples: pcm.length / 2, nonzero: pcm.some((byte) => byte !== 0), model })}\n`);
   if (offset >= Number(env.FAKE_CLI_HANG_FROM_SAMPLE ?? Infinity)) await sleep(30_000);
   await sleep(Number(env.CW_WORKER_DELAY_MS ?? 0));
   reply(env.CW_WORKER_FAIL === '1' ? 1 : 0, env.CW_WORKER_FAIL === '1' ? 'inference failed' : text);

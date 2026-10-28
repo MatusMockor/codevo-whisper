@@ -67,7 +67,7 @@ function start(partials: boolean, language: Language = 'sk'): Started {
   const dictation = new LocalDictation({
     dispatcher,
     clock,
-    context: { language, model: MODEL },
+    context: { language },
     options: { language, signal: controller.signal, partials, onTranscript: (update) => updates.push(update) },
   });
   return { dictation, updates, controller };

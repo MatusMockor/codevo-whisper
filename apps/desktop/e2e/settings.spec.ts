@@ -14,6 +14,8 @@ const DEFAULTS: Settings = {
   microphone: { deviceId: null, label: null },
   engineOrder: ['local'],
   localModelId: null,
+  localAcceleration: 'auto',
+  localModelUnload: 5,
   insertion: 'paste',
   overlay: 'indicator',
   launchAtLogin: false,
@@ -195,6 +197,39 @@ test.describe('settings page', () => {
     await start();
     await openSettings();
     await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('resident settings show all seven unload options, acceleration defaults and persist across relaunch', async () => {
+    const unload = page.getByRole('combobox', { name: 'Uvoľniť model' });
+    const acceleration = page.getByRole('group', { name: 'Akcelerácia' });
+    const expectedOptions = [
+      ['never', 'Nikdy'], ['immediately', 'Ihneď'], ['2', 'Po 2 minútach'], ['5', 'Po 5 minútach'],
+      ['10', 'Po 10 minútach'], ['15', 'Po 15 minútach'], ['60', 'Po 1 hodine'],
+    ];
+    await expect(unload.locator('option')).toHaveCount(7);
+    expect(await unload.locator('option').evaluateAll((options) => options.map((option) => [option.getAttribute('value'), option.textContent]))).toEqual(expectedOptions);
+    await expect(unload).toHaveValue('5');
+    await expect(acceleration.getByRole('button')).toHaveText(['Auto', 'GPU', 'CPU']);
+    await expect(acceleration.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    for (const [value] of expectedOptions) {
+      await unload.selectOption(value ?? '');
+      await expect(unload).toHaveValue(value ?? '');
+    }
+    for (const label of ['GPU', 'Auto', 'CPU']) {
+      await acceleration.getByRole('button', { name: label, exact: true }).click();
+      await expect(acceleration.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    }
+    await unload.selectOption('10');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
+    await expect.poll(async () => JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as unknown).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
+    await app.close();
+    await start();
+    await openSettings();
+    await expect(page.getByRole('combobox', { name: 'Uvoľniť model' })).toHaveValue('10');
+    await expect(page.getByRole('group', { name: 'Akcelerácia' }).getByRole('button', { name: 'CPU', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
   });
 
   test('changes to Režim, Jazyk, Vkladanie and Spustiť po prihlásení persist across a relaunch', async () => {

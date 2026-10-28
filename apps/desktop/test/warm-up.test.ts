@@ -39,7 +39,7 @@ it('activation and update warmup run silent inference on the same resident', asy
 it('logs retryable inference failure without stamping update success', async () => {
   vi.stubEnv('CW_WORKER_FAIL', '1');
   const logger = new RecordingLogger();
-  await expect(engine.warmUp(join(dir, 'models/alpha.gguf'))).rejects.toThrow();
+  await expect(engine.warmUp(join(dir, 'models/alpha.gguf'))).rejects.toMatchObject({ reason: 'exit' });
   await warmUpAfterUpdate({ file: join(dir, 'stamp'), appVersion: '2', models, warmUp: (path) => engine.warmUp(path), logger });
   await expect(readFile(join(dir, 'stamp'))).rejects.toMatchObject({ code: 'ENOENT' });
   expect(logger.errors.map((entry) => entry.message)).toEqual(['Warm-up after an app update failed']);
@@ -54,4 +54,12 @@ it('does not stamp a warmup superseded by a model change during READY', async ()
   await warming;
   await expect(readFile(join(dir, 'stamp'))).rejects.toMatchObject({ code: 'ENOENT' });
   expect(logger.errors).toHaveLength(1);
+});
+
+it.each([['arm64', 'metal'], ['x64', 'cpu']] as const)('warms the selected path with the %s Auto backend', async (arch, backend) => {
+  await engine.dispose();
+  engine = new LocalEngine({ binary: FAKE_WORKER, models, settings, arch, platform: 'darwin' });
+  await engine.warmUp(join(dir, 'models/alpha.gguf'));
+  const calls = await readRecordedCalls(join(dir, 'calls'));
+  expect(calls.map((call) => [call[call.indexOf('--model') + 1], call[call.indexOf('--backend') + 1]])).toEqual([[join(dir, 'models/alpha.gguf'), backend]]);
 });

@@ -113,7 +113,14 @@ static struct transcribe_session * open_session(const struct options * options) 
     transcribe_session_params_init(&params);
     load.backend     = options->backend;
     params.n_threads = options->threads;
-    return transcribe_open(options->model, &load, &params, &session) == TRANSCRIBE_OK ? session : NULL;
+    transcribe_status status = transcribe_open(options->model, &load, &params, &session);
+#if defined(__APPLE__)
+    if (status != TRANSCRIBE_OK && load.backend == TRANSCRIBE_BACKEND_METAL) {
+        load.backend = TRANSCRIBE_BACKEND_CPU;
+        status = transcribe_open(options->model, &load, &params, &session);
+    }
+#endif
+    return status == TRANSCRIBE_OK ? session : NULL;
 }
 
 static size_t read_bytes(uint8_t * buffer, size_t size) {

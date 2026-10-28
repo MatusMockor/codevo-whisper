@@ -198,7 +198,7 @@ it('warms with one second of silence on the same resident used for dictation and
   await local.warmUp(join(dir, 'models', 'alpha.gguf'));
   const text = await dictate();
   const calls = (await lines('calls')).map((line) => JSON.parse(line) as { pid: number; language: string; samples: number });
-  expect(calls).toMatchObject([{ pid: pid(text), language: 'en', samples: 16000 }, { pid: pid(text), language: 'cs', samples: 16000 }]);
+  expect(calls).toMatchObject([{ pid: pid(text), language: 'en', samples: 16000, nonzero: false }, { pid: pid(text), language: 'cs', samples: 16000, nonzero: true }]);
   await expect(local.warmUp(join(dir, 'models', 'beta.gguf'))).rejects.toThrow();
   expect(await lines('starts')).toHaveLength(1);
 });
@@ -212,4 +212,125 @@ it('rejects a warmup superseded during readiness, including ABA, and cannot resu
   expect(await warmed).toBe('stale');
   expect(await lines('calls')).toEqual([]);
   expect(await lines('starts')).toHaveLength(1);
+});
+
+it('reserves the current worker synchronously while preflight verification is pending past the idle deadline', async () => {
+  await local.dispose();
+  let verification: Promise<void> = Promise.resolve();
+  local = new LocalEngine({
+    binary: BINARY, settings, arch: 'arm64', clock: { now: () => now },
+    models: {
+      activeModelPath: () => models.activeModelPath(),
+      activeLanguageHint: () => models.activeLanguageHint(),
+      verifyActive: async () => { await verification; return models.verifyActive(); },
+    },
+  });
+  const text = await dictate();
+  const gate = Promise.withResolvers<void>();
+  verification = gate.promise;
+  const pending = local.prepare();
+  now = 6 * 60_000;
+  await settings.update({ localModelUnload: 2 });
+  expect(alive(pid(text))).toBe(true);
+  gate.resolve();
+  const prepared = await pending;
+  if (!prepared.ready) throw new Error('not prepared');
+  prepared.engine.release();
+  await expect.poll(() => alive(pid(text))).toBe(false);
+});
+
+it('holds recording and final inference past an idle deadline and never starts a fresh interval at inference completion', async () => {
+  vi.stubEnv('CW_WORKER_DELAY_MS', '200');
+  const first = await dictate();
+  const dictation = await start();
+  dictation.push(pcmBytes(timelineSpeech(1)));
+  now = 10 * 60_000;
+  await settings.update({ localModelUnload: 2 });
+  expect(alive(pid(first))).toBe(true);
+  const finishing = dictation.finish();
+  now += 3 * 60_000;
+  await settings.update({ localModelUnload: 5 });
+  expect(alive(pid(first))).toBe(true);
+  now += 3 * 60_000;
+  await settings.update({ localModelUnload: 2 });
+  expect(alive(pid(first))).toBe(true);
+  expect(await finishing).toBe(first);
+  await expect.poll(() => alive(pid(first))).toBe(false);
+});
+
+it('releases a failed dictation and an abort/finish race once without affecting overlapping recording', async () => {
+  await settings.update({ localModelUnload: 'immediately' });
+  vi.stubEnv('CW_WORKER_FAIL', '1');
+  const keeper = await start();
+  const failed = await start();
+  failed.push(pcmBytes(timelineSpeech(1)));
+  await expect(failed.finish()).rejects.toMatchObject({ reason: 'engine-failed' });
+  const starts = (await lines('starts')).map((line) => JSON.parse(line) as { pid: number });
+  const id = starts[0]?.pid ?? 0;
+  expect(alive(id)).toBe(true);
+  const controller = new AbortController();
+  const prepared = await local.prepare();
+  if (!prepared.ready) throw new Error('not prepared');
+  const cancelled = prepared.engine.start({ language: 'sk', signal: controller.signal });
+  cancelled.push(pcmBytes(timelineSpeech(1)));
+  const terminal = cancelled.finish().catch((error: unknown) => error);
+  controller.abort();
+  expect(await terminal).toMatchObject({ name: 'AbortError' });
+  expect(alive(id)).toBe(true);
+  await keeper.finish();
+  await expect.poll(() => alive(id)).toBe(false);
+});
+
+it('disposal invalidates pending verification and closes a loading child before returning', async () => {
+  vi.stubEnv('CW_WORKER_LOAD_MS', '1000');
+  expect(await local.prepare()).toMatchObject({ ready: true });
+  await expect.poll(() => lines('starts')).toHaveLength(1);
+  const starts = (await lines('starts')).map((line) => JSON.parse(line) as { pid: number });
+  await local.dispose();
+  expect(alive(starts[0]?.pid ?? 0)).toBe(false);
+  expect(await local.prepare()).toEqual({ ready: false, reason: 'no-model' });
+  expect(await lines('starts')).toHaveLength(1);
+});
+
+it('retains the latest recording end across overlapping finals without extending it when an older final completes', async () => {
+  await settings.update({ localModelUnload: 2 });
+  vi.stubEnv('CW_WORKER_DELAY_MS', '100');
+  const first = await start();
+  const second = await start();
+  first.push(pcmBytes(timelineSpeech(1)));
+  second.push(pcmBytes(timelineSpeech(1)));
+  const older = first.finish();
+  now = 1000;
+  const newer = second.finish();
+  now = 120_500;
+  const [text] = await Promise.all([older, newer]);
+  expect(alive(pid(text ?? ''))).toBe(true);
+  now = 121_000;
+  await settings.update({ localModelUnload: 2 });
+  await expect.poll(() => alive(pid(text ?? ''))).toBe(false);
+});
+
+it('warmup cannot renew a deadline established by real dictation', async () => {
+  const text = await dictate();
+  now = 4 * 60_000;
+  await local.warmUp(join(dir, 'models/alpha.gguf'));
+  now = 5 * 60_000;
+  await settings.update({ localModelUnload: 5 });
+  await expect.poll(() => alive(pid(text))).toBe(false);
+});
+
+it('shares one startup failure across queued jobs and retries only on later preparation', async () => {
+  vi.stubEnv('CW_WORKER_LOAD_FAIL', '1');
+  vi.stubEnv('CW_WORKER_LOAD_MS', '100');
+  const first = await start();
+  const second = await start();
+  first.push(pcmBytes(timelineSpeech(1)));
+  second.push(pcmBytes(timelineSpeech(1)));
+  const outcomes = await Promise.allSettled([first.finish(), second.finish()]);
+  expect(outcomes.map((outcome) => outcome.status)).toEqual(['rejected', 'rejected']);
+  expect(await lines('starts')).toHaveLength(1);
+  expect(await lines('calls')).toEqual([]);
+  vi.stubEnv('CW_WORKER_LOAD_FAIL', '0');
+  expect(await dictate()).toMatch(/^\d+:cs:16000$/);
+  expect(await lines('starts')).toHaveLength(2);
 });

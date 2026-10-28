@@ -20,3 +20,5 @@ expect_signature() {
 expect_signature "$app" app.codevo.whisper
 expect_signature "$app/Contents/Resources/bin/$arch/codevo-input-helper" app.codevo.whisper.input-helper
 expect_signature "$app/Contents/Resources/bin/$arch/transcribe-cli" app.codevo.whisper.transcribe-cli
+
+expect_signature "$app/Contents/Resources/bin/$arch/cw-stt-worker" app.codevo.whisper.stt-worker

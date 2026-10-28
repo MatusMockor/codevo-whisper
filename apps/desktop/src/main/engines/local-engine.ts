@@ -30,6 +30,7 @@ type Generation = {
   backend: ReturnType<typeof localBackend>;
   retired: AbortController;
   resident: ResidentTranscriber;
+  startup: Promise<void>;
   dispatcher: TranscriptionDispatcher<LocalContext>;
 };
 type Lease = { released: boolean; revision: number };
@@ -79,19 +80,28 @@ export class LocalEngine implements TranscriptionEngine {
       backend,
       threads: localThreads(),
       timeoutMs: this.deps.callTimeoutMs ?? LOCAL_CALL_TIMEOUT_MS,
+      startupTimeoutMs: this.deps.callTimeoutMs ?? LOCAL_CALL_TIMEOUT_MS,
     });
-    const dispatcher = new TranscriptionDispatcher<LocalContext>({ transcriber: new ResidentSegmentTranscriber(resident), clock: this.clock });
+    const startup = resident.warmUp();
+    const dispatcher = new TranscriptionDispatcher<LocalContext>({ transcriber: new ResidentSegmentTranscriber(resident, startup), clock: this.clock });
     this.anchor ??= this.clock.now();
-    this.generation = { warmed: false, backend, retired: new AbortController(), resident, dispatcher };
-    void resident.warmUp().catch((error: unknown) => consoleLogger.error('Local model could not start', error));
-    return this.generation;
+    const generation: Generation = { warmed: false, backend, retired: new AbortController(), resident, startup, dispatcher };
+    this.generation = generation;
+    void startup.catch((error: unknown) => {
+      if (this.generation !== generation) return;
+      this.clearIdle();
+      this.generation = undefined;
+      this.shutdown = Promise.all([this.shutdown, resident.close()]).then(() => undefined);
+      void this.shutdown.catch((failure: unknown) => consoleLogger.error('Local worker shutdown failed', failure));
+      consoleLogger.error('Local model could not start', error);
+    });
+    return generation;
   }
 
   dispose(): Promise<void> {
     this.disposed = true;
     this.revision += 1;
     this.unsubscribe();
-    this.clearIdle();
     return this.close();
   }
 
@@ -178,7 +188,7 @@ export class LocalEngine implements TranscriptionEngine {
             return new LocalDictation({
               dispatcher: generation.dispatcher,
               clock: this.clock,
-              context: { language: options.language, model },
+              context: { language: options.language },
               options: { ...options, signal: AbortSignal.any([options.signal, generation.retired.signal]) },
               onRecordingEnd: () => {
                 if (lease.revision !== this.revision) return;
@@ -210,6 +220,7 @@ export class LocalEngine implements TranscriptionEngine {
       await this.shutdown;
       if (lease.revision !== this.revision || this.disposed) throw new Error('Warm-up selection changed');
       const generation = this.acquire(modelPath);
+      await generation.startup;
       await generation.resident.transcribe({ pcm: new Uint8Array(PCM_BYTES_PER_SECOND), language: 'en', signal: generation.retired.signal });
       const selectedPath = await this.deps.models.activeModelPath();
       if (lease.revision !== this.revision || generation !== this.generation || selectedPath !== modelPath) {
