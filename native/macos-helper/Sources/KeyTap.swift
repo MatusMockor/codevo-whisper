@@ -193,6 +193,9 @@ final class KeyTap {
 }
 
 private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, userInfo: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
+    if event.getIntegerValueField(.eventSourceUserData) == SyntheticInput.marker {
+        return Unmanaged.passUnretained(event)
+    }
     let keycode = event.getIntegerValueField(.keyboardEventKeycode)
     let flags = event.flags.rawValue
     let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0

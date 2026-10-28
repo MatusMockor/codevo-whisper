@@ -44,7 +44,7 @@ async function protocolService() {
   await processHelper.start();
   const logger = new RecordingLogger();
   const service = new InsertionService(processHelper, settings, new LastTranscript(), () => Promise.resolve(), logger);
-  return { channel, logger, service };
+  return { channel, logger, service, settings, helper: processHelper };
 }
 
 async function prepared(setup: Setup = {}) {
@@ -60,10 +60,172 @@ async function prepared(setup: Setup = {}) {
   };
   const logger = new RecordingLogger();
   const service = new InsertionService(helper, settings, lastTranscript, sleep, logger);
-  return { helper, lastTranscript, sleeps, service, logger };
+  return { helper, lastTranscript, sleeps, service, logger, settings };
 }
 
 describe('InsertionService', () => {
+  it('keeps delivered text but blocks submit when the delivery target is unknown', async () => {
+    const { service, helper } = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' }, helper: { frontmost: null } });
+    expect(await service.insert('dictated', null)).toBe('delivered-submit-blocked');
+    expect(helper.typed).toEqual(['dictated']);
+    expect(helper.submitted).toEqual([]);
+  });
+  it('keeps positively pasted text delivered when clipboard restoration fails before submit', async () => {
+    const { service, helper, logger } = await prepared({ settings: { autoSubmit: 'enter' } });
+    helper.restoreClipboard = () => Promise.reject(new Error('clipboard unavailable'));
+    expect(await service.insert('dictated', TEXT_EDIT)).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(helper.submitted).toEqual(['enter']);
+    expect(logger.errors.map((entry) => entry.message)).toEqual(['The clipboard could not be restored after the paste']);
+  });
+  it('never submits after denied or malformed delivery acknowledgments from the helper process', async () => {
+    const { service, channel, settings, helper } = await protocolService();
+    const target = await helper.frontmost();
+    for (const insertion of ['paste', 'type'] as const) {
+      await settings.update({ insertion, autoSubmit: 'enter' });
+      for (const response of [{ posted: false, reason: 'post-access-denied' }, {}, { posted: 'true' }]) {
+        await channel.request('respond-next', { cmd: insertion === 'type' ? 'type-text' : 'paste', response });
+        expect(await service.insert('dictated', target)).toBe(insertion === 'paste' ? 'copied-paste-failed' : 'failed-type');
+        expect((await channel.request('output-state'))['operations']).toEqual([]);
+      }
+    }
+  });
+  it('does not query a submit target when automatic submit is off during replay', async () => {
+    const { service, helper, lastTranscript } = await prepared();
+    lastTranscript.set('dictated');
+    helper.frontmost = () => Promise.reject(new Error('submit target query must not run'));
+    helper.submit = () => Promise.reject(new Error('submit must not run'));
+    expect(await service.pasteLast()).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(helper.clipboard).toBe('original');
+  });
+  it('keeps submit inside the queue and applies current settings when the next operation begins', async () => {
+    const { service, helper, settings } = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' } });
+    let release = () => {};
+    let entered = () => {};
+    const submitting = new Promise<void>((resolve) => { entered = resolve; });
+    helper.submit = () => new Promise<void>((resolve) => { release = resolve; entered(); });
+    const first = service.insert('first', TEXT_EDIT);
+    await submitting;
+    const second = service.insert('second', TEXT_EDIT);
+    await settings.update({ insertion: 'clipboard', autoSubmit: 'off' });
+    expect(helper.typed).toEqual(['first']);
+    expect(helper.clipboard).toBe('original');
+    release();
+    expect(await first).toBe('typed');
+    expect(await second).toBe('copied-by-setting');
+    expect(helper.typed).toEqual(['first']);
+    expect(helper.clipboard).toBe('second');
+  });
+  it('reports delivered text when the submit query or action fails and never retries it', async () => {
+    for (const failure of ['query', 'submit'] as const) {
+      const { service, helper } = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' } });
+      helper.typeText = (text) => {
+        helper.typed.push(text);
+        if (failure === 'query') helper.focusedElement = () => Promise.reject(new Error('query failed'));
+        return Promise.resolve();
+      };
+      let submits = 0;
+      helper.submit = () => { submits += 1; return Promise.reject(new Error('submit timed out')); };
+      expect(await service.insert('dictated', TEXT_EDIT)).toBe('delivered-submit-failed');
+      expect(helper.typed).toEqual(['dictated']);
+      expect(helper.pasted).toEqual([]);
+      expect(submits).toBe(failure === 'submit' ? 1 : 0);
+      expect(helper.clipboard).toBe('original');
+    }
+  });
+  it('rechecks focus, secure input, editability and every modifier after the paste settling interval', async () => {
+    const mutations: Array<(helper: FakeInputHelper) => void> = [
+      (helper) => { helper.frontmostApp = NOTES; },
+      (helper) => { helper.frontmostApp = { ...TEXT_EDIT, windowId: 2 }; },
+      (helper) => { helper.frontmostApp = null; },
+      (helper) => { helper.secureInputEnabled = true; },
+      (helper) => { helper.editable = false; },
+      (helper) => { helper.editable = null; },
+      ...(['control', 'command', 'option', 'shift'] as const).map((key) => (helper: FakeInputHelper) => { helper.modifiers[key] = true; }),
+      (helper) => { helper.focusedElement = () => { helper.frontmostApp = NOTES; return Promise.resolve({ editable: true, role: 'AXTextArea' }); }; },
+    ];
+    for (const mutate of mutations) {
+      const { service, helper, sleeps } = await prepared({ settings: { autoSubmit: 'enter' }, onSleep: (_ms, fake) => mutate(fake) });
+      expect(await service.insert('dictated', TEXT_EDIT)).toBe('delivered-submit-blocked');
+      expect(helper.pasted).toEqual(['dictated']);
+      expect(helper.submitted).toEqual([]);
+      expect(helper.clipboard).toBe('original');
+      expect(sleeps).toEqual([500]);
+    }
+  });
+  it('never types or submits blocked, empty, copy-only, fallback or failed clipboard deliveries', async () => {
+    const cases: Array<{ setup: Setup; text: string; outcome: string }> = [
+      { setup: { helper: { frontmost: NOTES } }, text: 'dictated', outcome: 'blocked-focus-changed' },
+      { setup: { helper: { secureInput: true } }, text: 'dictated', outcome: 'blocked-secure-input' },
+      { setup: { helper: { editable: false } }, text: 'dictated', outcome: 'copied-no-text-field' },
+      { setup: {}, text: '  ', outcome: 'nothing-to-insert' },
+      { setup: { settings: { insertion: 'clipboard' } }, text: 'dictated', outcome: 'copied-by-setting' },
+      { setup: { helper: { clipboardWriteFails: true }, settings: { clipboardPolicy: 'leave' } }, text: 'dictated', outcome: 'failed-clipboard-write' },
+    ];
+    for (const { setup, text, outcome } of cases) {
+      const { service, helper } = await prepared({ ...setup, settings: { insertion: 'type', autoSubmit: 'enter', ...setup.settings } });
+      expect(await service.insert(text, TEXT_EDIT)).toBe(outcome);
+      expect(helper.typed).toEqual([]);
+      expect(helper.pasted).toEqual([]);
+      expect(helper.submitted).toEqual([]);
+      if (outcome === 'failed-clipboard-write') expect(helper.clipboard).toBe('original');
+    }
+  });
+  it('keeps delivery, clipboard policy and submit from a single snapshot until the next operation', async () => {
+    const { service, helper, settings } = await prepared();
+    helper.secureInput = async () => {
+      await settings.update({ insertion: 'type', clipboardPolicy: 'leave', autoSubmit: 'enter' });
+      return false;
+    };
+    expect(await service.insert('first', TEXT_EDIT)).toBe('pasted');
+    expect(helper.clipboard).toBe('original');
+    expect(helper.submitted).toEqual([]);
+    expect(await service.insert('second', TEXT_EDIT)).toBe('typed');
+    expect(helper.clipboard).toBe('second');
+    expect(helper.pasted).toEqual(['first']);
+    expect(helper.typed).toEqual(['second']);
+    expect(helper.submitted).toEqual(['enter']);
+  });
+  it('submits only after positive direct text delivery with a neutral keyboard', async () => {
+    const { service, helper } = await prepared({ settings: { insertion: 'type', autoSubmit: 'primary-enter' } });
+    helper.submit = (mode) => {
+      expect(helper.typed).toEqual(['Žilina 🚀 ']);
+      helper.submitted.push(mode);
+      return Promise.resolve();
+    };
+    expect(await service.insert('Žilina 🚀', TEXT_EDIT, { appendTrailingSpace: true })).toBe('typed');
+    expect(helper.submitted).toEqual(['primary-enter']);
+  });
+  it('reports copied fallback separately when typing fails and never retries or pastes', async () => {
+    for (const clipboardPolicy of ['restore', 'leave'] as const) {
+      const { service, helper } = await prepared({ settings: { insertion: 'type', clipboardPolicy } });
+      let attempts = 0;
+      helper.typeText = () => { attempts += 1; return Promise.reject(new Error('permission denied')); };
+      expect(await service.insert('dictated', TEXT_EDIT)).toBe(clipboardPolicy === 'leave' ? 'copied-type-failed' : 'failed-type');
+      expect(helper.clipboard).toBe(clipboardPolicy === 'leave' ? 'dictated' : 'original');
+      expect(attempts).toBe(1);
+      expect(helper.pasted).toEqual([]);
+    }
+  });
+  it('leaves the transcript on the clipboard for either delivery method when requested', async () => {
+    for (const insertion of ['paste', 'type'] as const) {
+      const { service, helper } = await prepared({ settings: { insertion, clipboardPolicy: 'leave' } });
+      expect(await service.insert('Žilina 🚀', TEXT_EDIT)).toBe(insertion === 'type' ? 'typed' : 'pasted');
+      expect(helper.clipboard).toBe('Žilina 🚀');
+    }
+  });
+  it('types exact Unicode and suffix without touching the clipboard under restore', async () => {
+    const { service, helper, sleeps, lastTranscript } = await prepared({ settings: { insertion: 'type' } });
+    helper.saveClipboard = () => Promise.reject(new Error('clipboard must stay untouched'));
+    expect(await service.insert(' Žilina é 🚀 ', TEXT_EDIT, { appendTrailingSpace: true })).toBe('typed');
+    lastTranscript.set('Žilina é 🚀', { appendTrailingSpace: true });
+    expect(await service.pasteLast()).toBe('typed');
+    expect(helper.typed).toEqual(['Žilina é 🚀 ', 'Žilina é 🚀 ']);
+    expect(helper.clipboard).toBe('original');
+    expect(helper.pasted).toEqual([]);
+    expect(sleeps).toEqual([]);
+  });
   it('delivers a safe explicit suffix and replays the stored bytes on copy and paste', async () => {
     const { service, helper, lastTranscript } = await prepared();
     expect(await service.insert(' Žilina\n\u001b[201~  ', TEXT_EDIT, { appendTrailingSpace: true })).toBe('pasted');

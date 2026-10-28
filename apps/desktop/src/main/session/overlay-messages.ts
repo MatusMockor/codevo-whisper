@@ -85,6 +85,11 @@ const COPIED: OverlayState = { kind: 'copied' };
 
 const INSERTION_STATES: Readonly<Record<InsertionOutcome, (appName: string) => OverlayState>> = {
   pasted: (appName) => ({ kind: 'inserted', appName }),
+  typed: (appName) => ({ kind: 'inserted', appName }),
+  'delivered-submit-blocked': () => errorState('Text bol vložený. Automatické odoslanie bolo zablokované. Odošlite ho ručne.'),
+  'delivered-submit-failed': () => errorState('Text bol vložený. Odoslanie sa nepodarilo potvrdiť. Skontrolujte aplikáciu pred opakovaním.'),
+  'copied-type-failed': () => errorState('Písanie sa nedokončilo. Text je v schránke. Skontrolujte vložený text pred opakovaním.'),
+  'failed-type': () => errorState('Písanie sa nedokončilo. Skontrolujte vložený text pred opakovaním.'),
   'copied-no-text-field': () => COPIED,
   'copied-by-setting': () => COPIED,
   'copied-paste-failed': () => COPIED,

@@ -2,11 +2,13 @@ import { expect, test, type ElectronApplication, type Locator, type Page } from 
 import { appWindows } from './app-windows';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
+import type { LastTranscript } from '../src/main/insertion/last-transcript';
 import type { HotkeyRecordResult } from '../src/shared/hotkey-record';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
-type FakeHelperGlobal = { codevoE2e: { helper: { recordedHotkey: HotkeyRecordResult } } };
+type FakeHelperGlobal = { codevoE2e: { helper: FakeInputHelper; lastTranscript: Pick<LastTranscript, 'set'> } };
 
 const DEFAULTS: Settings = {
   customWords: [],
@@ -176,6 +178,85 @@ function setRecordedHotkey(result: HotkeyRecordResult): Promise<void> {
 }
 
 test.describe('settings page', () => {
+  test('fake-helper replay types saved Unicode and suffix with current output preferences', async () => {
+    await app.evaluate(() => {
+      const { helper, lastTranscript } = (globalThis as unknown as FakeHelperGlobal).codevoE2e;
+      helper.clipboard = 'original';
+      lastTranscript.set(' Žilina é 🚀 ', { appendTrailingSpace: true });
+    });
+    await page.evaluate(() => window.codevo.updateSettings({ insertion: 'type', clipboardPolicy: 'restore', autoSubmit: 'enter', appendTrailingSpace: false }));
+    const replay = () => app.evaluate(() => { (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.pressPasteLast(); });
+    const output = () => app.evaluate(() => {
+      const helper = (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper;
+      return { typed: helper.typed, pasted: helper.pasted, submitted: helper.submitted, clipboard: helper.clipboard };
+    });
+    await replay();
+    await expect.poll(output).toEqual({ typed: ['Žilina é 🚀 '], pasted: [], submitted: ['enter'], clipboard: 'original' });
+    await page.evaluate(() => window.codevo.updateSettings({ clipboardPolicy: 'leave', autoSubmit: 'off' }));
+    await replay();
+    await expect.poll(output).toEqual({ typed: ['Žilina é 🚀 ', 'Žilina é 🚀 '], pasted: [], submitted: ['enter'], clipboard: 'Žilina é 🚀 ' });
+    await page.evaluate(() => window.codevo.updateSettings({ insertion: 'clipboard', autoSubmit: 'primary-enter' }));
+    await app.evaluate(() => { (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.clipboard = 'changed'; });
+    await replay();
+    await expect.poll(output).toEqual({ typed: ['Žilina é 🚀 ', 'Žilina é 🚀 '], pasted: [], submitted: ['enter'], clipboard: 'Žilina é 🚀 ' });
+    await page.getByRole('tab', { name: 'Domov' }).click();
+    await page.locator('.last').getByRole('button', { name: 'Kopírovať', exact: true }).click();
+    await expect(page.locator('.last').getByRole('button', { name: 'Skopírované' })).toBeVisible();
+    expect(await output()).toEqual({ typed: ['Žilina é 🚀 ', 'Žilina é 🚀 '], pasted: [], submitted: ['enter'], clipboard: 'Žilina é 🚀 ' });
+  });
+  test('output settings reject invalid IPC values and retain defaults after a save error', async () => {
+    const original = await page.evaluate(() => window.codevo.getSettings());
+    for (const patch of [{ insertion: 'typing' }, { clipboardPolicy: 'clear' }, { autoSubmit: 'cmd-enter' }, { autoSubmit: true }]) {
+      const error = await page.evaluate(async (invalid) => {
+        try {
+          await window.codevo.updateSettings(JSON.parse(JSON.stringify(invalid)) as Partial<Settings>);
+          return 'accepted';
+        } catch (failure) {
+          return String(failure);
+        }
+      }, patch);
+      expect(error).toContain('IpcValidationError');
+    }
+    expect(await page.evaluate(() => window.codevo.getSettings())).toEqual(original);
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:update');
+      ipcMain.handle('settings:update', () => Promise.reject(new Error('disk full')));
+    });
+    await page.getByRole('combobox', { name: 'Automatické odoslanie', exact: true }).selectOption('enter');
+    await expect(page.getByRole('alert').filter({ hasText: 'Zmenu sa nepodarilo uložiť.' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Automatické odoslanie', exact: true })).toHaveValue('off');
+    expect(await page.evaluate(() => window.codevo.getSettings())).toEqual(original);
+  });
+  test('output controls preserve defaults, keyboard choices and disabled values across relaunch', async () => {
+    const policy = page.getByRole('combobox', { name: 'Schránka', exact: true });
+    const submit = page.getByRole('combobox', { name: 'Automatické odoslanie', exact: true });
+    await expect(page.getByRole('radio', { name: 'Vložiť do aktívnej aplikácie' })).toBeChecked();
+    await expect(policy).toHaveValue('restore');
+    await expect(submit).toHaveValue('off');
+    await page.getByRole('radio', { name: 'Priame písanie' }).focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('radio', { name: 'Priame písanie' })).toBeChecked();
+    await policy.selectOption('leave');
+    await submit.selectOption('primary-enter');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ insertion: 'type', clipboardPolicy: 'leave', autoSubmit: 'primary-enter' });
+    await page.screenshot({ path: test.info().outputPath('output-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 760, height: 780 });
+    await policy.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath('output-760.png'), fullPage: true });
+    await page.getByRole('radio', { name: 'Iba skopírovať do schránky' }).click();
+    await expect(page.getByRole('radio', { name: 'Iba skopírovať do schránky' })).toBeChecked();
+    await expect(policy).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    await expect(policy).toHaveValue('leave');
+    await expect(submit).toHaveValue('primary-enter');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.insertion))).toBe('clipboard');
+    await app.close();
+    await start();
+    await openSettings();
+    await expect(page.getByRole('radio', { name: 'Iba skopírovať do schránky' })).toBeChecked();
+    await expect(page.getByRole('combobox', { name: 'Schránka', exact: true })).toHaveValue('leave');
+    await expect(page.getByRole('combobox', { name: 'Automatické odoslanie', exact: true })).toHaveValue('primary-enter');
+  });
   test.beforeEach(async () => {
     userDataDir = await createUserDataDir(ONBOARDED);
     await start();

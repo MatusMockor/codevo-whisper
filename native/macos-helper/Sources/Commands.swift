@@ -28,6 +28,13 @@ final class Commands {
             return pasteboard.write(text: args["text"] as? String ?? "")
         case "clipboard-restore":
             return pasteboard.restore(expectedText: args["expectedText"] as? String, force: args["force"] as? Bool ?? false)
+        case "type-text":
+            guard let text = args["text"] as? String else {
+                return ["posted": false, "reason": "invalid-text"]
+            }
+            return Typing.typeText(text)
+        case "submit":
+            return Submit.send(args["mode"] as? String ?? "")
         case "paste":
             return Paste.commandV()
         case "listen-start":

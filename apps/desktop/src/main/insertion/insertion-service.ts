@@ -1,3 +1,4 @@
+import type { Settings } from '../../shared/settings';
 import type { AppTarget, InputHelper } from '../helper/input-helper';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -10,6 +11,11 @@ import { SerialQueue } from './serial-queue';
 
 export type InsertionOutcome =
   | 'pasted'
+  | 'typed'
+  | 'delivered-submit-blocked'
+  | 'delivered-submit-failed'
+  | 'failed-type'
+  | 'copied-type-failed'
   | 'copied-no-text-field'
   | 'copied-by-setting'
   | 'copied-paste-failed'
@@ -22,6 +28,8 @@ export type InsertionOutcome =
 export type PasteLastOutcome = InsertionOutcome | 'no-transcript';
 
 export type CopyLastOutcome = 'copied' | 'no-transcript' | 'failed-clipboard-write';
+
+type OutputSettings = Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubmit'>;
 
 type CopyOutcome = 'copied-no-text-field' | 'copied-by-setting';
 
@@ -53,30 +61,33 @@ export class InsertionService {
   }
 
   private async insertInto(text: string, target: AppTarget | null): Promise<InsertionOutcome> {
+    const output = this.settings.get();
     if (text === '') {
       return 'nothing-to-insert';
     }
-    if (this.copiesBySetting()) {
+    if (output.insertion === 'clipboard') {
       return this.copy(text, 'copied-by-setting');
     }
     if (!isSameTarget(target, await this.helper.frontmost())) {
       return 'blocked-focus-changed';
     }
-    return this.deliver(text);
+    return this.deliver(text, target, output);
   }
 
   private async pasteLastTranscript(): Promise<PasteLastOutcome> {
+    const output = this.settings.get();
     const text = this.lastTranscript.get();
     if (!text) {
       return 'no-transcript';
     }
-    if (this.copiesBySetting()) {
+    if (output.insertion === 'clipboard') {
       return this.copy(text, 'copied-by-setting');
     }
     if (!(await waitForShortcutRelease(this.helper, this.sleep))) {
       return 'blocked-modifiers-held';
     }
-    return this.deliver(text);
+    const target = output.autoSubmit === 'off' ? null : await this.helper.frontmost();
+    return this.deliver(text, target, output);
   }
 
   private async copyLastTranscript(): Promise<CopyLastOutcome> {
@@ -90,7 +101,7 @@ export class InsertionService {
     return 'copied';
   }
 
-  private async deliver(text: string): Promise<InsertionOutcome> {
+  private async deliver(text: string, target: AppTarget | null, output: OutputSettings): Promise<InsertionOutcome> {
     if (await this.helper.secureInput()) {
       return 'blocked-secure-input';
     }
@@ -98,7 +109,20 @@ export class InsertionService {
     if (element.editable === false) {
       return this.copy(text, 'copied-no-text-field');
     }
-    return this.paste(text);
+    if (output.insertion === 'type') {
+      if (output.clipboardPolicy === 'leave' && !(await this.writeClipboard(text))) {
+        return 'failed-clipboard-write';
+      }
+      try {
+        await this.helper.typeText(text);
+        return this.submitAfterDelivery('typed', target, output);
+      } catch (error) {
+        this.logger.error('Direct typing failed; text may have been partially delivered', error);
+        return output.clipboardPolicy === 'leave' ? 'copied-type-failed' : 'failed-type';
+      }
+    }
+    const outcome = await this.paste(text, output);
+    return outcome === 'pasted' ? this.submitAfterDelivery(outcome, target, output) : outcome;
   }
 
   private async copy(text: string, outcome: CopyOutcome): Promise<InsertionOutcome> {
@@ -108,7 +132,7 @@ export class InsertionService {
     return outcome;
   }
 
-  private async paste(text: string): Promise<InsertionOutcome> {
+  private async paste(text: string, output: OutputSettings): Promise<InsertionOutcome> {
     if (!(await this.writeClipboard(text))) {
       return 'failed-clipboard-write';
     }
@@ -119,17 +143,32 @@ export class InsertionService {
       return 'copied-paste-failed';
     }
     await this.sleep(RESTORE_DELAY_MS);
-    await this.helper.restoreClipboard(text).catch((error: unknown) => {
-      this.logger.error('The clipboard could not be restored after the paste', error);
-    });
+    if (output.clipboardPolicy === 'restore') {
+      await this.helper.restoreClipboard(text).catch((error: unknown) => {
+        this.logger.error('The clipboard could not be restored after the paste', error);
+      });
+    }
     return 'pasted';
+  }
+
+  private async submitAfterDelivery(delivered: 'typed' | 'pasted', target: AppTarget | null, output: OutputSettings): Promise<InsertionOutcome> {
+    if (output.autoSubmit === 'off') return delivered;
+    try {
+      if (target === null || !isSameTarget(target, await this.helper.frontmost())) return 'delivered-submit-blocked';
+      if (await this.helper.secureInput()) return 'delivered-submit-blocked';
+      if ((await this.helper.focusedElement()).editable !== true) return 'delivered-submit-blocked';
+      const flags = await this.helper.modifierFlags();
+      if (flags.control || flags.command || flags.option || flags.shift) return 'delivered-submit-blocked';
+      if (!isSameTarget(target, await this.helper.frontmost())) return 'delivered-submit-blocked';
+      await this.helper.submit(output.autoSubmit);
+      return delivered;
+    } catch (error) {
+      this.logger.error('Text was delivered but automatic submit could not be confirmed', error);
+      return 'delivered-submit-failed';
+    }
   }
 
   private writeClipboard(text: string): Promise<boolean> {
     return writeClipboardOrRestore(this.helper, text, this.logger);
-  }
-
-  private copiesBySetting(): boolean {
-    return this.settings.get().insertion === 'clipboard';
   }
 }

@@ -22,6 +22,30 @@ async function started(timeoutMs?: number): Promise<{ channel: HelperProcess; he
 }
 
 describe('HelperProcessInputHelper', () => {
+  it('requires positive posting acknowledgments for every text and submit command', async () => {
+    const { channel, helper } = await started();
+    for (const response of [{ posted: false, reason: 'post-access-denied' }, {}, { posted: 'true' }]) {
+      for (const cmd of ['paste', 'type-text', 'submit']) {
+        await channel.request('respond-next', { cmd, response });
+        const operation = cmd === 'paste' ? helper.paste() : cmd === 'type-text' ? helper.typeText('🚀 ') : helper.submit('enter');
+        await expect(operation).rejects.toThrow();
+      }
+    }
+  });
+  it('lets direct typing finish beyond the ordinary helper request deadline without retry', async () => {
+    const { channel, helper } = await started(100);
+    await channel.request('respond-next', { cmd: 'type-text', response: { posted: true }, delayMs: 250 });
+    await expect(helper.typeText('🚀 '.repeat(10000))).resolves.toBeUndefined();
+  });
+  it('preserves long Unicode text and suffix through the real process protocol before submit', async () => {
+    const { channel, helper } = await started();
+    const text = 'Žilina é 🚀 '.repeat(10000);
+    await helper.typeText(text);
+    await helper.submit('primary-enter');
+    expect((await channel.request('output-state'))['operations']).toEqual([
+      { cmd: 'type-text', text }, { cmd: 'submit', mode: 'primary-enter' },
+    ]);
+  });
   it('maps helper responses to typed results', async () => {
     const { helper } = await started();
 
