@@ -1,14 +1,14 @@
 import type { TranscribeBackend } from '@codevo-whisper/stt-runner';
+import type { LocalAcceleration } from '../../shared/settings';
 import { availableParallelism } from 'node:os';
 
 const MAX_THREADS = 4;
 
 export type LocalEngineArch = 'arm64' | 'x64';
 
-const BACKEND_BY_ARCH: Record<LocalEngineArch, TranscribeBackend> = { arm64: 'metal', x64: 'cpu' };
-
-export function localBackend(arch: LocalEngineArch): TranscribeBackend {
-  return BACKEND_BY_ARCH[arch];
+export function localBackend(arch: LocalEngineArch, acceleration: LocalAcceleration = 'auto', platform: NodeJS.Platform = process.platform): TranscribeBackend {
+  if (platform !== 'darwin' || acceleration === 'cpu') return 'cpu';
+  return acceleration === 'gpu' || arch === 'arm64' ? 'metal' : 'cpu';
 }
 
 export function localThreads(): number {

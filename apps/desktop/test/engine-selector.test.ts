@@ -12,13 +12,14 @@ import { ServerConnector } from '../src/main/remote/server-connector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
-import { FAKE_CLI } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FAKE_WORKER } from './support/resident-fixture';
 import { stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { startTestGateway, type TestGateway } from './support/gateway';
 
 const MODEL_BODY = 'GGUF';
 
+const locals: LocalEngine[] = [];
 let scratch: string;
 let settings: SettingsStore;
 let gateway: TestGateway | null = null;
@@ -34,6 +35,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await gateway?.close();
   gateway = null;
+  await Promise.all(locals.splice(0).map((local) => local.dispose()));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
 });
@@ -46,7 +48,9 @@ async function localEngine(withModel: boolean): Promise<LocalEngine> {
     await settings.update({ localModelId: 'tiny' });
   }
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve() });
-  return new LocalEngine({ binary: FAKE_CLI, models, settings, arch: 'arm64' });
+  const local = new LocalEngine({ binary: FAKE_WORKER, models, settings, arch: 'arm64' });
+  locals.push(local);
+  return local;
 }
 
 describe('EngineSelector', () => {

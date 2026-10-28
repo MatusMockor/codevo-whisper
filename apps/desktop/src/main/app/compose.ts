@@ -190,6 +190,7 @@ export function composeApplication(logger: Logger): Application {
       () => home.dispose(),
       () => settingsServices.dispose(),
       () => server.dispose(),
+      () => { void models.dispose().catch((error: unknown) => logger.error('Local model shutdown failed', error)); },
       () => updates.dispose(),
       prewarmWhenShown(mainWindow, captureWindow),
     );

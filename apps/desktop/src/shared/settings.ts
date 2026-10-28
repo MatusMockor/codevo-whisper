@@ -28,6 +28,10 @@ export function isEngineOrder(value: unknown): value is Array<EngineId> {
 
 export type InsertionMode = 'paste' | 'clipboard';
 
+export type LocalAcceleration = 'auto' | 'gpu' | 'cpu';
+
+export type LocalModelUnload = 'never' | 'immediately' | 2 | 5 | 10 | 15 | 60;
+
 export type OverlayMode = 'indicator' | 'live';
 
 export type Settings = {
@@ -37,6 +41,8 @@ export type Settings = {
   microphone: MicrophoneSetting;
   engineOrder: Array<EngineId>;
   localModelId: string | null;
+  localAcceleration: LocalAcceleration;
+  localModelUnload: LocalModelUnload;
   insertion: InsertionMode;
   overlay: OverlayMode;
   launchAtLogin: boolean;
@@ -50,6 +56,8 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   microphone: Object.freeze({ deviceId: null, label: null }),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,
   localModelId: null,
+  localAcceleration: 'auto',
+  localModelUnload: 5,
   insertion: 'paste',
   overlay: 'indicator',
   launchAtLogin: false,

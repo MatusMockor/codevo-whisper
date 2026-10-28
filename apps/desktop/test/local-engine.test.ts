@@ -10,13 +10,13 @@ import { loadCatalog } from '../src/main/models/model-catalog';
 import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
-import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
 import { sha256Of, testEntry } from './model-fixtures';
 import { expectedText, joinSamples, pcmBytes, timelineSilence, timelineSpeech, writeTimeline } from './support/timeline-audio';
 import type { Language } from '../src/shared/settings';
 
 const MODEL_BODY = 'GGUF';
-const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/fake-timeline-cli.js', import.meta.url));
+const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 const BUNDLED_CATALOG = fileURLToPath(new URL('../resources/model-catalog.json', import.meta.url));
 
 let scratch: string;
@@ -24,6 +24,7 @@ let argsFile: string;
 let modelsDir: string;
 let modelFile: string;
 let settings: SettingsStore;
+const engines: LocalEngine[] = [];
 
 function secondStampedPcm(totalSeconds: number): Uint8Array {
   const pcm = new Uint8Array(totalSeconds * PCM_BYTES_PER_SECOND);
@@ -39,7 +40,9 @@ function models(catalog: CatalogEntry[] = [testEntry('alpha', MODEL_BODY)]): Mod
 }
 
 function engine(overrides: Partial<ConstructorParameters<typeof LocalEngine>[0]> = {}): LocalEngine {
-  return new LocalEngine({ binary: FAKE_CLI, models: models(), settings, arch: 'arm64', ...overrides });
+  const local = new LocalEngine({ binary: FAKE_WORKER, models: models(), settings, arch: 'arm64', platform: 'darwin', ...overrides });
+  engines.push(local);
+  return local;
 }
 
 async function activateBundled(id: string): Promise<ModelManager> {
@@ -87,6 +90,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await Promise.all(engines.splice(0).map((local) => local.dispose()));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
 });
@@ -184,6 +188,13 @@ describe('LocalEngine', () => {
     await settings.update({ localModelId: null });
 
     await expect(engine().prepare()).resolves.toEqual({ ready: false, reason: 'no-model' });
+  });
+
+  it('applies the desktop call timeout while the resident is still loading', async () => {
+    vi.stubEnv('CW_WORKER_LOAD_MS', '400');
+    const startedAt = performance.now();
+    await expect(dictate(engine({ callTimeoutMs: 100 }), secondStampedPcm(1), 'sk')).rejects.toMatchObject({ reason: 'engine-failed' });
+    expect(performance.now() - startedAt).toBeLessThan(350);
   });
 
   it('stops on abort', async () => {

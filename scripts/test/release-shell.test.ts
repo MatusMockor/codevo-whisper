@@ -136,6 +136,7 @@ describe.runIf(hasClang)('verify-binaries.sh', () => {
     const appPath = app('arm64');
     binary('codevo-input-helper', 'arm64', '13.0');
     binary('transcribe-cli', 'arm64', '12.0');
+    binary('cw-stt-worker', 'arm64', '13.0');
 
     expect(verify(appPath, 'arm64').status).toBe(0);
   });

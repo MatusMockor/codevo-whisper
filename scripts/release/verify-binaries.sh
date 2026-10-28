@@ -32,7 +32,7 @@ check_binary() {
 }
 
 failed=0
-for required in codevo-input-helper transcribe-cli; do
+for required in codevo-input-helper transcribe-cli cw-stt-worker; do
   [ -f "$bin/$required" ] || { echo "$required: missing in $bin" >&2; failed=1; }
 done
 

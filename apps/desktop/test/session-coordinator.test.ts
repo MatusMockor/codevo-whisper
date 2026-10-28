@@ -1,5 +1,5 @@
 import type { Clock } from '@codevo-whisper/audio';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
-import { FAKE_CLI, readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
+import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
 import { FakeCaptureHost } from './fake-capture-host';
 import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
@@ -33,12 +33,13 @@ const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
-const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/fake-timeline-cli.js', import.meta.url));
+const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
+const locals: LocalEngine[] = [];
 let scratch: string;
 let argsFile: string;
 let coordinator: SessionCoordinator | null = null;
@@ -47,15 +48,22 @@ beforeEach(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'cw-session-'));
   argsFile = join(scratch, 'args.txt');
   vi.stubEnv('FAKE_CLI_ARGS_FILE', argsFile);
-  vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
+  await setWorkerMode('echo-chunk');
 });
 
 afterEach(async () => {
   coordinator?.dispose();
   coordinator = null;
+  await Promise.all(locals.splice(0).map((local) => local.dispose()));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
 });
+
+async function setWorkerMode(mode: string): Promise<void> {
+  vi.stubEnv('FAKE_CLI_MODE', mode);
+  vi.stubEnv('CW_WORKER_CONTROL', join(scratch, 'worker-mode'));
+  await writeFile(join(scratch, 'worker-mode'), mode);
+}
 
 async function prepared(setup: Setup = {}) {
   const logger = new RecordingLogger();
@@ -67,8 +75,9 @@ async function prepared(setup: Setup = {}) {
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
   const engineClock = setup.engineClock === undefined ? {} : { clock: setup.engineClock };
-  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_CLI, models, settings, arch: 'arm64', ...engineClock });
-  const helper = new FakeInputHelper({ clipboard: 'original', ...setup.helper });
+  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_WORKER, models, settings, arch: 'arm64', ...engineClock });
+  locals.push(engine);
+  const helper = setup.inputHelper ?? new FakeInputHelper({ clipboard: 'original', ...setup.helper });
   const power = new FakePowerEvents();
   const hotkey = new HotkeyService(helper, settings, power, setup.clock ?? (() => Date.now()), logger);
   await hotkey.start();
@@ -208,6 +217,60 @@ describe('SessionCoordinator', () => {
     const secondProcessing = harness.states.findIndex((state, index) => index > secondStart && state.kind === 'processing');
     expect(harness.states.slice(secondStart, secondProcessing).every((state) => state.kind === 'recording')).toBe(true);
     expect(kinds(harness.states.slice(secondProcessing))).toEqual(['processing', 'inserted']);
+  });
+
+  it('anchors each recording end before waiting for the previous insertion pipeline', async () => {
+    const pasteGate = Promise.withResolvers<void>();
+    const pasteEntered = Promise.withResolvers<void>();
+    class BlockedPasteHelper extends FakeInputHelper {
+      override async paste(): Promise<void> {
+        pasteEntered.resolve();
+        await pasteGate.promise;
+        await super.paste();
+      }
+    }
+    vi.stubEnv('CW_WORKER_STARTS', join(scratch, 'starts'));
+    let now = 0;
+    const harness = await prepared({ inputHelper: new BlockedPasteHelper(), engineClock: { now: () => now }, settings: { localModelUnload: 2 } });
+    await dictate(harness, 7);
+    await pasteEntered.promise;
+    now = 1000;
+    await dictate(harness, 9);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(2);
+    expect(harness.helper.pasted).toEqual([]);
+    now = 3 * 60_000;
+    await harness.settings.update({ localModelUnload: 2 });
+    pasteGate.resolve();
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7), ONE_SECOND_TEXT(9)]);
+    const rows = (await readFile(join(scratch, 'starts'), 'utf8')).trim().split('\n');
+    const worker = JSON.parse(rows[0] ?? '{}') as { pid: number };
+    await expect.poll(() => {
+      try { process.kill(worker.pid, 0); return true; } catch { return false; }
+    }).toBe(false);
+  });
+
+  it('does not store or count an already transcribed session cancelled while insertion is queued', async () => {
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    class BlockedPasteHelper extends FakeInputHelper {
+      override async paste(): Promise<void> {
+        entered.resolve();
+        await gate.promise;
+        await super.paste();
+      }
+    }
+    const harness = await prepared({ inputHelper: new BlockedPasteHelper() });
+    await dictate(harness, 7);
+    await entered.promise;
+    await dictate(harness, 9);
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(2);
+    await expect.poll(() => harness.capture.recording).toBe(false);
+    harness.coordinator.dispose();
+    gate.resolve();
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.coordinator.isDictating()).toBe(false);
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
+    expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
   });
 
   it('blocked insertion keeps the text as last transcript', async () => {
@@ -354,7 +417,7 @@ describe('SessionCoordinator', () => {
     harness.helper.pressKey('up', FN.keycode);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
 
-    vi.stubEnv('FAKE_CLI_MODE', 'fail');
+    await setWorkerMode('fail');
     await dictate(harness, 3);
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
@@ -369,12 +432,12 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.capture.recording).toBe(true);
     harness.helper.pressKey('up', FN.keycode);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
-    vi.stubEnv('FAKE_CLI_MODE', 'fail');
+    await setWorkerMode('fail');
     await dictate(harness, 3);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
     expect(await harness.stats.days()).toEqual([]);
 
-    vi.stubEnv('FAKE_CLI_MODE', 'echo-chunk');
+    await setWorkerMode('echo-chunk');
     await dictate(harness, 7);
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     const today = localDate(new Date());
@@ -388,7 +451,7 @@ describe('SessionCoordinator', () => {
   });
 
   it('does not record punctuation-only text as a dictation', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    await setWorkerMode('text');
     vi.stubEnv('FAKE_CLI_TEXT', '- …');
     const harness = await prepared();
 
@@ -401,7 +464,7 @@ describe('SessionCoordinator', () => {
   });
 
   it('inserts, stores and counts only the sanitized transcript', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    await setWorkerMode('text');
     vi.stubEnv('FAKE_CLI_TEXT', 'ahoj\n\u001b[201~svet\u202e\u200b');
     const harness = await prepared();
 
@@ -413,7 +476,7 @@ describe('SessionCoordinator', () => {
   });
 
   it('treats a transcript with only control and invisible characters as silence', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'text');
+    await setWorkerMode('text');
     vi.stubEnv('FAKE_CLI_TEXT', '\u001b\u200b\u202e\u0007\u2028');
     const harness = await prepared();
 
@@ -580,7 +643,7 @@ describe('SessionCoordinator', () => {
   });
 
   it('dispose aborts a running transcription and inserts nothing', async () => {
-    vi.stubEnv('FAKE_CLI_MODE', 'hang');
+    await setWorkerMode('hang');
     const harness = await prepared();
 
     await dictate(harness, 3);
