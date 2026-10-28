@@ -41,7 +41,8 @@ enum Server {
             if let value = pair.value as? String { result[pair.key] = value; return }
             if let value = pair.value as? Bool { result[pair.key] = value; return }
             if let value = pair.value as? Int { result[pair.key] = value; return }
-            if let value = pair.value as? [Int] { result[pair.key] = value }
+            if let value = pair.value as? [Int] { result[pair.key] = value; return }
+            if let value = pair.value as? [String] { result[pair.key] = value }
         }
     }
 }

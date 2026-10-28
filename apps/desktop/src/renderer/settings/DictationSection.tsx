@@ -49,7 +49,7 @@ function LanguageSelect({ language, activeModel }: { language: Language; activeM
 export function DictationSection({ settings, activeModel }: { settings: Settings; activeModel: ModelInfo | null }) {
   return (
     <SettingsGroup title="Diktovanie">
-      <SettingsRow title="Klávesová skratka" titleId="set-hotkey" description="Odporúčame pravý ⌃ Control alebo Fn, nekolidujú s inými skratkami.">
+      <SettingsRow title="Klávesová skratka" titleId="set-hotkey" description="Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.">
         <HotkeyRecorder hotkey={settings.hotkey} labelledBy="set-hotkey" onRecorded={(hotkey) => saveSettings({ hotkey })} />
       </SettingsRow>
       <SettingsRow title="Režim" description={MODE_DESCRIPTIONS[settings.mode]}>

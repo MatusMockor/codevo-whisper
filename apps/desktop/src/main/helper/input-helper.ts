@@ -1,12 +1,11 @@
+import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+
 export type AppTarget = { bundleId: string; pid: number; name: string; windowId: number | null };
 
 export type Permissions = { listen: boolean; post: boolean; accessibility: boolean };
 
 export type PermissionKind = 'listen' | 'accessibility';
-
-export type KeyPhase = 'down' | 'up';
-
-export type KeyEvent = { phase: KeyPhase; keycode: number; ts: number };
 
 export type FocusedElement = { editable: boolean | null; role: string | null };
 
@@ -30,9 +29,9 @@ export interface InputHelper {
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;
   paste(): Promise<void>;
-  listen(keycodes: number[]): Promise<void>;
-  recordKey(timeoutMs: number): Promise<number | null>;
-  onKey(listener: (event: KeyEvent) => void): () => void;
+  listen(binding: HotkeyBinding | null): Promise<void>;
+  recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult>;
+  onHotkey(listener: (event: HotkeyEvent) => void): () => void;
   onShortcut(listener: (name: ShortcutName) => void): () => void;
   onInputLost(listener: (reason: InputLostReason) => void): () => void;
 }

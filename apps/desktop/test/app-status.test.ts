@@ -14,7 +14,7 @@ import type { AppStatus } from '../src/shared/app-status';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 
-const FN = { keycode: 63, label: 'Fn / 🌐' } as const;
+const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 
 let scratch: string;

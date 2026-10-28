@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HelperProcess } from '../src/main/helper/helper-process';
 import { HelperProcessInputHelper } from '../src/main/helper/helper-process-input-helper';
-import type { InputLostReason, KeyEvent } from '../src/main/helper/input-helper';
+import type { InputLostReason } from '../src/main/helper/input-helper';
+import type { HotkeyEvent } from '../src/shared/hotkey';
 import { protocolHelper } from './protocol-helper';
 
 let channel: HelperProcess | null = null;
@@ -80,34 +81,50 @@ describe('HelperProcessInputHelper', () => {
     expect(await helper.focusedElement()).toEqual({ editable: true, role: 'AXTextArea' });
   });
 
-  it('forwards key events and the paste-last shortcut', async () => {
+  it('forwards logical edges only for the latest confirmed binding and preserves paste-last', async () => {
     const { channel, helper } = await started();
-    const keys: KeyEvent[] = [];
+    const edges: HotkeyEvent[] = [];
     const shortcuts: string[] = [];
-    const unsubscribe = helper.onKey((event) => keys.push(event));
+    helper.onHotkey((event) => edges.push(event));
     helper.onShortcut((name) => shortcuts.push(name));
-
-    await channel.request('emit', { event: { event: 'key', phase: 'down', keycode: 61, ts: 5 } });
+    await helper.listen({ kind: 'key', keycode: 49, modifiers: ['control'] });
+    const first = await channel.request('listen-state');
+    await channel.request('emit', { event: { event: 'hotkey', listenId: first.listenId, phase: 'down', ts: 5 } });
+    await helper.listen({ kind: 'modifiers', keycodes: [58, 59] });
+    await channel.request('emit', { event: { event: 'hotkey', listenId: first.listenId, phase: 'up', ts: 6 } });
+    const current = await channel.request('listen-state');
+    await channel.request('emit', { event: { event: 'hotkey', listenId: current.listenId, phase: 'down', ts: 7 } });
     await channel.request('emit', { event: { event: 'shortcut', name: 'paste-last' } });
-    unsubscribe();
-    await channel.request('emit', { event: { event: 'key', phase: 'up', keycode: 61, ts: 6 } });
-
-    expect(keys).toEqual([{ phase: 'down', keycode: 61, ts: 5 }]);
+    expect(edges).toEqual([{ phase: 'down', ts: 5 }, { phase: 'down', ts: 7 }]);
     expect(shortcuts).toEqual(['paste-last']);
+    expect(current).toMatchObject({ kind: 'modifiers', keycodes: [58, 59] });
   });
 
-  it('returns the recorded key, an unsupported key or null on timeout', async () => {
+  it('records full combinations and ignores results from an older recording', async () => {
     const { channel, helper } = await started();
-
-    const recorded = helper.recordKey(1000);
-    await channel.request('emit', { event: { event: 'recorded', keycode: 62 } });
-    const unsupported = helper.recordKey(1000);
-    await channel.request('emit', { event: { event: 'record-unsupported', keycode: 0 } });
-
-    expect(await recorded).toBe(62);
-    expect(await unsupported).toBe(0);
-    expect(await helper.recordKey(50)).toBeNull();
+    const recorded = helper.recordHotkey(1000);
+    const first = await channel.request('record-state');
+    const binding = { kind: 'key', keycode: 49, modifiers: ['control'], label: '⌃Space' };
+    await channel.request('emit', { event: { event: 'recorded', recordingId: first.recordingId, ...binding } });
+    expect(await recorded).toEqual(binding);
+    const pending = helper.recordHotkey(1000);
+    const current = await channel.request('record-state');
+    await channel.request('emit', { event: { event: 'recorded', recordingId: first.recordingId, ...binding } });
+    await channel.request('emit', { event: { event: 'record-cancelled', recordingId: current.recordingId } });
+    expect(await pending).toBe('cancelled');
+    for (const result of ['unsupported', 'timeout'] as const) {
+      const next = helper.recordHotkey(1000);
+      const state = await channel.request('record-state');
+      await channel.request('emit', { event: { event: `record-${result}`, recordingId: state.recordingId } });
+      expect(await next).toBe(result);
+    }
   });
+
+  it('times out when the helper emits no recording result', async () => {
+    const { helper } = await started();
+
+    await expect(helper.recordHotkey(50)).resolves.toBe('timeout');
+  }, 1500);
 
   it('reports lost input on tap events and after a helper restart', async () => {
     const { channel, helper } = await started();
@@ -136,9 +153,9 @@ describe('HelperProcessInputHelper', () => {
 
   it('listens again after the helper restarts', async () => {
     const { channel, helper } = await started();
-    await helper.listen([61, 63]);
+    await helper.listen({ kind: 'key', keycode: 49, modifiers: ['control'] });
 
     await expect(channel.request('crash')).rejects.toThrow('helper-exited');
-    await expect.poll(async () => (await channel.request('listen-state')).keycodes).toEqual([61, 63]);
+    await expect.poll(async () => await channel.request('listen-state')).toMatchObject({ kind: 'key', keycode: 49, modifiers: ['control'] });
   });
 });

@@ -19,6 +19,8 @@ function parseJson(text: string | null): unknown {
 
 function freezeSettings(settings: Settings): Settings {
   const copy = structuredClone(settings);
+  if (copy.hotkey?.kind === 'modifiers') Object.freeze(copy.hotkey.keycodes);
+  if (copy.hotkey?.kind === 'key') Object.freeze(copy.hotkey.modifiers);
   Object.freeze(copy.hotkey);
   Object.freeze(copy.microphone);
   Object.freeze(copy.engineOrder);

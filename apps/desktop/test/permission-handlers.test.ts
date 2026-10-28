@@ -38,7 +38,7 @@ function harness(platform: NodeJS.Platform = 'darwin') {
   const handlers = permissionHandlers({
     permissions,
     appReveal: new AppReveal({ platform, executablePath: '/Applications/Codevo Whisper.app/Contents/MacOS/Codevo Whisper', shell }),
-    recorder: new KeyRecorder(helper),
+    recorder: new KeyRecorder(helper, { cancel: () => undefined }),
     hotkey: { isArmed: () => Promise.resolve(false) },
     relaunch: () => Promise.resolve(),
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { IDLE, nextActivity, statusLine, trayIconKind, type TrayActivity } from '../src/main/tray/tray-status';
 
-const RIGHT_CONTROL = { hotkey: { keycode: 62, label: 'Pravý ⌃ Control' } } as const;
+const RIGHT_CONTROL = { hotkey: { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' } } as const;
 const ERROR: TrayActivity = { kind: 'error', message: 'Nemáte stiahnutý model' };
 
 describe('tray status', () => {

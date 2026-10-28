@@ -1,4 +1,5 @@
-import type { InputHelper, KeyEvent } from '../helper/input-helper';
+import { sameHotkey, type HotkeyBinding, type HotkeyEvent } from '../../shared/hotkey';
+import type { InputHelper } from '../helper/input-helper';
 import { Listeners } from '../helper/listeners';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -17,6 +18,8 @@ export class HotkeyService {
   private state: HotkeyState = { kind: 'idle' };
   private paused = false;
   private permitted = false;
+  private configuration = 0;
+  private disposed = false;
   private readonly unsubscribers: Array<() => void>;
 
   constructor(
@@ -30,19 +33,36 @@ export class HotkeyService {
     this.starts = new Listeners(logger, 'Hotkey start listener failed');
     this.stops = new Listeners(logger, 'Hotkey stop listener failed');
     this.unsubscribers = [
-      helper.onKey((event) => this.handleKey(event)),
+      helper.onHotkey((event) => this.handleHotkey(event)),
+      helper.onInputLost((reason) => {
+        if (reason === 'tap-error' || reason === 'helper-died') {
+          this.configuration += 1;
+          this.permitted = false;
+        }
+        if (reason === 'helper-restarted') this.reconfigure();
+      }),
       settings.onChange((next, previous) => this.handleSettings(next, previous)),
     ];
   }
 
   async start(): Promise<void> {
+    if (this.disposed) return;
+    const configuration = ++this.configuration;
+    this.permitted = false;
     const permissions = await this.helper.permissions();
-    if (!permissions.listen) {
-      this.logger.error('Input Monitoring is not granted, the hotkey stays idle', permissions);
+    if (configuration !== this.configuration) return;
+    const hotkey = this.settings.get().hotkey;
+    if (!permissions.listen || (hotkey?.kind === 'key' && !permissions.accessibility)) {
+      this.finish('cancelled');
+      await this.helper.listen(null);
+      this.logger.error(!permissions.listen ? 'Input Monitoring is not granted, the hotkey stays idle' : 'Accessibility is not granted, the combination stays idle', permissions);
       return;
     }
-    this.permitted = true;
-    await this.listen();
+    const binding: HotkeyBinding | null = hotkey === null ? null : hotkey.kind === 'key'
+      ? { kind: 'key', keycode: hotkey.keycode, modifiers: hotkey.modifiers }
+      : { kind: 'modifiers', keycodes: hotkey.keycodes };
+    await this.helper.listen(this.paused ? null : binding);
+    if (configuration === this.configuration && !this.disposed) this.permitted = true;
   }
 
   isArmed(): boolean {
@@ -58,12 +78,16 @@ export class HotkeyService {
   }
 
   pause(): void {
+    if (this.paused) return;
     this.paused = true;
     this.finish('cancelled');
+    this.reconfigure();
   }
 
   resume(): void {
+    if (!this.paused) return;
     this.paused = false;
+    this.reconfigure();
   }
 
   stopForLimit(): void {
@@ -75,6 +99,8 @@ export class HotkeyService {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.configuration += 1;
     this.finish('cancelled');
     this.permitted = false;
     for (const unsubscribe of this.unsubscribers.splice(0)) {
@@ -82,9 +108,9 @@ export class HotkeyService {
     }
   }
 
-  private handleKey(event: KeyEvent): void {
+  private handleHotkey(event: HotkeyEvent): void {
     const { hotkey, mode } = this.settings.get();
-    if (this.paused || hotkey?.keycode !== event.keycode) {
+    if (this.paused || !this.permitted || hotkey === null) {
       return;
     }
     if (this.state.kind !== 'idle' && this.guard.expired()) {
@@ -148,7 +174,7 @@ export class HotkeyService {
   }
 
   private handleSettings(next: Settings, previous: Settings): void {
-    const keyChanged = next.hotkey?.keycode !== previous.hotkey?.keycode;
+    const keyChanged = !sameHotkey(next.hotkey, previous.hotkey);
     if (!keyChanged && next.mode === previous.mode) {
       return;
     }
@@ -156,21 +182,12 @@ export class HotkeyService {
     if (!keyChanged) {
       return;
     }
-    this.listen().catch((error: unknown) => {
-      this.logger.error('Hotkey could not listen to the new key', error);
-    });
+    this.reconfigure();
   }
 
-  private async listen(): Promise<void> {
-    if (!this.permitted) {
-      return;
-    }
-    const hotkey = this.settings.get().hotkey;
-    try {
-      await this.helper.listen(hotkey ? [hotkey.keycode] : []);
-    } catch (error) {
-      this.permitted = false;
-      throw error;
-    }
+  private reconfigure(): void {
+    void this.start().catch((error: unknown) => {
+      this.logger.error('Hotkey could not listen to the new key', error);
+    });
   }
 }

@@ -12,7 +12,7 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { FakePowerEvents } from './fake-power-events';
 import { RecordingLogger } from './recording-logger';
 
-const RIGHT_CONTROL = { keycode: 62, label: 'Pravý ⌃ Control' } as const;
+const RIGHT_CONTROL = { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' } as const;
 
 let dir: string;
 
@@ -51,12 +51,12 @@ describe('HotkeyRearm', () => {
     await hotkey.start();
     await permissions.status();
     expect(hotkey.isArmed()).toBe(false);
-    expect(helper.listening).toEqual([]);
+    expect(helper.listening).toBeNull();
 
     helper.permissionState = { listen: true, post: true, accessibility: true };
     await permissions.status();
 
-    await expect.poll(() => helper.listening).toEqual([62]);
+    await expect.poll(() => helper.listening).toEqual({ kind: 'modifiers', keycodes: [62] });
     expect(hotkey.isArmed()).toBe(true);
   });
 
@@ -69,7 +69,7 @@ describe('HotkeyRearm', () => {
     await permissions.status();
 
     await expect.poll(() => hotkey.isArmed()).toBe(true);
-    helper.pressKey('down', 62);
+    helper.emitHotkey('down');
     expect(starts).toEqual(['start']);
   });
 
@@ -111,7 +111,7 @@ describe('HotkeyRearm', () => {
     await rearm.settled();
 
     await expect.poll(() => hotkey.isArmed()).toBe(true);
-    expect(helper.listening).toEqual([62]);
+    expect(helper.listening).toEqual({ kind: 'modifiers', keycodes: [62] });
   });
 
   it('backs off between failed attempts and logs once per failure streak', async () => {

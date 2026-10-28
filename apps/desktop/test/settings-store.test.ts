@@ -74,13 +74,23 @@ describe('SettingsStore', () => {
     expect((await new SettingsStore(file).load()).mode).toBe('smart');
   });
 
+  it.each([54, 58, 61, 62, 63])('migrates legacy key %i only on load and saves canonical settings on the next update', async (keycode) => {
+    const legacy = { hotkey: { keycode, label: 'Legacy side' }, mode: 'hold', language: 'cs' };
+    await writeFile(file, JSON.stringify(legacy));
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', language: 'cs' });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(legacy);
+    await store.update({ language: 'en' });
+    expect(await new SettingsStore(file).load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', language: 'en' });
+  });
+
   it('persists an update', async () => {
     const store = new SettingsStore(file);
     await store.load();
 
-    const updated = await store.update({ mode: 'toggle', hotkey: { keycode: 62, label: 'Pravý ⌃ Control' } });
+    const updated = await store.update({ mode: 'toggle', hotkey: { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' } });
 
-    expect(updated).toEqual({ ...DEFAULT_SETTINGS, mode: 'toggle', hotkey: { keycode: 62, label: 'Pravý ⌃ Control' } });
+    expect(updated).toEqual({ ...DEFAULT_SETTINGS, mode: 'toggle', hotkey: { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' } });
     const reloaded = await new SettingsStore(file).load();
     expect(reloaded).toEqual(updated);
   });
@@ -113,6 +123,18 @@ describe('SettingsStore', () => {
       onboardingDone: true,
     });
     expect(loaded).not.toHaveProperty('history');
+  });
+
+  it('round trips combinations and protects nested members from mutation', async () => {
+    const store = new SettingsStore(file);
+    await store.load();
+    const binding = { kind: 'key', keycode: 49, modifiers: ['control'], label: '⌃Space' } as const;
+    await store.update({ hotkey: binding });
+    expect(await new SettingsStore(file).load()).toMatchObject({ hotkey: binding });
+    const hotkey = store.get().hotkey;
+    if (hotkey?.kind !== 'key') throw new Error('missing combo');
+    expect(Reflect.set(hotkey.modifiers, 0, 'alt')).toBe(false);
+    expect(hotkey.modifiers).toEqual(['control']);
   });
 
   it('notifies listeners with next and previous', async () => {

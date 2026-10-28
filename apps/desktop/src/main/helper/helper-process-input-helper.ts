@@ -1,3 +1,5 @@
+import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { HelperChannel, HelperMessage } from './helper-channel';
 import {
@@ -6,14 +8,14 @@ import {
   parseFocusedElement,
   parseFrontmost,
   parseInputLost,
-  parseKeyEvent,
+  parseHotkeyEvent,
   parseModifierFlags,
   parsePermissions,
-  parseRecordedKey,
+  parseRecordedHotkey,
   parseShortcut,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, KeyEvent, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
@@ -26,13 +28,21 @@ function ensure(message: HelperMessage, key: string, failure: string): void {
 }
 
 export class HelperProcessInputHelper implements InputHelper {
-  private keycodes: number[] | null = null;
+  private desired: HotkeyBinding | null = null;
+  private hasListened = false;
+  private listenId = 0;
+  private activeListenId: number | null = null;
+  private registration: Promise<void> = Promise.resolve();
+  private recordingId = 0;
+  private cancelRecording: (() => void) | null = null;
 
   constructor(
     private readonly channel: HelperChannel,
     private readonly logger: Logger = consoleLogger,
   ) {
     channel.onRestart(() => {
+      this.activeListenId = null;
+      this.cancelRecording?.();
       void this.relisten();
     });
   }
@@ -42,7 +52,9 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   stop(): Promise<void> {
-    this.keycodes = null;
+    this.hasListened = false;
+    this.activeListenId = null;
+    this.cancelRecording?.();
     return this.channel.stop();
   }
 
@@ -90,15 +102,26 @@ export class HelperProcessInputHelper implements InputHelper {
     ensure(await this.channel.request('paste'), 'posted', 'paste-failed');
   }
 
-  async listen(keycodes: number[]): Promise<void> {
-    ensure(await this.channel.request('listen-start', { keycodes }), 'running', 'listen-failed');
-    this.keycodes = [...keycodes];
+  listen(binding: HotkeyBinding | null): Promise<void> {
+    this.desired = binding;
+    this.hasListened = true;
+    this.activeListenId = null;
+    const listenId = ++this.listenId;
+    const configure = this.registration.then(async () => {
+      if (listenId !== this.listenId || !this.hasListened) return;
+      ensure(await this.channel.request('listen-start', { listenId, ...(binding ?? { kind: 'none' }) }), 'running', 'listen-failed');
+      if (listenId === this.listenId && this.hasListened) this.activeListenId = listenId;
+    });
+    this.registration = configure.catch(() => undefined);
+    return configure;
   }
 
-  async recordKey(timeoutMs: number): Promise<number | null> {
-    const recording = this.nextRecordedKey(timeoutMs);
+  async recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult> {
+    if (this.cancelRecording !== null) throw new Error('recording-in-progress');
+    const recordingId = ++this.recordingId;
+    const recording = this.nextRecordedHotkey(recordingId, timeoutMs);
     try {
-      ensure(await this.channel.request('record-key', { timeoutMs }), 'recording', 'record-failed');
+      ensure(await this.channel.request('record-key', { recordingId, timeoutMs }), 'recording', 'record-failed');
     } catch (error) {
       recording.cancel();
       throw error;
@@ -106,13 +129,11 @@ export class HelperProcessInputHelper implements InputHelper {
     return recording.result;
   }
 
-  onKey(listener: (event: KeyEvent) => void): () => void {
+  onHotkey(listener: (event: HotkeyEvent) => void): () => void {
     return this.channel.onEvent((message) => {
-      const event = parseKeyEvent(message);
-      if (!event) {
-        return;
-      }
-      listener(event);
+      if (this.activeListenId === null || message['listenId'] !== this.activeListenId) return;
+      const event = parseHotkeyEvent(message);
+      if (event) listener(event);
     });
   }
 
@@ -143,31 +164,31 @@ export class HelperProcessInputHelper implements InputHelper {
     };
   }
 
-  private nextRecordedKey(timeoutMs: number): { result: Promise<number | null>; cancel: () => void } {
-    let finish: (keycode: number | null) => void = () => undefined;
-    const result = new Promise<number | null>((resolve) => {
-      const timer = setTimeout(() => finish(null), timeoutMs);
+  private nextRecordedHotkey(recordingId: number, timeoutMs: number): { result: Promise<HotkeyRecordResult>; cancel: () => void } {
+    let finish: (value: HotkeyRecordResult) => void = () => undefined;
+    const result = new Promise<HotkeyRecordResult>((resolve) => {
+      const timer = setTimeout(() => finish('timeout'), timeoutMs + 1000);
       const unsubscribe = this.channel.onEvent((message) => {
-        const keycode = parseRecordedKey(message);
-        if (keycode === null) {
-          return;
-        }
-        finish(keycode);
+        if (message['recordingId'] !== recordingId) return;
+        const recorded = parseRecordedHotkey(message);
+        if (recorded !== null) finish(recorded);
       });
-      finish = (keycode) => {
+      const unsubscribeGiveUp = this.channel.onGiveUp(() => finish('timeout'));
+      finish = (value) => {
         clearTimeout(timer);
         unsubscribe();
-        resolve(keycode);
+        unsubscribeGiveUp();
+        this.cancelRecording = null;
+        resolve(value);
       };
     });
-    return { result, cancel: () => finish(null) };
+    this.cancelRecording = () => finish('timeout');
+    return { result, cancel: this.cancelRecording };
   }
 
   private async relisten(): Promise<void> {
-    if (!this.keycodes) {
-      return;
-    }
-    await this.listen(this.keycodes).catch((error: unknown) => {
+    if (!this.hasListened) return;
+    await this.listen(this.desired).catch((error: unknown) => {
       this.logger.error('Input helper could not listen again after a restart', error);
     });
   }

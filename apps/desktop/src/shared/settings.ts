@@ -1,8 +1,6 @@
-export const HOTKEY_KEYCODES = [54, 58, 61, 62, 63] as const;
+import type { HotkeyBinding } from './hotkey';
 
-export type HotkeyKeycode = (typeof HOTKEY_KEYCODES)[number];
-
-export type HotkeySetting = { keycode: HotkeyKeycode; label: string } | null;
+export type HotkeySetting = (HotkeyBinding & { label: string }) | null;
 
 export type DictationMode = 'hold' | 'toggle' | 'smart';
 

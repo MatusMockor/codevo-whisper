@@ -31,11 +31,14 @@ final class Commands {
         case "paste":
             return Paste.commandV()
         case "listen-start":
-            return KeyTap.shared.listen(keycodes: (args["keycodes"] as? [Int] ?? []).map(Int64.init))
+            return KeyTap.shared.listen(args)
         case "listen-stop":
             return KeyTap.shared.stopListening()
         case "record-key":
-            return KeyTap.shared.record(timeoutMs: max(args["timeoutMs"] as? Int ?? Commands.defaultRecordTimeoutMs, 0))
+            guard let recordingId = args["recordingId"] as? Int, recordingId > 0 else {
+                return ["recording": false, "reason": "invalid-recording-id"]
+            }
+            return KeyTap.shared.record(recordingId: recordingId, timeoutMs: max(args["timeoutMs"] as? Int ?? Commands.defaultRecordTimeoutMs, 0))
         default:
             return ["error": "unknown-command", "command": name]
         }

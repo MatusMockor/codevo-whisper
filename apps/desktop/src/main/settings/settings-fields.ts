@@ -1,4 +1,5 @@
-import { HOTKEY_KEYCODES, isEngineOrder, type Settings } from '../../shared/settings';
+import { parseHotkeySetting } from '../../shared/hotkey';
+import { isEngineOrder, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 
@@ -34,13 +35,7 @@ function isBoolean(value: unknown): value is boolean {
 }
 
 function isHotkey(value: unknown): value is Settings['hotkey'] {
-  if (value === null) {
-    return true;
-  }
-  if (!isPlainRecord(value) || !hasExactKeys(value, ['keycode', 'label'])) {
-    return false;
-  }
-  return HOTKEY_KEYCODES.some((keycode) => keycode === value['keycode']) && isText(value['label']);
+  return value === null || parseHotkeySetting(value) !== undefined;
 }
 
 function isMicrophone(value: unknown): value is Settings['microphone'] {
