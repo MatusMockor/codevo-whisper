@@ -34,6 +34,8 @@ class Initialization(unittest.TestCase):
         cls.scratch = tempfile.TemporaryDirectory()
         cls.binary = str(Path(cls.scratch.name) / 'worker')
         subprocess.run([os.environ.get('CC', 'cc'), '-D_POSIX_C_SOURCE=200809L', '-D__APPLE__', '-std=c11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'test/stub'), str(ROOT / 'stt-worker.c'), str(ROOT / 'stt-worker-request.c'), str(ROOT / 'test/stub/transcribe.c'), '-o', cls.binary], check=True)
+        cls.linux_binary = str(Path(cls.scratch.name) / 'linux-worker')
+        subprocess.run([os.environ.get('CC', 'cc'), '-D_POSIX_C_SOURCE=200809L', '-std=c11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'test/stub'), str(ROOT / 'stt-worker.c'), str(ROOT / 'stt-worker-request.c'), str(ROOT / 'test/stub/transcribe.c'), '-o', cls.linux_binary], check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -50,6 +52,12 @@ class Initialization(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(frames(result.stdout), [(2, ''), (0, 'sk 1 0.50'), (0, 'en 1 0.00'), (0, 'auto 1 0.00')])
             self.assertEqual([line for line in result.stderr.decode().splitlines() if line.startswith('VOCABULARY')], expected)
+
+    def test_linux_auto_parser_uses_upstream_auto_without_native_replay(self):
+        result = subprocess.run([self.linux_binary, '--model', 'supports-vocabulary', '--backend', 'auto', '--threads', '3'], input=request('sk', [0]), capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(frames(result.stdout), [(2, ''), (0, 'sk 1 0.00')])
+        self.assertEqual(result.stderr.decode().splitlines(), ['OPEN 0 supports-vocabulary 3', 'RUN', 'FREE'])
 
     def test_rejects_malformed_vocabulary_and_truncated_extended_requests(self):
         for term in [b'', b'a\x00b', b'a\nb', b'a\xc2\x85b', b'\xff', b'\xc0\xaf', b'\xed\xa0\x80', b'\xf4\x90\x80\x80', b'a' * 65, '😀'.encode() * 65, b'a' * 257]:

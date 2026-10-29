@@ -19,11 +19,12 @@ export function MicrophoneStep({ permissions, refresh }: { permissions: Live<Per
   }
   const microphone = permissions.value.microphone;
   const denied = microphone === 'denied';
+  const linux = permissions.value.platform === 'linux';
   return (
     <div className="sbox">
       <PermissionRow
         title="Mikrofón"
-        description={denied ? 'Prístup je zamietnutý. Povoľte Codevo Whisper v Nastaveniach systému v časti Mikrofón.' : 'macOS sa opýta, či môže Codevo Whisper používať mikrofón.'}
+        description={linux ? 'Prístup a dostupnosť mikrofónu sa overia pri nahrávaní. Ak záznam zlyhá, skontrolujte vybrané zariadenie a nastavenia vstupu v Linuxe.' : denied ? 'Prístup je zamietnutý. Povoľte Codevo Whisper v Nastaveniach systému v časti Mikrofón.' : 'macOS sa opýta, či môže Codevo Whisper používať mikrofón.'}
         granted={microphone === 'granted'}
         statusLabel={STATUS_LABELS[microphone]}
         actionLabel={denied ? 'Otvoriť Nastavenia systému' : 'Povoliť mikrofón'}

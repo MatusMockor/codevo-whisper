@@ -1,4 +1,4 @@
-import type { AutoSubmit, ClipboardPolicy, InsertionMode, Settings } from '../../shared/settings';
+import type { AutoSubmit, ClipboardPolicy, InsertionMode, LinuxPasteShortcut, Settings } from '../../shared/settings';
 import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
@@ -25,8 +25,9 @@ const CLIPBOARD_DESCRIPTIONS: Readonly<Record<InsertionMode, string>> = {
   type: 'Priame písanie pri možnosti Nemeniť schránku schránku vôbec nepoužíva.',
 };
 
-export function InsertionSection({ settings }: { settings: Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubmit'> }) {
-  const { insertion, clipboardPolicy, autoSubmit } = settings;
+export function InsertionSection({ settings }: { settings: Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubmit' | 'linuxPasteShortcut'> }) {
+  const { insertion, clipboardPolicy, autoSubmit, linuxPasteShortcut } = settings;
+  const linux = navigator.userAgent.includes('Linux');
   const copying = insertion === 'clipboard';
   return (
     <SettingsGroup title="Vkladanie textu">
@@ -43,11 +44,22 @@ export function InsertionSection({ settings }: { settings: Pick<Settings, 'inser
             />
             <div>
               <b>{option.title}</b>
-              <span>{option.description}</span>
+              <span>{linux && option.id === 'type' ? 'Priame písanie v Linuxe nie je dostupné. Text sa skopíruje do schránky.' : linux && option.id === 'clipboard' ? 'Text vložíte ručne pomocou Ctrl+V alebo skratky aplikácie.' : option.description}</span>
             </div>
           </label>
         ))}
       </div>
+      {linux && <SettingsRow title="Skratka na vloženie" titleId="set-linux-paste" description="Zvoľte skratku cieľovej aplikácie. Shift+Insert používa primárny výber. Vo Waylande sa text kopíruje na ručné vloženie.">
+        <select className="select" aria-labelledby="set-linux-paste" value={linuxPasteShortcut} disabled={insertion !== 'paste'} onChange={(event) => {
+          const choices: readonly LinuxPasteShortcut[] = ['ctrl-v', 'ctrl-shift-v', 'shift-insert'];
+          const next = choices.find((choice) => choice === event.target.value);
+          if (next) saveSettings({ linuxPasteShortcut: next });
+        }}>
+          <option value="ctrl-v">Ctrl+V</option>
+          <option value="ctrl-shift-v">Ctrl+Shift+V</option>
+          <option value="shift-insert">Shift+Insert</option>
+        </select>
+      </SettingsRow>}
       <SettingsRow title="Schránka" titleId="set-clipboard-policy" description={CLIPBOARD_DESCRIPTIONS[insertion]}>
         <select
           className="select"

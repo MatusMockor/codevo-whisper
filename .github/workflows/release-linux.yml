@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       enabled:
-        description: Build the Linux packages (Linux support lands in phase 4, keep off until then)
+        description: Build the Linux packages manually
         required: false
         default: false
         type: boolean
@@ -50,6 +50,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build pkg-config libgtk-3-dev libjson-glib-dev libatspi2.0-dev libevdev-dev libudev-dev libxi-dev libxtst-dev libxfixes-dev libx11-dev libvulkan-dev glslc spirv-headers
+      - name: Build Linux native resources
+        run: scripts/release/build-native.sh "$ARCH"
       - name: Build the desktop bundle
         run: pnpm --filter @codevo-whisper/desktop build
       - name: Package AppImage and deb

@@ -3,7 +3,7 @@ import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } fro
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, DeliveryDecision, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 export type FakeInputHelperState = {
@@ -31,6 +31,9 @@ const DEFAULT_STATE: FakeInputHelperState = {
 };
 
 export class FakeInputHelper implements InputHelper {
+  checkDelivery(): Promise<DeliveryDecision> {
+    return Promise.resolve({ kind: 'legacy' });
+  }
   outputAudio: OutputAudioView = { kind: 'available', canMute: true, outputs: [{ id: 'speakers', label: 'Reproduktory' }, { id: 'headphones', label: 'Slúchadlá' }] };
   outputMuted = false;
   readonly audioTrace: string[] = [];

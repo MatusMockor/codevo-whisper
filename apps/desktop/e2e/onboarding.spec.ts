@@ -115,6 +115,21 @@ test('is shown on the first run instead of the main window', async () => {
 
 test('step 2 shows live permission status and offers Reštartovať when Input Monitoring stays off', async () => {
   await next();
+  if (process.platform === 'linux') {
+    await expect(heading()).toHaveText('Prístup ku klávesnici a vkladanie');
+    const keyboard = permissionRow('Prístup ku klávesnici');
+    await expect(keyboard).toContainText('Povolené');
+    await setInputPermissions(false);
+    await expect(keyboard).toContainText('Zatiaľ nepovolené');
+    await keyboard.getByRole('button', { name: 'Skontrolovať znova' }).click();
+    await expect(keyboard).toContainText('Zatiaľ nepovolené');
+    await expect(page.getByText('Vo Waylande je text v schránke na ručné vloženie;', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reštartovať' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Zobraziť vo Finderi' })).toHaveCount(0);
+    await setInputPermissions(true);
+    await expect(keyboard).toContainText('Povolené');
+    return;
+  }
   await expect(heading()).toHaveText('Monitorovanie vstupu a prístupnosť');
   const inputRow = permissionRow('Monitorovanie vstupu');
   await expect(inputRow).toContainText('Povolené');

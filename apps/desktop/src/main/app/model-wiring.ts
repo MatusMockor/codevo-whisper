@@ -52,7 +52,7 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
     warmUp,
     logger,
   });
-  const engine = new LocalEngine({ binary, models: manager, settings, arch });
+  const engine = new LocalEngine({ binary, acceleratorBinary: resolveWorkerBinary({ ...location, arch, variant: 'vulkan' }), models: manager, settings, arch });
   return {
     manager,
     engine,

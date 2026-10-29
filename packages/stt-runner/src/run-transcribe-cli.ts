@@ -8,7 +8,7 @@ import { pcmToWav } from './wav';
 export const DEFAULT_TIMEOUT_MS = 120_000;
 export const MAX_OUTPUT_BYTES = 16_000;
 
-export type TranscribeBackend = 'metal' | 'cpu' | 'vulkan';
+export type TranscribeBackend = 'metal' | 'cpu' | 'vulkan' | 'auto';
 
 export type TranscribeLanguage = 'sk' | 'en' | 'cs' | 'auto';
 

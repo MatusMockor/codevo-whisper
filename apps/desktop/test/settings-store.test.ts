@@ -19,6 +19,16 @@ afterEach(async () => {
 });
 
 describe('SettingsStore', () => {
+  it('defaults and persists only the three Linux paste shortcuts', async () => {
+    const store = new SettingsStore(file);
+    expect((await store.load()).linuxPasteShortcut).toBe('ctrl-v');
+    for (const linuxPasteShortcut of ['ctrl-v', 'ctrl-shift-v', 'shift-insert'] as const) {
+      await store.update({ linuxPasteShortcut });
+      expect((await new SettingsStore(file).load()).linuxPasteShortcut).toBe(linuxPasteShortcut);
+    }
+    await writeFile(file, JSON.stringify({ linuxPasteShortcut: 'try-all' }));
+    expect((await new SettingsStore(file).load()).linuxPasteShortcut).toBe('ctrl-v');
+  });
   it('defaults recording audio for old files and persists independent preferences', async () => {
     await writeFile(file, JSON.stringify({ language: 'cs' }));
     const store = new SettingsStore(file);

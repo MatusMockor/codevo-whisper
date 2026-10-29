@@ -61,30 +61,32 @@ describe('bindPasteLastShortcut', () => {
     expect(helper.clipboard).toBe('original');
   });
 
-  it('logs a paste the helper could not post and keeps the transcript on the clipboard', async () => {
+  it.each(['darwin', 'linux'] as const)('logs a paste the helper could not post and keeps the transcript on the clipboard on %s', async (platform) => {
     const channel = protocolHelper();
-    processHelper = new HelperProcessInputHelper(channel);
+    processHelper = new HelperProcessInputHelper(channel, undefined, platform);
     const lastTranscript = new LastTranscript();
     lastTranscript.set('previous');
     const logger = new RecordingLogger();
     bindPasteLastShortcut(processHelper, new InsertionService(processHelper, await loadedSettings(), lastTranscript, immediate, logger), logger);
     await processHelper.start();
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'allowed', operationId: 'fixture-paste', pid: 42, bundleId: 'com.apple.TextEdit', name: 'TextEdit', windowId: 7 } });
 
     await channel.request('emit', { event: { event: 'shortcut', name: 'paste-last' } });
 
     await expect.poll(() => logger.infos).toEqual([{ message: 'Paste last transcript', detail: 'copied-paste-failed' }]);
     expect(String(logger.errors[0]?.error)).toContain('paste-failed:no-event-source');
+    await expect(channel.request('clipboard-state')).resolves.toMatchObject({ text: 'previous' });
   });
 
-  it('logs a failing insertion instead of rejecting unhandled', async () => {
+  it.each(['darwin', 'linux'] as const)('logs a failing insertion instead of rejecting unhandled on %s', async (platform) => {
     const channel = protocolHelper();
-    processHelper = new HelperProcessInputHelper(channel);
+    processHelper = new HelperProcessInputHelper(channel, undefined, platform);
     const lastTranscript = new LastTranscript();
     lastTranscript.set('previous');
     const logger = new RecordingLogger();
     bindPasteLastShortcut(processHelper, new InsertionService(processHelper, await loadedSettings(), lastTranscript, immediate, logger), logger);
     await processHelper.start();
-    await channel.request('respond-next', { cmd: 'secure-input', response: { error: 'gone' } });
+    await channel.request('respond-next', { cmd: platform === 'linux' ? 'check-delivery' : 'secure-input', response: { error: 'gone' } });
 
     await channel.request('emit', { event: { event: 'shortcut', name: 'paste-last' } });
 

@@ -8,6 +8,7 @@ let deferredListen;
 const overrides = new Map();
 const operations = [];
 const audioOperations = [];
+let clipboard = '';
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -59,8 +60,9 @@ const handlers = {
   'focused-element': (id) => send({ id, editable: null, role: 'AXWebArea', reason: 'chromium-no-tree' }),
   'secure-input': (id) => send({ id, enabled: false }),
   'modifier-flags': (id) => send({ id, flags: 0x100, combinedFlags: 0x100 }),
-  'clipboard-save': (id) => send({ id, items: 1, types: ['public.utf8-plain-text'] }),
-  'clipboard-write': (id) => send({ id, written: true }),
+  'clipboard-save': (id) => send({ id, saved: true, transactionId: 'fixture-transaction', items: 1, types: ['public.utf8-plain-text'] }),
+  'clipboard-write': (id, args) => { clipboard = args.text; send({ id, written: true }); },
+  'clipboard-state': (id) => send({ id, text: clipboard }),
   'clipboard-restore': (id, args) => send({ id, restored: args.force === true || typeof args.expectedText === 'string' }),
   'type-text': (id, args) => { operations.push({ cmd: 'type-text', text: args.text }); send({ id, posted: true }); },
   submit: (id, args) => { operations.push({ cmd: 'submit', mode: args.mode }); send({ id, posted: true }); },

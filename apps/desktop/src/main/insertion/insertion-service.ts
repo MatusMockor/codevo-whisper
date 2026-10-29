@@ -17,6 +17,9 @@ export type InsertionOutcome =
   | 'failed-type'
   | 'copied-type-failed'
   | 'copied-no-text-field'
+  | 'copied-unverified-target'
+  | 'copied-posting-unavailable'
+  | 'copied-unsupported-output'
   | 'copied-by-setting'
   | 'copied-paste-failed'
   | 'blocked-focus-changed'
@@ -29,9 +32,9 @@ export type PasteLastOutcome = InsertionOutcome | 'no-transcript';
 
 export type CopyLastOutcome = 'copied' | 'no-transcript' | 'failed-clipboard-write';
 
-type OutputSettings = Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubmit'>;
+type OutputSettings = Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubmit' | 'linuxPasteShortcut'>;
 
-type CopyOutcome = 'copied-no-text-field' | 'copied-by-setting';
+type CopyOutcome = 'copied-no-text-field' | 'copied-by-setting' | 'copied-unverified-target' | 'copied-posting-unavailable' | 'copied-unsupported-output';
 
 const RESTORE_DELAY_MS = 500;
 
@@ -68,6 +71,8 @@ export class InsertionService {
     if (output.insertion === 'clipboard') {
       return this.copy(text, 'copied-by-setting');
     }
+    const checked = await this.checkedDelivery(text, target, output, 'automatic');
+    if (checked !== null) return checked;
     if (!isSameTarget(target, await this.helper.frontmost())) {
       return 'blocked-focus-changed';
     }
@@ -86,8 +91,27 @@ export class InsertionService {
     if (!(await waitForShortcutRelease(this.helper, this.sleep))) {
       return 'blocked-modifiers-held';
     }
+    const checked = await this.checkedDelivery(text, null, output, 'replay');
+    if (checked !== null) return checked;
     const target = output.autoSubmit === 'off' ? null : await this.helper.frontmost();
     return this.deliver(text, target, output);
+  }
+
+  private async checkedDelivery(text: string, expected: AppTarget | null, output: OutputSettings, intent: 'automatic' | 'replay'): Promise<InsertionOutcome | null> {
+    const decision = await this.helper.checkDelivery({ expected, intent, shortcut: output.linuxPasteShortcut });
+    switch (decision.kind) {
+      case 'legacy': return null;
+      case 'blocked': {
+        const outcomes = { 'focus-changed': 'blocked-focus-changed', 'protected-input': 'blocked-secure-input', 'modifiers-held': 'blocked-modifiers-held' } as const;
+        return outcomes[decision.reason];
+      }
+      case 'copy': return this.copy(text, output.insertion === 'type' ? 'copied-unsupported-output' : `copied-${decision.reason}`);
+      case 'allowed': {
+        if (output.insertion === 'type') return this.copy(text, 'copied-unsupported-output');
+        const outcome = await this.paste(text, output);
+        return outcome === 'pasted' ? this.submitAfterDelivery(outcome, decision.target, output) : outcome;
+      }
+    }
   }
 
   private async copyLastTranscript(): Promise<CopyLastOutcome> {
@@ -133,7 +157,7 @@ export class InsertionService {
   }
 
   private async paste(text: string, output: OutputSettings): Promise<InsertionOutcome> {
-    if (!(await this.writeClipboard(text))) {
+    if (!(await writeClipboardOrRestore(this.helper, text, this.logger, { kind: 'paste', policy: output.clipboardPolicy }))) {
       return 'failed-clipboard-write';
     }
     try {

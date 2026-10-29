@@ -30,6 +30,8 @@ export type ClipboardPolicy = 'restore' | 'leave';
 
 export type AutoSubmit = 'off' | 'enter' | 'primary-enter';
 
+export type LinuxPasteShortcut = 'ctrl-v' | 'ctrl-shift-v' | 'shift-insert';
+
 export type LocalAcceleration = 'auto' | 'gpu' | 'cpu';
 
 export type LocalModelUnload = 'never' | 'immediately' | 2 | 5 | 10 | 15 | 60;
@@ -55,6 +57,7 @@ export type Settings = {
   insertion: InsertionMode;
   clipboardPolicy: ClipboardPolicy;
   autoSubmit: AutoSubmit;
+  linuxPasteShortcut: LinuxPasteShortcut;
   overlay: OverlayMode;
   launchAtLogin: boolean;
   onboardingDone: boolean;
@@ -79,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   insertion: 'paste',
   clipboardPolicy: 'restore',
   autoSubmit: 'off',
+  linuxPasteShortcut: 'ctrl-v',
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,

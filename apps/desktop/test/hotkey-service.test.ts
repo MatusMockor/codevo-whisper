@@ -17,6 +17,7 @@ type Setup = {
   settings?: Partial<Settings>;
   helper?: Partial<FakeInputHelperState>;
   clock?: () => number;
+  platform?: NodeJS.Platform;
 };
 
 let dir: string;
@@ -37,7 +38,7 @@ async function started(setup: Setup = {}) {
   await settings.update({ hotkey: FN, mode: 'hold', ...setup.settings });
   const helper = new FakeInputHelper(setup.helper);
   const power = new FakePowerEvents();
-  const service = new HotkeyService(helper, settings, power, setup.clock, logger);
+  const service = new HotkeyService(helper, settings, power, setup.clock, logger, setup.platform ?? 'darwin');
   const events: string[] = [];
   service.onStart(() => events.push('start'));
   service.onStop((reason) => events.push(`stop:${reason}`));
@@ -46,6 +47,24 @@ async function started(setup: Setup = {}) {
 }
 
 describe('HotkeyService', () => {
+  it('rearms Linux after native loss drains to neutral', async () => {
+    const { helper, service, events } = await started({ platform: 'linux' });
+    helper.emitHotkey('down');
+    helper.loseInput('tap-error');
+    helper.emitHotkey('up');
+    helper.loseInput('tap-reenabled');
+    await vi.waitFor(() => expect(service.isArmed()).toBe(true));
+    helper.emitHotkey('down');
+    expect(events).toEqual(['start', 'stop:input-lost', 'start']);
+    service.dispose();
+  });
+  it('arms Linux regular hotkeys with input access while posting is unavailable', async () => {
+    const { service, helper, events } = await started({ platform: 'linux', settings: { hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' } }, helper: { permissions: { listen: true, accessibility: false, post: false } } });
+    helper.emitHotkey('down');
+    expect(events).toEqual(['start']);
+    expect(service.isArmed()).toBe(true);
+    service.dispose();
+  });
   it.each([0, 299])('smart starts immediately and latches a %i ms press until the next down', async (duration) => {
     const { helper, events, service } = await started({ settings: { mode: 'smart' } });
 

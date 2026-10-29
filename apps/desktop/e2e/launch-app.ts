@@ -42,7 +42,7 @@ export const FAKE_DEVICE_ARGS: readonly string[] = Object.freeze(['--use-fake-de
 export const FAKE_MEDIA_ARGS: readonly string[] = Object.freeze([...FAKE_DEVICE_ARGS, '--use-fake-ui-for-media-stream']);
 
 export function launchApp(userDataDir: string, chromiumArgs: readonly string[] = FAKE_MEDIA_ARGS, options: LaunchOptions = {}): Promise<ElectronApplication> {
-  return electron.launch({ args: [...chromiumArgs, mainEntry], env: electronEnv(userDataDir, options) });
+  return electron.launch({ chromiumSandbox: true, args: [...chromiumArgs, mainEntry], env: electronEnv(userDataDir, options) });
 }
 
 export function spawnApp(userDataDir: string): ChildProcess {

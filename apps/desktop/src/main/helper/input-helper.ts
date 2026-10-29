@@ -1,4 +1,4 @@
-import type { AutoSubmit } from '../../shared/settings';
+import type { AutoSubmit, LinuxPasteShortcut } from '../../shared/settings';
 import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
@@ -17,7 +17,17 @@ export type ShortcutName = 'paste-last';
 
 export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted' | 'helper-died';
 
+export type DeliveryRequest = { expected: AppTarget | null; intent: 'automatic' | 'replay'; shortcut: LinuxPasteShortcut };
+export type DeliveryDecision =
+  | { kind: 'legacy' }
+  | { kind: 'allowed'; target: AppTarget }
+  | { kind: 'copy'; reason: 'unverified-target' | 'posting-unavailable' | 'unsupported-output' }
+  | { kind: 'blocked'; reason: 'focus-changed' | 'protected-input' | 'modifiers-held' };
+
+export type ClipboardPurpose = { kind: 'copy' } | { kind: 'paste'; policy: 'restore' | 'leave' };
+
 export interface InputHelper {
+  checkDelivery(request: DeliveryRequest): Promise<DeliveryDecision>;
   getOutputAudio(): Promise<OutputAudioView>;
   beginRecordingAudio(settings: RecordingAudioSettings): Promise<RecordingAudioLease>;
   start(): Promise<void>;
@@ -28,7 +38,7 @@ export interface InputHelper {
   secureInput(): Promise<boolean>;
   focusedElement(): Promise<FocusedElement>;
   modifierFlags(): Promise<ModifierFlags>;
-  saveClipboard(): Promise<void>;
+  saveClipboard(purpose?: ClipboardPurpose): Promise<void>;
   writeClipboard(text: string): Promise<void>;
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;

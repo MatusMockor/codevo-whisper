@@ -21,6 +21,7 @@ export type PermissionsDeps = {
   asked: AskedPermissions;
   logger: Logger;
   inputReady?: Promise<void> | undefined;
+  platform?: NodeJS.Platform;
 };
 
 const NO_INPUT_PERMISSIONS: Permissions = { listen: false, post: false, accessibility: false };
@@ -59,7 +60,7 @@ export class PermissionsService {
       this.deps.logger.error('The input permissions could not be read', error);
       return NO_INPUT_PERMISSIONS;
     });
-    const next = { microphone: microphonePermission(this.deps.microphone.status()), inputMonitoring: input.listen, accessibility: input.accessibility };
+    const next = { microphone: microphonePermission(this.deps.microphone.status()), inputMonitoring: input.listen, accessibility: input.accessibility, ...(this.deps.platform === 'linux' ? { platform: 'linux' as const } : {}) };
     this.remember(next);
     this.reads.emit(next);
     return next;

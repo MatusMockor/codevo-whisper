@@ -28,6 +28,7 @@ export class HotkeyService {
     power: PowerEvents,
     clock: () => number = () => Date.now(),
     private readonly logger: Logger = consoleLogger,
+    private readonly platform: NodeJS.Platform = process.platform,
   ) {
     this.guard = new ResetGuard(helper, power, clock);
     this.starts = new Listeners(logger, 'Hotkey start listener failed');
@@ -39,7 +40,7 @@ export class HotkeyService {
           this.configuration += 1;
           this.permitted = false;
         }
-        if (reason === 'helper-restarted') this.reconfigure();
+        if (reason === 'helper-restarted' || (reason === 'tap-reenabled' && this.platform === 'linux')) this.reconfigure();
       }),
       settings.onChange((next, previous) => this.handleSettings(next, previous)),
     ];
@@ -52,7 +53,7 @@ export class HotkeyService {
     const permissions = await this.helper.permissions();
     if (configuration !== this.configuration) return;
     const hotkey = this.settings.get().hotkey;
-    if (!permissions.listen || (hotkey?.kind === 'key' && !permissions.accessibility)) {
+    if (!permissions.listen || (this.platform === 'darwin' && hotkey?.kind === 'key' && !permissions.accessibility)) {
       this.finish('cancelled');
       await this.helper.listen(null);
       this.logger.error(!permissions.listen ? 'Input Monitoring is not granted, the hotkey stays idle' : 'Accessibility is not granted, the combination stays idle', permissions);

@@ -32,6 +32,7 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 it.each(['arm64', 'x64'])('builds and stages CLI and worker together for %s with the release flags and at most six jobs', (arch) => {
+  command('uname', 'echo Darwin');
   command('git', 'echo 8facde6fcd8fb9caa585a5788ab450df6e8ec7db');
   command('cmake', `printf '%s\\n' "$*" >> "$CW_COMMANDS"
 if [[ "$1" == --build ]]; then

@@ -142,7 +142,7 @@ function Content({ state, levels, onAction }: OverlayProps) {
         <span className="orb done">
           <CopyIcon />
         </span>
-        <span className="ov-status">Skopírované - vlož cez ⌘V</span>
+        <span className="ov-status">{navigator.userAgent.includes('Linux') ? 'Skopírované - vlož cez Ctrl+V' : 'Skopírované - vlož cez ⌘V'}</span>
       </StatusPill>
     );
   }

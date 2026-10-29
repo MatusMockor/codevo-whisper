@@ -14,6 +14,7 @@ export type ResidentTranscriberOptions = {
   startupTimeoutMs?: number;
   abortGraceMs?: number;
   backoff?: BackoffOptions;
+  startupFallback?: { binary: string; backend: 'cpu' };
 };
 
 export type WorkerCall = { pcm: Uint8Array; language: TranscribeLanguage; vocabulary?: readonly string[]; signal?: AbortSignal };
@@ -50,6 +51,7 @@ export class ResidentTranscriber {
   private readonly timeoutMs: number;
   private readonly startupTimeoutMs: number;
   private readonly abortGraceMs: number;
+  private fallbackSelected = false;
 
   constructor(private readonly options: ResidentTranscriberOptions) {
     this.backoff = new RestartBackoff(options.backoff ?? RESIDENT_DEFAULTS.backoff);
@@ -111,7 +113,7 @@ export class ResidentTranscriber {
     if (frame === undefined) {
       return;
     }
-    const worker = await this.acquire().catch((error: unknown) => {
+    const worker = await this.acquire(call.signal).catch((error: unknown) => {
       outcome.reject(asError(error));
       return undefined;
     });
@@ -130,37 +132,62 @@ export class ResidentTranscriber {
     }
   }
 
-  private async acquire(): Promise<WorkerProcess> {
+  private async acquire(signal?: AbortSignal): Promise<WorkerProcess> {
+    if (isAborted(signal)) throw asError(signal?.reason);
     if (this.worker?.alive === true) {
-      await this.awaitReady(this.worker);
+      await this.awaitReady(this.worker, signal);
       return this.worker;
     }
     await this.worker?.terminated;
-    await sleep(this.backoff.delayMs());
+    await sleep(this.backoff.delayMs(), undefined, { signal });
     if (this.closed) {
       throw closedError();
     }
-    const worker = this.spawn();
+    let worker = this.spawn();
     this.worker = worker;
-    await this.awaitReady(worker);
+    try {
+      await this.awaitReady(worker, signal);
+    } catch (error) {
+      worker.kill();
+      await worker.terminated;
+      if (this.closed || isAborted(signal) || this.fallbackSelected || this.options.startupFallback === undefined) throw error;
+      this.fallbackSelected = true;
+      worker = this.spawn();
+      this.worker = worker;
+      await this.awaitReady(worker, signal);
+    }
     return worker;
   }
 
-  private awaitReady(worker: WorkerProcess): Promise<void> {
+  private awaitReady(worker: WorkerProcess, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      const onAbort = (): void => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+        worker.kill();
+        reject(asError(signal?.reason));
+      };
       const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
         this.fail(worker);
         worker.kill();
         reject(new TranscribeCliError('timeout', `transcribe worker did not start within ${this.startupTimeoutMs} ms`));
       }, this.startupTimeoutMs);
+      signal?.addEventListener('abort', onAbort, { once: true });
       worker.ready.then(
         () => {
           clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+          if (this.closed || isAborted(signal) || !worker.alive) {
+            reject(this.closed ? closedError() : asError(signal?.reason ?? 'worker stopped before READY'));
+            return;
+          }
           this.state = 'ready';
           resolve();
         },
         (error: unknown) => {
           clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
           this.fail(worker);
           reject(asError(error));
         },
@@ -222,7 +249,8 @@ export class ResidentTranscriber {
   }
 
   private spawn(): WorkerProcess {
-    const { binary, model, backend, threads } = this.options;
+    const { model, threads } = this.options;
+    const { binary, backend } = this.fallbackSelected && this.options.startupFallback !== undefined ? this.options.startupFallback : this.options;
     this.state = this.state === 'ready' ? 'ready' : 'starting';
     return new WorkerProcess({ binary, args: ['--model', model, '--backend', backend, '--threads', String(threads)], maxTextBytes: MAX_OUTPUT_BYTES });
   }
