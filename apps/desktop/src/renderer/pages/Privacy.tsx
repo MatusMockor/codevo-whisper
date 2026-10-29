@@ -8,15 +8,16 @@ const VOICE_STEPS = [
 ];
 
 const NEVER = [
-  'Neposiela zvuk ani text na internet.',
+  'V lokálnom režime neposiela zvuk ani text na internet.',
   'Nezbiera analytiku ani telemetriu.',
-  'Neukladá prepísaný text na disk.',
+  'Neuchováva zvuk v histórii prepisov.',
   'Nepotrebuje účet, e-mail ani predplatné.',
 ];
 
 const STORED: ReadonlyArray<{ what: string; where: string }> = [
   { what: 'Nastavenia', where: 'settings.json' },
   { what: 'Súhrnné štatistiky po dňoch, bez textu', where: 'stats.json' },
+  { what: 'Voliteľná história prepisov a jej nastavenie, lokálny nešifrovaný text', where: 'history.json' },
   { what: 'Stiahnuté modely na prepis', where: 'priečinok models' },
   { what: 'Verzia aplikácie, pre ktorú je model pripravený na rýchly štart', where: 'warm-up.json' },
 ];
@@ -66,6 +67,7 @@ export function Privacy({ onOpenSettings }: { onOpenSettings: () => void }) {
         V lokálnom režime sa reč prepisuje priamo na tomto Macu. Zvuk ani text sa nikam neposielajú. Internet sa používa iba na stiahnutie modelu z Hugging Face, keď kliknete na Stiahnuť, a na
         kontrolu aktualizácií aplikácie.
       </p>
+      <p className="priv-sub">Ak zvolíte serverový režim, zvuk sa posiela na váš spárovaný server na prepis. História prepisov ostáva iba na tomto zariadení.</p>
       <LocalFlow />
       <div className="priv-cols">
         <div>
@@ -84,6 +86,8 @@ export function Privacy({ onOpenSettings }: { onOpenSettings: () => void }) {
             Čo sa ukladá na tomto Macu
           </h2>
           <p className="kept">Všetko je v priečinku aplikácie v ~/Library/Application Support/Codevo Whisper.</p>
+          <p className="kept">História je predvolene vypnutá. Po zapnutí ukladá iba text budúcich úspešne dokončených prepisov, nikdy zvuk. Limit je 10, 50, 100 alebo 500 prepisov, predvolene 100. Najstaršie sa automaticky vymažú; nižší limit ich vymaže ihneď.</p>
+          <p className="kept">V Domov môžete vymazať jeden prepis alebo celú históriu. Vypnutie v Nastaveniach vymaže históriu a zastaví ďalšie ukladanie. Vymazanie nemení súhrnné štatistiky, posledné diktovanie v pamäti ani schránku. Nejde o bezpečné prepísanie disku.</p>
           <ul className="kept-list">
             {STORED.map((item) => (
               <li key={item.what}>

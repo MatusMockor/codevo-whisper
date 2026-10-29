@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { StatsPeriod } from '../../shared/stats';
 import { summarize } from '../../shared/stats-summary';
+import { HistoryPanel } from '../components/HistoryPanel';
 import { LastTranscriptCard } from '../components/LastTranscriptCard';
 import { LockIcon } from '../components/Icons';
 import { PeriodSwitch } from '../components/PeriodSwitch';
@@ -47,6 +48,7 @@ export function Home({ onOpenSettings, onOpenServer }: HomeProps) {
         <span>Štatistiky sú len súčty čísel na tomto Macu, bez textu.</span>
       </p>
       <LastTranscriptCard transcript={lastTranscript} />
+      <HistoryPanel />
     </div>
   );
 }

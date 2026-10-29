@@ -1,3 +1,4 @@
+import type { HistoryPolicy, HistoryView } from './history';
 import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
 import type { HotkeyRecordResult } from './hotkey-record';
@@ -12,6 +13,10 @@ import type { InstallOutcome, UpdateStatus } from './updates';
 
 export type IpcInvokeApi = {
   getOutputAudio(): Promise<OutputAudioView>;
+  getHistory(): Promise<HistoryView>;
+  configureHistory(policy: HistoryPolicy): Promise<void>;
+  deleteHistoryEntry(id: string): Promise<void>;
+  clearHistory(): Promise<void>;
   getSettings(): Promise<Settings>;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
   getStats(): Promise<DayStats[]>;
@@ -47,6 +52,7 @@ export type IpcInvokeApi = {
 };
 
 export type IpcEvents = {
+  'history-changed': HistoryView;
   'settings-changed': Settings;
   'open-page': PageId;
   'stats-changed': DayStats[];
@@ -69,6 +75,10 @@ export type IpcApi = IpcInvokeApi & {
 
 export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = Object.freeze({
   getOutputAudio: 'output-audio:get',
+  getHistory: 'history:get',
+  configureHistory: 'history:configure',
+  deleteHistoryEntry: 'history:delete',
+  clearHistory: 'history:clear',
   getSettings: 'settings:get',
   updateSettings: 'settings:update',
   getStats: 'stats:get',
@@ -104,6 +114,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
+  'history-changed': 'history:changed',
   'settings-changed': 'settings:changed',
   'open-page': 'window:open-page',
   'stats-changed': 'stats:changed',

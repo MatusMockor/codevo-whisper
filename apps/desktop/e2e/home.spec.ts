@@ -116,10 +116,10 @@ function setLastTranscript(text: string): Promise<void> {
 
 test('copy writes the clipboard and the last transcript is empty after relaunch', async () => {
   await start();
-  const card = page.locator('.last');
+  const card = page.getByRole('region', { name: 'Posledné diktovanie', exact: true });
   await expect(card).toContainText('Zatiaľ nemáte žiadny prepis.');
   await expect(card.getByRole('button', { name: 'Kopírovať' })).toBeDisabled();
-  await expect(card).toContainText('Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.');
+  await expect(card).toContainText('Táto karta ostáva v pamäti do zatvorenia aplikácie. Voliteľnú históriu na disku spravujete v Nastaveniach.');
   const previousClipboard = await app.evaluate(({ clipboard }) => clipboard.readText());
 
   try {
@@ -135,7 +135,7 @@ test('copy writes the clipboard and the last transcript is empty after relaunch'
 
   await app.close();
   await start();
-  await expect(page.locator('.last')).toContainText('Zatiaľ nemáte žiadny prepis.');
+  await expect(page.getByRole('region', { name: 'Posledné diktovanie', exact: true })).toContainText('Zatiaľ nemáte žiadny prepis.');
   expect(await page.evaluate(() => window.codevo.getLastTranscript())).toBeNull();
 });
 
@@ -148,7 +148,7 @@ test('copy replays the exact safe trailing space after transcript preferences ch
     });
     await page.evaluate(() => window.codevo.updateSettings({ customWords: ['Other'], appendTrailingSpace: false }));
     await expect.poll(() => page.evaluate(() => window.codevo.getLastTranscript())).toBe('Žilina ');
-    await page.locator('.last').getByRole('button', { name: 'Kopírovať', exact: true }).click();
+    await page.getByRole('region', { name: 'Posledné diktovanie', exact: true }).getByRole('button', { name: 'Kopírovať', exact: true }).click();
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Žilina ');
   } finally {
     await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
@@ -158,11 +158,11 @@ test('copy replays the exact safe trailing space after transcript preferences ch
 test('the last transcript card updates even when the statistics cannot be saved', async () => {
   await mkdir(join(userDataDir, 'stats.json'));
   await start();
-  await expect(page.locator('.last')).toContainText('Zatiaľ nemáte žiadny prepis.');
+  await expect(page.getByRole('region', { name: 'Posledné diktovanie', exact: true })).toContainText('Zatiaľ nemáte žiadny prepis.');
 
   await setLastTranscript(TRANSCRIPT);
 
-  await expect(page.locator('.last')).toContainText(TRANSCRIPT);
+  await expect(page.getByRole('region', { name: 'Posledné diktovanie', exact: true })).toContainText(TRANSCRIPT);
 });
 
 test('shows a fallback and logs when the statistics cannot be loaded', async () => {

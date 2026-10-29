@@ -4,6 +4,7 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { RendererSource } from '../windows/renderer-source';
 import { broadcast } from './broadcast';
 import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
+import { historyHandlers, type HistoryHandlerDeps } from './history-handlers';
 import type { InvokeHandlers } from './invoke-handlers';
 import { microphoneHandlers, type MicrophoneHandlerDeps } from './microphone-handlers';
 import { modelHandlers, type ModelHandlerDeps } from './model-handlers';
@@ -14,6 +15,7 @@ import { updateHandlers, type UpdateHandlerDeps } from './update-handlers';
 import { IpcValidationError } from './validate';
 
 export type IpcDependencies = CoreHandlerDeps &
+  HistoryHandlerDeps &
   PermissionHandlerDeps &
   ModelHandlerDeps &
   MicrophoneHandlerDeps &
@@ -26,6 +28,7 @@ export type IpcDependencies = CoreHandlerDeps &
 function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
   return {
     ...coreHandlers(dependencies),
+    ...historyHandlers(dependencies),
     ...permissionHandlers(dependencies),
     ...modelHandlers(dependencies),
     ...microphoneHandlers(dependencies),

@@ -1,5 +1,6 @@
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
+import type { HistoryStore } from '../history/history-store';
 import type { InputHelper } from '../helper/input-helper';
 import type { HotkeyService, StopReason } from '../hotkey/hotkey-service';
 import type { CopyLastOutcome, InsertionService, PasteLastOutcome } from '../insertion/insertion-service';
@@ -26,6 +27,7 @@ export type SessionCoordinatorDeps = {
   helper: InputHelper;
   settings: SettingsStore;
   stats: StatsRecorder;
+  history: Pick<HistoryStore, 'record'>;
   pause: PauseState;
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
@@ -211,7 +213,12 @@ export class SessionCoordinator {
       settings: this.deps.settings,
       overlay: this.sessionOverlay(),
       abandon: (session) => this.handleAbandon(session),
-      transcribed: (text, pcm) => this.recordStats(text, pcm),
+      transcribed: (text, pcm) => {
+        this.recordStats(text, pcm);
+        this.deps.history.record(text).catch(() => {
+          this.logger.error('The completed transcript could not be saved to history', undefined);
+        });
+      },
       captureLane: this.captureLane,
       pipeline: this.pipeline,
       clock: this.deps.clock ?? Date.now,
