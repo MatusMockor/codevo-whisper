@@ -96,3 +96,29 @@ test('ordinary Electron quit waits for held fixture restoration before exit', as
   await app.close();
   expect(chunks.join('')).toContain('CW_AUDIO_QUIT ["restore-start","restore-end:false"]');
 });
+
+test('relaunch IPC drains fixture restoration before helper stop and process actions', async () => {
+  await app.evaluate(({ app: electronApp }) => {
+    const hooks = globalThis as unknown as Hooks;
+    const helper = hooks.codevoE2e.helper;
+    const begin = helper.beginRecordingAudio.bind(helper);
+    helper.beginRecordingAudio = async (settings) => {
+      const lease = await begin(settings);
+      return { finish: async (options) => {
+        hooks.audioEvents.push('restore-start');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await lease.finish(options);
+        hooks.audioEvents.push(`restore-end:${helper.outputMuted}`);
+      } };
+    };
+    const stop = helper.stop.bind(helper);
+    helper.stop = () => { hooks.audioEvents.push(`helper-stop:${helper.outputMuted}`); return stop(); };
+    electronApp.relaunch = () => { hooks.audioEvents.push(`relaunch:${helper.outputMuted}`); };
+    electronApp.exit = () => { hooks.audioEvents.push('exit'); };
+  });
+  await edge('down');
+  await expect.poll(() => audioState().then((state) => state.frames)).toBeGreaterThan(1);
+  await page.evaluate(() => window.codevo.relaunch());
+  expect(await app.evaluate(() => (globalThis as unknown as Hooks).audioEvents)).toEqual(['restore-start', 'restore-end:false', 'helper-stop:false', 'relaunch:false', 'exit']);
+  expect((await audioState()).trace).toEqual(['start:headphones:73', 'mute', 'restore:false']);
+});
