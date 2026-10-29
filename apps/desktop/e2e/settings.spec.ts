@@ -11,6 +11,10 @@ import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDat
 type FakeHelperGlobal = { codevoE2e: { helper: FakeInputHelper; lastTranscript: Pick<LastTranscript, 'set'> } };
 
 const DEFAULTS: Settings = {
+  muteWhileRecording: false,
+  audioFeedback: false,
+  feedbackOutputId: null,
+  feedbackVolume: 50,
   customWords: [],
   removeFillerWords: false,
   appendTrailingSpace: false,
@@ -178,6 +182,91 @@ function setRecordedHotkey(result: HotkeyRecordResult): Promise<void> {
 }
 
 test.describe('settings page', () => {
+  test('recording audio discovery preserves missing devices and explains unavailable and failed states', async () => {
+    await page.evaluate(() => window.codevo.updateSettings({ audioFeedback: true, feedbackOutputId: 'disconnected', feedbackVolume: 73 }));
+    const output = page.getByRole('combobox', { name: 'Výstupné zariadenie', exact: true });
+    const volume = page.getByRole('slider', { name: 'Hlasitosť', exact: true });
+    await expect(output).toHaveValue('disconnected');
+    await expect(output.locator('option:checked')).toHaveText('Vybrané zariadenie (nepripojené)');
+    await expect(page.getByText('Vybrané zariadenie nie je pripojené. Zvuky použijú systémový predvolený výstup.')).toBeVisible();
+    await app.evaluate(() => {
+      (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.outputAudio = { kind: 'unavailable', reason: 'platform' };
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByText('Zvuková odozva na tomto systéme zatiaľ nie je dostupná.')).toBeVisible();
+    await expect(output).toBeDisabled();
+    await expect(volume).toBeDisabled();
+    await expect(volume).toHaveValue('73');
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('output-audio:get');
+      ipcMain.handle('output-audio:get', () => Promise.reject(new Error('device lookup failed')));
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('alert').filter({ hasText: 'Výstupné zariadenia sa nepodarilo načítať.' })).toBeVisible();
+    expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ audioFeedback: true, feedbackOutputId: 'disconnected', feedbackVolume: 73 });
+  });
+  test('recording audio controls keep saved values after a write error', async () => {
+    await expect(page.getByRole('switch', { name: 'Zvuková odozva', exact: true })).toBeEnabled();
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:update');
+      ipcMain.handle('settings:update', () => Promise.reject(new Error('disk full')));
+    });
+    await page.getByRole('switch', { name: 'Zvuková odozva', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Zmenu sa nepodarilo uložiť.' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Zvuková odozva', exact: true })).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByRole('slider', { name: 'Hlasitosť', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ audioFeedback: false, feedbackOutputId: null, feedbackVolume: 50 });
+  });
+  test('recording audio controls preserve keyboard choices and disabled preferences across relaunch', async () => {
+    const mute = page.getByRole('switch', { name: 'Stlmiť počas nahrávania', exact: true });
+    const feedback = page.getByRole('switch', { name: 'Zvuková odozva', exact: true });
+    const output = page.getByRole('combobox', { name: 'Výstupné zariadenie', exact: true });
+    const volume = page.getByRole('slider', { name: 'Hlasitosť', exact: true });
+    await expect(mute).toHaveAttribute('aria-checked', 'false');
+    await expect(feedback).toHaveAttribute('aria-checked', 'false');
+    await expect(output).toBeDisabled();
+    await expect(volume).toBeDisabled();
+    await expect(volume).toHaveValue('50');
+    expect(await page.evaluate(() => window.codevo.getOutputAudio())).toMatchObject({ kind: 'available', canMute: true });
+    for (const toggle of [mute, feedback]) {
+      await toggle.focus();
+      await page.keyboard.press('Space');
+      await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    }
+    await expect(output).toBeEnabled();
+    await output.selectOption('headphones');
+    await volume.focus();
+    await page.keyboard.press('End');
+    await expect(volume).toHaveValue('100');
+    await page.keyboard.press('ArrowLeft');
+    await expect(volume).toHaveValue('99');
+    expect(await volume.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none');
+    for (const width of [980, 760]) {
+      await page.setViewportSize({ width, height: 760 });
+      await volume.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`recording-audio-${width}.png`) });
+      const layout = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth, scrollers: [...document.querySelectorAll('*')].filter((element) => element.scrollHeight > element.clientHeight && getComputedStyle(element).overflowY === 'auto').map((element) => ({ tag: element.tagName, className: element.className, height: element.clientHeight, scrollHeight: element.scrollHeight, width: element.clientWidth, scrollWidth: element.scrollWidth })) }));
+      test.info().annotations.push({ type: `layout-${width}`, description: JSON.stringify(layout) });
+      expect(layout.content).toBeLessThanOrEqual(layout.viewport);
+      if (width === 760) {
+        await page.locator('.panel').evaluate((element) => { element.scrollLeft = element.scrollWidth - element.clientWidth; });
+        await page.screenshot({ path: test.info().outputPath('recording-audio-760-scrolled.png') });
+      }
+    }
+    await feedback.click();
+    await expect(output).toBeDisabled();
+    await expect(volume).toBeDisabled();
+    await expect(output).toHaveValue('headphones');
+    await expect(volume).toHaveValue('99');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ muteWhileRecording: true, audioFeedback: false, feedbackOutputId: 'headphones', feedbackVolume: 99 });
+    await app.close();
+    await start();
+    await openSettings();
+    await expect(page.getByRole('switch', { name: 'Stlmiť počas nahrávania', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('combobox', { name: 'Výstupné zariadenie', exact: true })).toHaveValue('headphones');
+    await expect(page.getByRole('slider', { name: 'Hlasitosť', exact: true })).toHaveValue('99');
+    expect(JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8'))).toMatchObject({ muteWhileRecording: true, audioFeedback: false, feedbackOutputId: 'headphones', feedbackVolume: 99 });
+  });
   test('fake-helper replay types saved Unicode and suffix with current output preferences', async () => {
     await app.evaluate(() => {
       const { helper, lastTranscript } = (globalThis as unknown as FakeHelperGlobal).codevoE2e;

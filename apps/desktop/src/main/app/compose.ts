@@ -75,7 +75,12 @@ export function composeApplication(logger: Logger): Application {
   const lastTranscript = new LastTranscript(logger);
   const mainWindow = new MainWindowController(logger, e2e ? backgroundPresentation : foregroundPresentation);
   const disposers: Array<() => void> = [];
-  const quitGate = new QuitGate(capture, () => app.quit(), logger);
+  let sessions: SessionCoordinator | null = null;
+  const shutdown = async (): Promise<void> => {
+    await sessions?.shutdown();
+    await capture.settled();
+  };
+  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false), settled: shutdown }, () => app.quit(), logger);
   const allowShutdown = (): void => quitGate.systemShuttingDown();
   const recordingShell = e2e ? new RecordingDesktopShell() : null;
   const desktopShell: DesktopShell = recordingShell ?? shell;
@@ -87,6 +92,7 @@ export function composeApplication(logger: Logger): Application {
   }
 
   async function relaunch(): Promise<void> {
+    await shutdown();
     disposeAll();
     await startedHelper?.stop().catch((error: unknown) => {
       logger.error('The input helper could not be stopped before the relaunch', error);
@@ -127,6 +133,7 @@ export function composeApplication(logger: Logger): Application {
       logger,
     });
     registerIpc({
+      helper,
       settings,
       stats: home.stats,
       status: home.status,
@@ -164,6 +171,7 @@ export function composeApplication(logger: Logger): Application {
       openServer: () => mainWindow.open('server'),
       logger,
     });
+    sessions = coordinator;
     const tray = new TrayMenu({
       coordinator,
       capture,
@@ -209,7 +217,7 @@ export function composeApplication(logger: Logger): Application {
     beforeQuit: (event) => quitGate.handle(event),
     dispose: () => {
       disposeAll();
-      void startedHelper?.stop();
+      void shutdown().then(() => startedHelper?.stop()).catch((error: unknown) => logger.error('Recording audio shutdown failed', error));
     },
   };
 }

@@ -4,6 +4,44 @@
   max-width: 820px;
 }
 
+.feedback-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 190px;
+}
+
+.feedback-volume input {
+  width: 130px;
+  min-width: 0;
+  accent-color: var(--lamp);
+  cursor: pointer;
+}
+
+.feedback-volume input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.feedback-volume:has(input:disabled) {
+  opacity: .5;
+}
+
+.feedback-volume input:disabled {
+  cursor: not-allowed;
+}
+
+.feedback-volume output {
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.switch:disabled {
+  opacity: .5;
+}
+
 .sgroup h2 {
   margin: 0 0 8px;
   font-size: 12.5px;

@@ -1,4 +1,5 @@
 import type { AutoSubmit } from '../../shared/settings';
+import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 
@@ -17,6 +18,8 @@ export type ShortcutName = 'paste-last';
 export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted' | 'helper-died';
 
 export interface InputHelper {
+  getOutputAudio(): Promise<OutputAudioView>;
+  beginRecordingAudio(settings: RecordingAudioSettings): Promise<RecordingAudioLease>;
   start(): Promise<void>;
   stop(): Promise<void>;
   permissions(): Promise<Permissions>;

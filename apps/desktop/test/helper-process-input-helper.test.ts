@@ -4,6 +4,7 @@ import { HelperProcessInputHelper } from '../src/main/helper/helper-process-inpu
 import type { InputLostReason } from '../src/main/helper/input-helper';
 import type { HotkeyEvent } from '../src/shared/hotkey';
 import { protocolHelper } from './protocol-helper';
+import { DEFAULT_SETTINGS } from '../src/shared/settings';
 
 let channel: HelperProcess | null = null;
 let helper: HelperProcessInputHelper | null = null;
@@ -16,12 +17,66 @@ afterEach(async () => {
 
 async function started(timeoutMs?: number): Promise<{ channel: HelperProcess; helper: HelperProcessInputHelper }> {
   channel = protocolHelper(timeoutMs);
-  helper = new HelperProcessInputHelper(channel);
+  helper = new HelperProcessInputHelper(channel, undefined, 'darwin');
   await helper.start();
   return { channel, helper };
 }
 
 describe('HelperProcessInputHelper', () => {
+  it('retries unresolved restoration and blocks a later both-off recording until restored', async () => {
+    const { channel, helper } = await started();
+    const lease = await helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true });
+    await channel.request('respond-next', { cmd: 'recording-audio-end', response: { ended: false } });
+    await expect(lease.finish({ playStop: false })).rejects.toThrow('recording-audio-end-failed');
+    await channel.request('respond-next', { cmd: 'recording-audio-end', response: { ended: false } });
+    await expect(helper.beginRecordingAudio(DEFAULT_SETTINGS)).rejects.toThrow('recording-audio-end-failed');
+    const off = await helper.beginRecordingAudio(DEFAULT_SETTINGS);
+    await off.finish({ playStop: false });
+    expect((await channel.request('audio-state'))['operations']).toEqual([
+      { cmd: 'recording-audio-begin', token: 1, mute: true, feedback: false, outputId: '', volume: 50 },
+      { cmd: 'recording-audio-end', token: 1, playStop: false },
+    ]);
+  });
+  it('does no audio work with both switches off and exposes unavailable production platforms', async () => {
+    const { channel, helper } = await started();
+    const lease = await helper.beginRecordingAudio(DEFAULT_SETTINGS);
+    await lease.finish({ playStop: true });
+    expect((await channel.request('audio-state'))['operations']).toEqual([]);
+    const unsupported = new HelperProcessInputHelper(channel, undefined, 'linux');
+    expect(await unsupported.getOutputAudio()).toEqual({ kind: 'unavailable', reason: 'platform' });
+    await expect(unsupported.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true })).rejects.toThrow('recording-audio-unavailable');
+  });
+  it('requires explicit audio acknowledgments and cleans the same token after begin failure or timeout', async () => {
+    const { channel, helper } = await started(50);
+    for (const response of [{ begun: false }, {}, { begun: 'true' }]) {
+      await channel.request('respond-next', { cmd: 'recording-audio-begin', response });
+      await expect(helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true })).rejects.toThrow('recording-audio-begin-failed');
+    }
+    await channel.request('respond-next', { cmd: 'recording-audio-begin', response: { begun: true }, delayMs: 100 });
+    await expect(helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true })).rejects.toThrow();
+    expect((await channel.request('audio-state'))['operations']).toEqual([1, 2, 3, 4].map((token) => ({ cmd: 'recording-audio-end', token, playStop: false })));
+    const lease = await helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, audioFeedback: true });
+    await channel.request('respond-next', { cmd: 'recording-audio-end', response: { ended: false, reason: 'restore-pending' } });
+    await expect(lease.finish({ playStop: true })).rejects.toThrow('recording-audio-end-failed');
+  });
+  it('rejects malformed output inventories instead of assuming mute capability', async () => {
+    const { channel, helper } = await started();
+    for (const response of [{ kind: 'available', outputs: [], canMute: 'yes' }, { kind: 'available', outputs: [{ id: '', label: 'bad' }], canMute: true }, {}]) {
+      await channel.request('respond-next', { cmd: 'output-audio', response });
+      await expect(helper.getOutputAudio()).rejects.toThrow('output-audio-invalid');
+    }
+  });
+  it('discovers real protocol outputs and sends integer preferences through a private idempotent lease', async () => {
+    const { channel, helper } = await started();
+    expect(await helper.getOutputAudio()).toEqual({ kind: 'available', outputs: [{ id: 'speakers', label: 'Speakers' }], canMute: true });
+    const lease = await helper.beginRecordingAudio({ ...DEFAULT_SETTINGS, muteWhileRecording: true, audioFeedback: true, feedbackVolume: 73, feedbackOutputId: 'speakers' });
+    await Promise.all([lease.finish({ playStop: true }), lease.finish({ playStop: true })]);
+    const { operations } = await channel.request('audio-state');
+    expect(operations).toEqual([
+      { cmd: 'recording-audio-begin', token: 1, mute: true, feedback: true, outputId: 'speakers', volume: 73 },
+      { cmd: 'recording-audio-end', token: 1, playStop: true },
+    ]);
+  });
   it('requires positive posting acknowledgments for every text and submit command', async () => {
     const { channel, helper } = await started();
     for (const response of [{ posted: false, reason: 'post-access-denied' }, {}, { posted: 'true' }]) {

@@ -1,5 +1,6 @@
 import { parseHotkeySetting, type HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+import type { AudioOutput, OutputAudioView } from '../../shared/recording-audio';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import type { HelperMessage } from './helper-channel';
 import type { AppTarget, FocusedElement, InputLostReason, ModifierFlags, Permissions, ShortcutName } from './input-helper';
@@ -8,6 +9,21 @@ const SHIFT_MASK = 0x20000;
 const CONTROL_MASK = 0x40000;
 const OPTION_MASK = 0x80000;
 const COMMAND_MASK = 0x100000;
+
+export function parseOutputAudio(message: HelperMessage): OutputAudioView {
+  if (message['kind'] === 'unavailable' && (message['reason'] === 'platform' || message['reason'] === 'device')) {
+    return { kind: 'unavailable', reason: message['reason'] };
+  }
+  const outputs = message['outputs'];
+  if (message['kind'] !== 'available' || typeof message['canMute'] !== 'boolean' || !Array.isArray(outputs)) throw new Error('output-audio-invalid');
+  const parsed: AudioOutput[] = [];
+  const entries: readonly unknown[] = outputs;
+  for (const output of entries) {
+    if (typeof output !== 'object' || output === null || !('id' in output) || typeof output.id !== 'string' || output.id.length === 0 || output.id.length > 512 || !('label' in output) || typeof output.label !== 'string') throw new Error('output-audio-invalid');
+    parsed.push({ id: output.id, label: output.label });
+  }
+  return { kind: 'available', outputs: parsed, canMute: message['canMute'] };
+}
 
 function nullableBoolean(message: HelperMessage, key: string): boolean | null {
   const value = message[key];

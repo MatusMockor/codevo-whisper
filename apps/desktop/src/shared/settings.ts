@@ -37,6 +37,10 @@ export type LocalModelUnload = 'never' | 'immediately' | 2 | 5 | 10 | 15 | 60;
 export type OverlayMode = 'indicator' | 'live';
 
 export type Settings = {
+  muteWhileRecording: boolean;
+  audioFeedback: boolean;
+  feedbackOutputId: string | null;
+  feedbackVolume: number;
   customWords: readonly string[];
   removeFillerWords: boolean;
   appendTrailingSpace: boolean;
@@ -57,6 +61,10 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
+  muteWhileRecording: false,
+  audioFeedback: false,
+  feedbackOutputId: null,
+  feedbackVolume: 50,
   customWords: Object.freeze([]),
   removeFillerWords: false,
   appendTrailingSpace: false,

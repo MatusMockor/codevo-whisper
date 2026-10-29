@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
+  it('accepts recording audio preferences and rejects malformed percentages and output ids', () => {
+    const patch = { muteWhileRecording: true, audioFeedback: false, feedbackOutputId: 'output-uid', feedbackVolume: 0 };
+    expect(validateSettingsPatch(patch)).toEqual(patch);
+    expect(validateSettingsPatch({ feedbackOutputId: null, feedbackVolume: 100 })).toEqual({ feedbackOutputId: null, feedbackVolume: 100 });
+    for (const feedbackVolume of [-1, 101, 0.5, NaN, Infinity, '50', null]) {
+      expect(() => validateSettingsPatch({ feedbackVolume })).toThrow(IpcValidationError);
+    }
+    for (const feedbackOutputId of ['', 'x'.repeat(513), 0, false]) {
+      expect(() => validateSettingsPatch({ feedbackOutputId })).toThrow(IpcValidationError);
+    }
+    expect(() => validateSettingsPatch({ muteWhileRecording: 1 })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ audioFeedback: 'true' })).toThrow(IpcValidationError);
+  });
   it('accepts only the logical output methods, clipboard policies and submit modes', () => {
     for (const insertion of ['paste', 'type', 'clipboard']) {
       for (const clipboardPolicy of ['restore', 'leave']) {

@@ -46,6 +46,10 @@ function isMicrophone(value: unknown): value is Settings['microphone'] {
 }
 
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
+  muteWhileRecording: isBoolean,
+  audioFeedback: isBoolean,
+  feedbackOutputId: isNullableText,
+  feedbackVolume: (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100,
   customWords: isCustomWords,
   removeFillerWords: isBoolean,
   appendTrailingSpace: isBoolean,

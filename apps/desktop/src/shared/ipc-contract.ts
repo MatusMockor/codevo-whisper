@@ -1,4 +1,5 @@
 import type { AppStatus } from './app-status';
+import type { OutputAudioView } from './recording-audio';
 import type { HotkeyRecordResult } from './hotkey-record';
 import type { AudioDevice } from './microphones';
 import type { ModelCatalogView, ModelState } from './models';
@@ -10,6 +11,7 @@ import type { DayStats } from './stats';
 import type { InstallOutcome, UpdateStatus } from './updates';
 
 export type IpcInvokeApi = {
+  getOutputAudio(): Promise<OutputAudioView>;
   getSettings(): Promise<Settings>;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
   getStats(): Promise<DayStats[]>;
@@ -66,6 +68,7 @@ export type IpcApi = IpcInvokeApi & {
 };
 
 export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = Object.freeze({
+  getOutputAudio: 'output-audio:get',
   getSettings: 'settings:get',
   updateSettings: 'settings:update',
   getStats: 'stats:get',

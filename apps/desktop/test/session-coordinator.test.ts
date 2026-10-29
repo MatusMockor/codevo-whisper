@@ -27,6 +27,7 @@ import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
+import { QuitGate } from '../src/main/app/quit-gate';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
@@ -35,7 +36,7 @@ const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes',
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -83,7 +84,7 @@ async function prepared(setup: Setup = {}) {
   await hotkey.start();
   const capture = new InProcessCapture();
   const lastTranscript = new LastTranscript();
-  const insertion = new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger);
+  const insertion = new InsertionService(helper, settings, lastTranscript, setup.pasteDelay === 'default' ? undefined : () => Promise.resolve(), logger);
   const states: OverlayState[] = [];
   const settingsOpened: string[] = [];
   const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
@@ -127,6 +128,382 @@ function lastVisible(states: OverlayState[]): OverlayState | undefined {
 }
 
 describe('SessionCoordinator', () => {
+  it.each(['mode change', 'tray pause'] as const)('retains failed restoration after %s cancellation settles', async (action) => {
+    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: async () => {
+        restoring.resolve();
+        await release.promise;
+        throw new Error('restore-failed-cancellation');
+      } };
+    };
+    await pressAndSpeak(harness, 7);
+    await (action === 'mode change' ? harness.settings.update({ mode: 'toggle' }) : harness.coordinator.pause());
+    await restoring.promise;
+    expect(harness.capture.recording).toBe(false);
+    release.resolve();
+    await harness.coordinator.settled();
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.logger.errors.some((entry) => String(entry.error).includes('restore-failed-cancellation'))).toBe(true);
+    expect(harness.states.at(-1)).toEqual({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
+  });
+  it.each(['mode change', 'tray pause'] as const)('hides after successful restoration on %s cancellation', async (action) => {
+    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    await pressAndSpeak(harness, 7);
+    await (action === 'mode change' ? harness.settings.update({ mode: 'toggle' }) : harness.coordinator.pause());
+    await harness.coordinator.settled();
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+  });
+  it('restores pending audio after engine abandonment without a late microphone start', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true, localModelId: null } });
+    const acquiring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      acquiring.resolve();
+      await release.promise;
+      return begin(settings);
+    };
+    harness.helper.emitHotkey('down');
+    await acquiring.promise;
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    release.resolve();
+    await harness.coordinator.settled();
+    expect(harness.capture.starts).toEqual([]);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false']);
+  });
+  it('expires the abandonment notice before pending acquisition settles without reviving it', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, localModelId: null } });
+    const acquiring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      acquiring.resolve();
+      await release.promise;
+      return begin(settings);
+    };
+    harness.helper.emitHotkey('down');
+    await acquiring.promise;
+    await expect.poll(() => harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.coordinator.isBusy()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 4100));
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    release.resolve();
+    await harness.coordinator.settled();
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.capture.starts).toEqual([]);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+  }, 10000);
+  it('keeps the original restoration notice deadline through a held paste and default paste delay', async () => {
+    const pasteEntered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    class HeldPasteHelper extends FakeInputHelper {
+      override async paste(): Promise<void> {
+        pasteEntered.resolve();
+        await release.promise;
+        await super.paste();
+      }
+    }
+    const harness = await prepared({ inputHelper: new HeldPasteHelper({ clipboard: 'original' }), settings: { muteWhileRecording: true }, pasteDelay: 'default' });
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: () => Promise.reject(new Error('restore-failed-held-paste')) };
+    };
+    await dictate(harness, 7);
+    await pasteEntered.promise;
+    expect(harness.coordinator.isBusy()).toBe(true);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(harness.states.at(-1)?.kind).toBe('error');
+    release.resolve();
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.pasted).toEqual(['7:32000']);
+    expect(harness.helper.clipboard).toBe('original');
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.outputMuted).toBe(true);
+  }, 10000);
+  it('does not revive an expired newer utility notice when stale cleanup fails', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: async () => {
+        restoring.resolve();
+        await release.promise;
+        throw new Error('restore-failed-stale');
+      } };
+    };
+    await pressAndSpeak(harness, 7);
+    harness.hotkey.cancel();
+    await restoring.promise;
+    expect(await harness.coordinator.copyLast()).toBe('no-transcript');
+    expect(harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Zatiaľ nemáte žiadny prepis' });
+    await new Promise((resolve) => setTimeout(resolve, 4100));
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    const expired = harness.states.length;
+    release.resolve();
+    await harness.coordinator.settled();
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.states.slice(expired)).toEqual([]);
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.helper.pasted).toEqual([]);
+  }, 10000);
+  it('keeps the next recording visible when stale cancellation restoration fails', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    let first = true;
+    harness.helper.beginRecordingAudio = async (settings) => {
+      const lease = await begin(settings);
+      if (!first) return lease;
+      first = false;
+      return { finish: async () => {
+        restoring.resolve();
+        await release.promise;
+        throw new Error('restore-failed-previous-recording');
+      } };
+    };
+    await pressAndSpeak(harness, 7);
+    harness.hotkey.cancel();
+    await restoring.promise;
+    harness.helper.emitHotkey('down');
+    expect(harness.states.at(-1)?.kind).toBe('recording');
+    release.resolve();
+    await expect.poll(() => harness.capture.starts).toHaveLength(2);
+    expect(harness.states.at(-1)?.kind).toBe('recording');
+    harness.capture.speak(stampedPcm(8));
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.pasted).toEqual(['8:32000']);
+    expect(harness.states.at(-1)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+  });
+  it('does not revive shutdown presentation when held restoration fails', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: async () => {
+        restoring.resolve();
+        await release.promise;
+        throw new Error('restore-failed-shutdown');
+      } };
+    };
+    await pressAndSpeak(harness, 7);
+    const shutdown = harness.coordinator.shutdown();
+    await restoring.promise;
+    const state = harness.states.at(-1);
+    release.resolve();
+    await shutdown;
+    harness.helper.emitHotkey('down');
+    expect(harness.states.at(-1)).toEqual(state);
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.capture.starts).toHaveLength(1);
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.logger.errors.some((entry) => String(entry.error).includes('restore-failed-shutdown'))).toBe(true);
+  });
+  it('holds a rapid following recording behind unfinished restoration', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    let first = true;
+    harness.helper.beginRecordingAudio = async (settings) => {
+      const lease = await begin(settings);
+      if (!first) return lease;
+      first = false;
+      return { finish: async (options) => { restoring.resolve(); await release.promise; await lease.finish(options); } };
+    };
+    await pressAndSpeak(harness, 7);
+    harness.helper.emitHotkey('up');
+    await restoring.promise;
+    harness.helper.emitHotkey('down');
+    expect(harness.capture.starts).toHaveLength(1);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute']);
+    release.resolve();
+    await expect.poll(() => harness.capture.starts).toHaveLength(2);
+    harness.capture.speak(stampedPcm(8));
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.helper.pasted).toEqual(['7:32000', '8:32000']);
+    expect(harness.helper.outputMuted).toBe(false);
+  });
+  it('keeps the saved mute state and recording preferences through cancellation', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'speakers', feedbackVolume: 73 } });
+    harness.helper.outputMuted = true;
+    await pressAndSpeak(harness, 7);
+    await harness.settings.update({ muteWhileRecording: false, audioFeedback: false, feedbackOutputId: null, feedbackVolume: 1 });
+    harness.hotkey.cancel();
+    await harness.coordinator.settled();
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.helper.audioTrace).toEqual(['start:speakers:73', 'mute', 'restore:true', 'stop:speakers:73']);
+    await pressAndSpeak(harness, 8);
+    harness.helper.emitHotkey('up');
+    await harness.coordinator.settled();
+    expect(harness.helper.audioTrace).toHaveLength(4);
+  });
+  it('restores without a stop cue when microphone start fails', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    harness.capture.failNextStart = true;
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Mikrofón sa nepodarilo zapnúť' });
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false']);
+  });
+  it('restores even when microphone stop rejects', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    await pressAndSpeak(harness, 7);
+    const stop = harness.capture.stop.bind(harness.capture);
+    harness.capture.stop = async () => { await stop(); throw new Error('capture-stop-failed'); };
+    harness.hotkey.cancel();
+    await harness.coordinator.settled();
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false', 'stop:default:50']);
+  });
+  it('preserves recorded PCM and reports restoration failure', async () => {
+    const pcmFile = join(scratch, 'worker.pcm');
+    vi.stubEnv('CW_WORKER_PCM_FILE', pcmFile);
+    const harness = await prepared({ settings: { muteWhileRecording: true }, pasteDelay: 'default' });
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: () => Promise.reject(new Error('restore-failed')) };
+    };
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual(['7:32000']);
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.lastTranscript.get()).toBe('7:32000');
+    expect(harness.helper.clipboard).toBe('original');
+    expect(await readFile(pcmFile)).toEqual(Buffer.from(stampedPcm(7)));
+    expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
+    expect(harness.logger.errors.some((entry) => String(entry.error).includes('restore-failed'))).toBe(true);
+    expect(harness.states.some((state) => state.kind === 'error' && state.message.includes('Zvukový výstup'))).toBe(true);
+    expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
+    expect(harness.states.at(-1)?.kind).toBe('error');
+  });
+  it('keeps normal success after restored audio and default paste settle', async () => {
+    const pcmFile = join(scratch, 'worker.pcm');
+    vi.stubEnv('CW_WORKER_PCM_FILE', pcmFile);
+    const harness = await prepared({ settings: { muteWhileRecording: true }, pasteDelay: 'default' });
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual(['7:32000']);
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.lastTranscript.get()).toBe('7:32000');
+    expect(harness.helper.clipboard).toBe('original');
+    expect(await readFile(pcmFile)).toEqual(Buffer.from(stampedPcm(7)));
+    expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
+    expect(lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    expect(harness.states.some((state) => state.kind === 'error')).toBe(false);
+    expect(harness.states.at(-1)?.kind).toBe('inserted');
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+  });
+  it('waits for restoration before update suspension completes', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    const release = Promise.withResolvers<void>();
+    const restoring = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      const lease = await begin(settings);
+      return { finish: async (options) => { restoring.resolve(); await release.promise; await lease.finish(options); } };
+    };
+    await pressAndSpeak(harness, 7);
+    const microphone = new WindowAudioCapture(new FakeCaptureHost(), harness.logger);
+    const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
+    let suspended = false;
+    const pause = guard.suspend().then((resume) => { suspended = true; return resume; });
+    await restoring.promise;
+    expect(suspended).toBe(false);
+    expect(harness.capture.recording).toBe(false);
+    release.resolve();
+    const resume = await pause;
+    expect(harness.helper.outputMuted).toBe(false);
+    resume();
+  });
+  it('holds ordinary quit until recording restoration and terminally prevents new starts', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    const restoring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      const lease = await begin(settings);
+      return { finish: async (options) => {
+        expect(harness.capture.recording).toBe(false);
+        restoring.resolve();
+        await release.promise;
+        await lease.finish(options);
+      } };
+    };
+    await pressAndSpeak(harness, 7);
+    let quits = 0;
+    const gate = new QuitGate({ isBusy: () => harness.coordinator.isBusy(), settled: () => harness.coordinator.shutdown() }, () => quits++, harness.logger);
+    let prevented = false;
+    gate.handle({ preventDefault: () => { prevented = true; } });
+    await restoring.promise;
+    expect(prevented).toBe(true);
+    expect(quits).toBe(0);
+    expect(harness.helper.outputMuted).toBe(true);
+    release.resolve();
+    await expect.poll(() => quits).toBe(1);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false']);
+    harness.helper.emitHotkey('up');
+    harness.helper.emitHotkey('down');
+    await harness.coordinator.shutdown();
+    expect(harness.capture.starts).toHaveLength(1);
+  });
+  it('never opens the microphone after cancellation during pending audio acquisition', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    const acquiring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      acquiring.resolve();
+      await release.promise;
+      return begin(settings);
+    };
+    harness.helper.emitHotkey('down');
+    await acquiring.promise;
+    harness.hotkey.cancel();
+    release.resolve();
+    await expect.poll(() => harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false']);
+    expect(harness.capture.starts).toEqual([]);
+    expect(harness.helper.outputMuted).toBe(false);
+  });
+  it('restores output and settles the stop cue before the next recording opens', async () => {
+    const harness = await prepared({ settings: { muteWhileRecording: true, audioFeedback: true } });
+    await pressAndSpeak(harness, 7);
+    expect(harness.helper.outputMuted).toBe(true);
+    harness.helper.emitHotkey('up');
+    await pressAndSpeak(harness, 8);
+    expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false', 'stop:default:50', 'start:default:50', 'mute']);
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.helper.outputMuted).toBe(false);
+    await expect.poll(() => harness.helper.pasted).toEqual(['7:32000', '8:32000']);
+  });
   it('shows partial submit failure as delivered text without offering text reinsertion', async () => {
     const harness = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' } });
     harness.lastTranscript.set('Žilina 🚀', { appendTrailingSpace: true });
@@ -700,6 +1077,32 @@ describe('SessionCoordinator', () => {
     expect(processing.length).toBeGreaterThan(0);
     expect(processing.every((state) => state.live !== undefined)).toBe(true);
     expect(processing.at(-1)?.live).toEqual({ confirmed: expectedText(samples), tentative: '' });
+  });
+
+  it('keeps restoration failure visible through later live finals and insertion', async () => {
+    const samples = timelineSpeech(6);
+    await useTimeline(samples);
+    vi.stubEnv('CW_WORKER_DELAY_MS', '300');
+    let now = 0;
+    const harness = await prepared({ binary: FAKE_TIMELINE_CLI, settings: { overlay: 'live', muteWhileRecording: true }, engineClock: { now: () => now } });
+    const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
+    harness.helper.beginRecordingAudio = async (settings) => {
+      await begin(settings);
+      return { finish: () => Promise.reject(new Error('restore-failed-live')) };
+    };
+    await speakTimeline(harness, samples, () => { now += 1000; });
+    await expect.poll(() => harness.states.some((state) => state.kind === 'recording' && (state.live?.tentative ?? '') !== '')).toBe(true);
+    harness.helper.emitHotkey('up');
+    await harness.coordinator.settled();
+    expect(harness.coordinator.isBusy()).toBe(true);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
+    const warning = harness.states.length - 1;
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.pasted).toEqual([expectedText(samples)]);
+    expect(harness.lastTranscript.get()).toBe(expectedText(samples));
+    expect(kinds(harness.states.slice(warning))).toEqual(['error']);
+    expect(harness.helper.outputMuted).toBe(true);
   });
 
   it('never shows transcript text in Indikátor mode', async () => {

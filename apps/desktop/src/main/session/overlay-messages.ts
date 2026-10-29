@@ -4,6 +4,7 @@ import type { OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
 type ErrorState = Extract<OverlayState, { kind: 'error' }>;
+type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
 
 export const MESSAGES = Object.freeze({
   noModel: 'Nemáte stiahnutý model',
@@ -12,6 +13,7 @@ export const MESSAGES = Object.freeze({
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
   engineUnavailable: 'Prepis teraz nie je dostupný',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
+  recordingAudio: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.',
   transcriptionFailed: 'Prepis sa nepodaril',
   nothingHeard: 'Nezachytila sa žiadna reč',
   insertFailed: 'Text sa nepodarilo vložiť',
@@ -81,9 +83,9 @@ export function readinessError(reason: EngineUnavailableReason | undefined): Err
   return READINESS_ERRORS[reason];
 }
 
-const COPIED: OverlayState = { kind: 'copied' };
+const COPIED: TerminalState = { kind: 'copied' };
 
-const INSERTION_STATES: Readonly<Record<InsertionOutcome, (appName: string) => OverlayState>> = {
+const INSERTION_STATES: Readonly<Record<InsertionOutcome, (appName: string) => TerminalState>> = {
   pasted: (appName) => ({ kind: 'inserted', appName }),
   typed: (appName) => ({ kind: 'inserted', appName }),
   'delivered-submit-blocked': () => errorState('Text bol vložený. Automatické odoslanie bolo zablokované. Odošlite ho ručne.'),
@@ -100,7 +102,7 @@ const INSERTION_STATES: Readonly<Record<InsertionOutcome, (appName: string) => O
   'nothing-to-insert': () => errorState(MESSAGES.nothingHeard),
 };
 
-export function insertionState(outcome: InsertionOutcome | null, appName: string): OverlayState {
+export function insertionState(outcome: InsertionOutcome | null, appName: string): TerminalState {
   if (outcome === null) {
     return errorState(MESSAGES.insertFailed);
   }

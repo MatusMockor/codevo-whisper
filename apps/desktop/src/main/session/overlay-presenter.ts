@@ -16,6 +16,10 @@ export class OverlayPresenter {
 
   constructor(private readonly render: (state: OverlayState) => void) {}
 
+  owns(owner: object): boolean {
+    return !this.closed && this.owner === owner;
+  }
+
   claim(owner: object): void {
     this.clearTimer();
     this.owner = owner;

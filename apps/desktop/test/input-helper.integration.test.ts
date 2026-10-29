@@ -25,6 +25,20 @@ describe.runIf(process.platform === 'darwin')('macOS input helper', () => {
     expect(typeof pong.pid).toBe('number');
   });
 
+  it('discovers output capability and rejects invalid recording arguments without changing audio', async () => {
+    const view = await helper.getOutputAudio();
+    expect(['available', 'unavailable']).toContain(view.kind);
+    if (view.kind === 'available') {
+      expect(typeof view.canMute).toBe('boolean');
+      for (const output of view.outputs) {
+        expect(output.id.length).toBeGreaterThan(0);
+        expect(typeof output.label).toBe('string');
+      }
+    }
+    expect(await channel.request('recording-audio-begin', { token: 1, mute: true, feedback: false, outputId: '', volume: 101 })).toMatchObject({ begun: false });
+    expect(await channel.request('recording-audio-end', { token: 999, playStop: false })).toMatchObject({ ended: true });
+  });
+
   it('permissions returns three booleans', async () => {
     const permissions = await helper.permissions();
 

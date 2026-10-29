@@ -19,6 +19,13 @@ afterEach(async () => {
 });
 
 describe('SettingsStore', () => {
+  it('defaults recording audio for old files and persists independent preferences', async () => {
+    await writeFile(file, JSON.stringify({ language: 'cs' }));
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ muteWhileRecording: false, audioFeedback: false, feedbackOutputId: null, feedbackVolume: 50 });
+    await store.update({ muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'usb-output', feedbackVolume: 73 });
+    expect(await new SettingsStore(file).load()).toMatchObject({ language: 'cs', muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'usb-output', feedbackVolume: 73 });
+  });
   it('migrates output defaults and persists direct typing preferences across reload', async () => {
     await writeFile(file, JSON.stringify({ insertion: 'paste' }));
     const store = new SettingsStore(file);

@@ -42,6 +42,8 @@ export class SessionCoordinator {
   private readonly pipeline = new SerialQueue();
   private recording: DictationSession | null = null;
   private unsubscribers: Array<() => void> = [];
+  private shutdownTask: Promise<void> | null = null;
+  private stopped = false;
 
   constructor(private readonly deps: SessionCoordinatorDeps) {
     this.presenter = new OverlayPresenter(deps.overlay);
@@ -75,6 +77,25 @@ export class SessionCoordinator {
 
   isDictating(): boolean {
     return this.sessions.size > 0;
+  }
+
+  isBusy(): boolean {
+    return this.sessions.size > 0;
+  }
+
+  settled(): Promise<void> {
+    return this.captureLane.run(() => Promise.resolve());
+  }
+
+  shutdown(): Promise<void> {
+    if (this.shutdownTask !== null) return this.shutdownTask;
+    this.stopped = true;
+    for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+    const closing = [...this.sessions].map((session) => session.cancel());
+    this.recording = null;
+    this.presenter.dispose();
+    this.shutdownTask = Promise.all(closing).then(() => this.settled());
+    return this.shutdownTask;
   }
 
   async pasteLast(): Promise<PasteLastOutcome> {
@@ -114,17 +135,11 @@ export class SessionCoordinator {
   }
 
   dispose(): void {
-    for (const unsubscribe of this.unsubscribers.splice(0)) {
-      unsubscribe();
-    }
-    for (const session of this.sessions) {
-      session.cancel();
-    }
-    this.recording = null;
-    this.presenter.dispose();
+    void this.shutdown();
   }
 
   private handleStart(): void {
+    if (this.stopped) return;
     const session = new DictationSession(this.sessionDeps());
     this.recording = session;
     this.sessions.add(session);
@@ -206,6 +221,7 @@ export class SessionCoordinator {
 
   private sessionOverlay(): SessionOverlay {
     return {
+      owns: (session) => this.presenter.owns(session),
       show: (session, state) => this.presenter.show(session, state),
       flash: (session, state) => this.presenter.flash(session, state),
       hide: (session) => this.presenter.hide(session),

@@ -11,12 +11,14 @@ import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { Language, MicrophoneSetting } from '../../shared/settings';
+import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
 import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError } from './overlay-messages';
 import { processFinalTranscript, type TranscriptSettings } from './process-final-transcript';
 
 export type SessionOverlay = {
+  owns(session: DictationSession): boolean;
   show(session: DictationSession, state: OverlayState): void;
   flash(session: DictationSession, state: OverlayState): void;
   hide(session: DictationSession): void;
@@ -27,7 +29,7 @@ export type DictationSessionDeps = {
   engines: Pick<EngineSelector, 'prepare'>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
-  helper: Pick<InputHelper, 'frontmost' | 'focusedElement'>;
+  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio'>;
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
@@ -39,6 +41,19 @@ export type DictationSessionDeps = {
 };
 
 type Phase = 'recording' | 'finishing' | 'done';
+type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
+type ErrorState = Extract<TerminalState, { kind: 'error' }>;
+type TransientState = Extract<OverlayState, { kind: 'recording' | 'processing' }>;
+type TerminalIntent =
+  | { kind: 'result'; state: TerminalState }
+  | { kind: 'abandoned'; state: ErrorState }
+  | { kind: 'cancelled' }
+  | { kind: 'shutdown' };
+type Presentation =
+  | { kind: 'none' }
+  | { kind: 'hide' }
+  | { kind: 'show'; state: TransientState }
+  | { kind: 'flash'; state: TerminalState };
 
 type ProcessingNotice = Extract<OverlayState, { kind: 'processing' }>['notice'];
 
@@ -65,6 +80,14 @@ export class DictationSession {
   private dictation: EngineDictation | null = null;
   private prepared: PreparedEngine | null = null;
   private unsubscribeFrames: () => void = () => undefined;
+  private readonly audioSettings: RecordingAudioSettings;
+  private audio: RecordingAudioLease | null = null;
+  private restoreError: ErrorState | null = null;
+  private microphoneOpened = false;
+  private closing: Promise<Uint8Array> | null = null;
+  private intent: TerminalIntent | null = null;
+  private cleanupDone = false;
+  private flashed: TerminalState | null = null;
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
@@ -74,6 +97,8 @@ export class DictationSession {
     this.partials = overlay === 'live';
     this.live = this.partials ? new LiveTranscript() : null;
     this.microphone = microphone;
+    const { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume } = deps.settings.get();
+    this.audioSettings = { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume };
   }
 
   begin(): void {
@@ -101,14 +126,11 @@ export class DictationSession {
 
   async finish(reason: StopReason): Promise<void> {
     if (this.phase !== 'recording') {
+      await this.stopCapture();
       return;
     }
     if (!TRANSCRIBED_REASONS.has(reason)) {
-      this.phase = 'done';
-      this.controller.abort();
-      this.releaseEngine();
-      await this.stopCapture();
-      this.deps.overlay.hide(this);
+      await this.chooseTerminal({ kind: 'cancelled' });
       return;
     }
     this.phase = 'finishing';
@@ -116,9 +138,7 @@ export class DictationSession {
     this.showProcessing();
     const pcm = await this.stopCapture();
     if (!(await this.opened)) {
-      this.end(errorState(MESSAGES.microphone));
-      this.controller.abort();
-      this.releaseEngine();
+      await this.chooseTerminal({ kind: 'abandoned', state: errorState(MESSAGES.microphone) });
       return;
     }
     const readiness = await this.readiness;
@@ -126,7 +146,7 @@ export class DictationSession {
       return;
     }
     if (!readiness.ready) {
-      this.end(readinessError(readiness.reason));
+      await this.chooseTerminal({ kind: 'result', state: readinessError(readiness.reason) });
       return;
     }
     const dictation = this.startDictation(readiness.engine);
@@ -134,34 +154,39 @@ export class DictationSession {
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
 
-  cancel(): void {
-    const recording = this.phase === 'recording';
-    this.phase = 'done';
-    this.controller.abort();
-    this.releaseEngine();
-    if (!recording) {
-      return;
-    }
-    void this.stopCapture();
+  cancel(): Promise<void> {
+    return this.chooseTerminal({ kind: 'shutdown' });
   }
 
   private async openMicrophone(): Promise<boolean> {
+    let acquiringAudio = true;
     try {
       const started = await this.deps.captureLane.run(async () => {
+        if (this.phase !== 'recording') return null;
+        this.audio = await this.deps.helper.beginRecordingAudio(this.audioSettings);
+        acquiringAudio = false;
+        if (this.phase !== 'recording') {
+          await this.finishAudio(false);
+          return null;
+        }
         this.unsubscribeFrames = this.deps.capture.onFrame((pcm) => this.relay.push(pcm));
         try {
-          return await this.deps.capture.start(this.microphone);
+          const started = await this.deps.capture.start(this.microphone);
+          this.microphoneOpened = true;
+          return started;
         } catch (error) {
           this.unsubscribeFrames();
+          await this.finishAudio(false);
           throw error;
         }
       });
+      if (started === null) return false;
       this.noteFallback(started.fallback);
       return true;
     } catch (error) {
       this.deps.logger.error('The microphone could not be started', error);
       if (this.phase === 'recording') {
-        this.abandon(errorState(MESSAGES.microphone));
+        await this.chooseTerminal({ kind: 'abandoned', state: errorState(acquiringAudio ? MESSAGES.recordingAudio : MESSAGES.microphone) });
       }
       return false;
     }
@@ -181,16 +206,14 @@ export class DictationSession {
         this.adopt(readiness.engine);
       } catch (error) {
         this.deps.logger.error('The prepared engine could not start', error);
-        this.abandon(this.failure(error));
-        await this.stopCapture();
+        await this.chooseTerminal({ kind: 'abandoned', state: this.failure(error) });
       }
       return;
     }
     if (this.phase !== 'recording') {
       return;
     }
-    this.abandon(readinessError(readiness.reason));
-    await this.stopCapture();
+    await this.chooseTerminal({ kind: 'abandoned', state: readinessError(readiness.reason) });
   }
 
   private adopt(engine: PreparedEngine): void {
@@ -242,26 +265,49 @@ export class DictationSession {
     this.prepared.release();
   }
 
-  private abandon(state: OverlayState): void {
-    this.end(state);
-    this.controller.abort();
-    this.releaseEngine();
-    this.deps.abandon(this);
+  private chooseTerminal(next: TerminalIntent): Promise<void> {
+    if (this.intent !== null && next.kind !== 'shutdown') {
+      return this.stopCapture().then(() => undefined);
+    }
+    this.intent = next;
+    this.phase = 'done';
+    const closing = this.stopCapture();
+    if (next.kind !== 'result') {
+      this.controller.abort();
+      this.releaseEngine();
+    }
+    this.present();
+    if (next.kind === 'abandoned') this.deps.abandon(this);
+    return closing.then(() => undefined);
   }
 
   private stopCapture(): Promise<Uint8Array> {
-    return this.deps.captureLane
+    return this.closing ??= this.deps.captureLane
       .run(async () => {
+        let pcm: Uint8Array = new Uint8Array(0);
         try {
-          return await this.deps.capture.stop();
+          if (this.microphoneOpened) pcm = await this.deps.capture.stop();
+        } catch (error) {
+          this.deps.logger.error('The recording could not be stopped', error);
         } finally {
           this.unsubscribeFrames();
+          await this.finishAudio(this.microphoneOpened && this.intent?.kind !== 'shutdown');
         }
-      })
-      .catch((error: unknown) => {
-        this.deps.logger.error('The recording could not be stopped', error);
-        return new Uint8Array(0);
+        this.cleanupDone = true;
+        this.present();
+        return pcm;
       });
+  }
+
+  private async finishAudio(playStop: boolean): Promise<void> {
+    const audio = this.audio;
+    this.audio = null;
+    if (audio === null) return;
+    await audio.finish({ playStop }).catch((error: unknown) => {
+      this.deps.logger.error('The recording audio could not be restored', error);
+      this.restoreError ??= errorState(MESSAGES.recordingAudio);
+      this.present();
+    });
   }
 
   private async transcribeAndInsert(transcription: Promise<string | null>, pcm: Uint8Array): Promise<void> {
@@ -272,13 +318,13 @@ export class DictationSession {
     }
     const text = this.finalize(rawText);
     if (text === '') {
-      this.end(errorState(MESSAGES.nothingHeard));
+      await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
       return;
     }
     this.deps.transcribed(text, pcm);
     const target = await this.target;
     const outcome = await this.insert(text, target);
-    this.end(insertionState(outcome, target?.name ?? ''));
+    await this.chooseTerminal({ kind: 'result', state: insertionState(outcome, target?.name ?? '') });
   }
 
   private async transcribe(dictation: EngineDictation): Promise<string | null> {
@@ -289,12 +335,12 @@ export class DictationSession {
         return null;
       }
       this.deps.logger.error('The transcription failed', error);
-      this.end(this.failure(error));
+      await this.chooseTerminal({ kind: 'result', state: this.failure(error) });
       return null;
     }
   }
 
-  private failure(error: unknown): OverlayState {
+  private failure(error: unknown): ErrorState {
     if (error instanceof EngineUnavailableError) {
       return readinessError(error.reason);
     }
@@ -321,23 +367,42 @@ export class DictationSession {
     });
   }
 
-  private end(state: OverlayState): void {
-    this.phase = 'done';
-    if (this.controller.signal.aborted) {
+  private decision(transient: TransientState | null): Presentation {
+    const intent = this.intent;
+    if (intent?.kind === 'shutdown') return { kind: 'none' };
+    if (this.restoreError !== null) return { kind: 'flash', state: this.restoreError };
+    if (intent?.kind === 'result' || intent?.kind === 'abandoned') {
+      return { kind: 'flash', state: intent.state };
+    }
+    if (intent?.kind === 'cancelled') return { kind: this.cleanupDone ? 'hide' : 'none' };
+    return transient === null ? { kind: 'none' } : { kind: 'show', state: transient };
+  }
+
+  private present(transient: TransientState | null = null): void {
+    const decision = this.decision(transient);
+    if (decision.kind === 'none' || !this.deps.overlay.owns(this)) return;
+    if (decision.kind === 'flash') {
+      if (this.flashed === decision.state) return;
+      this.flashed = decision.state;
+      this.deps.overlay.flash(this, decision.state);
       return;
     }
-    this.deps.overlay.flash(this, state);
+    if (decision.kind === 'hide') {
+      this.deps.overlay.hide(this);
+      return;
+    }
+    this.deps.overlay.show(this, decision.state);
   }
 
   private showRecording(): void {
     const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, language: languageChip(this.language) } as const;
     const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
-    this.deps.overlay.show(this, this.withLive(withDevice));
+    this.present(this.withLive(withDevice));
   }
 
   private showProcessing(): void {
     const state = this.notice === undefined ? ({ kind: 'processing' } as const) : ({ kind: 'processing', notice: this.notice } as const);
-    this.deps.overlay.show(this, this.withLive(state));
+    this.present(this.withLive(state));
   }
 
   private withLive<T extends OverlayState>(state: T): T | (T & { live: LiveText }) {
