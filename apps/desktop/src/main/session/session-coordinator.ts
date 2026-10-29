@@ -221,6 +221,7 @@ export class SessionCoordinator {
 
   private sessionOverlay(): SessionOverlay {
     return {
+      owns: (session) => this.presenter.owns(session),
       show: (session, state) => this.presenter.show(session, state),
       flash: (session, state) => this.presenter.flash(session, state),
       hide: (session) => this.presenter.hide(session),

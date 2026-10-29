@@ -18,6 +18,7 @@ import { errorState, failureState, insertionState, languageChip, MESSAGES, readi
 import { processFinalTranscript, type TranscriptSettings } from './process-final-transcript';
 
 export type SessionOverlay = {
+  owns(session: DictationSession): boolean;
   show(session: DictationSession, state: OverlayState): void;
   flash(session: DictationSession, state: OverlayState): void;
   hide(session: DictationSession): void;
@@ -40,6 +41,19 @@ export type DictationSessionDeps = {
 };
 
 type Phase = 'recording' | 'finishing' | 'done';
+type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
+type ErrorState = Extract<TerminalState, { kind: 'error' }>;
+type TransientState = Extract<OverlayState, { kind: 'recording' | 'processing' }>;
+type TerminalIntent =
+  | { kind: 'result'; state: TerminalState }
+  | { kind: 'abandoned'; state: ErrorState }
+  | { kind: 'cancelled' }
+  | { kind: 'shutdown' };
+type Presentation =
+  | { kind: 'none' }
+  | { kind: 'hide' }
+  | { kind: 'show'; state: TransientState }
+  | { kind: 'flash'; state: TerminalState };
 
 type ProcessingNotice = Extract<OverlayState, { kind: 'processing' }>['notice'];
 
@@ -68,10 +82,12 @@ export class DictationSession {
   private unsubscribeFrames: () => void = () => undefined;
   private readonly audioSettings: RecordingAudioSettings;
   private audio: RecordingAudioLease | null = null;
-  private audioRestoreError: ReturnType<typeof errorState> | null = null;
+  private restoreError: ErrorState | null = null;
   private microphoneOpened = false;
   private closing: Promise<Uint8Array> | null = null;
-  private shuttingDown = false;
+  private intent: TerminalIntent | null = null;
+  private cleanupDone = false;
+  private flashed: TerminalState | null = null;
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
@@ -114,11 +130,7 @@ export class DictationSession {
       return;
     }
     if (!TRANSCRIBED_REASONS.has(reason)) {
-      this.phase = 'done';
-      this.controller.abort();
-      this.releaseEngine();
-      await this.stopCapture();
-      this.deps.overlay.hide(this);
+      await this.chooseTerminal({ kind: 'cancelled' });
       return;
     }
     this.phase = 'finishing';
@@ -126,9 +138,7 @@ export class DictationSession {
     this.showProcessing();
     const pcm = await this.stopCapture();
     if (!(await this.opened)) {
-      this.end(errorState(MESSAGES.microphone));
-      this.controller.abort();
-      this.releaseEngine();
+      await this.chooseTerminal({ kind: 'abandoned', state: errorState(MESSAGES.microphone) });
       return;
     }
     const readiness = await this.readiness;
@@ -136,7 +146,7 @@ export class DictationSession {
       return;
     }
     if (!readiness.ready) {
-      this.end(readinessError(readiness.reason));
+      await this.chooseTerminal({ kind: 'result', state: readinessError(readiness.reason) });
       return;
     }
     const dictation = this.startDictation(readiness.engine);
@@ -145,11 +155,7 @@ export class DictationSession {
   }
 
   cancel(): Promise<void> {
-    this.shuttingDown = true;
-    this.phase = 'done';
-    this.controller.abort();
-    this.releaseEngine();
-    return this.stopCapture().then(() => undefined);
+    return this.chooseTerminal({ kind: 'shutdown' });
   }
 
   private async openMicrophone(): Promise<boolean> {
@@ -180,7 +186,7 @@ export class DictationSession {
     } catch (error) {
       this.deps.logger.error('The microphone could not be started', error);
       if (this.phase === 'recording') {
-        this.abandon(errorState(acquiringAudio ? MESSAGES.recordingAudio : MESSAGES.microphone));
+        await this.chooseTerminal({ kind: 'abandoned', state: errorState(acquiringAudio ? MESSAGES.recordingAudio : MESSAGES.microphone) });
       }
       return false;
     }
@@ -200,16 +206,14 @@ export class DictationSession {
         this.adopt(readiness.engine);
       } catch (error) {
         this.deps.logger.error('The prepared engine could not start', error);
-        this.abandon(this.failure(error));
-        await this.stopCapture();
+        await this.chooseTerminal({ kind: 'abandoned', state: this.failure(error) });
       }
       return;
     }
     if (this.phase !== 'recording') {
       return;
     }
-    this.abandon(readinessError(readiness.reason));
-    await this.stopCapture();
+    await this.chooseTerminal({ kind: 'abandoned', state: readinessError(readiness.reason) });
   }
 
   private adopt(engine: PreparedEngine): void {
@@ -261,12 +265,20 @@ export class DictationSession {
     this.prepared.release();
   }
 
-  private abandon(state: OverlayState): void {
-    this.end(state);
-    this.controller.abort();
-    this.releaseEngine();
-    this.deps.abandon(this);
-    void this.stopCapture();
+  private chooseTerminal(next: TerminalIntent): Promise<void> {
+    if (this.intent !== null && next.kind !== 'shutdown') {
+      return this.stopCapture().then(() => undefined);
+    }
+    this.intent = next;
+    this.phase = 'done';
+    const closing = this.stopCapture();
+    if (next.kind !== 'result') {
+      this.controller.abort();
+      this.releaseEngine();
+    }
+    this.present();
+    if (next.kind === 'abandoned') this.deps.abandon(this);
+    return closing.then(() => undefined);
   }
 
   private stopCapture(): Promise<Uint8Array> {
@@ -279,8 +291,10 @@ export class DictationSession {
           this.deps.logger.error('The recording could not be stopped', error);
         } finally {
           this.unsubscribeFrames();
-          await this.finishAudio(this.microphoneOpened && !this.shuttingDown);
+          await this.finishAudio(this.microphoneOpened && this.intent?.kind !== 'shutdown');
         }
+        this.cleanupDone = true;
+        this.present();
         return pcm;
       });
   }
@@ -291,8 +305,8 @@ export class DictationSession {
     if (audio === null) return;
     await audio.finish({ playStop }).catch((error: unknown) => {
       this.deps.logger.error('The recording audio could not be restored', error);
-      this.audioRestoreError = errorState(MESSAGES.recordingAudio);
-      this.deps.overlay.flash(this, this.audioRestoreError);
+      this.restoreError ??= errorState(MESSAGES.recordingAudio);
+      this.present();
     });
   }
 
@@ -304,13 +318,13 @@ export class DictationSession {
     }
     const text = this.finalize(rawText);
     if (text === '') {
-      this.end(errorState(MESSAGES.nothingHeard));
+      await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
       return;
     }
     this.deps.transcribed(text, pcm);
     const target = await this.target;
     const outcome = await this.insert(text, target);
-    this.end(insertionState(outcome, target?.name ?? ''));
+    await this.chooseTerminal({ kind: 'result', state: insertionState(outcome, target?.name ?? '') });
   }
 
   private async transcribe(dictation: EngineDictation): Promise<string | null> {
@@ -321,12 +335,12 @@ export class DictationSession {
         return null;
       }
       this.deps.logger.error('The transcription failed', error);
-      this.end(this.failure(error));
+      await this.chooseTerminal({ kind: 'result', state: this.failure(error) });
       return null;
     }
   }
 
-  private failure(error: unknown): OverlayState {
+  private failure(error: unknown): ErrorState {
     if (error instanceof EngineUnavailableError) {
       return readinessError(error.reason);
     }
@@ -353,23 +367,42 @@ export class DictationSession {
     });
   }
 
-  private end(state: OverlayState): void {
-    this.phase = 'done';
-    if (this.controller.signal.aborted) {
+  private decision(transient: TransientState | null): Presentation {
+    const intent = this.intent;
+    if (intent?.kind === 'shutdown') return { kind: 'none' };
+    if (this.restoreError !== null) return { kind: 'flash', state: this.restoreError };
+    if (intent?.kind === 'result' || intent?.kind === 'abandoned') {
+      return { kind: 'flash', state: intent.state };
+    }
+    if (intent?.kind === 'cancelled') return { kind: this.cleanupDone ? 'hide' : 'none' };
+    return transient === null ? { kind: 'none' } : { kind: 'show', state: transient };
+  }
+
+  private present(transient: TransientState | null = null): void {
+    const decision = this.decision(transient);
+    if (decision.kind === 'none' || !this.deps.overlay.owns(this)) return;
+    if (decision.kind === 'flash') {
+      if (this.flashed === decision.state) return;
+      this.flashed = decision.state;
+      this.deps.overlay.flash(this, decision.state);
       return;
     }
-    this.deps.overlay.flash(this, this.audioRestoreError ?? state);
+    if (decision.kind === 'hide') {
+      this.deps.overlay.hide(this);
+      return;
+    }
+    this.deps.overlay.show(this, decision.state);
   }
 
   private showRecording(): void {
     const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, language: languageChip(this.language) } as const;
     const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
-    this.deps.overlay.show(this, this.withLive(withDevice));
+    this.present(this.withLive(withDevice));
   }
 
   private showProcessing(): void {
     const state = this.notice === undefined ? ({ kind: 'processing' } as const) : ({ kind: 'processing', notice: this.notice } as const);
-    this.deps.overlay.show(this, this.withLive(state));
+    this.present(this.withLive(state));
   }
 
   private withLive<T extends OverlayState>(state: T): T | (T & { live: LiveText }) {
