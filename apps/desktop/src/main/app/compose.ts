@@ -7,6 +7,7 @@ import type { InputHelper } from '../helper/input-helper';
 import { EngineSelector } from '../engines/engine-selector';
 import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
+import { HistoryStore } from '../history/history-store';
 import { HotkeyService } from '../hotkey/hotkey-service';
 import { KeyRecorder } from '../hotkey/key-recorder';
 import { HotkeyRearm } from '../hotkey/rearm-on-grant';
@@ -76,11 +77,13 @@ export function composeApplication(logger: Logger): Application {
   const mainWindow = new MainWindowController(logger, e2e ? backgroundPresentation : foregroundPresentation);
   const disposers: Array<() => void> = [];
   let sessions: SessionCoordinator | null = null;
+  const history = new HistoryStore(join(app.getPath('userData'), 'history.json'), logger);
   const shutdown = async (): Promise<void> => {
     await sessions?.shutdown();
     await capture.settled();
+    await history.settled();
   };
-  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false), settled: shutdown }, () => app.quit(), logger);
+  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false) || history.isBusy(), settled: shutdown }, () => app.quit(), logger);
   const allowShutdown = (): void => quitGate.systemShuttingDown();
   const recordingShell = e2e ? new RecordingDesktopShell() : null;
   const desktopShell: DesktopShell = recordingShell ?? shell;
@@ -109,6 +112,8 @@ export function composeApplication(logger: Logger): Application {
     disposers.push(() => powerMonitor.removeListener('shutdown', allowShutdown));
     const settings = new SettingsStore(join(app.getPath('userData'), SETTINGS_FILE), logger);
     await settings.load();
+    await history.view();
+    disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();
@@ -136,6 +141,7 @@ export function composeApplication(logger: Logger): Application {
       helper,
       settings,
       stats: home.stats,
+      history,
       status: home.status,
       lastTranscript,
       permissions,
@@ -165,6 +171,7 @@ export function composeApplication(logger: Logger): Application {
       helper,
       settings,
       stats: home.stats,
+      history,
       pause,
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),

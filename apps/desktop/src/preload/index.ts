@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
+import type { HistoryView } from '../shared/history';
 import type { AppStatus } from '../shared/app-status';
 import type { OutputAudioView } from '../shared/recording-audio';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
@@ -30,6 +31,10 @@ function subscribe<E extends IpcEventName>(event: E, listener: IpcEventListener<
 
 const api: IpcApi = {
   getOutputAudio: () => ipcRenderer.invoke(INVOKE_CHANNELS.getOutputAudio) as Promise<OutputAudioView>,
+  getHistory: () => ipcRenderer.invoke(INVOKE_CHANNELS.getHistory) as Promise<HistoryView>,
+  configureHistory: (policy) => ipcRenderer.invoke(INVOKE_CHANNELS.configureHistory, policy) as Promise<void>,
+  deleteHistoryEntry: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteHistoryEntry, id) as Promise<void>,
+  clearHistory: () => ipcRenderer.invoke(INVOKE_CHANNELS.clearHistory) as Promise<void>,
   getSettings: () => ipcRenderer.invoke(INVOKE_CHANNELS.getSettings) as Promise<Settings>,
   updateSettings: (patch) => ipcRenderer.invoke(INVOKE_CHANNELS.updateSettings, patch) as Promise<Settings>,
   getStats: () => ipcRenderer.invoke(INVOKE_CHANNELS.getStats) as Promise<DayStats[]>,

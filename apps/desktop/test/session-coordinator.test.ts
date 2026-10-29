@@ -9,6 +9,7 @@ import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
 import type { AppTarget } from '../src/main/helper/input-helper';
+import { HistoryStore } from '../src/main/history/history-store';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
@@ -88,6 +89,8 @@ async function prepared(setup: Setup = {}) {
   const states: OverlayState[] = [];
   const settingsOpened: string[] = [];
   const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
+  const history = new HistoryStore(join(scratch, 'history.json'), logger);
+  await history.configure({ enabled: true, limit: 100 });
   const pause = new PauseState(logger);
   coordinator = new SessionCoordinator({
     hotkey,
@@ -98,13 +101,14 @@ async function prepared(setup: Setup = {}) {
     helper,
     settings,
     stats,
+    history,
     pause,
     overlay: (state) => states.push(state),
     openSettings: () => settingsOpened.push('settings'),
     logger,
   });
   coordinator.start();
-  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir, stats, pause };
+  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir, stats, history, pause };
 }
 
 async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
@@ -398,6 +402,7 @@ describe('SessionCoordinator', () => {
     expect(harness.helper.clipboard).toBe('original');
     expect(await readFile(pcmFile)).toEqual(Buffer.from(stampedPcm(7)));
     expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(7) }] });
     expect(harness.logger.errors.some((entry) => String(entry.error).includes('restore-failed'))).toBe(true);
     expect(harness.states.some((state) => state.kind === 'error' && state.message.includes('Zvukový výstup'))).toBe(true);
     expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
@@ -612,6 +617,7 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7), ONE_SECOND_TEXT(9)]);
     expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(9));
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(9) }, { text: ONE_SECOND_TEXT(7) }] });
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
     const firstProcessing = harness.states.findIndex((state) => state.kind === 'processing');
     const secondStart = harness.states.findIndex((state, index) => index > firstProcessing && state.kind === 'recording');
@@ -690,6 +696,7 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.clipboard).toBe(ONE_SECOND_TEXT(4));
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'copied' });
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(4) }] });
   });
 
   it('secure input blocks the paste and keeps the text', async () => {
@@ -839,6 +846,7 @@ describe('SessionCoordinator', () => {
     await dictate(harness, 3);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
     expect(await harness.stats.days()).toEqual([]);
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
 
     await setWorkerMode('echo-chunk');
     await dictate(harness, 7);
@@ -862,6 +870,7 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.pasted).toEqual(['- …']);
     expect(harness.lastTranscript.get()).toBe('- …');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: '- …' }] });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await harness.stats.days()).toEqual([]);
   });
@@ -875,6 +884,7 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.pasted).toEqual(['ahoj [201~svet']);
     expect(harness.lastTranscript.get()).toBe('ahoj [201~svet');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'ahoj [201~svet' }] });
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
   });
 
@@ -902,6 +912,41 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     expect(announced).toEqual([ONE_SECOND_TEXT(7)]);
     await expect.poll(() => harness.logger.errors.map((entry) => entry.message)).toContain('The dictation statistics could not be saved');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(7) }] });
+  });
+
+  it('keeps insertion and aggregate stats independent of history persistence failure', async () => {
+    const harness = await prepared();
+    await rm(join(scratch, 'history.json'));
+    await mkdir(join(scratch, 'history.json'));
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.stats.days()).toMatchObject([{ words: 1, dictations: 1 }]);
+    expect(await harness.history.view()).toMatchObject({ entries: [], writeError: true });
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
+    expect(harness.logger.errors.filter((entry) => entry.message === 'The completed transcript could not be saved to history')).toEqual([{ message: 'The completed transcript could not be saved to history', error: undefined }]);
+  });
+
+  it('uses consent at completion and never records utility copies, re-pastes or backfills', async () => {
+    const harness = await prepared();
+    await harness.history.configure({ enabled: false, limit: 10 });
+    await dictate(harness, 1);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(1)]);
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    await pressAndSpeak(harness, 2);
+    await harness.history.configure({ enabled: true, limit: 10 });
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(1), ONE_SECOND_TEXT(2)]);
+    await harness.coordinator.copyLast();
+    await harness.coordinator.pasteLast();
+    harness.lastTranscript.set('direct memory update');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(2) }] });
+    const days = await harness.stats.days();
+    const raw = await readFile(join(scratch, 'stats.json'), 'utf8');
+    await harness.history.clear();
+    expect(await harness.stats.days()).toEqual(days);
+    expect(await readFile(join(scratch, 'stats.json'), 'utf8')).toBe(raw);
+    expect(harness.lastTranscript.get()).toBe('direct memory update');
   });
 
   it('pausing and resuming updates the shared pause state', async () => {

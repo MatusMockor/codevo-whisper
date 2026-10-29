@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
+import { HistoryStore } from '../src/main/history/history-store';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
@@ -78,6 +79,8 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   const states: OverlayState[] = [];
   const opened: string[] = [];
   const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
+  const history = new HistoryStore(join(scratch, 'history.json'), logger);
+  await history.configure({ enabled: true, limit: 100 });
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
@@ -87,13 +90,14 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     helper,
     settings,
     stats,
+    history,
     pause: new PauseState(logger),
     overlay: (state) => states.push(state),
     openServer: () => opened.push('server'),
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings, stats };
+  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings, stats, history };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
@@ -117,6 +121,7 @@ describe('SessionCoordinator with the server engine', () => {
     harness.helper.emitHotkey('up');
     await expect.poll(() => harness.helper.pasted).toEqual(['Kumiba ']);
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'Kumiba ' }] });
     expect(gateway.stt.requests).toEqual([{ language: 'sk', bytes: 32000 }]);
     coordinator?.act('copy-last');
     await expect.poll(() => harness.helper.clipboard).toBe('Kumiba ');
@@ -130,6 +135,7 @@ describe('SessionCoordinator with the server engine', () => {
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
     expect(harness.helper.pasted).toEqual([]);
     expect(await harness.stats.days()).toEqual([]);
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
   });
 
   it.each([false, true])('keeps the prior transcript for filler-only server output, recovery=%s', async (recovery) => {
