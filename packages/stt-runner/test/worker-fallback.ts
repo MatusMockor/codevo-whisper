@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import { readFile } from 'node:fs/promises';
-import { ResidentTranscriber } from '../../packages/stt-runner/src/worker/resident-transcriber';
+import { ResidentTranscriber } from '../src/worker/resident-transcriber';
 
 const { values } = parseArgs({ options: { accelerator: { type: 'string' }, cpu: { type: 'string' }, model: { type: 'string' }, pcm: { type: 'string' } } });
 const { accelerator, cpu, model, pcm } = values;

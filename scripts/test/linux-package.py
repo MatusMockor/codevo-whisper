@@ -50,7 +50,7 @@ if args.cpu_without_vulkan:
   command=['bwrap','--unshare-user','--unshare-pid','--unshare-net','--die-with-parent','--ro-bind',str(fixture),'/','--ro-bind',str(args.model.resolve()),'/model.gguf','--proc','/proc','--dev','/dev',f'/bin/{name}']
   wrapper.write_text('#!/bin/sh\nprintf "%s\\n" '+shlex.quote(backend)+' >> '+shlex.quote(str(attempts))+'\nexec '+shlex.join(command)+' "$@"\n');wrapper.chmod(0o755);wrappers[backend]=wrapper
  root=pathlib.Path(__file__).resolve().parents[2]
- command=[str(root/'apps/desktop/node_modules/.bin/tsx'),str(root/'scripts/test/worker-fallback.ts'),'--accelerator',str(wrappers['vulkan']),'--cpu',str(wrappers['cpu']),'--model','/model.gguf','--pcm',str(args.pcm.resolve())]
+ command=[str(root/'apps/desktop/node_modules/.bin/tsx'),str(root/'packages/stt-runner/test/worker-fallback.ts'),'--accelerator',str(wrappers['vulkan']),'--cpu',str(wrappers['cpu']),'--model','/model.gguf','--pcm',str(args.pcm.resolve())]
  subprocess.run(command,cwd=work,check=True,env=runtime_env)
  assert attempts.read_text().splitlines()==['cpu','vulkan','cpu'],attempts.read_text()
  print(json.dumps({'absentVulkan':True,'fixture':str(fixture),'attempts':attempts.read_text().splitlines(),'modelSha256':hashlib.file_digest(args.model.open('rb'),'sha256').hexdigest(),'pcmSha256':hashlib.sha256(args.pcm.read_bytes()).hexdigest()}),flush=True)

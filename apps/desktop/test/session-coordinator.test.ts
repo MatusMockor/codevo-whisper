@@ -37,7 +37,7 @@ const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes',
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -77,7 +77,7 @@ async function prepared(setup: Setup = {}) {
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
   const engineClock = setup.engineClock === undefined ? {} : { clock: setup.engineClock };
-  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_WORKER, models, settings, arch: 'arm64', ...engineClock });
+  const engine = new LocalEngine({ binary: setup.binary ?? FAKE_WORKER, acceleratorBinary: setup.binary ?? FAKE_WORKER, models, settings, arch: 'arm64', platform: setup.platform ?? process.platform, ...engineClock });
   locals.push(engine);
   const helper = setup.inputHelper ?? new FakeInputHelper({ clipboard: 'original', ...setup.helper });
   const power = new FakePowerEvents();
@@ -835,8 +835,8 @@ describe('SessionCoordinator', () => {
     expect(harness.lastTranscript.get()).toBeNull();
   });
 
-  it('records stats after a successful dictation and not after an empty or failed one', async () => {
-    const harness = await prepared();
+  it.each(['darwin', 'linux'] as const)('records stats after a successful dictation and not after an empty or failed one on %s', async (platform) => {
+    const harness = await prepared({ platform });
 
     harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.recording).toBe(true);
