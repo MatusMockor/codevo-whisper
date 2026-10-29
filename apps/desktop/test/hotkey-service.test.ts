@@ -47,6 +47,17 @@ async function started(setup: Setup = {}) {
 }
 
 describe('HotkeyService', () => {
+  it('rearms Linux after native loss drains to neutral', async () => {
+    const { helper, service, events } = await started({ platform: 'linux' });
+    helper.emitHotkey('down');
+    helper.loseInput('tap-error');
+    helper.emitHotkey('up');
+    helper.loseInput('tap-reenabled');
+    await vi.waitFor(() => expect(service.isArmed()).toBe(true));
+    helper.emitHotkey('down');
+    expect(events).toEqual(['start', 'stop:input-lost', 'start']);
+    service.dispose();
+  });
   it('arms Linux regular hotkeys with input access while posting is unavailable', async () => {
     const { service, helper, events } = await started({ platform: 'linux', settings: { hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' } }, helper: { permissions: { listen: true, accessibility: false, post: false } } });
     helper.emitHotkey('down');

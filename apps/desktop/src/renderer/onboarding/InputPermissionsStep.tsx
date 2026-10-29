@@ -99,8 +99,8 @@ export function InputPermissionsStep({ permissions, refresh }: { permissions: Li
   if (permissions.value.platform === 'linux') {
     return <div className="sbox">
       <PermissionRow title="Prístup ku klávesnici" description="X11 používa systémové skratky. Wayland vyžaduje prístup na čítanie ku klávesniciam aktívneho používateľa. Aplikácia nemení oprávnenia zariadení." granted={permissions.value.inputMonitoring} statusLabel={grantLabel(permissions.value.inputMonitoring)} actionLabel="Skontrolovať znova" onAction={refresh} />
-      <p className="hint">Po zmene medzi X11 a Waylandom nahrajte skratku znova. Vo Waylande je text v schránke na ručné vloženie; vyžaduje XWayland a jeho most schránky. Poloha a zobrazenie okna závisia od kompozítora.</p>
-      <p className="hint">{permissions.value.accessibility ? 'Textové pole sa dá overiť cez AT-SPI.' : 'Textové pole sa nedá bezpečne overiť. Automatické vkladanie zostáva vypnuté, prepis môžete skopírovať.'}</p>
+      <p className="sbox-foot">Po zmene medzi X11 a Waylandom nahrajte skratku znova. Vo Waylande je text v schránke na ručné vloženie; vyžaduje XWayland a jeho most schránky. Poloha a zobrazenie okna závisia od kompozítora.</p>
+      <p className="sbox-foot">{permissions.value.accessibility ? 'Textové pole sa dá overiť cez AT-SPI.' : 'Textové pole sa nedá bezpečne overiť. Automatické vkladanie zostáva vypnuté, prepis môžete skopírovať.'}</p>
     </div>;
   }
   const reason = relaunchReason(permissions.value);

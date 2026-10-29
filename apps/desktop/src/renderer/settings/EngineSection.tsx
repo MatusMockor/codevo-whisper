@@ -32,7 +32,7 @@ export function EngineSection({ engineOrder, paired }: { engineOrder: readonly E
             />
             <div>
               <b>{option.title}</b>
-              <span>{option.description}</span>
+              <span>{navigator.userAgent.includes('Linux') ? option.description.replace('na tomto Macu', 'na tomto počítači') : option.description}</span>
             </div>
           </label>
         ))}

@@ -11,14 +11,16 @@ import type { RendererSource } from './renderer-source';
 const HIDDEN: OverlayState = { kind: 'hidden' };
 
 function createPanel(): BrowserWindow {
+  const mac = process.platform === 'darwin';
+  const reduced = process.platform === 'linux' && (process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY']));
   const window = new BrowserWindow({
-    type: 'panel',
+    ...(mac ? { type: 'panel' as const } : {}),
     ...OVERLAY_SIZE,
     show: false,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
-    focusable: false,
+    focusable: !mac,
     acceptFirstMouse: true,
     resizable: false,
     movable: false,
@@ -28,7 +30,7 @@ function createPanel(): BrowserWindow {
     hasShadow: false,
     skipTaskbar: true,
     hiddenInMissionControl: true,
-    alwaysOnTop: true,
+    alwaysOnTop: !reduced,
     webPreferences: {
       preload: fileURLToPath(new URL('../preload/overlay.cjs', import.meta.url)),
       sandbox: true,
@@ -39,8 +41,11 @@ function createPanel(): BrowserWindow {
       backgroundThrottling: false,
     },
   });
-  window.setAlwaysOnTop(true, 'screen-saver');
-  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  if (mac) {
+    window.setAlwaysOnTop(true, 'screen-saver');
+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  }
+  if (!mac && !reduced) window.setAlwaysOnTop(true);
   return window;
 }
 
@@ -103,6 +108,10 @@ export class OverlayWindow {
     window.webContents.send(OVERLAY_CHANNELS.state, state);
     window.setIgnoreMouseEvents(!isInteractive(state));
     if (window.isVisible()) {
+      return;
+    }
+    if (process.platform === 'linux' && (process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY']))) {
+      window.show();
       return;
     }
     window.setBounds(bottomCenter(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea));

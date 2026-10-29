@@ -52,6 +52,7 @@ static int parse_backend(const char * name, transcribe_backend_request * out) {
         const char *               name;
         transcribe_backend_request value;
     } backends[] = {
+        { "auto", TRANSCRIBE_BACKEND_AUTO },
         { "cpu", TRANSCRIBE_BACKEND_CPU },
         { "metal", TRANSCRIBE_BACKEND_METAL },
         { "vulkan", TRANSCRIBE_BACKEND_VULKAN },

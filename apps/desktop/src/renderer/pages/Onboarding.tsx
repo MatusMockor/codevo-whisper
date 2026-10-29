@@ -6,7 +6,7 @@ import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { MicrophoneStep } from '../onboarding/MicrophoneStep';
 import { initialEngineChoice, stickyEngineChoice, type EngineChoice } from '../onboarding/engine-choice';
 import { EngineStep } from '../onboarding/EngineStep';
-import { ONBOARDING_STEPS } from '../onboarding/steps';
+import { LINUX_ONBOARDING_STEPS, ONBOARDING_STEPS } from '../onboarding/steps';
 import { TryStep } from '../onboarding/TryStep';
 import { useModels, type Models } from '../settings/use-models';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
@@ -49,7 +49,8 @@ export function Onboarding({ settings }: { settings: Settings }) {
   if (choice !== engineChoice) {
     setEngineChoice(choice);
   }
-  const current = ONBOARDING_STEPS[step] ?? ONBOARDING_STEPS[0];
+  const steps = navigator.userAgent.includes('Linux') ? LINUX_ONBOARDING_STEPS : ONBOARDING_STEPS;
+  const current = steps[step] ?? steps[0];
 
   return (
     <div className="onboarding">

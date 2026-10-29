@@ -7,6 +7,7 @@ const MAX_THREADS = 4;
 export type LocalEngineArch = 'arm64' | 'x64';
 
 export function localBackend(arch: LocalEngineArch, acceleration: LocalAcceleration = 'auto', platform: NodeJS.Platform = process.platform): TranscribeBackend {
+  if (platform === 'linux' && acceleration !== 'cpu') return 'auto';
   if (platform !== 'darwin' || acceleration === 'cpu') return 'cpu';
   return acceleration === 'gpu' || arch === 'arm64' ? 'metal' : 'cpu';
 }

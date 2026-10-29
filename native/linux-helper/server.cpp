@@ -35,6 +35,7 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   auto o=object();
   if(cmd=="ping") { boolean(o,"pong",true);number(o,"pid",getpid()); }
   else if(cmd=="permissions" || cmd=="request-permission") {
+    text(o,"inputBackend",wayland?"evdev":"x11");number(o,"inputDeviceCount",inputDeviceCount());boolean(o,"controlledInput",controlledInput());
     boolean(o,"listenEvent",canListen());boolean(o,"postEvent",display && !wayland && seatActive());
     auto t=frontmost(); auto f=focused(t);boolean(o,"accessibility",f.known);
   }
@@ -43,7 +44,7 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="secure-input") { auto f=focused(frontmost());boolean(o,"enabled",!f.known || f.protectedInput); }
   else if(cmd=="modifier-flags") number(o,"flags",modifierFlags());
   else if(cmd=="check-delivery") { json_object_unref(o);return checkDelivery(args); }
-  else if(cmd=="clipboard-save") { selectionSave();boolean(o,"saved",true); }
+  else if(cmd=="clipboard-save") { selectionSave();boolean(o,"saved",display!=nullptr); }
   else if(cmd=="clipboard-write") {
     auto n=args ? json_object_get_member(args,"text"):nullptr;
     boolean(o,"written",n && json_node_get_value_type(n)==G_TYPE_STRING && selectionWrite(string(args,"text")));

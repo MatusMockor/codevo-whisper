@@ -40,7 +40,7 @@ export class HotkeyService {
           this.configuration += 1;
           this.permitted = false;
         }
-        if (reason === 'helper-restarted') this.reconfigure();
+        if (reason === 'helper-restarted' || (reason === 'tap-reenabled' && this.platform === 'linux')) this.reconfigure();
       }),
       settings.onChange((next, previous) => this.handleSettings(next, previous)),
     ];

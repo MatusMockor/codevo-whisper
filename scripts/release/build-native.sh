@@ -10,6 +10,12 @@ esac
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 dest="$root/apps/desktop/resources/bin/$arch"
 
+if [[ "$(uname -s)" == Linux ]]; then
+  "$root/native/linux-helper/build.sh" "$arch"
+  "$root/native/transcribe/build.sh" "$arch"
+  exit 0
+fi
+
 "$root/native/macos-helper/build.sh" "$arch"
 "$root/native/transcribe/build.sh" "$arch"
 

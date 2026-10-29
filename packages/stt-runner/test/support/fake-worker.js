@@ -9,6 +9,9 @@ const slowSamples = Number(process.env.FAKE_WORKER_SLOW_SAMPLES ?? '-1');
 const slowMs = Number(process.env.FAKE_WORKER_SLOW_MS ?? '5000');
 const loadDelayMs = Number(process.env.FAKE_WORKER_LOAD_DELAY_MS ?? '0');
 const replyText = process.env.FAKE_WORKER_REPLY_TEXT;
+const backend = process.argv[process.argv.indexOf('--backend') + 1];
+const primaryFailure = backend !== 'cpu' && process.env.FAKE_WORKER_PRIMARY;
+let readySent = false;
 
 if (argsFile) {
   appendFileSync(argsFile, `${process.argv.slice(2).join(' ')}\n`);
@@ -25,7 +28,7 @@ function reply(status, text) {
   process.stdout.write(Buffer.concat([header, body]));
 }
 
-if (process.env.FAKE_WORKER_LOAD === 'fail') {
+if (process.env.FAKE_WORKER_LOAD === 'fail' || primaryFailure === 'fail') {
   reply(1, 'model load failed');
   process.exit(1);
 }
@@ -69,6 +72,7 @@ function nextRequest() {
 }
 
 async function handle(request) {
+  if (process.env.FAKE_WORKER_REQUIRE_READY === '1' && !readySent) process.exit(83);
   if (process.env.FAKE_WORKER_VOCABULARY === '1') return reply(0, JSON.stringify(request.vocabulary));
   await sleep(request.samples === slowSamples ? slowMs : delayMs);
   if (request.samples === crashSamples) {
@@ -91,4 +95,5 @@ process.stdin.on('data', (chunk) => {
 process.stdin.on('end', () => {
   void busy.then(() => process.exit(0));
 });
-setTimeout(() => reply(2, ''), loadDelayMs);
+if (primaryFailure === 'exit') process.exit(127);
+if (primaryFailure !== 'timeout') setTimeout(() => { readySent = true; reply(2, ''); }, loadDelayMs);

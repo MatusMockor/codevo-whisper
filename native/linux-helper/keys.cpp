@@ -31,6 +31,9 @@ static unsigned int lockMask=LockMask,numMask=0;
 static std::vector<std::pair<int,unsigned int>> grabs;
 struct Device { int fd=-1;libevdev* ev=nullptr;guint watch=0;std::set<int> pressed;~Device(){if(watch)g_source_remove(watch);if(ev)libevdev_free(ev);if(fd>=0)close(fd);} };
 static std::map<std::string,std::unique_ptr<Device>> devices;
+static std::string onlyDevice;
+int inputDeviceCount() {int count=0;for(auto& pair:devices)if(pair.second->watch)++count;return count;}
+bool controlledInput() {return !onlyDevice.empty();}
 static udev* udevContext=nullptr;
 static udev_monitor* monitor=nullptr;
 static guint monitorWatch=0;
@@ -75,6 +78,7 @@ static void handle(int key,bool pressed,bool raw,int64_t observedFlags=-1) {
   if(!active || g_get_monotonic_time()<fencedUntil) {neutral=false;return;}
   if(!neutral) {if(held.empty()){neutral=true;event("tap-reenabled");}return;}
   auto current=observedFlags<0?flags(held):observedFlags;
+  if(recordingId && !raw)return;
   if(recordingId && raw) {
     if(pressed) {
       if(modifier(key))recordedModifiers.insert(key);
@@ -107,7 +111,7 @@ static bool grab(int key,unsigned int mask) {
   XSync(inputDisplay,False);XSetErrorHandler(previous);return !failed;
 }
 static unsigned int xflags(int64_t flags) {unsigned int mask=0;if(flags&CONTROL)mask|=ControlMask;if(flags&ALT)mask|=Mod1Mask;if(flags&SHIFT)mask|=ShiftMask;if(flags&META)mask|=Mod4Mask;return mask;}
-bool canListen() {return available && seatActive();}
+bool canListen() {return (wayland?inputDeviceCount()>0:available) && seatActive();}
 JsonObject* listen(JsonObject* args) {
   finishRecord("record-cancelled");ungrab();binding={};down=false;neutral=held.empty();listenId=integer(args,"listenId");invalidateDelivery();
   auto o=object();auto kind=string(args,"kind");Binding next;next.kind=kind;
@@ -165,7 +169,7 @@ static void discover() {
   udev_list_entry* entry;
   udev_list_entry_foreach(entry,udev_enumerate_get_list_entry(enumeration)) {
     auto node=udev_device_new_from_syspath(udevContext,udev_list_entry_get_name(entry));auto path=udev_device_get_devnode(node);auto seat=udev_device_get_property_value(node,"ID_SEAT");
-    if(path && (!seat || std::string(seat)==(g_getenv("XDG_SEAT")?g_getenv("XDG_SEAT"):"seat0")) && !devices.count(path)) {
+    if(path && (onlyDevice.empty() || onlyDevice==path) && (!seat || std::string(seat)==(g_getenv("XDG_SEAT")?g_getenv("XDG_SEAT"):"seat0")) && !devices.count(path)) {
       auto d=std::make_unique<Device>();d->fd=open(path,O_RDONLY|O_NONBLOCK|O_CLOEXEC);
       if(d->fd>=0 && libevdev_new_from_fd(d->fd,&d->ev)==0) {
         for(int k=0;k<=KEY_MAX;++k)if(libevdev_get_event_value(d->ev,EV_KEY,k))d->pressed.insert(k);
@@ -192,7 +196,8 @@ static void discover() {
   }
   udev_enumerate_unref(enumeration);refreshHeld();available=!devices.empty();neutral=held.empty();
 }
-void keysInit() {
+void keysInit(const std::string& controlledDevice) {
+  onlyDevice=controlledDevice;
   active=seatActive();
   if(!wayland)inputDisplay=XOpenDisplay(nullptr);
   if(inputDisplay && !wayland) {

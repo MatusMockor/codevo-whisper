@@ -40,7 +40,7 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
         <span id={currentId}>{recording ? 'Stlačte novú skratku…' : (hotkey?.label ?? 'Nenastavená')}</span>
         <small>{hotkey === null ? 'Nastaviť' : 'Zmeniť'}</small>
       </button>
-      <p id={helpId} className="field-note">Stlačte skratku a uvoľnite všetky klávesy. Esc zruší záznam. Kombinácie s bežným klávesom vyžadujú povolenie Prístupnosť.</p>
+      <p id={helpId} className="field-note">{navigator.userAgent.includes('Linux') ? 'Stlačte skratku a uvoľnite všetky klávesy. Po zmene X11 alebo Waylandu ju nahrajte znova. Ctrl+Super+V je vyhradené.' : 'Stlačte skratku a uvoľnite všetky klávesy. Esc zruší záznam. Kombinácie s bežným klávesom vyžadujú povolenie Prístupnosť.'}</p>
       {message !== null && (
         <p className="field-note warn" role="alert">
           {message}

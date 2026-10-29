@@ -29,6 +29,7 @@ const DEFAULTS: Settings = {
   insertion: 'paste',
   clipboardPolicy: 'restore',
   autoSubmit: 'off',
+  linuxPasteShortcut: 'ctrl-v',
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,

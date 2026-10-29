@@ -83,6 +83,56 @@ afterEach(async () => {
 });
 
 describe('ResidentTranscriber', () => {
+  it.each(['fail', 'exit', 'timeout'])('falls back only before READY after primary %s', async (mode) => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_PRIMARY', mode);
+    vi.stubEnv('FAKE_WORKER_REQUIRE_READY', '1');
+    const worker = create({ backend: 'auto', startupTimeoutMs: 150, startupFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).resolves.toMatch(/:sk:3$/);
+    const args = (await readFile(argsFile, 'utf8')).trim().split('\n');
+    expect(args).toHaveLength(2);
+    expect(args[0]).toContain('--backend auto');
+    expect(args[1]).toContain('--backend cpu');
+  });
+  it('does not start CPU after startup cancellation or replay a failed inference', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_PRIMARY', 'timeout');
+    const worker = create({ backend: 'auto', startupTimeoutMs: 150, startupFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    const controller = new AbortController();
+    const call = worker.transcribe({ pcm: pcm(3), language: 'sk', signal: controller.signal });
+    const rejected = expect(call).rejects.toBeInstanceOf(DOMException);
+    await waitForFile(argsFile);
+    controller.abort();
+    await rejected;
+    await worker.close();
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+  it('never uses startup fallback to replay a post-READY inference failure', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_CRASH_SAMPLES', '9');
+    const worker = create({ backend: 'auto', startupFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(9), language: 'sk' })).rejects.toMatchObject({ reason: 'exit' });
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+  it('reports CPU startup failure after exactly two failed attempts', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_LOAD', 'fail');
+    const worker = create({ backend: 'auto', startupFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).rejects.toMatchObject({ reason: 'spawn' });
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(2);
+  });
+  it('starts CPU once when the accelerator executable cannot load before READY', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    const worker = create({ binary: join(scratch, 'absent-vulkan-worker'), backend: 'auto', startupFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).resolves.toMatch(/:sk:3$/);
+    expect((await readFile(argsFile, 'utf8')).trim()).toContain('--backend cpu');
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
   it('isolates consecutive non-ASCII, different and empty vocabularies in one worker', async () => {
     vi.stubEnv('FAKE_WORKER_VOCABULARY', '1');
     const worker = create();

@@ -14,7 +14,8 @@ def target():
  for secret in [False,False,True]:
   entry=Gtk.Entry();entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
  window.show_all();fields[0].grab_focus()
- send({'windowId':window.get_window().get_xid(),'pid':os.getpid()})
+ backend=Gdk.Display.get_default().__gtype__.name
+ send({'windowId':window.get_window().get_xid() if backend=='GdkX11Display' else None,'pid':os.getpid(),'nativeWayland':backend=='GdkWaylandDisplay'})
  def command(source,condition):
   line=sys.stdin.readline()
   if not line: Gtk.main_quit();return False

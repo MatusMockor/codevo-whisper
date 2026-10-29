@@ -156,7 +156,7 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async saveClipboard(): Promise<void> {
-    await this.channel.request('clipboard-save');
+    await this.channel.request('clipboard-save', {}, this.platform === 'linux' ? 5000 : undefined);
   }
 
   async writeClipboard(text: string): Promise<void> {

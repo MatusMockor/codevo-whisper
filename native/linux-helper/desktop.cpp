@@ -76,8 +76,8 @@ void describeTarget(JsonObject* o,const Target& t) {
   if(!t.window || !t.pid) {json_object_set_null_member(o,"pid");json_object_set_null_member(o,"windowId");return;}
   number(o,"pid",t.pid);number(o,"windowId",t.window);text(o,"bundleId",t.name);text(o,"name",t.name);
 }
-static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget) {
-  if(!node || depth>32 || --budget<0)return nullptr;
+static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget,int64_t deadline) {
+  if(!node || depth>32 || --budget<0 || g_get_monotonic_time()>deadline)return nullptr;
   atspi_accessible_clear_cache(node);
   auto states=atspi_accessible_get_state_set(node);
   bool focus=states && atspi_state_set_contains(states,ATSPI_STATE_FOCUSED) && !atspi_state_set_contains(states,ATSPI_STATE_DEFUNCT);
@@ -86,7 +86,7 @@ static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget) {
   GError* error=nullptr;int count=atspi_accessible_get_child_count(node,&error);if(error){g_clear_error(&error);return nullptr;}
   for(int i=0;i<count && budget>0;++i) {
     auto child=atspi_accessible_get_child_at_index(node,i,&error);if(error){g_clear_error(&error);continue;}
-    auto found=findFocus(child,depth+1,budget);if(child)g_object_unref(child);if(found)return found;
+    auto found=findFocus(child,depth+1,budget,deadline);if(child)g_object_unref(child);if(found)return found;
   }
   return nullptr;
 }
@@ -94,10 +94,10 @@ Field focused(const Target& target) {
   Field field;if(!target.pid || wayland || !focusListener)return field;
   auto desktop=atspi_get_desktop(0);if(!desktop)return field;
   GError* error=nullptr;int count=atspi_accessible_get_child_count(desktop,&error);g_clear_error(&error);
-  AtspiAccessible* focus=nullptr;
-  for(int i=0;i<count && !focus;++i) {
+  AtspiAccessible* focus=nullptr;auto deadline=g_get_monotonic_time()+1200000;
+  for(int i=0;i<count && i<256 && !focus && g_get_monotonic_time()<deadline;++i) {
     auto app=atspi_accessible_get_child_at_index(desktop,i,&error);if(error){g_clear_error(&error);continue;}
-    if(app && atspi_accessible_get_process_id(app,&error)==static_cast<guint>(target.pid)) {int budget=2048;focus=findFocus(app,0,budget);}
+    if(app && atspi_accessible_get_process_id(app,&error)==static_cast<guint>(target.pid)) {int budget=2048;focus=findFocus(app,0,budget,deadline);}
     g_clear_error(&error);if(app)g_object_unref(app);
   }
   g_object_unref(desktop);if(!focus)return field;

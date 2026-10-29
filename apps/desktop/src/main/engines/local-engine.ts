@@ -16,6 +16,7 @@ export const LOCAL_CALL_TIMEOUT_MS = 60_000;
 
 export type LocalEngineDeps = {
   binary: string;
+  acceleratorBinary?: string;
   models: ActiveModel;
   settings: Pick<SettingsStore, 'get' | 'onChange'>;
   arch: LocalEngineArch;
@@ -75,7 +76,8 @@ export class LocalEngine implements TranscriptionEngine {
     if (this.generation !== undefined) return this.generation;
     const backend = this.backend();
     const resident = new ResidentTranscriber({
-      binary: this.deps.binary,
+      binary: backend === 'auto' ? this.deps.acceleratorBinary ?? `${this.deps.binary}-vulkan` : this.deps.binary,
+      ...(backend === 'auto' ? { startupFallback: { binary: this.deps.binary, backend: 'cpu' as const } } : {}),
       model,
       backend,
       threads: localThreads(),

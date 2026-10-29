@@ -8,6 +8,8 @@ type HookGlobal = { codevoE2e: E2eHooks };
 type PanelFlags = { focusable: boolean; visible: boolean; alwaysOnTop: boolean; allWorkspaces: boolean; focused: boolean; mainFocused: boolean };
 
 const OVERLAY_PAGE = '/overlay/overlay.html';
+const MAC = process.platform === 'darwin';
+const REDUCED = process.platform === 'linux' && Boolean(process.env['WAYLAND_DISPLAY'] || process.env['XDG_SESSION_TYPE'] === 'wayland');
 
 let app: ElectronApplication;
 let main: Page;
@@ -51,7 +53,7 @@ function panelFlags(): Promise<PanelFlags> {
   }, OVERLAY_PAGE);
 }
 
-test('overlay window is not focusable and shows the recording state from an injected state', async () => {
+test('overlay window preserves platform presentation and shows the injected recording state', async () => {
   const mainFocusedBefore = (await panelFlags()).mainFocused;
   await inject({ kind: 'recording', elapsedMs: 4200, level: 0.5, language: 'SK' });
   const overlay = await overlayPage();
@@ -60,10 +62,11 @@ test('overlay window is not focusable and shows the recording state from an inje
   await expect(pill).toBeVisible();
   await expect(pill).toContainText('0:04');
   await expect(pill).toContainText('SK');
-  await expect.poll(panelFlags).toMatchObject({ focusable: false, visible: true, alwaysOnTop: true, allWorkspaces: true, focused: false });
+  await expect.poll(panelFlags).toMatchObject({ focusable: !MAC, visible: true, alwaysOnTop: !REDUCED, allWorkspaces: MAC });
+  if (!REDUCED) expect((await panelFlags()).focused).toBe(false);
   await inject({ kind: 'processing' });
   await expect(overlay.getByText('Spracúvam')).toBeVisible();
-  expect(await panelFlags()).toMatchObject({ focusable: false, focused: false, mainFocused: mainFocusedBefore });
+  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: !MAC, focused: false, mainFocused: mainFocusedBefore });
 
   await inject({ kind: 'hidden' });
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);
@@ -108,7 +111,7 @@ test('Živý text shows confirmed words solid and tentative words lighter, grows
   await expect(confirmed).toHaveText('ahoj Peter, pozrel som si ten pull request.');
   await expect(tentative).toHaveCount(0);
 
-  expect(await panelFlags()).toMatchObject({ focusable: false, visible: true, focused: false, mainFocused: mainFocusedBefore });
+  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: !MAC, visible: true, focused: false, mainFocused: mainFocusedBefore });
 });
 
 test('Živý text keeps the fallback notice inside the panel', async () => {
@@ -146,7 +149,7 @@ test('overlay shows the fallback notice, the processing and the result states', 
   await expect(overlay.getByRole('status')).toHaveText('VloženéNotes');
 
   await inject({ kind: 'copied' });
-  await expect(overlay.getByText('Skopírované - vlož cez ⌘V')).toBeVisible();
+  await expect(overlay.getByText(process.platform === 'linux' ? 'Skopírované - vlož cez Ctrl+V' : 'Skopírované - vlož cez ⌘V')).toBeVisible();
 });
 
 test('overlay error and blocked states offer their actions', async () => {
