@@ -19,6 +19,7 @@ let busy = Promise.resolve();
 async function handle(language, pcm, vocabulary) {
   const mode = env.CW_WORKER_CONTROL ? readFileSync(env.CW_WORKER_CONTROL, 'utf8') : env.FAKE_CLI_MODE;
   if (env.FAKE_CLI_ARGS_FILE) appendFileSync(env.FAKE_CLI_ARGS_FILE, `${[...args, '--language', language || 'auto'].join('\n')}\n--\n`);
+  if (env.CW_WORKER_PCM_FILE) writeFileSync(env.CW_WORKER_PCM_FILE, pcm);
   if (env.FAKE_CLI_PID_FILE) writeFileSync(env.FAKE_CLI_PID_FILE, String(process.pid));
   if (mode === 'hang') await sleep(30_000);
   if (mode === 'fail') process.exit(3);

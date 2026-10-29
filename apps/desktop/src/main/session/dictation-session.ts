@@ -68,6 +68,7 @@ export class DictationSession {
   private unsubscribeFrames: () => void = () => undefined;
   private readonly audioSettings: RecordingAudioSettings;
   private audio: RecordingAudioLease | null = null;
+  private audioRestoreError: ReturnType<typeof errorState> | null = null;
   private microphoneOpened = false;
   private closing: Promise<Uint8Array> | null = null;
   private shuttingDown = false;
@@ -290,7 +291,8 @@ export class DictationSession {
     if (audio === null) return;
     await audio.finish({ playStop }).catch((error: unknown) => {
       this.deps.logger.error('The recording audio could not be restored', error);
-      this.deps.overlay.flash(this, errorState(MESSAGES.recordingAudio));
+      this.audioRestoreError = errorState(MESSAGES.recordingAudio);
+      this.deps.overlay.flash(this, this.audioRestoreError);
     });
   }
 
@@ -356,7 +358,7 @@ export class DictationSession {
     if (this.controller.signal.aborted) {
       return;
     }
-    this.deps.overlay.flash(this, state);
+    this.deps.overlay.flash(this, this.audioRestoreError ?? state);
   }
 
   private showRecording(): void {

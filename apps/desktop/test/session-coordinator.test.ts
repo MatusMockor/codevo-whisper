@@ -36,7 +36,7 @@ const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes',
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper };
+type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -84,7 +84,7 @@ async function prepared(setup: Setup = {}) {
   await hotkey.start();
   const capture = new InProcessCapture();
   const lastTranscript = new LastTranscript();
-  const insertion = new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger);
+  const insertion = new InsertionService(helper, settings, lastTranscript, setup.pasteDelay === 'default' ? undefined : () => Promise.resolve(), logger);
   const states: OverlayState[] = [];
   const settingsOpened: string[] = [];
   const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
@@ -206,7 +206,9 @@ describe('SessionCoordinator', () => {
     expect(harness.helper.audioTrace).toEqual(['start:default:50', 'mute', 'restore:false', 'stop:default:50']);
   });
   it('preserves recorded PCM and reports restoration failure', async () => {
-    const harness = await prepared({ settings: { muteWhileRecording: true } });
+    const pcmFile = join(scratch, 'worker.pcm');
+    vi.stubEnv('CW_WORKER_PCM_FILE', pcmFile);
+    const harness = await prepared({ settings: { muteWhileRecording: true }, pasteDelay: 'default' });
     const begin = harness.helper.beginRecordingAudio.bind(harness.helper);
     harness.helper.beginRecordingAudio = async (settings) => {
       await begin(settings);
@@ -214,8 +216,30 @@ describe('SessionCoordinator', () => {
     };
     await dictate(harness, 7);
     await expect.poll(() => harness.helper.pasted).toEqual(['7:32000']);
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.outputMuted).toBe(true);
+    expect(harness.lastTranscript.get()).toBe('7:32000');
+    expect(harness.helper.clipboard).toBe('original');
+    expect(await readFile(pcmFile)).toEqual(Buffer.from(stampedPcm(7)));
+    expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
     expect(harness.logger.errors.some((entry) => String(entry.error).includes('restore-failed'))).toBe(true);
     expect(harness.states.some((state) => state.kind === 'error' && state.message.includes('Zvukový výstup'))).toBe(true);
+    expect(lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.' });
+  });
+  it('keeps normal success after restored audio and default paste settle', async () => {
+    const pcmFile = join(scratch, 'worker.pcm');
+    vi.stubEnv('CW_WORKER_PCM_FILE', pcmFile);
+    const harness = await prepared({ settings: { muteWhileRecording: true }, pasteDelay: 'default' });
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual(['7:32000']);
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.helper.outputMuted).toBe(false);
+    expect(harness.lastTranscript.get()).toBe('7:32000');
+    expect(harness.helper.clipboard).toBe('original');
+    expect(await readFile(pcmFile)).toEqual(Buffer.from(stampedPcm(7)));
+    expect(await harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
+    expect(lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    expect(harness.states.some((state) => state.kind === 'error')).toBe(false);
   });
   it('waits for restoration before update suspension completes', async () => {
     const harness = await prepared({ settings: { muteWhileRecording: true } });
