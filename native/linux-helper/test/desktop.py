@@ -13,6 +13,12 @@ def target():
  fields=[];activations=[]
  for secret in [False,False,True]:
   entry=Gtk.Entry();entry.connect('activate',lambda entry:activations.append(entry.get_text()));entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
+ if '--compatible-target' in sys.argv:
+  def paste_variant(entry,event):
+   if event.keyval in [Gdk.KEY_v,Gdk.KEY_V] and event.state&Gdk.ModifierType.CONTROL_MASK and event.state&Gdk.ModifierType.SHIFT_MASK:
+    entry.paste_clipboard();return True
+   return False
+  for entry in fields:entry.connect('key-press-event',paste_variant)
  window.show_all();fields[0].grab_focus()
  backend=Gdk.Display.get_default().__gtype__.name
  send({'windowId':window.get_window().get_xid() if backend=='GdkX11Display' else None,'pid':os.getpid(),'nativeWayland':backend=='GdkWaylandDisplay'})

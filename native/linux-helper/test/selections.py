@@ -6,23 +6,24 @@ def owner():
  import gi
  gi.require_version('Gtk','3.0')
  from gi.repository import Gtk, Gdk, GLib
- widget=Gtk.Invisible();widget.realize();value='original';reject=False
+ widget=Gtk.Invisible();widget.realize();value='original';reject=False;delay=0
  targets=['UTF8_STRING','application/x-codevo-fixture']
  for index,name in enumerate(targets):Gtk.selection_add_target(widget,Gdk.SELECTION_CLIPBOARD,Gdk.Atom.intern(name,False),index)
  def selection_get(widget,data,info,timestamp):
+  if info==1 and delay:time.sleep(delay)
   if info==1 and reject:return
   payload=value.encode() if info==0 else b'\x00\xff\x12\x00fixture'
   data.set(Gdk.Atom.intern(targets[info],False),8,payload)
  widget.connect('selection-get',selection_get)
  clipboard=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
  def command(source,condition):
-  nonlocal value,reject
+  nonlocal value,reject,delay
   import json
   line=sys.stdin.readline()
   if not line:Gtk.main_quit();return False
   request=json.loads(line)
   if request['cmd']=='own':
-   value=request['text'];reject=request.get('reject',False);assert Gtk.selection_owner_set(widget,Gdk.SELECTION_CLIPBOARD,Gdk.CURRENT_TIME);desktop.send({'owned':True})
+   value=request['text'];reject=request.get('reject',False);delay=request.get('delay',0);assert Gtk.selection_owner_set(widget,Gdk.SELECTION_CLIPBOARD,Gdk.CURRENT_TIME);desktop.send({'owned':True})
   elif request['cmd']=='read':
    data=clipboard.wait_for_contents(Gdk.Atom.intern(targets[1],False));desktop.send({'text':clipboard.wait_for_text(),'raw':list(data.get_data()) if data else None})
   return True

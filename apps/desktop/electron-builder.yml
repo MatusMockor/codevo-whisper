@@ -80,6 +80,7 @@ deb:
     - libudev1
     - libxi6
     - libx11-6
+    - libxfixes3
     - libglib2.0-0
     - libstdc++6
     - libgcc-s1

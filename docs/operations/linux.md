@@ -6,7 +6,7 @@ The initial Linux target is Ubuntu 24.04 with GNOME 46 on x64 or arm64. X11 supp
 
 Run Codevo Whisper as your normal desktop user. Never run the application or helper as root. The application does not change groups, device permissions, compositor settings or sandbox configuration.
 
-The native helper requires GTK3/GDK-X11, JSON-GLib, GLib/GIO, AT-SPI2, libevdev, libudev, X11, Xi and XTest. The deb declares these libraries alongside Electron's dependencies. On Ubuntu 24.04 their runtime packages include `libgtk-3-0t64`, `libjson-glib-1.0-0`, `libglib2.0-0t64`, `libatspi2.0-0t64`, `libevdev2`, `libudev1`, `libxi6`, `libxtst6` and `libx11-6`. Ubuntu provides the historical GTK, GLib and AT-SPI package names used in deb dependencies through those t64 packages. Both workers also require the system C/C++ runtime. Artifacts built on Ubuntu 24.04 do not establish compatibility with older distributions.
+The native helper requires GTK3/GDK-X11, JSON-GLib, GLib/GIO, AT-SPI2, libevdev, libudev, X11, Xi, XTest and XFixes. The deb declares these libraries alongside Electron's dependencies. On Ubuntu 24.04 their runtime packages include `libgtk-3-0t64`, `libjson-glib-1.0-0`, `libglib2.0-0t64`, `libatspi2.0-0t64`, `libevdev2`, `libudev1`, `libxi6`, `libxtst6`, `libx11-6` and `libxfixes3`. Ubuntu provides the historical GTK, GLib and AT-SPI package names used in deb dependencies through those t64 packages. Both workers also require the system C/C++ runtime. Artifacts built on Ubuntu 24.04 do not establish compatibility with older distributions.
 
 AppImage users need those runtime libraries installed. The AppImage carries the helper and workers, not a private replacement for the desktop's GTK, accessibility stack or GPU driver. The package verification driver prints the actual library origins with loader overrides removed. An unresolved dependency is a failure.
 
@@ -22,13 +22,13 @@ Record a shortcut in the existing settings. Re-record it after switching between
 
 Select one paste shortcut for the target application: Ctrl+V, Ctrl+Shift+V or Shift+Insert. Codevo never tries all variants. Ctrl+V and Ctrl+Shift+V use CLIPBOARD. Shift+Insert uses PRIMARY and retains CLIPBOARD recovery text. Direct typing on Linux copies the text and explains the limitation.
 
-X11 delivery requires the captured nonnull window and process, a positively editable AT-SPI field, known clear protection, released modifiers and an active unlocked session. The native helper rechecks authorization before paste and submit. Unknown terminal password state, inaccessible fields, protected input and unknown focus do not authorize injection. A posting acknowledgment alone does not prove target consumption. Ctrl+Shift+V is not a paste binding in a plain GTK Entry; test it in a compatible terminal.
+X11 delivery requires the captured nonnull window and process, a positively editable AT-SPI field, known clear protection, released modifiers and an active unlocked session. The native helper rechecks authorization before paste and submit. Unknown terminal password state, inaccessible fields, protected input and unknown focus do not authorize injection. A posting acknowledgment alone does not prove target consumption. Ctrl+Shift+V is not a paste binding in a plain GTK Entry; test native posting in a compatible editable widget and manual paste in a terminal.
 
-The native selection owner snapshots all offered restorable formats within its bounds. Incomplete snapshots cannot authorize destructive restoration. After the settling delay, ownership and generation must still belong to the operation. Later owners win even when their text equals the transcript. A forced rollback is also conditional.
+Clipboard transactions distinguish Copy from paste and restore from leave. Copy touches CLIPBOARD only, even after Shift+Insert. The native owner snapshots every touched selection before restore-policy paste can write. Incomplete preparation preserves the original data and leaves the transcript recoverable. Explicit Copy does not require a restorable old snapshot. Original ownership is checked before writing, and current offers are checked immediately before posting. XFixes owner generations and timestamps distinguish later equal-text copies. After the settling delay, ownership and generation must still belong to the operation. Later owners win even when their text equals the transcript. A forced rollback is also conditional.
 
 ## Build without publishing
 
-Install build dependencies through your normal development or CI setup. The required development packages are CMake, Ninja, pkg-config, GTK3, JSON-GLib, AT-SPI2, libevdev, libudev, X11/Xi/XTest, Vulkan headers, glslc and SPIRV-Headers. The manual Linux workflow lists their Ubuntu package names and remains disabled by default.
+Install build dependencies through your normal development or CI setup. The required development packages are CMake, Ninja, pkg-config, GTK3, JSON-GLib, AT-SPI2, libevdev, libudev, X11/Xi/XTest/XFixes, Vulkan headers, glslc and SPIRV-Headers. The manual Linux workflow lists their Ubuntu package names and remains disabled by default.
 
 Run from the checkout with the existing machine limits:
 
@@ -50,11 +50,14 @@ Use an isolated writable evidence directory through TMPDIR and retain command ar
 python3 native/linux-helper/test/protocol.py apps/desktop/resources/bin/x64/codevo-input-helper
 python3 native/linux-helper/test/desktop.py --session x11 --helper apps/desktop/resources/bin/x64/codevo-input-helper --controlled-only
 xvfb-run -a python3 native/linux-helper/test/selections.py apps/desktop/resources/bin/x64/codevo-input-helper
+xvfb-run -a python3 native/linux-helper/test/input-lifecycle.py apps/desktop/resources/bin/x64/codevo-input-helper --unmanaged
 python3 native/linux-helper/test/evdev.py apps/desktop/resources/bin/x64/codevo-input-helper
 python3 scripts/test/linux-package.py --artifact /absolute/application.AppImage --cpu-without-vulkan --model /absolute/catalog-model.gguf --pcm /absolute/fixture.pcm
 ```
 
-The evdev driver creates one uniquely named temporary uinput keyboard and restricts the helper to its exact node. It does not alter device permissions or read other keyboards. Its default mode proves repeat, recording, modifier and unplug behavior. The optional `--synthetic-sync` case requires the separately compiled `test/evdev-sync-fixture.c` through LD_PRELOAD. That case simulates libevdev's sync return at the external library boundary. It does not prove a kernel overflow. The attempted uinput SYN_DROPPED event is filtered on this host and its failed experiment remains separate evidence.
+The evdev driver creates one uniquely named temporary uinput keyboard and restricts the helper to its exact node. It does not alter device permissions or read other keyboards. Its default mode proves repeat, recording, modifier and unplug behavior. The optional `--read-error` case uses `test/evdev-read-error-fixture.c` through LD_PRELOAD to check retirement, same-node reopening without removal, cancellation and neutral rearm at the external libevdev boundary. It does not prove kernel overflow or physical device recovery. Compile with `cc -shared -fPIC $(pkg-config --cflags libevdev) -o /absolute/evdev-read-error.so native/linux-helper/test/evdev-read-error-fixture.c -ldl`.
+
+The optional `--synthetic-sync` case requires the separately compiled `test/evdev-sync-fixture.c` through LD_PRELOAD. That case simulates libevdev's sync return at the external library boundary. It does not prove a kernel overflow. The attempted uinput SYN_DROPPED event is filtered on this host and its failed experiment remains separate evidence.
 
 The package driver extracts without installation, checks ELF architecture and executable staging, rejects absolute build search paths and inspects sanitized dependency origins. Its absent-loader fixture contains the packaged worker binaries and CPU dependency closure, with no libvulkan file. It runs explicit CPU and automatic startup fallback with two real model replies each, from an arbitrary working directory. Disabled ICD discovery is a different test.
 

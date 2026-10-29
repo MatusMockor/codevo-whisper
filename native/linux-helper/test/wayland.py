@@ -44,11 +44,11 @@ try:
  for intent in ['automatic','replay']:
   decision=helper.request('check-delivery',expected=None,intent=intent,shortcut='ctrl-v');assert decision['kind']=='copy',decision
  expected='Wayland Žilina é 🚀'
- helper.request('clipboard-save');assert helper.request('clipboard-write',text=expected)['written']
+ saved=helper.request('clipboard-save',purpose='copy',policy='leave');assert saved['saved'],saved
+ assert helper.request('clipboard-write',text=expected,transactionId=saved['transactionId'])['written']
  input('Click the first native GTK field and manually paste with Ctrl+V, then return here and press Enter. ')
  assert fixture.request('text')['texts'][0]==expected,'native Wayland target did not consume the XWayland selection bridge'
  assert not helper.request('paste')['posted'],'unknown focus must never authorize posting'
- helper.request('clipboard-restore',expectedText=expected)
  input('Click the password field. Press Ctrl+Super+V, then return here and press Enter. ');helper.request('ping')
  assert any(e.get('event')=='shortcut' for e in helper.events),'physical replay shortcut unavailable'
  observations['nativeGtkManualPaste']=True;observations['clipboardOnlyAutomaticAndReplay']=True;observations['physicalGestureAndLockReset']=True
