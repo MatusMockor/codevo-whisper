@@ -96,6 +96,10 @@ final class RecordingAudio: NSObject, NSSoundDelegate {
         guard case .opening(let current) = state, current === lease else {
             return ["begun": false, "reason": "audio-cancelled"]
         }
+        if sound != nil {
+            _ = await close(lease, playStop: false)
+            return ["begun": false, "reason": "cue-not-stopped"]
+        }
         if let snapshot {
             guard let device = device(uid: snapshot.uid), await setMute(device, 1, lease) else {
                 _ = await close(lease, playStop: false)
@@ -137,7 +141,9 @@ final class RecordingAudio: NSObject, NSSoundDelegate {
                 }
                 lease.snapshot = nil
             }
+            guard self.sound == nil else { return false }
             if playStop && lease.feedback && !self.shuttingDown { await self.play("Pop", lease) }
+            guard self.sound == nil else { return false }
             if self.state.lease === lease { self.state = .idle }
             return true
         }
@@ -148,7 +154,7 @@ final class RecordingAudio: NSObject, NSSoundDelegate {
     }
 
     private func play(_ name: String, _ lease: Lease) async {
-        guard let sound = NSSound(named: NSSound.Name(name)) else {
+        guard let named = NSSound(named: NSSound.Name(name)), let sound = named.copy() as? NSSound else {
             diagnostic("Recording cue is missing: \(name)")
             return
         }
@@ -182,9 +188,13 @@ final class RecordingAudio: NSObject, NSSoundDelegate {
         cueTimer?.cancel()
         cueTimer = nil
         let current = sound
-        sound = nil
-        current?.delegate = nil
         current?.stop()
+        if current?.isPlaying == true {
+            diagnostic("Recording cue is still playing after stop")
+        } else {
+            sound = nil
+            current?.delegate = nil
+        }
         let continuation = cue
         cue = nil
         continuation?.resume()
