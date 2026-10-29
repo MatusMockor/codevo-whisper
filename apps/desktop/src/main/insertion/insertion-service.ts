@@ -157,7 +157,7 @@ export class InsertionService {
   }
 
   private async paste(text: string, output: OutputSettings): Promise<InsertionOutcome> {
-    if (!(await this.writeClipboard(text))) {
+    if (!(await writeClipboardOrRestore(this.helper, text, this.logger, { kind: 'paste', policy: output.clipboardPolicy }))) {
       return 'failed-clipboard-write';
     }
     try {

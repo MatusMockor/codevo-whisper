@@ -24,6 +24,8 @@ export type DeliveryDecision =
   | { kind: 'copy'; reason: 'unverified-target' | 'posting-unavailable' | 'unsupported-output' }
   | { kind: 'blocked'; reason: 'focus-changed' | 'protected-input' | 'modifiers-held' };
 
+export type ClipboardPurpose = { kind: 'copy' } | { kind: 'paste'; policy: 'restore' | 'leave' };
+
 export interface InputHelper {
   checkDelivery(request: DeliveryRequest): Promise<DeliveryDecision>;
   getOutputAudio(): Promise<OutputAudioView>;
@@ -36,7 +38,7 @@ export interface InputHelper {
   secureInput(): Promise<boolean>;
   focusedElement(): Promise<FocusedElement>;
   modifierFlags(): Promise<ModifierFlags>;
-  saveClipboard(): Promise<void>;
+  saveClipboard(purpose?: ClipboardPurpose): Promise<void>;
   writeClipboard(text: string): Promise<void>;
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;

@@ -10,9 +10,9 @@ def target():
  window=Gtk.Window(title='Codevo controlled native target')
  window.set_wmclass('codevo-fixture','CodevoFixture');window.set_default_size(520,220)
  box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);window.add(box)
- fields=[]
+ fields=[];activations=[]
  for secret in [False,False,True]:
-  entry=Gtk.Entry();entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
+  entry=Gtk.Entry();entry.connect('activate',lambda entry:activations.append(entry.get_text()));entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
  window.show_all();fields[0].grab_focus()
  backend=Gdk.Display.get_default().__gtype__.name
  send({'windowId':window.get_window().get_xid() if backend=='GdkX11Display' else None,'pid':os.getpid(),'nativeWayland':backend=='GdkWaylandDisplay'})
@@ -22,10 +22,13 @@ def target():
   r=json.loads(line);cmd=r['cmd']
   if cmd=='focus': fields[r['index']].grab_focus();send({'ok':True})
   elif cmd=='text': send({'texts':[f.get_text() for f in fields]})
+  elif cmd=='activations': send({'values':activations})
   elif cmd=='clear':
    for f in fields:f.set_text('')
    send({'ok':True})
   elif cmd=='copy': Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(r['text'],-1);send({'ok':True})
+  elif cmd=='primary-copy': Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(r['text'],-1);send({'ok':True})
+  elif cmd=='primary': send({'text':Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).wait_for_text()})
   elif cmd=='clipboard': send({'text':Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()})
   elif cmd=='quit': Gtk.main_quit();return False
   return True
@@ -69,13 +72,13 @@ def verify(args):
    allowed=helper.request('check-delivery',expected=current,intent='automatic',shortcut=chord)
    assert allowed.get('kind')=='allowed',allowed
    prior=fixture.request('clipboard')['text']
-   helper.request('clipboard-save');assert helper.request('clipboard-write',text='Žilina 🚀')['written']
-   posted=helper.request('paste',operationId=allowed['operationId']);assert posted['posted'],posted
+   saved=helper.request('clipboard-save',purpose='paste',policy='restore',operationId=allowed['operationId']);assert saved['saved'],saved;tx=saved['transactionId'];assert helper.request('clipboard-write',text='Žilina 🚀',transactionId=tx)['written']
+   posted=helper.request('paste',operationId=allowed['operationId'],transactionId=tx);assert posted['posted'],posted
    time.sleep(.5)
    consumed=fixture.request('text')['texts'][0]
    if chord!='ctrl-shift-v':assert consumed=='Žilina 🚀',(chord,consumed)
    else:assert fixture.request('clipboard')['text']=='Žilina 🚀'
-   assert helper.request('clipboard-restore',expectedText='Žilina 🚀')['restored'],'complete clipboard snapshot must restore'
+   assert helper.request('clipboard-restore',expectedText='Žilina 🚀',transactionId=tx)['restored'],'complete clipboard snapshot must restore'
    assert fixture.request('clipboard')['text']==prior,'original clipboard text must survive'
    print(json.dumps({'chord':chord,'posted':True,'targetConsumed':consumed=='Žilina 🚀','fixture':'GTK Entry'}),flush=True)
    assert not helper.request('paste',operationId=allowed['operationId'])['posted'],'operation must be single use'

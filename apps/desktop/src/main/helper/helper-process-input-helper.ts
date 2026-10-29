@@ -18,7 +18,7 @@ import {
   parseShortcut,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, DeliveryDecision, DeliveryRequest, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, ClipboardPurpose, DeliveryDecision, DeliveryRequest, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
@@ -33,6 +33,7 @@ function ensure(message: HelperMessage, key: string, failure: string): void {
 }
 
 export class HelperProcessInputHelper implements InputHelper {
+  private transactionId: string | null = null;
   private operationId: string | null = null;
   private audioToken = 0;
   private pendingAudioToken: number | null = null;
@@ -63,6 +64,7 @@ export class HelperProcessInputHelper implements InputHelper {
     });
     channel.onRestart(() => {
       this.operationId = null;
+      this.transactionId = null;
       this.activeListenId = null;
       this.pendingListen = null;
       this.cancelRecording?.();
@@ -155,24 +157,37 @@ export class HelperProcessInputHelper implements InputHelper {
     return parseModifierFlags(await this.channel.request('modifier-flags'));
   }
 
-  async saveClipboard(): Promise<void> {
-    await this.channel.request('clipboard-save', {}, this.platform === 'linux' ? 5000 : undefined);
+  async saveClipboard(purpose: ClipboardPurpose = { kind: 'copy' }): Promise<void> {
+    if (this.platform !== 'linux') {
+      await this.channel.request('clipboard-save');
+      return;
+    }
+    this.transactionId = null;
+    const message = await this.channel.request('clipboard-save', {
+      purpose: purpose.kind,
+      policy: purpose.kind === 'paste' ? purpose.policy : 'leave',
+      ...(purpose.kind === 'paste' ? { operationId: this.operationId } : {}),
+    }, 5000);
+    ensure(message, 'saved', 'clipboard-prepare-failed');
+    const transactionId = message['transactionId'];
+    if (typeof transactionId !== 'string' || transactionId.length === 0 || transactionId.length > 256) throw new Error('clipboard-transaction-invalid');
+    this.transactionId = transactionId;
   }
 
   async writeClipboard(text: string): Promise<void> {
-    ensure(await this.channel.request('clipboard-write', { text }), 'written', 'clipboard-write-failed');
+    ensure(await this.channel.request('clipboard-write', { text, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}) }), 'written', 'clipboard-write-failed');
   }
 
   async restoreClipboard(expectedText: string): Promise<boolean> {
-    return requireBoolean(await this.channel.request('clipboard-restore', { expectedText }), 'restored', 'clipboard-restore-invalid');
+    return requireBoolean(await this.channel.request('clipboard-restore', { expectedText, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}) }), 'restored', 'clipboard-restore-invalid');
   }
 
   async restoreSavedClipboard(): Promise<boolean> {
-    return requireBoolean(await this.channel.request('clipboard-restore', { force: true }), 'restored', 'clipboard-restore-invalid');
+    return requireBoolean(await this.channel.request('clipboard-restore', { force: true, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}) }), 'restored', 'clipboard-restore-invalid');
   }
 
   async paste(): Promise<void> {
-    ensure(await this.channel.request('paste', this.platform === 'linux' ? { operationId: this.operationId } : {}), 'posted', 'paste-failed');
+    ensure(await this.channel.request('paste', this.platform === 'linux' ? { operationId: this.operationId, transactionId: this.transactionId } : {}), 'posted', 'paste-failed');
   }
 
   async typeText(text: string): Promise<void> {

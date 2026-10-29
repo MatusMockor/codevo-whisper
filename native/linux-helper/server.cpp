@@ -44,12 +44,12 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="secure-input") { auto f=focused(frontmost());boolean(o,"enabled",!f.known || f.protectedInput); }
   else if(cmd=="modifier-flags") number(o,"flags",modifierFlags());
   else if(cmd=="check-delivery") { json_object_unref(o);return checkDelivery(args); }
-  else if(cmd=="clipboard-save") { selectionSave();boolean(o,"saved",display!=nullptr); }
+  else if(cmd=="clipboard-save") { json_object_unref(o);return selectionSave(args); }
   else if(cmd=="clipboard-write") {
     auto n=args ? json_object_get_member(args,"text"):nullptr;
-    boolean(o,"written",n && json_node_get_value_type(n)==G_TYPE_STRING && selectionWrite(string(args,"text")));
+    boolean(o,"written",n && json_node_get_value_type(n)==G_TYPE_STRING && selectionWrite(args));
   }
-  else if(cmd=="clipboard-restore") boolean(o,"restored",selectionRestore(string(args,"expectedText"),truth(args,"force")));
+  else if(cmd=="clipboard-restore") boolean(o,"restored",selectionRestore(args));
   else if(cmd=="paste" || cmd=="submit") boolean(o,"posted",post(args,cmd=="submit"));
   else if(cmd=="type-text") { boolean(o,"posted",false);text(o,"reason","unsupported-output"); }
   else if(cmd=="listen-start") { json_object_unref(o);return listen(args); }

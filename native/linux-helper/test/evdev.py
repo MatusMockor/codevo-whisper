@@ -41,6 +41,18 @@ try:
   assert edges[before:]==['down'],('lost release must cancel without a phantom edge',edges)
   key(97,1);key(97,0);client.request('ping')
   assert [e['phase'] for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==18][-2:]==['down','up']
+ if '--read-error' in sys.argv:
+  client.request('listen-start',listenId=19,kind='modifiers',keycodes=[0x20000+97])
+  key(97,1);key(97,0);time.sleep(1.2)
+  capability=client.request('permissions')
+  print({'sameNode':node,'afterReadError':capability},flush=True)
+  assert capability.get('inputDeviceCount')==1, 'failed descriptor must retire and same node reopen without physical remove'
+  client.request('ping');edges=[e['phase'] for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==19]
+  assert edges==['down'],('read loss cancels without phantom up',edges)
+  assert any(e.get('event')=='tap-error' for e in client.events)
+  assert any(e.get('event')=='tap-reenabled' for e in client.events)
+  key(97,1);key(97,0);client.request('ping')
+  assert [e['phase'] for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==19]==['down','down','up'],client.events
  fcntl.ioctl(fd,0x5502);time.sleep(.3);client.request('ping');assert any(e.get('event')=='tap-error' for e in client.events),'unplug must cancel'
  print(json.dumps({'controlledDevice':node,'unrelatedDevicesRead':False,'repeatIgnored':True,'keyAndModifierEdges':True,'recordingNamespace':True,'unplugCancelled':True,'synDropped':'synthetic libevdev sync cancelled and rearmed' if synthetic else 'kernel SYN_DROPPED unexecuted','session':'Wayland-path fixture on X11, not actual Wayland'}))
 finally:

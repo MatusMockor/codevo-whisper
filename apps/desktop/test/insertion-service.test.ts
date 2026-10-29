@@ -65,6 +65,17 @@ async function prepared(setup: Setup = {}) {
 }
 
 describe('InsertionService', () => {
+  it('preserves clipboard and LastTranscript when Linux restore preparation is incomplete', async () => {
+    const { service, channel, lastTranscript } = await protocolService('linux');
+    lastTranscript.set('recoverable transcript');
+    await channel.request('clipboard-write', { text: 'original user data' });
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'allowed', operationId: 'operation', ...PROTOCOL_TARGET } });
+    await channel.request('respond-next', { cmd: 'clipboard-save', response: { saved: false } });
+    expect(await service.insert('recoverable transcript', PROTOCOL_TARGET)).toBe('failed-clipboard-write');
+    expect((await channel.request('clipboard-state'))['text']).toBe('original user data');
+    expect(lastTranscript.get()).toBe('recoverable transcript');
+    expect((await channel.request('output-state'))['operations']).toEqual([]);
+  });
   it('copies an automatic Linux null target without mutating target text', async () => {
     const { service, channel } = await protocolService('linux');
     await channel.request('respond-next', { cmd: 'frontmost', response: { pid: null } });

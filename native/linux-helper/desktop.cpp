@@ -14,8 +14,8 @@ static AtspiEventListener* focusListener=nullptr;
 static GDBusConnection* systemBus=nullptr;
 static std::string sessionPath;
 static bool xtest=false;
-bool usesPrimary() { return operation && operation->shortcut=="shift-insert"; }
-void invalidateDelivery() { ++generation;operation.reset(); }
+std::string selectionShortcut(const std::string& id) {return operation && operation->id==id && !operation->pasted && operation->generation==generation && g_get_monotonic_time()<=operation->expires?operation->shortcut:"";}
+void invalidateDelivery() { ++generation;operation.reset();selectionRetire(); }
 static GVariant* call(const char* path,const char* iface,const char* method,GVariant* args,const GVariantType* type) {
   if(!systemBus) return nullptr;
   GError* error=nullptr;
@@ -114,7 +114,7 @@ Field focused(const Target& target) {
   return field;
 }
 JsonObject* checkDelivery(JsonObject* args) {
-  operation.reset();auto o=object();auto t=frontmost();auto intent=string(args,"intent");auto shortcut=string(args,"shortcut");
+  selectionRetire();operation.reset();auto o=object();auto t=frontmost();auto intent=string(args,"intent");auto shortcut=string(args,"shortcut");
   auto outcome=[&](const char* kind,const char* reason) {text(o,"kind",kind);text(o,"reason",reason);return o;};
   if((intent!="automatic" && intent!="replay") || (shortcut!="ctrl-v" && shortcut!="ctrl-shift-v" && shortcut!="shift-insert")) return outcome("copy","unverified-target");
   auto expected=child(args,"expected");
@@ -131,7 +131,6 @@ JsonObject* checkDelivery(JsonObject* args) {
 bool post(JsonObject* args,bool submit) {
   if(!operation || string(args,"operationId")!=operation->id || !display || wayland)return false;
   auto op=*operation;
-  if(!submit && !selectionRestorable())return false;
   if(g_get_monotonic_time()>op.expires || generation!=op.generation || op.pasted!=submit || !seatActive() || modifierFlags()!=0) {operation.reset();return false;}
   auto target=frontmost();auto field=focused(target);
   if(target.window!=op.target.window || target.pid!=op.target.pid || !field.known || !field.editable || field.protectedInput || field.identity!=op.field.identity || generation!=op.generation) {operation.reset();return false;}
@@ -143,11 +142,15 @@ bool post(JsonObject* args,bool submit) {
   else {modifiers.push_back(XK_Control_L);if(op.shortcut=="ctrl-shift-v")modifiers.push_back(XK_Shift_L);}
   auto keycode=XKeysymToKeycode(display,key);if(!keycode)return false;
   for(auto modifier:modifiers)if(!XKeysymToKeycode(display,modifier))return false;
+  XGrabServer(display);
+  auto finalTarget=frontmost();
+  if(finalTarget.window!=op.target.window || finalTarget.pid!=op.target.pid || (!submit && !selectionCanPost(op.id,string(args,"transactionId")))) {XUngrabServer(display);XFlush(display);return false;}
   fence(true);
   for(auto modifier:modifiers)XTestFakeKeyEvent(display,XKeysymToKeycode(display,modifier),True,CurrentTime);
   XTestFakeKeyEvent(display,keycode,True,CurrentTime);XTestFakeKeyEvent(display,keycode,False,CurrentTime);
   for(auto it=modifiers.rbegin();it!=modifiers.rend();++it)XTestFakeKeyEvent(display,XKeysymToKeycode(display,*it),False,CurrentTime);
-  XSync(display,False);fence(false);
+  XSync(display,False);XUngrabServer(display);XFlush(display);fence(false);
+  if(!submit)selectionPosted();
   if(operation) {if(submit)operation.reset();else operation->pasted=true;}
   return true;
 }

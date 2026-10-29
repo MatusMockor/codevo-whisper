@@ -21,7 +21,8 @@ static std::set<int> recordedModifiers;
 static int recordedKey=0;
 static int64_t recordedFlags=0;
 static int64_t listenId=0,recordingId=0;
-static guint recordTimer=0,seatTimer=0;
+static guint recordTimer=0,seatTimer=0,retireTimer=0;
+static int64_t nextDiscovery=0;
 static bool down=false,neutral=false,active=false,available=false;
 static int64_t fencedUntil=0;
 static int xiOpcode=0;
@@ -52,7 +53,7 @@ static void finishRecord(const char* name) {
   auto o=object();text(o,"event",name);number(o,"recordingId",recordingId);emit(o);recordingId=0;
   if(recordTimer){g_source_remove(recordTimer);recordTimer=0;}
 }
-void resetInput() {down=false;neutral=false;invalidateDelivery();event("tap-error");}
+void resetInput() {finishRecord("record-cancelled");down=false;neutral=false;invalidateDelivery();event("tap-error");}
 void fence(bool begin) {fencedUntil=begin?INT64_MAX:g_get_monotonic_time()+100000;}
 static int replayKey() {return wayland?KEY_V:(inputDisplay?XKeysymToKeycode(inputDisplay,XK_v):0);}
 static std::string keyLabel(int key) {
@@ -164,6 +165,15 @@ static GdkFilterReturn filter(GdkXEvent* raw,GdkEvent*,gpointer) {
   return GDK_FILTER_CONTINUE;
 }
 static void refreshHeld() {held.clear();for(auto& pair:devices)held.insert(pair.second->pressed.begin(),pair.second->pressed.end());}
+static void discover();
+static void retire(Device& device) {
+  device.watch=0;device.pressed.clear();resetInput();refreshHeld();
+  if(!retireTimer)retireTimer=g_idle_add(+[](gpointer)->gboolean {
+    retireTimer=0;
+    for(auto it=devices.begin();it!=devices.end();) {if(!it->second->watch)it=devices.erase(it);else ++it;}
+    discover();return G_SOURCE_REMOVE;
+  },nullptr);
+}
 static void discover() {
   auto enumeration=udev_enumerate_new(udevContext);udev_enumerate_add_match_subsystem(enumeration,"input");udev_enumerate_add_match_property(enumeration,"ID_INPUT_KEYBOARD","1");udev_enumerate_scan_devices(enumeration);
   udev_list_entry* entry;
@@ -175,7 +185,7 @@ static void discover() {
         for(int k=0;k<=KEY_MAX;++k)if(libevdev_get_event_value(d->ev,EV_KEY,k))d->pressed.insert(k);
         d->watch=g_unix_fd_add(d->fd,GIOCondition(G_IO_IN|G_IO_HUP|G_IO_ERR),+[](gint,GIOCondition condition,gpointer data)->gboolean {
           auto d=static_cast<Device*>(data);
-          if(condition&(G_IO_HUP|G_IO_ERR)) {d->watch=0;d->pressed.clear();resetInput();refreshHeld();return G_SOURCE_REMOVE;}
+          if(condition&(G_IO_HUP|G_IO_ERR)) {retire(*d);return G_SOURCE_REMOVE;}
           input_event ev;int status;
           while((status=libevdev_next_event(d->ev,LIBEVDEV_READ_FLAG_NORMAL,&ev))>=0) {
             if(status==LIBEVDEV_READ_STATUS_SYNC) {
@@ -187,14 +197,14 @@ static void discover() {
             refreshHeld();handle(ev.code,held.count(ev.code),true);
             if(binding.kind=="key" || ev.code==replayKey())handle(ev.code,held.count(ev.code),false);
           }
-          if(status!=-EAGAIN) {d->watch=0;resetInput();return G_SOURCE_REMOVE;}
+          if(status!=-EAGAIN) {retire(*d);return G_SOURCE_REMOVE;}
           return G_SOURCE_CONTINUE;
         },d.get());devices.emplace(path,std::move(d));
       }
     }
     udev_device_unref(node);
   }
-  udev_enumerate_unref(enumeration);refreshHeld();available=!devices.empty();neutral=held.empty();
+  udev_enumerate_unref(enumeration);refreshHeld();available=inputDeviceCount()>0;
 }
 void keysInit(const std::string& controlledDevice) {
   onlyDevice=controlledDevice;
@@ -215,12 +225,17 @@ void keysInit(const std::string& controlledDevice) {
   }
   neutral=held.empty();
   seatTimer=g_timeout_add(250,+[](gpointer)->gboolean {
-    bool next=seatActive();if(next!=active){active=next;resetInput();if(next && held.empty()){neutral=true;event("tap-reenabled");}}if(active && !neutral && held.empty() && g_get_monotonic_time()>fencedUntil){neutral=true;event("tap-reenabled");}return G_SOURCE_CONTINUE;
+    if(wayland && udevContext && g_get_monotonic_time()>=nextDiscovery) {nextDiscovery=g_get_monotonic_time()+1000000;discover();}
+    bool next=seatActive();if(next!=active){active=next;resetInput();}
+    bool usable=wayland?inputDeviceCount()>0:available;
+    if(active && usable && !neutral && held.empty() && g_get_monotonic_time()>fencedUntil){neutral=true;event("tap-reenabled");}
+    return G_SOURCE_CONTINUE;
   },nullptr);
 }
 void keysShutdown() {
   if(recordTimer)g_source_remove(recordTimer);
   if(seatTimer)g_source_remove(seatTimer);
+  if(retireTimer)g_source_remove(retireTimer);
   if(monitorWatch)g_source_remove(monitorWatch);
   if(xWatch)g_source_remove(xWatch);
   if(inputDisplay && !wayland){ungrab();XCloseDisplay(inputDisplay);inputDisplay=nullptr;}devices.clear();if(monitor)udev_monitor_unref(monitor);if(udevContext)udev_unref(udevContext);
