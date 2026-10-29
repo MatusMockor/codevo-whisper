@@ -64,6 +64,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   insertion: oneOf(['paste', 'type', 'clipboard']),
   clipboardPolicy: oneOf(['restore', 'leave']),
   autoSubmit: oneOf(['off', 'enter', 'primary-enter']),
+  linuxPasteShortcut: oneOf(['ctrl-v', 'ctrl-shift-v', 'shift-insert']),
   overlay: oneOf(['indicator', 'live']),
   launchAtLogin: isBoolean,
   onboardingDone: isBoolean,

@@ -36,15 +36,16 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-async function protocolService() {
+async function protocolService(platform: NodeJS.Platform = 'darwin') {
   const settings = new SettingsStore(join(dir, 'settings.json'), new RecordingLogger());
   await settings.load();
   const channel = protocolHelper();
-  processHelper = new HelperProcessInputHelper(channel);
+  processHelper = new HelperProcessInputHelper(channel, new RecordingLogger(), platform);
   await processHelper.start();
   const logger = new RecordingLogger();
-  const service = new InsertionService(processHelper, settings, new LastTranscript(), () => Promise.resolve(), logger);
-  return { channel, logger, service, settings, helper: processHelper };
+  const lastTranscript = new LastTranscript();
+  const service = new InsertionService(processHelper, settings, lastTranscript, () => Promise.resolve(), logger);
+  return { channel, logger, service, settings, helper: processHelper, lastTranscript };
 }
 
 async function prepared(setup: Setup = {}) {
@@ -64,6 +65,34 @@ async function prepared(setup: Setup = {}) {
 }
 
 describe('InsertionService', () => {
+  it('copies an automatic Linux null target without mutating target text', async () => {
+    const { service, channel } = await protocolService('linux');
+    await channel.request('respond-next', { cmd: 'frontmost', response: { pid: null } });
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'copy', reason: 'unverified-target' } });
+    expect(await service.insert('Žilina 🚀', null)).toBe('copied-unverified-target');
+    expect((await channel.request('clipboard-state'))['text']).toBe('Žilina 🚀');
+    expect((await channel.request('output-state'))['operations']).toEqual([]);
+  });
+  it('preflights Linux replay with submit off and retains copy-only text', async () => {
+    const { service, channel, lastTranscript } = await protocolService('linux');
+    lastTranscript.set('previous');
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'copy', reason: 'unverified-target' } });
+    expect(await service.pasteLast()).toBe('copied-unverified-target');
+    expect((await channel.request('clipboard-state'))['text']).toBe('previous');
+    expect((await channel.request('output-state'))['operations']).toEqual([]);
+  });
+  it('blocks Linux protected or changed targets and copies unsupported direct typing', async () => {
+    const { service, channel, settings } = await protocolService('linux');
+    for (const [reason, expected] of [['protected-input', 'blocked-secure-input'], ['focus-changed', 'blocked-focus-changed']] as const) {
+      await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'blocked', reason } });
+      expect(await service.insert('dictated', PROTOCOL_TARGET)).toBe(expected);
+    }
+    await settings.update({ insertion: 'type' });
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'copy', reason: 'unverified-target' } });
+    expect(await service.insert('dictated', PROTOCOL_TARGET)).toBe('copied-unsupported-output');
+    expect((await channel.request('clipboard-state'))['text']).toBe('dictated');
+    expect((await channel.request('output-state'))['operations']).toEqual([]);
+  });
   it('keeps delivered text but blocks submit when the delivery target is unknown', async () => {
     const { service, helper } = await prepared({ settings: { insertion: 'type', autoSubmit: 'enter' }, helper: { frontmost: null } });
     expect(await service.insert('dictated', null)).toBe('delivered-submit-blocked');

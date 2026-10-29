@@ -18,7 +18,7 @@ import {
   parseShortcut,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, DeliveryDecision, DeliveryRequest, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
@@ -33,6 +33,7 @@ function ensure(message: HelperMessage, key: string, failure: string): void {
 }
 
 export class HelperProcessInputHelper implements InputHelper {
+  private operationId: string | null = null;
   private audioToken = 0;
   private pendingAudioToken: number | null = null;
   private desired: HotkeyBinding | null = null;
@@ -61,6 +62,7 @@ export class HelperProcessInputHelper implements InputHelper {
       if (this.pendingListen !== null && message['listenId'] === this.pendingListen.id) this.pendingListen.events.push(event);
     });
     channel.onRestart(() => {
+      this.operationId = null;
       this.activeListenId = null;
       this.pendingListen = null;
       this.cancelRecording?.();
@@ -70,6 +72,25 @@ export class HelperProcessInputHelper implements InputHelper {
 
   start(): Promise<void> {
     return this.channel.start();
+  }
+
+  async checkDelivery(request: DeliveryRequest): Promise<DeliveryDecision> {
+    if (this.platform !== 'linux') return { kind: 'legacy' };
+    this.operationId = null;
+    const message = await this.channel.request('check-delivery', request, FOCUSED_ELEMENT_TIMEOUT_MS);
+    const kind = message['kind'];
+    const reason = message['reason'];
+    if (kind === 'copy' && (reason === 'unverified-target' || reason === 'posting-unavailable' || reason === 'unsupported-output')) return { kind, reason };
+    if (kind === 'blocked' && (reason === 'focus-changed' || reason === 'protected-input' || reason === 'modifiers-held')) return { kind, reason };
+    if (kind === 'allowed') {
+      const target = parseFrontmost(message);
+      const operationId = message['operationId'];
+      if (target !== null && target.windowId !== null && typeof operationId === 'string' && operationId.length > 0 && operationId.length <= 256) {
+        this.operationId = operationId;
+        return { kind, target };
+      }
+    }
+    throw new Error('delivery-decision-invalid');
   }
 
   async getOutputAudio(): Promise<OutputAudioView> {
@@ -151,7 +172,7 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async paste(): Promise<void> {
-    ensure(await this.channel.request('paste'), 'posted', 'paste-failed');
+    ensure(await this.channel.request('paste', this.platform === 'linux' ? { operationId: this.operationId } : {}), 'posted', 'paste-failed');
   }
 
   async typeText(text: string): Promise<void> {
@@ -159,7 +180,7 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void> {
-    ensure(await this.channel.request('submit', { mode }), 'posted', 'submit-failed');
+    ensure(await this.channel.request('submit', { mode, ...(this.platform === 'linux' ? { operationId: this.operationId } : {}) }), 'posted', 'submit-failed');
   }
 
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {

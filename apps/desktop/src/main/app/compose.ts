@@ -120,7 +120,8 @@ export function composeApplication(logger: Logger): Application {
     const permissions = new PermissionsService({
       helper,
       microphone: electronMicrophoneAccess,
-      links: MACOS_PERMISSION_LINKS,
+      links: process.platform === 'linux' ? { microphone: 'help:gnome-help/sound-usespeaker', 'input-monitoring': 'help:gnome-help', accessibility: 'help:gnome-help/a11y' } : MACOS_PERMISSION_LINKS,
+      platform: process.platform,
       openUrl: (url) => desktopShell.openExternal(url),
       asked: new AskedPermissionsStore(join(app.getPath('userData'), ASKED_PERMISSIONS_FILE), logger),
       logger,
