@@ -70,7 +70,7 @@ export function LastTranscriptCard({ transcript }: { transcript: Live<string | n
       <p className={text === null ? 'empty' : undefined}>{text ?? placeholder(transcript)}</p>
       <p className="note">
         <LockIcon />
-        Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.
+        Táto karta ostáva v pamäti do zatvorenia aplikácie. Voliteľnú históriu na disku spravujete v Nastaveniach.
       </p>
     </section>
   );

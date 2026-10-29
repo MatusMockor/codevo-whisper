@@ -1,6 +1,7 @@
 import { MicrophonePicker } from '../components/MicrophonePicker';
 import { DictationSection } from '../settings/DictationSection';
 import { EngineSection } from '../settings/EngineSection';
+import { HistorySection } from '../settings/HistorySection';
 import { InsertionSection } from '../settings/InsertionSection';
 import { LocalModelSection } from '../settings/LocalModelSection';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
@@ -40,6 +41,7 @@ export function Settings() {
       </SettingsGroup>
       <InsertionSection settings={value} />
       <TranscriptSection settings={value} />
+      <HistorySection />
       <SystemSection launchAtLogin={value.launchAtLogin} />
     </div>
   );

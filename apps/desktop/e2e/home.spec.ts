@@ -119,7 +119,7 @@ test('copy writes the clipboard and the last transcript is empty after relaunch'
   const card = page.locator('.last');
   await expect(card).toContainText('Zatiaľ nemáte žiadny prepis.');
   await expect(card.getByRole('button', { name: 'Kopírovať' })).toBeDisabled();
-  await expect(card).toContainText('Uchováva sa len do zatvorenia aplikácie. Nič sa neukladá na disk.');
+  await expect(card).toContainText('Táto karta ostáva v pamäti do zatvorenia aplikácie. Voliteľnú históriu na disku spravujete v Nastaveniach.');
   const previousClipboard = await app.evaluate(({ clipboard }) => clipboard.readText());
 
   try {

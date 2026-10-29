@@ -16,7 +16,7 @@ export function isHistoryEntryId(value: unknown): value is string {
 function toEntry(value: unknown): HistoryEntry | null {
   if (!isPlainRecord(value)) return null;
   const { id, completedAt, text } = value;
-  if (!isHistoryEntryId(id) || typeof completedAt !== 'number' || !Number.isSafeInteger(completedAt) || completedAt < 0
+  if (!isHistoryEntryId(id) || typeof completedAt !== 'number' || !Number.isSafeInteger(completedAt) || completedAt < 0 || !Number.isFinite(new Date(completedAt).getTime())
     || typeof text !== 'string' || text.trim() === '') return null;
   return { id, completedAt, text };
 }

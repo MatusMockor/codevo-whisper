@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HistoryStore } from '../src/main/history/history-store';
 
 let dir: string;
@@ -10,7 +10,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'cw-history-'));
   file = join(dir, 'history.json');
 });
-afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); await rm(dir, { recursive: true, force: true }); });
 
 it('starts OFF and never retains completed text or creates a file without consent', async () => {
   const store = new HistoryStore(file);
@@ -136,4 +136,20 @@ it.each([
 ])('fails closed on an inconsistent stored history %#', async (envelope) => {
   await writeFile(file, JSON.stringify(envelope));
   expect(await new HistoryStore(file).view()).toEqual({ kind: 'unavailable' });
+});
+
+it('rejects stored times that cannot be rendered as dates', async () => {
+  await writeFile(file, JSON.stringify({ version: 1, policy: { enabled: true, limit: 10 }, entries: [{ id: '00000000-0000-4000-8000-000000000000', completedAt: 9_000_000_000_000_000, text: 'unrenderable date' }] }));
+  expect(await new HistoryStore(file).view()).toEqual({ kind: 'unavailable' });
+});
+
+it('keeps FIFO completion order when timestamps tie or the clock goes backwards', async () => {
+  const store = new HistoryStore(file);
+  await store.configure({ enabled: true, limit: 10 });
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(100);
+  await store.record('first');
+  await store.record('second');
+  clock.mockReturnValue(1);
+  await store.record('third');
+  expect(await new HistoryStore(file).view()).toMatchObject({ entries: [{ text: 'third', completedAt: 1 }, { text: 'second', completedAt: 100 }, { text: 'first', completedAt: 100 }] });
 });
