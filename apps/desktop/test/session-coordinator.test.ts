@@ -42,6 +42,7 @@ type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperSta
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
 const locals: LocalEngine[] = [];
+const stores: Array<{ stats: StatsStore; history: HistoryStore }> = [];
 let scratch: string;
 let argsFile: string;
 let coordinator: SessionCoordinator | null = null;
@@ -54,9 +55,10 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  coordinator?.dispose();
+  await coordinator?.shutdown();
   coordinator = null;
   await Promise.all(locals.splice(0).map((local) => local.dispose()));
+  await Promise.all(stores.splice(0).map(({ stats, history }) => Promise.all([stats.days(), history.view()])));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
 });
@@ -90,6 +92,7 @@ async function prepared(setup: Setup = {}) {
   const settingsOpened: string[] = [];
   const stats = new StatsStore(join(scratch, 'stats.json'), undefined, logger);
   const history = new HistoryStore(join(scratch, 'history.json'), logger);
+  stores.push({ stats, history });
   await history.configure({ enabled: true, limit: 100 });
   const pause = new PauseState(logger);
   coordinator = new SessionCoordinator({

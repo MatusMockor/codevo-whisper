@@ -68,7 +68,16 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
   const respond = behaviour.respond ?? (() => ({ status: 200, body: { text: 'ahoj svet' } }));
 
   const handleTranscribe = async (request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> => {
-    const pcm = await readBody(request);
+    let pcm: Uint8Array;
+    try {
+      pcm = await readBody(request);
+    } catch (error) {
+      if (request.destroyed && !request.complete && error instanceof Error && 'code' in error && error.code === 'ECONNRESET') {
+        aborted += 1;
+        return;
+      }
+      throw error;
+    }
     const language = url.searchParams.get('language') ?? '';
     const invalid = validationStatus(request, pcm, language);
     if (invalid !== null) {
