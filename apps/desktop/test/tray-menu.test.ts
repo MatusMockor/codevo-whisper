@@ -56,7 +56,7 @@ function linuxTray() {
     },
     lastTranscript: { get: () => null, onChange: () => () => undefined },
     models: { activeLanguageHint: () => 'optional' } as never,
-    updates: { status: () => ({ currentVersion: '0.2.1', mode: 'auto', phase: { kind: 'idle' } }) as never, install: () => Promise.resolve('restarting' as never), onChange: () => () => undefined },
+    updates: { status: () => ({ currentVersion: '0.2.1', mode: 'auto', phase: { kind: 'idle' } }) as never, install: () => Promise.resolve('restarting' as never), check: () => Promise.resolve(undefined as never), onChange: () => () => undefined },
     openApp: () => undefined,
     openSettings: () => undefined,
     quit: () => undefined,

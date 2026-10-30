@@ -14,6 +14,12 @@ export type UpdatePhase =
 
 export type UpdateStatus = { currentVersion: string; mode: UpdateMode; phase: UpdatePhase };
 
+const CHECKABLE: ReadonlySet<UpdatePhase['kind']> = new Set(['idle', 'available', 'error']);
+
+export function canCheckForUpdates(status: UpdateStatus): boolean {
+  return status.mode !== 'unsupported' && CHECKABLE.has(status.phase.kind);
+}
+
 export type InstallOutcome = 'restarting' | 'dictation-active' | 'not-ready';
 
 export const RELEASES_URL = 'https://github.com/MatusMockor/codevo-whisper/releases/latest';

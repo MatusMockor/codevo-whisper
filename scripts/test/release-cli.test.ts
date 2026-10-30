@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseMacManifest, serializeMacManifest, type FeedFile } from '../release/mac-manifest.ts';
+import { parseUpdateManifest, serializeUpdateManifest, type FeedFile } from '../release/update-manifest.ts';
 
 const releaseDir = join(import.meta.dirname, '..', 'release');
 const fixtures = join(import.meta.dirname, 'fixtures');
@@ -21,7 +21,7 @@ function asset(url: string, content: string): FeedFile {
 function perArchManifest(arch: string, content: string): string {
   const file = asset(`codevo-whisper-1.2.0-${arch}-mac.zip`, content);
   const manifestFile = join(workDir, `latest-mac-${arch}.yml`);
-  writeFileSync(manifestFile, serializeMacManifest({ version: '1.2.0', files: [file], path: file.url, sha512: file.sha512, releaseDate: '2026-10-25T10:00:00.000Z' }));
+  writeFileSync(manifestFile, serializeUpdateManifest({ version: '1.2.0', files: [file], path: file.url, sha512: file.sha512, releaseDate: '2026-10-25T10:00:00.000Z' }));
   return manifestFile;
 }
 
@@ -41,7 +41,7 @@ describe('merge-latest-mac.ts', () => {
     const result = run('merge-latest-mac.ts', [out, join(workDir, 'arm64.yml'), join(fixtures, 'latest-mac-x64.yml')]);
 
     expect(result.status).toBe(0);
-    expect(parseMacManifest(readFileSync(out, 'utf8'), out).files).toHaveLength(2);
+    expect(parseUpdateManifest(readFileSync(out, 'utf8'), out).files).toHaveLength(2);
   });
 
   it('exits with 1 on mismatched versions', () => {
@@ -69,6 +69,60 @@ describe('verify-feed.ts', () => {
     expect(valid.stdout).toContain('feed 1.2.0 valid');
     expect(tampered.status).toBe(1);
     expect(tampered.stderr).toContain('sha512 mismatch');
+  });
+});
+
+describe('verify-feed.ts for Linux manifests', () => {
+  it('accepts the arm64 manifest and rejects an unknown manifest name', () => {
+    const appImage = asset('codevo-whisper-1.2.0-arm64-linux.AppImage', 'arm64 appimage');
+    const deb = asset('codevo-whisper-1.2.0-arm64-linux.deb', 'arm64 deb');
+    const manifest = serializeUpdateManifest({ version: '1.2.0', files: [appImage, deb], path: appImage.url, sha512: appImage.sha512 });
+    writeFileSync(join(workDir, 'latest-linux-arm64.yml'), manifest);
+    writeFileSync(join(workDir, 'latest-linux-armv7l.yml'), manifest);
+
+    const valid = run('verify-feed.ts', [join(workDir, 'latest-linux-arm64.yml'), '1.2.0']);
+    const unknown = run('verify-feed.ts', [join(workDir, 'latest-linux-armv7l.yml'), '1.2.0']);
+
+    expect(valid.status).toBe(0);
+    expect(valid.stdout).toContain('feed 1.2.0 valid: 2 files, archs arm64');
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain('unknown update manifest');
+  });
+});
+
+describe('manifest-urls.ts', () => {
+  it('prints every listed url and fails on a manifest without files', () => {
+    const manifest = join(workDir, 'latest-linux.yml');
+    writeFileSync(manifest, serializeUpdateManifest({ version: '1.2.0', files: [{ url: 'a.AppImage', sha512: 'x', size: 1 }, { url: 'b.deb', sha512: 'y', size: 2 }] }));
+    writeFileSync(join(workDir, 'empty.yml'), 'version: 1.2.0\nfiles: []\n');
+
+    const listed = run('manifest-urls.ts', [manifest]);
+    const empty = run('manifest-urls.ts', [join(workDir, 'empty.yml')]);
+
+    expect(listed.status).toBe(0);
+    expect(listed.stdout).toBe('a.AppImage\nb.deb\n');
+    expect(empty.status).toBe(1);
+    expect(empty.stderr).toContain('no files');
+  });
+});
+
+describe('verify-checksums.ts', () => {
+  it('passes for matching checksums and fails for a tampered package', () => {
+    writeFileSync(join(workDir, 'app.AppImage'), 'appimage');
+    writeFileSync(join(workDir, 'SHA256SUMS-linux-x64'), `${createHash('sha256').update('appimage').digest('hex')}  app.AppImage\n`);
+
+    const valid = run('verify-checksums.ts', [join(workDir, 'SHA256SUMS-linux-x64')]);
+    writeFileSync(join(workDir, 'app.AppImage'), 'appimagE');
+    const tampered = run('verify-checksums.ts', [join(workDir, 'SHA256SUMS-linux-x64')]);
+
+    expect(valid.status).toBe(0);
+    expect(valid.stdout).toContain('valid: 1 files');
+    expect(tampered.status).toBe(1);
+    expect(tampered.stderr).toContain('app.AppImage: sha256 mismatch');
+  });
+
+  it('exits with 2 without arguments', () => {
+    expect(run('verify-checksums.ts', []).status).toBe(2);
   });
 });
 

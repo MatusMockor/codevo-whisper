@@ -8,6 +8,7 @@ import type { SessionCoordinator } from '../session/session-coordinator';
 import type { SettingsStore } from '../settings/settings-store';
 import type { UpdateService } from '../updates/update-service';
 import type { OverlayState } from '../../shared/overlay-contract';
+import { canCheckForUpdates } from '../../shared/updates';
 import { SPIN_FRAME_MS, TrayIcons } from './tray-icons';
 import { trayMenuTemplate, type TrayMenuActions, type TrayMenuModel } from './tray-menu-template';
 import { IDLE, nextActivity, statusLine, trayIconKind, type TrayActivity, type TrayIconKind } from './tray-status';
@@ -21,7 +22,7 @@ export type TrayMenuDeps = {
   settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
   lastTranscript: Pick<LastTranscript, 'get' | 'onChange'>;
   models: Pick<ActiveModel, 'activeLanguageHint'>;
-  updates: Pick<UpdateService, 'status' | 'install' | 'onChange'>;
+  updates: Pick<UpdateService, 'status' | 'install' | 'check' | 'onChange'>;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -134,6 +135,7 @@ export class TrayMenu {
       autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
       readyUpdate: this.readyUpdate(),
       installingUpdate: this.installingUpdate(),
+      updateCheckable: canCheckForUpdates(this.deps.updates.status()),
     };
   }
 
@@ -150,6 +152,7 @@ export class TrayMenu {
       openSettings: () => this.deps.openSettings(),
       quit: () => this.deps.quit(),
       installUpdate: () => this.installUpdate(),
+      checkForUpdates: () => this.checkForUpdates(),
     };
   }
 
@@ -175,6 +178,13 @@ export class TrayMenu {
       .catch((error: unknown) => {
         this.deps.logger.error('Installing the update from the tray failed', error);
       });
+  }
+
+  private checkForUpdates(): void {
+    this.deps.openApp();
+    this.deps.updates.check().catch((error: unknown) => {
+      this.deps.logger.error('Checking for updates from the tray failed', error);
+    });
   }
 
   private togglePause(): void {

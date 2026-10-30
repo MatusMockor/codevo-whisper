@@ -190,12 +190,20 @@ jobs:
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/codevo-signing.keychain-db" || true
 
+  build-linux:
+    needs: [version, checks]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-linux.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
   publish:
-    needs: [version, build-mac]
+    needs: [version, build-mac, build-linux]
     if: github.event_name == 'push'
     environment: release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
     env:
@@ -216,8 +224,14 @@ jobs:
         with:
           pattern: mac-*
           path: artifacts
-      - name: Merge and verify the update feed
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: linux-*
+          path: artifacts
+      - name: Merge and verify the macOS update feed
         run: scripts/release/assemble-mac-feed.sh artifacts feed "$VERSION"
+      - name: Add and verify the Linux packages and update feeds
+        run: scripts/release/assemble-linux-feed.sh artifacts feed "$VERSION"
       - name: Draft, re-verify and publish the release
         env:
           GH_TOKEN: ${{ github.token }}

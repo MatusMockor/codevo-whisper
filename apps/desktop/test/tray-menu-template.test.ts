@@ -15,6 +15,7 @@ const MODEL: TrayMenuModel = {
   autoLanguageAllowed: true,
   readyUpdate: null,
   installingUpdate: false,
+  updateCheckable: true,
 };
 
 function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
@@ -29,6 +30,7 @@ function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
     openSettings: () => calls.push('open-settings'),
     quit: () => calls.push('quit'),
     installUpdate: () => calls.push('install-update'),
+    checkForUpdates: () => calls.push('check-for-updates'),
   };
   return { actions, calls };
 }
@@ -71,6 +73,7 @@ describe('trayMenuTemplate', () => {
       '---',
       'Otvoriť Codevo Whisper',
       'Nastavenia…',
+      'Skontrolovať aktualizácie',
       '---',
       'Ukončiť Codevo Whisper',
     ]);
@@ -165,5 +168,22 @@ describe('trayMenuTemplate with a downloaded update', () => {
 
     expect(item(items, 'Pokračovať')).toMatchObject({ enabled: false });
     expect(item(trayMenuTemplate({ ...MODEL, paused: true }, actions), 'Pokračovať').enabled).not.toBe(false);
+  });
+});
+
+describe('trayMenuTemplate update check', () => {
+  it('checks for updates from the tray', () => {
+    const { actions, calls } = recordingActions();
+    const check = item(trayMenuTemplate(MODEL, actions), 'Skontrolovať aktualizácie');
+
+    expect(check.enabled).toBe(true);
+    click(check);
+    expect(calls).toEqual(['check-for-updates']);
+  });
+
+  it('disables the check when the updater cannot check now', () => {
+    const { actions } = recordingActions();
+
+    expect(item(trayMenuTemplate({ ...MODEL, updateCheckable: false }, actions), 'Skontrolovať aktualizácie').enabled).toBe(false);
   });
 });

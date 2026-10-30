@@ -93,3 +93,11 @@ export function PlusIcon() {
     </Icon>
   );
 }
+
+export function RefreshIcon() {
+  return (
+    <Icon>
+      <path d="M13.5 8a5.5 5.5 0 1 1-5.5-5.5c1.54 0 3.02.61 4.12 1.68L13.5 5.5M13.5 2v3.5H10" />
+    </Icon>
+  );
+}
