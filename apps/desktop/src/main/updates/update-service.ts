@@ -1,6 +1,6 @@
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
-import type { InstallOutcome, UpdateMode, UpdatePhase, UpdateStatus } from '../../shared/updates';
+import { canCheckForUpdates, type InstallOutcome, type UpdateMode, type UpdatePhase, type UpdateStatus } from '../../shared/updates';
 import type { AppUpdater, AvailableUpdate } from './app-updater';
 import type { DictationGuard } from './dictation-guard';
 
@@ -16,8 +16,6 @@ export type UpdateServiceDeps = {
 type CheckOrigin = 'user' | 'background';
 
 const INSTALL_STALL_MS = 120_000;
-
-const CHECKABLE: ReadonlySet<UpdatePhase['kind']> = new Set(['idle', 'available', 'error']);
 
 const CHECK_FAILURES: Readonly<Record<CheckOrigin, string>> = {
   user: 'The update check failed',
@@ -78,7 +76,7 @@ export class UpdateService {
       this.join(origin);
       return this.running;
     }
-    if (this.deps.mode === 'unsupported' || !CHECKABLE.has(this.phase.kind)) {
+    if (!canCheckForUpdates(this.status())) {
       return Promise.resolve();
     }
     this.origin = origin;

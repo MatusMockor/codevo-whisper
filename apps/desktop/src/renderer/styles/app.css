@@ -137,6 +137,60 @@ button {
   height: 28px;
 }
 
+.side-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 0 10px;
+  -webkit-app-region: no-drag;
+}
+
+.side-foot-text {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-3);
+}
+
+.side-foot-result {
+  color: var(--ink-2);
+}
+
+.side-foot-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.side-foot-btn:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.side-foot-btn:disabled:not([aria-busy="true"]) {
+  opacity: .45;
+}
+
+.side-foot-btn[aria-busy="true"] .ic {
+  animation: side-foot-spin 1s linear infinite;
+}
+
+@keyframes side-foot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .main {
   display: flex;
   flex-direction: column;
@@ -260,5 +314,9 @@ kbd {
   .btn,
   .seg button {
     transition: none;
+  }
+
+  .side-foot-btn[aria-busy="true"] .ic {
+    animation: none;
   }
 }

@@ -12,6 +12,7 @@ export type TrayMenuModel = {
   autoLanguageAllowed: boolean;
   readyUpdate: string | null;
   installingUpdate: boolean;
+  updateCheckable: boolean;
 };
 
 export type TrayMenuActions = {
@@ -24,6 +25,7 @@ export type TrayMenuActions = {
   openSettings(): void;
   quit(): void;
   installUpdate(): void;
+  checkForUpdates(): void;
 };
 
 const EXCERPT_LENGTH = 48;
@@ -126,6 +128,7 @@ export function trayMenuTemplate(model: TrayMenuModel, actions: TrayMenuActions)
     SEPARATOR,
     { label: 'Otvoriť Codevo Whisper', click: () => actions.openApp() },
     { label: 'Nastavenia…', accelerator: 'Command+,', registerAccelerator: false, click: () => actions.openSettings() },
+    { label: 'Skontrolovať aktualizácie', enabled: model.updateCheckable, click: () => actions.checkForUpdates() },
     SEPARATOR,
     { label: 'Ukončiť Codevo Whisper', accelerator: 'Command+Q', registerAccelerator: false, click: () => actions.quit() },
   ];

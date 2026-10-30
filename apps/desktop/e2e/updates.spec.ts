@@ -24,6 +24,10 @@ function updatesRow(): Locator {
   return page.locator('.srow', { has: page.locator('b', { hasText: 'Aktualizácie' }) });
 }
 
+function sidebarFooter(): Locator {
+  return page.locator('.side-foot');
+}
+
 function control(values: FakeControl): Promise<void> {
   return app.evaluate(async (_electron, next) => {
     Object.assign(await (globalThis as unknown as UpdaterGlobal).codevoE2e.updater, next);
@@ -92,6 +96,25 @@ test('reports the newest version and a failed check', async () => {
 
   await expect(row).toContainText('Aktualizácie sa nepodarilo skontrolovať. Skúste to neskôr.');
   expect(await fake('checks')).toBe(2);
+});
+
+test('the sidebar footer checks for updates from any page and reports the result', async () => {
+  await start();
+  const footer = sidebarFooter();
+  const button = footer.getByRole('button', { name: 'Skontrolovať aktualizácie' });
+  await expect(footer).toContainText(`Verzia ${currentVersion}`);
+
+  await button.click();
+  await expect(footer).toContainText('Máte najnovšiu verziu');
+  await control({ checkFails: true });
+  await button.click();
+  await expect(footer).toContainText('Kontrola zlyhala');
+
+  await control({ checkFails: false, latest: '9.9.9', holdDownloads: true });
+  await button.click();
+  await expect(page.locator('.side-update')).toContainText('Sťahujem aktualizáciu… 0 %');
+  await expect(button).toBeDisabled();
+  expect(await fake('checks')).toBe(3);
 });
 
 test('a package without in-app updates shows the new version with a download link', async () => {
