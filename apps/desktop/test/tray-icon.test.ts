@@ -77,10 +77,17 @@ describe('encodePng', () => {
 
 describe('trayIconSpec', () => {
   it('uses an amber icon while recording and template icons otherwise', () => {
-    expect(trayIconSpec('recording')).toMatchObject({ color: [240, 162, 58, 1], template: false });
-    expect(trayIconSpec('idle')).toMatchObject({ template: true, badge: false });
-    expect(trayIconSpec('error')).toMatchObject({ template: true, badge: true });
-    expect(trayIconSpec('paused')).toMatchObject({ template: true, color: [0, 0, 0, 0.45] });
-    expect(trayIconSpec('processing', 3).rotationDeg).toBe(45);
+    expect(trayIconSpec('recording', 'darwin')).toMatchObject({ color: [240, 162, 58, 1], template: false });
+    expect(trayIconSpec('idle', 'darwin')).toMatchObject({ template: true, badge: false });
+    expect(trayIconSpec('error', 'darwin')).toMatchObject({ template: true, badge: true });
+    expect(trayIconSpec('paused', 'darwin')).toMatchObject({ template: true, color: [0, 0, 0, 0.45] });
+    expect(trayIconSpec('processing', 'darwin', 3).rotationDeg).toBe(45);
+  });
+
+  it('draws white icons on Linux, where the panel is dark and template images are not inverted', () => {
+    expect(trayIconSpec('idle', 'linux').color).toEqual([255, 255, 255, 1]);
+    expect(trayIconSpec('processing', 'linux', 3).color).toEqual([255, 255, 255, 1]);
+    expect(trayIconSpec('paused', 'linux').color).toEqual([255, 255, 255, 0.45]);
+    expect(trayIconSpec('recording', 'linux').color).toEqual([240, 162, 58, 1]);
   });
 });
