@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FeedError } from '../release/feed-error.ts';
-import { mergeMacManifests, parseMacManifest, serializeMacManifest, type MacManifest } from '../release/mac-manifest.ts';
+import { mergeMacManifests } from '../release/mac-manifest.ts';
+import { parseUpdateManifest, serializeUpdateManifest, type UpdateManifest } from '../release/update-manifest.ts';
 
-const fixture = (name: string): MacManifest =>
-  parseMacManifest(readFileSync(join(import.meta.dirname, 'fixtures', name), 'utf8'), name);
+const fixture = (name: string): UpdateManifest =>
+  parseUpdateManifest(readFileSync(join(import.meta.dirname, 'fixtures', name), 'utf8'), name);
 
-describe('parseMacManifest', () => {
+describe('parseUpdateManifest', () => {
   it('reads an electron-builder manifest', () => {
     const manifest = fixture('latest-mac-arm64.yml');
 
@@ -21,11 +22,11 @@ describe('parseMacManifest', () => {
   });
 
   it('rejects a manifest without files', () => {
-    expect(() => parseMacManifest('version: 1.2.0\nfiles: []\n', 'empty.yml')).toThrow(/empty\.yml/);
+    expect(() => parseUpdateManifest('version: 1.2.0\nfiles: []\n', 'empty.yml')).toThrow(/empty\.yml/);
   });
 
   it('rejects a document that is not a manifest', () => {
-    expect(() => parseMacManifest('just text', 'text.yml')).toThrow(FeedError);
+    expect(() => parseUpdateManifest('just text', 'text.yml')).toThrow(FeedError);
   });
 });
 
@@ -88,6 +89,6 @@ describe('mergeMacManifests', () => {
   it('serializes to a manifest that parses back to the same content', () => {
     const merged = mergeMacManifests([fixture('latest-mac-arm64.yml'), fixture('latest-mac-x64.yml')]);
 
-    expect(parseMacManifest(serializeMacManifest(merged), 'merged.yml')).toEqual(merged);
+    expect(parseUpdateManifest(serializeUpdateManifest(merged), 'merged.yml')).toEqual(merged);
   });
 });

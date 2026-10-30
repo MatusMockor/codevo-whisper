@@ -14,6 +14,6 @@ for arch in x64 arm64; do
 done
 
 mkdir -p "$feed"
-find "$artifacts" -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.blockmap' \) -exec cp {} "$feed/" \;
+find "$artifacts/mac-x64" "$artifacts/mac-arm64" -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.blockmap' \) -exec cp {} "$feed/" \;
 node "$here/merge-latest-mac.ts" "$feed/latest-mac.yml" "${manifests[@]}"
 node "$here/verify-feed.ts" "$feed/latest-mac.yml" "$version"

@@ -1,15 +1,16 @@
 name: Release Linux
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version without the v prefix, resolved and verified by the calling release workflow
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
-      enabled:
-        description: Build the Linux packages manually
-        required: false
-        default: false
-        type: boolean
       version:
-        description: Version without the v prefix, for example 1.2.0
+        description: Version to build without publishing, without the v prefix, for example 1.2.0
         required: true
         type: string
 
@@ -18,7 +19,6 @@ permissions:
 
 jobs:
   build-linux:
-    if: inputs.enabled
     strategy:
       fail-fast: true
       matrix:
@@ -36,11 +36,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Verify the build commit
+        if: github.event_name == 'push'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_SHA: ${{ github.sha }}
+        run: scripts/release/verify-build-ref.sh
       - id: resolve
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ inputs.version }}
         run: scripts/release/resolve-version.sh
+      - name: Check the version matches the requested one
+        env:
+          RESOLVED: ${{ steps.resolve.outputs.version }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          if [ "$RESOLVED" != "$REQUESTED" ]; then
+            echo "resolved version $RESOLVED != requested version $REQUESTED" >&2
+            exit 1
+          fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -63,7 +81,17 @@ jobs:
         run: pnpm exec electron-builder --linux AppImage deb "--$ARCH" --publish never -c.extraMetadata.version="$VERSION" -c.directories.output="release/linux/$ARCH"
       - name: Write checksums
         working-directory: ${{ env.DIST_DIR }}
-        run: sha256sum ./*.AppImage ./*.deb > "SHA256SUMS-linux-$ARCH"
+        run: sha256sum -- *.AppImage *.deb > "SHA256SUMS-linux-$ARCH"
+      - name: Verify the update manifest and checksums
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          manifest=latest-linux.yml
+          if [ "$ARCH" != "x64" ]; then
+            manifest="latest-linux-$ARCH.yml"
+          fi
+          node scripts/release/verify-feed.ts "$DIST_DIR/$manifest" "$VERSION"
+          node scripts/release/verify-checksums.ts "$DIST_DIR/SHA256SUMS-linux-$ARCH"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-${{ matrix.arch }}
@@ -72,5 +100,6 @@ jobs:
             ${{ env.DIST_DIR }}/*.deb
             ${{ env.DIST_DIR }}/latest-linux*.yml
             ${{ env.DIST_DIR }}/SHA256SUMS-linux-*
+          overwrite: true
           if-no-files-found: error
           retention-days: 14

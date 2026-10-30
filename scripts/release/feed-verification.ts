@@ -1,12 +1,12 @@
 import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
+import { FeedError } from './feed-error.ts';
+import { MANIFEST_NAMES, rulesForManifest } from './feed-manifests.ts';
+import type { FeedRules } from './feed-rules.ts';
 import { fileHash } from './file-hash.ts';
-import { parseMacManifest, type FeedFile, type MacManifest } from './mac-manifest.ts';
-import { zipArch } from './zip-arch.ts';
+import { parseUpdateManifest, type FeedFile, type UpdateManifest } from './update-manifest.ts';
 
-export const REQUIRED_ARCHS = ['arm64', 'x64'] as const;
-
-export type FeedReport = { manifest: MacManifest; archs: string[]; problems: string[] };
+export type FeedReport = { manifest: UpdateManifest; archs: string[]; problems: string[] };
 
 async function sizeOf(file: string): Promise<number | null> {
   return stat(file).then(
@@ -33,12 +33,7 @@ async function checkEntry(feedDir: string, entry: FeedFile): Promise<string | nu
   return null;
 }
 
-function coveredArchs(manifest: MacManifest): string[] {
-  const found = new Set(manifest.files.map((entry) => zipArch(entry.url)));
-  return REQUIRED_ARCHS.filter((arch) => found.has(arch));
-}
-
-function primaryProblem(manifest: MacManifest): string | null {
+function primaryProblem(manifest: UpdateManifest): string | null {
   if (manifest.path === undefined) {
     return null;
   }
@@ -46,18 +41,27 @@ function primaryProblem(manifest: MacManifest): string | null {
   return listed ? null : `path ${manifest.path} does not match a listed file with the same sha512`;
 }
 
-function versionProblem(manifest: MacManifest, expectedVersion: string | undefined): string | null {
+function versionProblem(manifest: UpdateManifest, expectedVersion: string | undefined): string | null {
   if (expectedVersion === undefined || manifest.version === expectedVersion) {
     return null;
   }
   return `manifest version ${manifest.version} != release version ${expectedVersion}`;
 }
 
+function rulesFor(manifestFile: string): FeedRules {
+  const rules = rulesForManifest(basename(manifestFile));
+  if (rules === null) {
+    throw new FeedError(`${manifestFile}: unknown update manifest, expected one of ${MANIFEST_NAMES.join(', ')}`);
+  }
+  return rules;
+}
+
 export async function verifyFeed(manifestFile: string, expectedVersion?: string): Promise<FeedReport> {
-  const manifest = parseMacManifest(await readFile(manifestFile, 'utf8'), manifestFile);
+  const rules = rulesFor(manifestFile);
+  const manifest = parseUpdateManifest(await readFile(manifestFile, 'utf8'), manifestFile);
   const entryProblems = await Promise.all(manifest.files.map((entry) => checkEntry(dirname(manifestFile), entry)));
-  const archs = coveredArchs(manifest);
-  const archProblem = archs.length === REQUIRED_ARCHS.length ? null : `expected zip entries for ${REQUIRED_ARCHS.join(' and ')}, found: ${archs.join(', ') || 'none'}`;
-  const problems = [versionProblem(manifest, expectedVersion), ...entryProblems, archProblem, primaryProblem(manifest)].filter((problem): problem is string => problem !== null);
-  return { manifest, archs, problems };
+  const problems = [versionProblem(manifest, expectedVersion), ...entryProblems, ...rules.problems(manifest), primaryProblem(manifest)].filter(
+    (problem): problem is string => problem !== null,
+  );
+  return { manifest, archs: rules.archs(manifest), problems };
 }

@@ -3,7 +3,7 @@ import { verifyFeed } from './feed-verification.ts';
 
 async function main(manifestFile: string | undefined, expectedVersion: string | undefined): Promise<number> {
   if (manifestFile === undefined) {
-    console.error('usage: node scripts/release/verify-feed.ts <feed/latest-mac.yml> [expected-version]');
+    console.error('usage: node scripts/release/verify-feed.ts <feed/latest-mac.yml|latest-linux.yml|latest-linux-arm64.yml> [expected-version]');
     return 2;
   }
   const report = await verifyFeed(manifestFile, expectedVersion);

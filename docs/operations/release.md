@@ -1,6 +1,6 @@
 # Release pipeline
 
-Spec section 10 and the recommendations in `docs/spikes/signed-update.md`. Workflow: `.github/workflows/release.yml`. Repository: `MatusMockor/codevo-whisper`.
+Spec section 10 and the recommendations in `docs/spikes/signed-update.md`. Workflows: `.github/workflows/release.yml`, which calls the reusable `.github/workflows/release-linux.yml` for the Linux packages. Repository: `MatusMockor/codevo-whisper`.
 
 ## Jobs
 
@@ -10,12 +10,14 @@ Spec section 10 and the recommendations in `docs/spikes/signed-update.md`. Workf
 | `checks` | `macos-15` | - | `pnpm lint`, `pnpm typecheck`, `pnpm test` (includes the real input helper integration test) |
 | `build-mac` (arm64) | `macos-15` | `release` | native build, sign, package, notarize, staple, gates, upload `mac-arm64` |
 | `build-mac` (x64) | `macos-15-intel` | `release` | same for Intel, upload `mac-x64` |
-| `publish` | `ubuntu-latest` | `release` | merge `latest-mac.yml`, verify, draft release, re-verify every asset of the draft, publish |
+| `build-linux` (x64) | `ubuntu-24.04` | - | reusable `release-linux.yml`: `verify-build-ref.sh` on tag runs, checks, native build, AppImage and deb, `SHA256SUMS-linux-x64`, verify `latest-linux.yml`, upload `linux-x64` (see Linux) |
+| `build-linux` (arm64) | `ubuntu-24.04-arm` | - | same for arm64 with `latest-linux-arm64.yml`, upload `linux-arm64` |
+| `publish` | `ubuntu-latest` | `release` | merge `latest-mac.yml`, add the Linux packages and manifests, verify every manifest, draft release, re-verify every asset of the draft, publish |
 
 Triggers:
 
-- Tag push `v*.*.*`: full release, `publish` runs after both `build-mac` jobs succeeded.
-- Manual run (`workflow_dispatch`, input `version`): only from `main` (the `version` job is skipped for any other ref, so nothing else runs). Builds, signs, notarizes and verifies both architectures and uploads the artifacts to the run; never publishes. Publishing always needs a tag (`gh release create --verify-tag`).
+- Tag push `v*.*.*`: full release. `build-mac` and `build-linux` both start after `checks`; `publish` runs only after both `build-mac` and both `build-linux` jobs succeeded, so a release always ships macOS and Linux together.
+- Manual run (`workflow_dispatch`, input `version`): only from `main` (the `version` job is skipped for any other ref, so nothing else runs). Builds, signs, notarizes and verifies both mac architectures, builds both Linux architectures and uploads the artifacts to the run; never publishes. Publishing always needs a tag (`gh release create --verify-tag`).
 - Runs for the same version share the concurrency group `release-v<version>` and never cancel each other.
 - The `build-mac` matrix runs with `fail-fast: false`: a failure of one architecture (for example a network error talking to Apple that outlasted the retries) does not cancel the other one. Each architecture saves its own `notary-state-<arch>`, `publish` still needs both, and "Re-run failed jobs" resumes only the architecture that failed (see Notarization latency and resume).
 
@@ -42,9 +44,9 @@ Artifact names: `codevo-whisper-${version}-${arch}-mac.{dmg,zip}`. The arch toke
 
 ## Signing protection
 
-- `build-mac` and `publish` run in the GitHub environment `release`; the signing and notarization secrets live in that environment, not in the repository, so no other workflow or job can read them.
-- `verify-build-ref.sh` runs in `version` and before anything is built in `build-mac`: for a tag run the dereferenced tag commit must equal the build SHA, for a manual run the ref must be `main`, and in both cases the build commit must be on `main`.
-- `publish-github-release.sh` checks again that the tag (dereferenced through the GitHub API) points to the build SHA, that `latest-mac.yml` has the release version, and creates the release with `--verify-tag`.
+- `build-mac` and `publish` run in the GitHub environment `release`; the signing and notarization secrets live in that environment, not in the repository, so no other workflow or job can read them. `build-linux` signs nothing, does not use the `release` environment and gets no secrets (the caller passes none to the reusable workflow; its token is `contents: read`).
+- `verify-build-ref.sh` runs in `version` and before anything is built in `build-mac`, and in `build-linux` when it runs for a tag push: for a tag run the dereferenced tag commit must equal the build SHA, for a manual run the ref must be `main`, and in both cases the build commit must be on `main`.
+- `publish-github-release.sh` checks again that the tag (dereferenced through the GitHub API) points to the build SHA, that `latest-mac.yml`, `latest-linux.yml` and `latest-linux-arm64.yml` have the release version, and creates the release with `--verify-tag`.
 - Every `uses:` is pinned to a full commit SHA with a trailing `# vX.Y.Z` comment; `.github/dependabot.yml` proposes updates for the `github-actions` ecosystem weekly. Only first-party `actions/*` actions are used; pnpm comes from `corepack enable` (version from `packageManager`).
 - `permissions: contents: read` for the workflow; only `publish` gets `contents: write`. Checkouts use `persist-credentials: false`.
 - Secrets are only step-level `env` of the steps that need them: `CSC_LINK` / `CSC_KEY_PASSWORD` for the certificate import, `APPLE_API_KEY` / `APPLE_API_KEY_ID` / `APPLE_API_ISSUER` for the four notarization steps, `GH_TOKEN` for the release step. Native and desktop builds (the steps that run third-party build code: transcribe.cpp, npm packages) run before the certificate is imported.
@@ -85,24 +87,44 @@ gh variable set APPLE_TEAM_ID --repo "$repo" --env release --body U574W69TH6
    git push origin v1.2.0
    ```
 
-4. Approve the `release` environment for `build-mac` and later for `publish`, watch the run (`gh run watch`). Notary submission IDs are in each build job's summary.
-5. The release appears as published once `publish` finishes. A version with a pre-release suffix (`1.2.0-beta.1`) is published as a GitHub pre-release.
+4. Approve the `release` environment for `build-mac` and later for `publish`, watch the run (`gh run watch`). Notary submission IDs are in each build job's summary. `build-linux` needs no approval and runs in parallel with `build-mac`.
+5. The release appears as published once `publish` finishes, with the macOS DMGs and ZIPs and the Linux AppImages and debs (asset list in How the update feed is merged). A version with a pre-release suffix (`1.2.0-beta.1`) is published as a GitHub pre-release.
+
+When only a Linux job failed (for example an arm64 runner problem), "Re-run failed jobs" re-runs the failed and cancelled `build-linux` jobs (with `fail-fast: true` a failure cancels the other architecture) and then `publish`; the finished `build-mac` jobs and their notarization are kept.
 
 `publish-github-release.sh` refuses to run when a release for the tag already exists. To retry after a failed publish, delete the leftover draft (`gh release delete v1.2.0`) and re-run the failed job.
 
 ## How the update feed is merged
 
-Each `build-mac` job writes its own `latest-mac.yml` listing only its own ZIP. Uploading both as-is would let the second one overwrite the first, and one architecture would silently stop updating. So build jobs never publish (`--publish never`), and the `publish` job:
+Each `build-mac` job writes its own `latest-mac.yml` listing only its own ZIP. Uploading both as-is would let the second one overwrite the first, and one architecture would silently stop updating. Linux needs no merge: electron-builder names the manifest by architecture, `latest-linux.yml` for x64 and `latest-linux-arm64.yml` for arm64 (also for pre-release versions, the GitHub provider always uses the `latest` channel), and each lists the AppImage and the deb of that architecture. So build jobs never publish (`--publish never`), and the `publish` job:
 
-1. downloads `mac-arm64` and `mac-x64`,
-2. `assemble-mac-feed.sh`: copies DMGs, ZIPs and blockmaps into `feed/` and runs `merge-latest-mac.ts feed/latest-mac.yml <x64 manifest> <arm64 manifest>`. The merge refuses different versions, entries without `url`/`sha512`/integer `size`, and a result without a ZIP; it de-duplicates by `url`, keeps the latest `releaseDate`, and points the legacy top-level `path`/`sha512` to the x64 ZIP (what electron-builder writes in a single two-arch run),
+1. downloads `mac-arm64`, `mac-x64` (pattern `mac-*`) and `linux-x64`, `linux-arm64` (pattern `linux-*`) into `artifacts/<name>/`,
+2. `assemble-mac-feed.sh`: copies DMGs, ZIPs and blockmaps of the two mac artifacts into `feed/` and runs `merge-latest-mac.ts feed/latest-mac.yml <x64 manifest> <arm64 manifest>`. The merge refuses different versions, entries without `url`/`sha512`/integer `size`, and a result without a ZIP; it de-duplicates by `url`, keeps the latest `releaseDate`, and points the legacy top-level `path`/`sha512` to the x64 ZIP (what electron-builder writes in a single two-arch run),
 3. `verify-feed.ts feed/latest-mac.yml <version>`: the manifest version must be the release version; re-hashes every listed file (size and sha512), requires a ZIP for both `arm64` and `x64`, rejects URLs that are not plain file names and a legacy `path` that does not match a listed file,
-4. `publish-github-release.sh`: checks the tag commit, creates a draft release with every file of `feed/`, downloads every asset of the draft into a temp dir and runs `verify-release-assets.ts` (the exact same file list and the same sha256 for every DMG, ZIP, blockmap and `latest-mac.yml`) and `verify-feed.ts` on the downloaded copy,
-5. publishes the draft. Publishing is the single atomic switch: until then no client sees the new version.
+4. `assemble-linux-feed.sh`: requires per architecture the manifest, `SHA256SUMS-linux-<arch>`, at least one AppImage and one deb, refuses any AppImage or deb of the artifact that its manifest does not list (`manifest-urls.ts`) or that its `SHA256SUMS` file does not list, copies them into `feed/` (refusing to overwrite a file already there), then runs `verify-feed.ts` on both Linux manifests and `verify-checksums.ts` on both checksum files,
+5. `publish-github-release.sh`: checks the tag commit, runs `verify-feed.ts` on all three manifests and `verify-checksums.ts` on both checksum files, creates a draft release with every file of `feed/`, downloads every asset of the draft into a temp dir and runs `verify-release-assets.ts` (the exact same file list and the same sha256 for every asset) and the same manifest and checksum checks on the downloaded copy,
+6. publishes the draft. Publishing is the single atomic switch: until then no client sees the new version.
+
+`verify-feed.ts` picks its rules by the manifest file name (`scripts/release/feed-manifests.ts`) and refuses any other name. Common to all: the version, size and sha512 of every listed file, plain file names, the legacy `path`. Per platform:
+
+- `latest-mac.yml`: a ZIP for both `arm64` and `x64` (other entries are ignored, as before).
+- `latest-linux.yml` / `latest-linux-arm64.yml`: exactly two entries, the AppImage and the deb of that architecture and of the manifest version (which must be the release version), named exactly `codevo-whisper-<version>-<token>-linux.<ext>` with the electron-builder 26 tokens `x86_64` (AppImage) and `amd64` (deb) for x64, `arm64` for both on arm64 (`scripts/release/linux-package.ts`). Any other entry, a package of another version or architecture, or a missing or duplicated AppImage or deb fails. electron-builder lists both packages in each manifest (checked on the 0.2.1 CI artifacts). A single AppImage matters because electron-updater's `AppImageUpdater` takes the first AppImage of the manifest when no name contains `process.arch` (`x86_64` never contains `x64`); the deb entry is required so a stale or wrong deb can never be published next to a valid manifest, even though the app only reads the manifest version for the deb ("Je dostupná verzia X").
+
+`verify-checksums.ts` accepts only `sha256sum` lines with plain file names and re-hashes every listed file.
+
+Assets of a release `vX.Y.Z` (14 files):
+
+| Platform | Files |
+|---|---|
+| macOS | `codevo-whisper-X.Y.Z-{arm64,x64}-mac.dmg`, `codevo-whisper-X.Y.Z-{arm64,x64}-mac.zip`, `codevo-whisper-X.Y.Z-{arm64,x64}-mac.zip.blockmap`, `latest-mac.yml` |
+| Linux x64 | `codevo-whisper-X.Y.Z-x86_64-linux.AppImage`, `codevo-whisper-X.Y.Z-amd64-linux.deb`, `latest-linux.yml`, `SHA256SUMS-linux-x64` |
+| Linux arm64 | `codevo-whisper-X.Y.Z-arm64-linux.AppImage`, `codevo-whisper-X.Y.Z-arm64-linux.deb`, `latest-linux-arm64.yml`, `SHA256SUMS-linux-arm64` |
+
+The AppImage blockmap for differential updates is embedded in the AppImage (`blockMapSize` in the manifest entry), so there is no separate Linux blockmap file.
 
 MacUpdater on Apple silicon keeps only URLs containing `arm64` (also for an x64 build under Rosetta, which migrates it to arm64); on Intel it drops them. Both ZIPs in one manifest are therefore required.
 
-Local check of a feed: `node scripts/release/verify-feed.ts <dir>/latest-mac.yml [version]`.
+Local check of a feed: `node scripts/release/verify-feed.ts <dir>/<latest-mac.yml|latest-linux.yml|latest-linux-arm64.yml> [version]`, `node scripts/release/verify-checksums.ts <dir>/SHA256SUMS-linux-<arch>`.
 
 ## Notarization latency and resume
 
@@ -148,16 +170,25 @@ With the API key available (`APPLE_API_KEY_CONTENT` for `with-api-key.sh`, or `A
 
 ## Linux
 
-`.github/workflows/release-linux.yml` is a separate, manual-only workflow (`workflow_dispatch`) whose only job runs when the `enabled` input is true; the input defaults to false, so the workflow does nothing until Linux support lands in phase 4. When enabled it runs the checks, builds AppImage and deb for x64 (`ubuntu-24.04`) and arm64 (`ubuntu-24.04-arm`) with `--publish never`, writes `SHA256SUMS-linux-<arch>` and uploads `latest-linux.yml` / `latest-linux-arm64.yml` with the packages as run artifacts. It does not sign anything and does not attach anything to a release yet.
+`.github/workflows/release-linux.yml` is a reusable workflow (`workflow_call`, input `version`) that `release.yml` calls as the `build-linux` job for every tag push and every manual release run, so every release publishes the Linux packages and the Linux update manifests. It can also be dispatched on its own (`gh workflow run release-linux.yml --ref <branch> -f version=1.2.0`) to build the packages from any branch without publishing; there is no `enabled` switch any more (the old default-off gate dated from before Linux support landed, and a gate in a called workflow could silently skip the release build).
 
-Not ready before phase 4: there is no Linux transcribe-cli or input helper build (`resources/bin/<arch>` is empty on Linux), and the update policy from spec 10 still applies: in-app auto-update only for the AppImage (verified by HTTPS and the sha512 from the same feed, no publisher signature), deb users get a notice with a download link.
+One `build-linux` job per architecture, x64 on `ubuntu-24.04` and arm64 on `ubuntu-24.04-arm` (`fail-fast: true`, 60 minutes):
+
+1. Checkout with full history; for a tag push (`github.event_name == 'push'`, which a called workflow inherits from `release.yml`) `verify-build-ref.sh` checks the tag commit against the build SHA and `main` exactly as in `build-mac`. A manual run of `release.yml` already verified the ref in its `version` job; a stand-alone manual run of `release-linux.yml` is not restricted to `main` because it never publishes.
+2. `resolve-version.sh` (version from the tag on a push, from the input otherwise) and a check that it equals the `version` input.
+3. `pnpm lint`, `pnpm typecheck`, `pnpm test` on Linux, the native build dependencies from apt, `build-native.sh <arch>`, the desktop bundle.
+4. `electron-builder --linux AppImage deb --<arch> --publish never -c.extraMetadata.version=<version>` into `apps/desktop/release/linux/<arch>`, then `sha256sum -- *.AppImage *.deb > SHA256SUMS-linux-<arch>` (plain file names, so `sha256sum -c` works in a download directory).
+5. `verify-feed.ts` on the manifest of the architecture and `verify-checksums.ts`, so a bad package fails the build job, not only `publish`.
+6. Upload AppImage, deb, `latest-linux*.yml` and `SHA256SUMS-linux-<arch>` as `linux-<arch>` (no clash with the `mac-<arch>` and `notary-state-<arch>` artifacts of the same run).
+
+Nothing is signed: the update policy from spec 10 applies. In-app auto-update only for the AppImage (verified by HTTPS and the sha512 from the same feed, no publisher signature), deb users get a notice with a download link (manual mode, the deb entry of the manifest is never downloaded by the app).
 
 ## In-app update
 
 Code: `apps/desktop/src/main/updates/` (`UpdateService`, `ElectronUpdaterAdapter`, `UpdateScheduler`, platform policy), wiring in `apps/desktop/src/main/app/update-wiring.ts`.
 
 - Feed: electron-updater with the GitHub provider from `Contents/Resources/app-update.yml` (`owner: MatusMockor`, `repo: codevo-whisper`), written by electron-builder from `publish` in `electron-builder.yml`. Only published releases are visible to clients; drafts are not. Private repositories are not supported.
-- Schedule: first check 15 s after start, then every 4 minutes (not in e2e mode). "Skontrolovať aktualizácie" in Nastavenia > Systém checks on demand. A background check never shows "Hľadám aktualizácie…" and a failed one is only logged, so the row and the sidebar keep their previous state while offline; only a download it starts becomes visible. A failed check the user asked for is shown, also when it joined a background check that was already running (the row then switches to "Hľadám aktualizácie…"). electron-updater is loaded only on the first check, not at startup.
+- Schedule: first check 15 s after start, then every 4 minutes (not in e2e mode). "Skontrolovať aktualizácie" checks on demand from three places: the button in Nastavenia > Systém, the refresh button in the sidebar footer and the tray item (which also opens the app window, so the result is visible in the sidebar). All three are disabled unless the phase is idle, available or error, and in unsupported (unpackaged) builds. A background check never shows "Hľadám aktualizácie…" and a failed one is only logged, so the row and the sidebar keep their previous state while offline; only a download it starts becomes visible. A failed check the user asked for is shown, also when it joined a background check that was already running (the row then switches to "Hľadám aktualizácie…"). electron-updater is loaded only on the first check, not at startup.
 - Deadlines: a check gives up after 60 s, a download after 60 minutes (the download is cancelled).
 - Redirects: `patches/builder-util-runtime@9.7.0.patch` and `patches/electron-updater@6.8.11.patch` (pnpm `patchedDependencies`) make electron-updater count every redirect hop (upstream passes the same count on, so a redirect loop never ends) and refuse a redirect from HTTPS to HTTP. HTTPS redirects such as github.com -> release-assets.githubusercontent.com keep working (`apps/desktop/test/updater-redirects.test.ts`). Drop the patches when an upstream release fixes both.
 - Download starts right after a check finds a newer version (`autoDownload` stays off in electron-updater; the service starts the download). `autoInstallOnAppQuit = false`: on macOS `MacUpdater` then does not hand the file to Squirrel.Mac after the download, so quitting the app normally never installs anything.
@@ -169,7 +200,7 @@ Code: `apps/desktop/src/main/updates/` (`UpdateService`, `ElectronUpdaterAdapter
 - After an update the first start runs the Metal warm-up again (`warm-up.json` stores the app version of the last warm-up).
 - Updater cache: `~/Library/Caches/@codevo-whisperdesktop-updater` (electron-builder derives `updaterCacheDirName` from the package name and ignores a value in `publish`).
 - Cache cleanup (`pending-update-pruner.ts`, in-app mode only, once at startup; electron-updater is loaded only after it finished): electron-updater keeps the downloaded ZIP twice, `pending/<artifact>.zip` (with `pending/update-info.json` and `pending/current.blockmap`) and `update.zip` + `current.blockmap` at the cache root as the base for the next differential download. When the version in the pending artifact name (`codevo-whisper-<version>-<arch>-<os>.<ext>`, from `update-info.json` `fileName`) is not newer than the running app, `pending/` is deleted; the cache root files are never touched. A newer pending version (downloaded, not installed) stays. The cache directory is `<OS cache dir>/<updaterCacheDirName from Resources/app-update.yml>` (`~/Library/Caches` on macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux), the same lookup electron-updater does. Symlinks or directories not owned by the user are refused; every failure is logged as a warning and never blocks the start.
-- Sidebar indicator (`UpdateIndicator`, bottom of the left sidebar): "Sťahujem aktualizáciu… x %" while downloading, "Aktualizácia X je pripravená" with "Reštartovať" when ready ("Reštartujem…" while installing, "Po dokončení diktovania to skúste znova." when refused), "Je dostupná verzia X" with "Stiahnuť z GitHubu" for manual packages. Hidden otherwise; errors are shown only in the settings row.
+- Sidebar indicator (`UpdateIndicator`, bottom of the left sidebar): "Sťahujem aktualizáciu… x %" while downloading, "Aktualizácia X je pripravená" with "Reštartovať" when ready ("Reštartujem…" while installing, "Po dokončení diktovania to skúste znova." when refused), "Je dostupná verzia X" with "Stiahnuť z GitHubu" for manual packages. Hidden otherwise; download and install errors are shown only in the settings row. Below it an always visible footer (`UpdateFooter`) shows "Verzia X" and a refresh icon button ("Skontrolovať aktualizácie"); the icon spins while "Hľadám aktualizácie…", and the footer then shows "Máte najnovšiu verziu" or "Kontrola zlyhala" (also after a background check without an update). In unsupported builds the button is disabled with the title "Aktualizácie fungujú iba v nainštalovanej aplikácii".
 
 ## N -> N+1 update verification (manual, release-blocking)
 
@@ -209,4 +240,5 @@ Linux (phase 4): repeat steps 4-9 with the AppImage (in-app) and check that the 
 ## Not covered yet
 
 - The N -> N+1 verification above has not run yet: it needs two published releases.
-- Linux release jobs (phase 4) and server images to GHCR (phase 2, spec 10).
+- Linux packages have never been published by the pipeline: the first tag after this change is the first real run of `build-linux` inside `release.yml` and of the Linux part of `publish`.
+- Server images to GHCR (phase 2, spec 10).

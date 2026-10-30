@@ -30,9 +30,13 @@ X11 delivery requires the captured nonnull window and process, a positively edit
 
 Clipboard transactions distinguish Copy from paste and restore from leave. Copy touches CLIPBOARD only, even after Shift+Insert. The native owner snapshots every touched selection before restore-policy paste can write. Incomplete preparation preserves the original data and leaves the transcript recoverable. Explicit Copy does not require a restorable old snapshot. Original ownership is checked before writing, and current offers are checked immediately before posting. XFixes owner generations and timestamps distinguish later equal-text copies. After the settling delay, ownership and generation must still belong to the operation. Later owners win even when their text equals the transcript. A forced rollback is also conditional.
 
+## Release packages
+
+Every release tag publishes the AppImage and the deb for x64 and arm64 to the GitHub release, together with `latest-linux.yml`, `latest-linux-arm64.yml` and `SHA256SUMS-linux-<arch>`; `release.yml` builds them through the reusable `release-linux.yml` and verifies the manifests before and after the upload (see `docs/operations/release.md`, Linux). The AppImage updates in the app from those manifests. The deb is a manual package: the app only reads the manifest version, shows the newer version and links to the release page.
+
 ## Build without publishing
 
-Install build dependencies through your normal development or CI setup. The required development packages are CMake, Ninja, pkg-config, GTK3, JSON-GLib, AT-SPI2, libevdev, libudev, X11/Xi/XTest/XFixes, Vulkan headers, glslc and SPIRV-Headers. The manual Linux workflow lists their Ubuntu package names and remains disabled by default.
+Install build dependencies through your normal development or CI setup. The required development packages are CMake, Ninja, pkg-config, GTK3, JSON-GLib, AT-SPI2, libevdev, libudev, X11/Xi/XTest/XFixes, Vulkan headers, glslc and SPIRV-Headers. The Linux release workflow (`.github/workflows/release-linux.yml`) lists their Ubuntu package names.
 
 Run from the checkout with the existing machine limits:
 
