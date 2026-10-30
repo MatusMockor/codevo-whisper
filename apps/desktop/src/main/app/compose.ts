@@ -181,6 +181,7 @@ export function composeApplication(logger: Logger): Application {
     });
     sessions = coordinator;
     const tray = new TrayMenu({
+      platform: process.platform,
       coordinator,
       capture,
       settings,

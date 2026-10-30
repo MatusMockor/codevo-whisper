@@ -15,12 +15,13 @@ import { IDLE, nextActivity, statusLine, trayIconKind, type TrayActivity, type T
 const DEVICE_LIST_TIMEOUT_MS = 800;
 
 export type TrayMenuDeps = {
+  platform: NodeJS.Platform;
   coordinator: Pick<SessionCoordinator, 'pasteLast' | 'copyLast' | 'pause' | 'resume' | 'isPaused'>;
   capture: Pick<AudioCapture, 'listDevices'>;
-  settings: Pick<SettingsStore, 'get' | 'update'>;
-  lastTranscript: Pick<LastTranscript, 'get'>;
+  settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
+  lastTranscript: Pick<LastTranscript, 'get' | 'onChange'>;
   models: Pick<ActiveModel, 'activeLanguageHint'>;
-  updates: Pick<UpdateService, 'status' | 'install'>;
+  updates: Pick<UpdateService, 'status' | 'install' | 'onChange'>;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -35,23 +36,44 @@ export class TrayMenu {
   private frame = 0;
   private shownKind: TrayIconKind = 'idle';
   private readonly icons = new TrayIcons();
+  private attachedMenu: string | null = null;
+  private unsubscribers: Array<() => void> = [];
 
   constructor(private readonly deps: TrayMenuDeps) {}
 
   create(): void {
     const tray = new Tray(this.icons.image('idle'));
     tray.setToolTip('Codevo Whisper');
-    tray.on('click', () => this.popUp());
-    tray.on('right-click', () => this.popUp());
     this.tray = tray;
+    if (this.deps.platform !== 'linux') {
+      tray.on('click', () => this.popUp());
+      tray.on('right-click', () => this.popUp());
+      return;
+    }
+    tray.on('click', () => this.deps.openApp());
+    const attach = () => this.attachMenu();
+    this.unsubscribers = [this.deps.settings.onChange(attach), this.deps.lastTranscript.onChange(attach), this.deps.updates.onChange(attach)];
+    this.attachMenu();
+    this.attachMenuWithFreshDevices();
   }
 
   reflect(state: OverlayState): void {
-    this.activity = nextActivity(this.activity, state);
+    const previous = this.activity;
+    this.activity = nextActivity(previous, state);
     this.refreshIcon();
+    if (this.deps.platform !== 'linux') {
+      return;
+    }
+    if (this.activity.kind === 'idle' && previous.kind !== 'idle') {
+      this.attachMenuWithFreshDevices();
+      return;
+    }
+    this.attachMenu();
   }
 
   destroy(): void {
+    this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.unsubscribers = [];
     this.stopSpinner();
     this.tray?.destroy();
     this.tray = null;
@@ -66,6 +88,23 @@ export class TrayMenu {
       .catch((error: unknown) => {
         this.deps.logger.error('The tray menu could not be opened', error);
       });
+  }
+
+  private attachMenuWithFreshDevices(): void {
+    void this.freshDevices().then((devices) => {
+      this.devices = devices;
+      this.attachMenu();
+    });
+  }
+
+  private attachMenu(): void {
+    const model = this.model();
+    const key = JSON.stringify(model);
+    if (this.tray === null || key === this.attachedMenu) {
+      return;
+    }
+    this.attachedMenu = key;
+    this.tray.setContextMenu(Menu.buildFromTemplate(trayMenuTemplate(model, this.actions())));
   }
 
   private freshDevices(): Promise<AudioDevice[]> {
@@ -145,6 +184,9 @@ export class TrayMenu {
     const toggle = coordinator.isPaused() ? () => coordinator.resume() : () => coordinator.pause();
     toggle();
     this.refreshIcon();
+    if (this.deps.platform === 'linux') {
+      this.attachMenu();
+    }
   }
 
   private refreshIcon(): void {
