@@ -2,6 +2,10 @@
 
 The initial Linux target is Ubuntu 24.04 with GNOME 46 on x64 or arm64. X11 supports guarded automatic paste. GNOME Wayland uses physical evdev shortcuts, a reduced regular overlay window and clipboard delivery for manual paste. Automatic insertion and replay on Wayland never receive a target authorization.
 
+Packaged builds start the native input helper as a transient service of the current user's systemd manager. This avoids inheriting Electron's named user-namespace profile, which prevents accessibility communication with confined Snap applications. A working user manager, `systemd-run` and `systemctl` are required. The deb declares `systemd`. Each helper instance owns a unique collected unit. Closing the app sends EOF. A stuck runner is terminated and its unit is stopped before replacement.
+
+In Settings > Prístup k systému, click **Povoliť rozpoznávanie polí** to enable system accessibility for applications such as Firefox and Zen. The same action is available during onboarding. It enables the AT-SPI toolkit bridge, not the screen reader. Automatic insertion still requires a verified editable field in the original active window. Unsupported applications retain clipboard recovery.
+
 ## Runtime prerequisites
 
 Run Codevo Whisper as your normal desktop user. Never run the application or helper as root. The application does not change groups, device permissions, compositor settings or sandbox configuration.

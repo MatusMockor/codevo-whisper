@@ -9,7 +9,7 @@ export type EngineChoice = 'local' | 'server' | 'later';
 export type EngineChoiceOption = { id: EngineChoice; title: string; description: string };
 
 export const ENGINE_CHOICES: readonly EngineChoiceOption[] = Object.freeze([
-  { id: 'local', title: 'Na tomto Macu', description: 'Model sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač.' },
+  { id: 'local', title: 'Na tomto zariadení', description: 'Model sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač.' },
   { id: 'server', title: 'Na vlastnom serveri', description: 'Prepisuje váš spárovaný server, napríklad domáci počítač s grafickou kartou. Zvuk putuje zašifrovaný od začiatku do konca.' },
   { id: 'later', title: 'Nastavím neskôr', description: 'Teraz sa nič nesťahuje ani nepáruje.' },
 ]);

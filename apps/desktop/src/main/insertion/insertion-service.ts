@@ -71,6 +71,9 @@ export class InsertionService {
     if (output.insertion === 'clipboard') {
       return this.copy(text, 'copied-by-setting');
     }
+    if (!(await waitForShortcutRelease(this.helper, this.sleep))) {
+      return 'blocked-modifiers-held';
+    }
     const checked = await this.checkedDelivery(text, target, output, 'automatic');
     if (checked !== null) return checked;
     if (!isSameTarget(target, await this.helper.frontmost())) {

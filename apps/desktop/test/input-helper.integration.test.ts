@@ -9,7 +9,7 @@ let helper: HelperProcessInputHelper;
 
 describe.runIf(process.platform === 'darwin')('macOS input helper', () => {
   beforeAll(async () => {
-    channel = new HelperProcess({ file: ensureBuiltHelper(), args: [] }, { logger: new RecordingLogger() });
+    channel = new HelperProcess({ kind: 'direct', file: ensureBuiltHelper(), args: [] }, { logger: new RecordingLogger() });
     helper = new HelperProcessInputHelper(channel);
     await helper.start();
   }, 180_000);

@@ -66,6 +66,7 @@ linux:
     - deb
 deb:
   depends:
+    - systemd
     - libgtk-3-0
     - libnotify4
     - libnss3

@@ -37,7 +37,7 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="permissions" || cmd=="request-permission") {
     text(o,"inputBackend",wayland?"evdev":"x11");number(o,"inputDeviceCount",inputDeviceCount());boolean(o,"controlledInput",controlledInput());
     boolean(o,"listenEvent",canListen());boolean(o,"postEvent",display && !wayland && seatActive());
-    auto t=frontmost(); auto f=focused(t);boolean(o,"accessibility",f.known);
+    boolean(o,"accessibility",accessibilityEnabled(cmd=="request-permission" && string(args,"kind")=="accessibility"));
   }
   else if(cmd=="frontmost") describeTarget(o,frontmost());
   else if(cmd=="focused-element") { auto f=focused(frontmost()); if(f.known) boolean(o,"editable",f.editable && !f.protectedInput);else json_object_set_null_member(o,"editable");text(o,"role",f.role); }

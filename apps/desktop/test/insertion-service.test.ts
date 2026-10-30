@@ -65,6 +65,25 @@ async function prepared(setup: Setup = {}) {
 }
 
 describe('InsertionService', () => {
+  it('delivers automatic Linux dictation after the shortcut modifier is released', async () => {
+    const { service, helper } = await prepared({
+      helper: { modifiers: { ...HELD, command: false } },
+      onSleep: (_ms, fake) => { fake.modifiers = { control: false, command: false, option: false, shift: false }; },
+    });
+    helper.checkDelivery = () => Promise.resolve(helper.modifiers.control
+      ? { kind: 'blocked', reason: 'modifiers-held' }
+      : { kind: 'allowed', target: TEXT_EDIT });
+    expect(await service.insert('Žilina 🚀', TEXT_EDIT)).toBe('pasted');
+    expect(helper.pasted).toEqual(['Žilina 🚀']);
+  });
+
+  it('does not write the clipboard when a dictation shortcut stays held', async () => {
+    const { service, helper } = await prepared({ helper: { modifiers: HELD } });
+    expect(await service.insert('dictated', TEXT_EDIT)).toBe('blocked-modifiers-held');
+    expect(helper.pasted).toEqual([]);
+    expect(helper.clipboard).toBe('original');
+  });
+
   it('preserves clipboard and LastTranscript when Linux restore preparation is incomplete', async () => {
     const { service, channel, lastTranscript } = await protocolService('linux');
     lastTranscript.set('recoverable transcript');

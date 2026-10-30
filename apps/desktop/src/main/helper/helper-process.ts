@@ -1,10 +1,9 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { HelperArgs, HelperChannel, HelperMessage } from './helper-channel';
 import { Listeners } from './listeners';
-
-export type HelperCommand = { file: string; args: readonly string[] };
+import { launchHelper, type HelperCommand } from './helper-launch';
 
 export type HelperProcessOptions = { logger?: Logger; timeoutMs?: number };
 
@@ -41,6 +40,8 @@ function parseLine(line: string): HelperMessage | null {
 export class HelperProcess implements HelperChannel {
   private live: Promise<ChildProcessWithoutNullStreams> = unavailable();
   private child: ChildProcessWithoutNullStreams | null = null;
+  private cleanup: Promise<void> = Promise.resolve();
+  private starting = false;
   private restartsLeft = 0;
   private stopping = false;
   private gaveUp = false;
@@ -64,16 +65,21 @@ export class HelperProcess implements HelperChannel {
   }
 
   async start(): Promise<void> {
-    if (!this.stopping && isRunning(this.child)) {
+    if (!this.stopping && (this.starting || isRunning(this.child))) {
       await this.live;
       return;
     }
     this.stopping = false;
     this.gaveUp = false;
     this.restartsLeft = 0;
+    this.starting = true;
     this.live = this.spawnChild();
-    await this.live;
-    this.restartsLeft = MAX_RESTARTS;
+    try {
+      await this.live;
+      this.restartsLeft = MAX_RESTARTS;
+    } finally {
+      this.starting = false;
+    }
   }
 
   async stop(): Promise<void> {
@@ -81,6 +87,7 @@ export class HelperProcess implements HelperChannel {
     this.live = unavailable();
     const child = this.child;
     if (!isRunning(child)) {
+      await this.cleanup;
       return;
     }
     await new Promise<void>((resolve) => {
@@ -91,6 +98,7 @@ export class HelperProcess implements HelperChannel {
       });
       child.stdin.end();
     });
+    await this.cleanup;
   }
 
   async request(cmd: string, args: HelperArgs = {}, timeoutMs = this.timeoutMs): Promise<HelperMessage> {
@@ -115,8 +123,11 @@ export class HelperProcess implements HelperChannel {
     return this.giveUps.add(listener);
   }
 
-  private spawnChild(): Promise<ChildProcessWithoutNullStreams> {
-    const child = spawn(this.command.file, [...this.command.args], { stdio: 'pipe' });
+  private async spawnChild(): Promise<ChildProcessWithoutNullStreams> {
+    await this.cleanup;
+    if (this.stopping) throw new Error('helper-stopped');
+    const launch = launchHelper(this.command);
+    const child = launch.child;
     this.child = child;
     let markReady: () => void = () => undefined;
     const ready = new Promise<ChildProcessWithoutNullStreams>((resolve, reject) => {
@@ -141,7 +152,11 @@ export class HelperProcess implements HelperChannel {
     child.stdin.on('error', (error) => this.logger.error('Input helper stdin failed', error));
     createInterface({ input: child.stdout }).on('line', (line) => this.handleLine(line, markReady));
     createInterface({ input: child.stderr }).on('line', (line) => this.logger.error('Input helper stderr', line));
-    child.once('exit', (code, signal) => this.handleExit(child, { code, signal }));
+    child.once('exit', (code, signal) => {
+      this.cleanup = launch.cleanup();
+      void this.cleanup.catch((error: unknown) => this.logger.error('Input helper cleanup failed', error));
+      this.handleExit(child, { code, signal });
+    });
     return ready;
   }
 
@@ -209,10 +224,12 @@ export class HelperProcess implements HelperChannel {
   }
 
   private restart(): void {
+    this.starting = true;
     this.live = this.spawnChild();
     this.live.then(
-      () => this.restarts.emit(),
+      () => { this.starting = false; this.restarts.emit(); },
       (error: unknown) => {
+        this.starting = false;
         this.logger.error('Input helper restart failed', error);
         this.giveUp();
       },

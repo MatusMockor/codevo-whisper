@@ -21,5 +21,6 @@ export function createInputHelper(logger: Logger, fake: boolean): Promise<InputH
     appPath: process.platform === 'linux' ? desktopAppRoot() : app.getAppPath(),
     arch: process.arch,
   });
-  return Promise.resolve(new HelperProcessInputHelper(new HelperProcess({ file, args: [] }, { logger }), logger));
+  const kind = process.platform === 'linux' && app.isPackaged ? 'user-service' : 'direct';
+  return Promise.resolve(new HelperProcessInputHelper(new HelperProcess({ kind, file, args: [] }, { logger }), logger));
 }

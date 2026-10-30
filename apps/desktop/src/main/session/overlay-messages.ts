@@ -18,7 +18,7 @@ export const MESSAGES = Object.freeze({
   nothingHeard: 'Nezachytila sa žiadna reč',
   insertFailed: 'Text sa nepodarilo vložiť',
   clipboardFailed: 'Text sa nepodarilo skopírovať do schránky',
-  modifiersHeld: 'Pustite ⌃ a ⌘ a skúste to znova',
+  modifiersHeld: 'Pustite klávesy skratky a skúste to znova',
   noTranscript: 'Zatiaľ nemáte žiadny prepis',
   serverNotPaired: 'Server nie je spárovaný',
   serverOffline: 'Server nie je dostupný',
