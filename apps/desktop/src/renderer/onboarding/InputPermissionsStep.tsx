@@ -93,14 +93,25 @@ function RelaunchNotice({ message }: { message: string }) {
 }
 
 export function InputPermissionsStep({ permissions, refresh }: { permissions: Live<PermissionsView>; refresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   if (permissions.kind !== 'ready') {
     return null;
   }
   if (permissions.value.platform === 'linux') {
     return <div className="sbox">
       <PermissionRow title="Prístup ku klávesnici" description="X11 používa systémové skratky. Wayland vyžaduje prístup na čítanie ku klávesniciam aktívneho používateľa. Aplikácia nemení oprávnenia zariadení." granted={permissions.value.inputMonitoring} statusLabel={grantLabel(permissions.value.inputMonitoring)} actionLabel="Skontrolovať znova" onAction={refresh} />
+      <PermissionRow title="Rozpoznávanie textových polí" description="Povolí systémovú prístupnosť, aby aplikácia vedela overiť, kam vkladá text. Čítačka obrazovky sa nezapne." granted={permissions.value.accessibility} statusLabel={grantLabel(permissions.value.accessibility)} actionLabel="Povoliť rozpoznávanie polí" busy={busy} onAction={() => {
+        setBusy(true);
+        setPermissionError(null);
+        void window.codevo.requestPermission('accessibility').then(() => window.codevo.getPermissions()).then((status) => {
+          if (!status.accessibility) setPermissionError('Rozpoznávanie polí sa nepodarilo povoliť. Skúste to znova.');
+          refresh();
+        }).catch(() => setPermissionError('Rozpoznávanie polí sa nepodarilo povoliť. Skúste to znova.')).finally(() => setBusy(false));
+      }} />
+      {permissionError !== null && <p role="alert" className="sbox-foot">{permissionError}</p>}
       <p className="sbox-foot">Po zmene medzi X11 a Waylandom nahrajte skratku znova. Vo Waylande je text v schránke na ručné vloženie; vyžaduje XWayland a jeho most schránky. Poloha a zobrazenie okna závisia od kompozítora.</p>
-      <p className="sbox-foot">{permissions.value.accessibility ? 'Textové pole sa dá overiť cez AT-SPI.' : 'Textové pole sa nedá bezpečne overiť. Automatické vkladanie zostáva vypnuté, prepis môžete skopírovať.'}</p>
+      <p className="sbox-foot">{permissions.value.accessibility ? 'Rozpoznávanie polí je povolené. Dostupnosť automatického vloženia závisí od cieľovej aplikácie.' : 'Prepis zostane dostupný v schránke aj bez rozpoznávania polí.'}</p>
     </div>;
   }
   const reason = relaunchReason(permissions.value);

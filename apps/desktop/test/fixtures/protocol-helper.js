@@ -20,6 +20,7 @@ const handlers = {
   'recording-audio-end': (id, args) => { audioOperations.push({ cmd: 'recording-audio-end', ...args }); send({ id, ended: true }); },
   'audio-state': (id) => send({ id, operations: audioOperations }),
   ping: (id) => send({ id, pong: true, pid: process.pid }),
+  'session-env': (id) => send({ id, display: process.env['DISPLAY'] ?? null, wayland: process.env['WAYLAND_DISPLAY'] ?? null }),
   echo: (id, args) => setTimeout(() => send({ id, value: args.value }), args.delayMs ?? 0),
   silent: () => undefined,
   crash: () => process.exit(1),
@@ -98,6 +99,12 @@ if (blockedMarker && existsSync(blockedMarker)) {
 
 createInterface({ input: process.stdin })
   .on('line', (line) => respond(JSON.parse(line)))
-  .on('close', () => process.exit(0));
+  .on('close', () => {
+    if (process.argv.includes('--ignore-eof')) { setInterval(() => undefined, 1000); return; }
+    process.exit(0);
+  });
 
-send({ event: 'ready', pid: process.pid });
+const readyDelay = Number(process.argv.find((arg) => arg.startsWith('--ready-delay='))?.split('=')[1] ?? 0);
+const pidFile = process.argv.find((arg) => arg.startsWith('--started-pid-file='))?.split('=')[1];
+if (pidFile) writeFileSync(pidFile, String(process.pid));
+setTimeout(() => send({ event: 'ready', pid: process.pid }), readyDelay);

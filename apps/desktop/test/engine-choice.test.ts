@@ -24,8 +24,8 @@ function modelState(status: ModelState['status']): ModelState {
 }
 
 describe('ENGINE_CHOICES', () => {
-  it('offers the Mac, an own server and deciding later', () => {
-    expect(ENGINE_CHOICES.map((option) => option.title)).toEqual(['Na tomto Macu', 'Na vlastnom serveri', 'Nastavím neskôr']);
+  it('offers this device, an own server and deciding later on every platform', () => {
+    expect(ENGINE_CHOICES.map((option) => option.title)).toEqual(['Na tomto zariadení', 'Na vlastnom serveri', 'Nastavím neskôr']);
   });
 });
 

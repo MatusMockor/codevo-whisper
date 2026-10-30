@@ -26,6 +26,7 @@ extern Display* display;
 extern bool wayland;
 extern GMainLoop* loop;
 void desktopInit();
+bool accessibilityEnabled(bool request = false);
 Target frontmost();
 Field focused(const Target&);
 bool seatActive();

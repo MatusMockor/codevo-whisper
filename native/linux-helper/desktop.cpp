@@ -11,6 +11,7 @@ bool wayland=false;
 static int64_t generation=0;
 static std::optional<Operation> operation;
 static AtspiEventListener* focusListener=nullptr;
+static AtspiAccessible* eventFocus=nullptr;
 static GDBusConnection* systemBus=nullptr;
 static std::string sessionPath;
 static bool xtest=false;
@@ -44,6 +45,19 @@ bool seatActive() {
   bool known=g_variant_lookup(props,"Active","b",&active) && g_variant_lookup(props,"LockedHint","b",&locked);
   g_variant_unref(props);g_variant_unref(result);return known && active && !locked;
 }
+bool accessibilityEnabled(bool request) {
+  GError* error=nullptr;
+  auto bus=g_bus_get_sync(G_BUS_TYPE_SESSION,nullptr,&error);
+  g_clear_error(&error);if(!bus)return false;
+  if(request) {
+    auto result=g_dbus_connection_call_sync(bus,"org.a11y.Bus","/org/a11y/bus","org.freedesktop.DBus.Properties","Set",g_variant_new("(ssv)","org.a11y.Status","IsEnabled",g_variant_new_boolean(true)),G_VARIANT_TYPE_UNIT,G_DBUS_CALL_FLAGS_NONE,1000,nullptr,&error);
+    g_clear_error(&error);if(result)g_variant_unref(result);
+  }
+  auto result=g_dbus_connection_call_sync(bus,"org.a11y.Bus","/org/a11y/bus","org.freedesktop.DBus.Properties","Get",g_variant_new("(ss)","org.a11y.Status","IsEnabled"),G_VARIANT_TYPE("(v)"),G_DBUS_CALL_FLAGS_NONE,1000,nullptr,&error);
+  bool enabled=false;
+  if(result) {GVariant* value;g_variant_get(result,"(v)",&value);enabled=g_variant_is_of_type(value,G_VARIANT_TYPE_BOOLEAN) && g_variant_get_boolean(value);g_variant_unref(value);g_variant_unref(result);}
+  g_clear_error(&error);g_object_unref(bus);return enabled;
+}
 void desktopInit() {
   wayland=std::string(g_getenv("XDG_SESSION_TYPE")?g_getenv("XDG_SESSION_TYPE"):"")=="wayland" || g_getenv("WAYLAND_DISPLAY");
   auto gdk=gdk_display_get_default();
@@ -52,7 +66,11 @@ void desktopInit() {
   if(display) {int a,b,c,d;xtest=XTestQueryExtension(display,&a,&b,&c,&d);}
   if(atspi_init()==0) {
     atspi_set_timeout(200,200);
-    focusListener=atspi_event_listener_new(+[](AtspiEvent*,void*) {invalidateDelivery();},nullptr,nullptr);
+    focusListener=atspi_event_listener_new(+[](AtspiEvent* event,void*) {
+      invalidateDelivery();
+      if(eventFocus) {g_object_unref(eventFocus);eventFocus=nullptr;}
+      if(event->source && event->detail1 && g_str_has_prefix(event->type,"object:state-changed:focused")) eventFocus=ATSPI_ACCESSIBLE(g_object_ref(event->source));
+    },nullptr,nullptr);
     atspi_event_listener_register(focusListener,"object:state-changed:focused",nullptr);
     atspi_event_listener_register(focusListener,"window:activate",nullptr);
   }
@@ -79,11 +97,17 @@ void describeTarget(JsonObject* o,const Target& t) {
 static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget,int64_t deadline) {
   if(!node || depth>32 || --budget<0 || g_get_monotonic_time()>deadline)return nullptr;
   atspi_accessible_clear_cache(node);
+  GError* error=nullptr;
+  if(atspi_accessible_get_role(node,&error)==ATSPI_ROLE_FRAME) {
+    auto attributes=atspi_accessible_get_attributes(node,&error);
+    if(attributes)g_hash_table_unref(attributes);
+  }
+  if(error){g_clear_error(&error);return nullptr;}
   auto states=atspi_accessible_get_state_set(node);
   bool focus=states && atspi_state_set_contains(states,ATSPI_STATE_FOCUSED) && !atspi_state_set_contains(states,ATSPI_STATE_DEFUNCT);
   if(states)g_object_unref(states);
   if(focus)return ATSPI_ACCESSIBLE(g_object_ref(node));
-  GError* error=nullptr;int count=atspi_accessible_get_child_count(node,&error);if(error){g_clear_error(&error);return nullptr;}
+  int count=atspi_accessible_get_child_count(node,&error);if(error){g_clear_error(&error);return nullptr;}
   for(int i=0;i<count && budget>0;++i) {
     auto child=atspi_accessible_get_child_at_index(node,i,&error);if(error){g_clear_error(&error);continue;}
     auto found=findFocus(child,depth+1,budget,deadline);if(child)g_object_unref(child);if(found)return found;
@@ -92,9 +116,20 @@ static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget,in
 }
 Field focused(const Target& target) {
   Field field;if(!target.pid || wayland || !focusListener)return field;
-  auto desktop=atspi_get_desktop(0);if(!desktop)return field;
-  GError* error=nullptr;int count=atspi_accessible_get_child_count(desktop,&error);g_clear_error(&error);
-  AtspiAccessible* focus=nullptr;auto deadline=g_get_monotonic_time()+1200000;
+  AtspiAccessible* focus=nullptr;
+  GError* error=nullptr;
+  if(eventFocus) {
+    atspi_accessible_clear_cache(eventFocus);
+    auto states=atspi_accessible_get_state_set(eventFocus);
+    bool valid=states && atspi_state_set_contains(states,ATSPI_STATE_FOCUSED) && !atspi_state_set_contains(states,ATSPI_STATE_DEFUNCT);
+    if(states)g_object_unref(states);
+    auto pid=atspi_accessible_get_process_id(eventFocus,&error);
+    if(valid && !error && pid==static_cast<guint>(target.pid))focus=ATSPI_ACCESSIBLE(g_object_ref(eventFocus));
+    g_clear_error(&error);
+  }
+  auto desktop=atspi_get_desktop(0);if(!desktop) {if(focus)g_object_unref(focus);return field;}
+  int count=atspi_accessible_get_child_count(desktop,&error);g_clear_error(&error);
+  auto deadline=g_get_monotonic_time()+1200000;
   for(int i=0;i<count && i<256 && !focus && g_get_monotonic_time()<deadline;++i) {
     auto app=atspi_accessible_get_child_at_index(desktop,i,&error);if(error){g_clear_error(&error);continue;}
     if(app && atspi_accessible_get_process_id(app,&error)==static_cast<guint>(target.pid)) {int budget=2048;focus=findFocus(app,0,budget,deadline);}
@@ -105,6 +140,7 @@ Field focused(const Target& target) {
   field.protectedInput=role==ATSPI_ROLE_PASSWORD_TEXT;
   bool textRole=role==ATSPI_ROLE_TEXT || role==ATSPI_ROLE_ENTRY || role==ATSPI_ROLE_PASSWORD_TEXT;
   auto states=atspi_accessible_get_state_set(focus);
+  textRole=textRole || (role==ATSPI_ROLE_SECTION && states && atspi_state_set_contains(states,ATSPI_STATE_EDITABLE));
   field.known=textRole && states && atspi_state_set_contains(states,ATSPI_STATE_ENABLED) && atspi_state_set_contains(states,ATSPI_STATE_SENSITIVE);
   field.editable=states && atspi_state_set_contains(states,ATSPI_STATE_EDITABLE);
   auto obj=ATSPI_OBJECT(focus);if(obj->path && obj->app && obj->app->bus_name)field.identity=std::string(obj->app->bus_name)+":"+obj->path;
@@ -156,6 +192,7 @@ bool post(JsonObject* args,bool submit) {
 }
 void shutdownDesktop() {
   if(focusListener) {atspi_event_listener_deregister(focusListener,"object:state-changed:focused",nullptr);atspi_event_listener_deregister(focusListener,"window:activate",nullptr);g_object_unref(focusListener);}
+  if(eventFocus)g_object_unref(eventFocus);
   atspi_exit();if(systemBus)g_object_unref(systemBus);
 }
 }

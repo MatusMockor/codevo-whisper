@@ -186,7 +186,7 @@ test('the engine step offers three choices, preselects none and moves on without
   await recordHotkeyAndOpenEngineStep();
   await expect(page.locator('.ob-lead')).toContainText('na vlastnom serveri');
   await expect(engines().getByRole('radio')).toHaveCount(3);
-  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).not.toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).not.toBeChecked();
   await expect(engines().getByRole('radio', { name: /^Na vlastnom serveri/ })).not.toBeChecked();
   await expect(engines().getByRole('radio', { name: /^Nastavím neskôr/ })).not.toBeChecked();
   await expect(modelList()).toHaveCount(0);
@@ -214,7 +214,7 @@ test('switching the engine quickly back to this Mac saves the local order', asyn
     radios[0]?.click();
   });
   await page.evaluate(() => window.codevo.updateSettings({ mode: 'hold' }));
-  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).toBeChecked();
   expect((await savedSettings()).engineOrder).toEqual(['local']);
   await expect(modelList()).toBeVisible();
   await expectNoModelDownload();
@@ -226,9 +226,9 @@ test('choosing this Mac drops a server fallback so audio never leaves the Mac', 
   userDataDir = await createUserDataDir({ engineOrder: ['local', 'server'] });
   await start();
   await recordHotkeyAndOpenEngineStep();
-  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).not.toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).not.toBeChecked();
 
-  await engines().getByRole('radio', { name: /^Na tomto Macu/ }).check();
+  await engines().getByRole('radio', { name: /^Na tomto zariadení/ }).check();
   await expect(modelList()).toBeVisible();
   await expect.poll(async () => (await savedSettings()).engineOrder).toEqual(['local']);
   await expectNoModelDownload();
@@ -236,20 +236,20 @@ test('choosing this Mac drops a server fallback so audio never leaves the Mac', 
 
 test('choosing this Mac shows the preselected recommended model, then onboarding is skipped after completion', async () => {
   await recordHotkeyAndOpenEngineStep();
-  await engines().getByRole('radio', { name: /^Na tomto Macu/ }).check();
+  await engines().getByRole('radio', { name: /^Na tomto zariadení/ }).check();
   await expect(modelList().getByRole('radio', { name: DEFAULT_MODEL_NAME, exact: true })).toBeChecked();
   await expect(modelList().getByRole('radio')).toHaveCount(4);
   await expect(page.locator('.ob-model-actions').getByRole('button', { name: `Stiahnuť: ${DEFAULT_MODEL_NAME}` })).toBeVisible();
   await modelList().getByRole('radio', { name: 'Canary 1B v2' }).check();
   await expect(page.locator('.ob-model-actions').getByRole('button', { name: 'Stiahnuť: Canary 1B v2' })).toBeVisible();
-  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).toBeChecked();
 
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
   await expect(page.locator('.ob-try')).toHaveText('Stlačte Pravý ⌃ Control a povedzte niečo.');
   await expect(page.getByText('Model sa ešte sťahuje alebo nie je vybraný.')).toBeVisible();
   await page.getByRole('button', { name: 'Späť' }).click();
-  await expect(engines().getByRole('radio', { name: /^Na tomto Macu/ })).toBeChecked();
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).toBeChecked();
   await next();
   await page.getByRole('button', { name: 'Dokončiť' }).click();
 

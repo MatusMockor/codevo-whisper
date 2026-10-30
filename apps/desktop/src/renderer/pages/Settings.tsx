@@ -11,11 +11,14 @@ import { TranscriptSection } from '../settings/TranscriptSection';
 import { useModels } from '../settings/use-models';
 import { saveSettings, useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
+import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
+import { usePermissions } from '../settings/use-permissions';
 
 export function Settings() {
   const settings = useSettings();
   const models = useModels();
   const server = useServer();
+  const permissions = usePermissions();
   if (settings.kind === 'loading') {
     return null;
   }
@@ -40,6 +43,7 @@ export function Settings() {
         <MicrophonePicker microphone={value.microphone} onChange={(microphone) => saveSettings({ microphone })} />
       </SettingsGroup>
       <InsertionSection settings={value} />
+      {permissions.permissions.kind === 'ready' && permissions.permissions.value.platform === 'linux' && <SettingsGroup title="Prístup k systému"><InputPermissionsStep permissions={permissions.permissions} refresh={permissions.refresh} /></SettingsGroup>}
       <TranscriptSection settings={value} />
       <HistorySection />
       <SystemSection launchAtLogin={value.launchAtLogin} />
