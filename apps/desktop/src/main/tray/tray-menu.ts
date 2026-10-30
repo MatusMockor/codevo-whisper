@@ -35,11 +35,13 @@ export class TrayMenu {
   private spinner: NodeJS.Timeout | null = null;
   private frame = 0;
   private shownKind: TrayIconKind = 'idle';
-  private readonly icons = new TrayIcons();
+  private readonly icons: TrayIcons;
   private attachedMenu: string | null = null;
   private unsubscribers: Array<() => void> = [];
 
-  constructor(private readonly deps: TrayMenuDeps) {}
+  constructor(private readonly deps: TrayMenuDeps) {
+    this.icons = new TrayIcons(deps.platform);
+  }
 
   create(): void {
     const tray = new Tray(this.icons.image('idle'));
