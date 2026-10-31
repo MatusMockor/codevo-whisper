@@ -1,0 +1,33 @@
+{
+  "name": "@codevo-whisper/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codevo-whisper/protocol": "workspace:*",
+    "@scure/base": "2.4.0",
+    "@stablelib/utf8": "2.1.0",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-url-polyfill": "3.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/runtime": "7.29.10",
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-ios": "20.2.0",
+    "@react-native/babel-preset": "0.88.1",
+    "@react-native/codegen": "0.88.1",
+    "@react-native/gradle-plugin": "0.88.1",
+    "@react-native/metro-config": "0.88.1",
+    "@types/react": "19.2.14",
+    "hermes-compiler": "260318099.0.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  },
+  "type": "module"
+}

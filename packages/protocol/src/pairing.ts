@@ -1,4 +1,5 @@
 import { blake2s } from '@noble/hashes/blake2.js';
+import { base64urlnopad, hex } from '@scure/base';
 import { badMessage } from './errors';
 import { PROTOCOL_VERSION } from './version';
 
@@ -15,14 +16,19 @@ export function createPairingSecret(): Uint8Array {
 }
 
 function encodeBase64url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64url');
+  return base64urlnopad.encode(bytes);
 }
 
 function decodeBase64url(text: string, expectedBytes: number, label: string): Uint8Array {
   if (!BASE64URL.test(text)) {
     throw badMessage(`${label} is not base64url`);
   }
-  const bytes = new Uint8Array(Buffer.from(text, 'base64url'));
+  let bytes: Uint8Array;
+  try {
+    bytes = base64urlnopad.decode(text);
+  } catch (error) {
+    throw badMessage(`${label} is not canonical base64url`, error);
+  }
   if (bytes.length !== expectedBytes || encodeBase64url(bytes) !== text) {
     throw badMessage(`${label} must be ${expectedBytes} bytes`);
   }
@@ -30,7 +36,13 @@ function decodeBase64url(text: string, expectedBytes: number, label: string): Ui
 }
 
 function assertEndpoint(endpoint: string): string {
-  if (!URL.canParse(endpoint) || !ENDPOINT_PROTOCOLS.includes(new URL(endpoint).protocol)) {
+  let protocol: string;
+  try {
+    protocol = new URL(endpoint).protocol;
+  } catch (error) {
+    throw badMessage('endpoint must be a ws:// or wss:// URL', error);
+  }
+  if (!ENDPOINT_PROTOCOLS.includes(protocol)) {
     throw badMessage('endpoint must be a ws:// or wss:// URL');
   }
   return endpoint;
@@ -74,6 +86,6 @@ export function parsePairingToken(text: string): PairingToken {
 }
 
 export function fingerprint(bytes: Uint8Array): string {
-  const hex = Buffer.from(blake2s(bytes).subarray(0, FINGERPRINT_BYTES)).toString('hex').toUpperCase();
-  return (hex.match(/.{4}/g) ?? []).join(' ');
+  const digest = hex.encode(blake2s(bytes).subarray(0, FINGERPRINT_BYTES)).toUpperCase();
+  return (digest.match(/.{4}/g) ?? []).join(' ');
 }

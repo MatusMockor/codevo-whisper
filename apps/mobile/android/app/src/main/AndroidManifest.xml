@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <application android:name="com.codevo.MainApplication" android:label="Codevo Voice" android:icon="@drawable/ic_codevo" android:allowBackup="false" android:fullBackupContent="false" android:networkSecurityConfig="@xml/network_security_config" android:theme="@style/AppTheme" android:supportsRtl="true">
+    <activity android:name="com.codevo.MainActivity" android:label="Codevo Voice" android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:exported="true" android:windowSoftInputMode="adjustResize">
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+    </activity>
+    <service android:name="com.codevo.VoiceInputService" android:label="Codevo Voice" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
+      <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
+      <meta-data android:name="android.view.im" android:resource="@xml/input_method" />
+    </service>
+  </application>
+</manifest>

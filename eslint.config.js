@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['**/node_modules/**', '**/out/**', '**/dist/**', 'apps/*/release/**', '**/test-results/**', '**/playwright-report/**', 'spikes/**', 'docs/**', 'native/transcribe/work/**', 'native/stt-worker/work/**'],
+    ignores: ['**/node_modules/**', 'apps/mobile/android/**/build/**', 'apps/mobile/android/.gradle/**', 'apps/mobile/android/.kotlin/**', 'apps/mobile/ios/Pods/**', 'apps/mobile/ios/build/**', '**/out/**', '**/dist/**', 'apps/*/release/**', '**/test-results/**', '**/playwright-report/**', 'spikes/**', 'docs/**', 'native/transcribe/work/**', 'native/stt-worker/work/**'],
   },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
@@ -28,12 +28,13 @@ export default defineConfig(
     },
   },
   {
-    files: ['apps/*/src/renderer/**/*.{ts,tsx}'],
+    files: ['apps/*/src/renderer/**/*.{ts,tsx}', 'apps/mobile/src/**/*.{ts,tsx}'],
     ...reactHooks.configs.flat.recommended,
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    files: ['**/*.js'],
+    files: ['**/*.{js,cjs}'],
     ...tseslint.configs.disableTypeChecked,
   },
+  { files: ['apps/mobile/*.cjs'], rules: { '@typescript-eslint/no-require-imports': 'off' } },
 );

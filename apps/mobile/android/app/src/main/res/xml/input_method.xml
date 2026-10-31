@@ -1,0 +1,3 @@
+<input-method xmlns:android="http://schemas.android.com/apk/res/android" android:settingsActivity="com.codevo.MainActivity" android:supportsSwitchingToNextInputMethod="true">
+  <subtype android:label="Codevo Voice" android:imeSubtypeMode="keyboard" />
+</input-method>
