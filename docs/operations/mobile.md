@@ -62,6 +62,6 @@ For distribution, build `:app:assembleRelease` or `:app:bundleRelease` through `
 
 ## Build the iOS companion on macOS
 
-Use `apps/mobile/ios/CodevoMobile.xcodeproj` and the `CodevoMobile` scheme. Install CocoaPods dependencies in `apps/mobile/ios`, open the generated workspace, and configure your signing team. The native adapter uses Keychain with `WhenUnlockedThisDeviceOnly`, `SecRandomCopyBytes`, and AVAudioEngine conversion to mono 16 kHz PCM16. It stops on backgrounding or audio interruption. Only TLS endpoints are supported.
+Use `apps/mobile/ios/CodevoMobile.xcodeproj` and the `CodevoMobile` scheme. Install CocoaPods dependencies in `apps/mobile/ios`, open the generated workspace, and configure your signing team. The native adapter uses Keychain with `WhenUnlockedThisDeviceOnly`, `SecRandomCopyBytes`, and AVAudioEngine conversion to mono 16 kHz PCM16. It stops on backgrounding or audio interruption. Its native URLSession WebSocket adapter serializes sends and retains byte reservations until send completion; a stalled send terminates the connection after ten seconds. Only TLS endpoints are supported.
 
 This target has not been compiled, signed, or run on Linux. macOS/Xcode and device validation are required before calling it usable. No iOS keyboard extension target exists in this delivery. See [React Native environment setup](https://reactnative.dev/docs/set-up-your-environment), [Headless JS](https://reactnative.dev/docs/headless-js-android), and the [official template](https://github.com/react-native-community/template/tree/0.88-stable).

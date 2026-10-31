@@ -22,7 +22,7 @@ export async function startMobileRuntimePeer() {
     server.once('listening', resolve);
     server.once('error', reject);
   });
-  const stats = { resumedAudio: 0, pausedAudio: 0, errors: 0, sessions: 0, rejected: 0 };
+  const stats = { resumedAudio: 0, pausedAudio: 0, errors: 0, sessions: 0, rejected: 0, malformed: 0 };
   let paired = false;
   server.on('connection', (socket) => {
     let transport: SecureTransport | undefined;
@@ -84,12 +84,21 @@ export async function startMobileRuntimePeer() {
           return;
         }
         if (message.type === 'finish') {
+          if (stats.sessions > 2) {
+            stats.malformed++;
+            const malformed = encodeServerMessage({ type: 'final', sessionId, segmentId: 0, text: 'Č' });
+            malformed[malformed.indexOf(0xc4)] = 0x84;
+            socket.send(transport.seal(malformed));
+            send({ type: 'done', sessionId });
+            return;
+          }
           if (stats.sessions > 1) {
             stats.errors++;
             send({ type: 'error', code: 'stt_unavailable', message: 'fixture failure', sessionId });
             return;
           }
-          send({ type: 'final', sessionId, segmentId: 0, text: 'Flow respected' });
+          const final = encodeServerMessage({ type: 'final', sessionId, segmentId: 0, text: 'Flow respected Č 👋 100%' });
+          socket.send(transport.seal(Uint8Array.from([1, 0xef, 0xbb, 0xbf, ...final.subarray(1)])));
           send({ type: 'done', sessionId });
           return;
         }

@@ -157,3 +157,108 @@ RCT_EXPORT_METHOD(complete:(NSString *)run text:(NSString *)text resolver:(RCTPr
   if (valid) { @synchronized(self) { _runId=nil; } [self releaseAudio];@synchronized(self) { _pcm=nil;_pending=nil; } } resolve(@(valid));
 }
 @end
+
+@interface CodevoSocketState : NSObject
+@property(nonatomic,strong) NSURLSession *session;
+@property(nonatomic,strong) NSURLSessionWebSocketTask *task;
+@property(nonatomic,copy) RCTPromiseResolveBlock opening;
+@property(nonatomic,copy) RCTPromiseRejectBlock openingFailure;
+@property(nonatomic,copy) RCTPromiseRejectBlock sendFailure;
+@property(nonatomic,strong) NSObject *sending;
+@property(nonatomic,assign) BOOL opened;
+@end
+@implementation CodevoSocketState
+@end
+
+@interface CodevoSocket : RCTEventEmitter <RCTBridgeModule,NSURLSessionWebSocketDelegate>
+@end
+@implementation CodevoSocket {
+  NSMutableDictionary<NSString *,CodevoSocketState *> *_sockets;
+  BOOL _invalidated;
+}
+RCT_EXPORT_MODULE(CodevoSocket)
++ (BOOL)requiresMainQueueSetup { return YES; }
+- (dispatch_queue_t)methodQueue { return dispatch_get_main_queue(); }
+- (NSArray<NSString *> *)supportedEvents { return @[@"CodevoSocketEvent"]; }
+- (instancetype)init { if ((self=[super init])) _sockets=[NSMutableDictionary new];return self; }
+- (void)closeSocket:(NSString *)identifier {
+  CodevoSocketState *state=_sockets[identifier];
+  if (!state) return;
+  [_sockets removeObjectForKey:identifier];
+  [state.task cancelWithCloseCode:NSURLSessionWebSocketCloseCodeGoingAway reason:nil];
+  [state.session invalidateAndCancel];
+  if (state.openingFailure) state.openingFailure(@"socket_error",@"Socket closed",nil);
+  if (state.sendFailure) state.sendFailure(@"socket_error",@"Socket closed or stalled",nil);
+  state.opening=nil;state.openingFailure=nil;state.sendFailure=nil;state.sending=nil;
+}
+- (void)failSocket:(NSString *)identifier {
+  if (!_sockets[identifier]) return;
+  [self closeSocket:identifier];
+  [self sendEventWithName:@"CodevoSocketEvent" body:@{@"id":identifier,@"type":@"failed"}];
+}
+- (NSString *)identifierForTask:(NSURLSessionTask *)task {
+  for (NSString *identifier in _sockets) if (_sockets[identifier].task==task) return identifier;
+  return nil;
+}
+- (void)receiveSocket:(NSString *)identifier state:(CodevoSocketState *)state {
+  [state.task receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *message,NSError *error) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (self->_sockets[identifier]!=state) return;
+      if (error || message.type!=NSURLSessionWebSocketMessageTypeData || message.data.length>65535) { [self failSocket:identifier];return; }
+      [self sendEventWithName:@"CodevoSocketEvent" body:@{@"id":identifier,@"type":@"frame",@"data":[message.data base64EncodedStringWithOptions:0]}];
+      [self receiveSocket:identifier state:state];
+    });
+  }];
+}
+RCT_EXPORT_METHOD(connect:(NSString *)identifier endpoint:(NSString *)endpoint resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  NSURL *url=[NSURL URLWithString:endpoint];
+  if (_invalidated || _sockets[identifier] || _sockets.count>=4 || ![url.scheme.lowercaseString isEqualToString:@"wss"]) { reject(@"socket_error",@"TLS socket unavailable",nil);return; }
+  CodevoSocketState *state=[CodevoSocketState new];
+  state.opening=resolve;state.openingFailure=reject;
+  NSURLSessionConfiguration *configuration=[NSURLSessionConfiguration ephemeralSessionConfiguration];
+  configuration.timeoutIntervalForRequest=15;
+  state.session=[NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:NSOperationQueue.mainQueue];
+  state.task=[state.session webSocketTaskWithURL:url];state.task.maximumMessageSize=65535;
+  _sockets[identifier]=state;
+  [state.task resume];
+  [self receiveSocket:identifier state:state];
+}
+RCT_EXPORT_METHOD(send:(NSString *)identifier data:(NSString *)encoded resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  CodevoSocketState *state=_sockets[identifier];
+  NSData *data=encoded.length<=85336 ? [[NSData alloc] initWithBase64EncodedString:encoded options:0] : nil;
+  if (!state || !state.opened || state.sending || !data || data.length==0 || data.length>64000) { reject(@"socket_error",@"Socket unavailable or full",nil);[self failSocket:identifier];return; }
+  NSObject *attempt=[NSObject new];state.sending=attempt;state.sendFailure=reject;
+  [state.task sendMessage:[[NSURLSessionWebSocketMessage alloc] initWithData:data] completionHandler:^(NSError *error) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (self->_sockets[identifier]!=state || state.sending!=attempt) return;
+      if (error) { [self failSocket:identifier];return; }
+      state.sending=nil;state.sendFailure=nil;resolve(nil);
+    });
+  }];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(), ^{
+    if (self->_sockets[identifier]==state && state.sending==attempt) [self failSocket:identifier];
+  });
+}
+RCT_EXPORT_METHOD(close:(NSString *)identifier) { [self closeSocket:identifier]; }
+- (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)task didOpenWithProtocol:(NSString *)protocol {
+  NSString *identifier=[self identifierForTask:task];
+  CodevoSocketState *state=identifier ? _sockets[identifier] : nil;
+  if (!state) return;
+  state.opened=YES;
+  if (state.opening) state.opening(nil);
+  state.opening=nil;state.openingFailure=nil;
+}
+- (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)task didCloseWithCode:(NSURLSessionWebSocketCloseCode)code reason:(NSData *)reason {
+  NSString *identifier=[self identifierForTask:task];if (identifier) [self failSocket:identifier];
+}
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+  NSString *identifier=[self identifierForTask:task];if (identifier) [self failSocket:identifier];
+}
+- (void)invalidate {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    self->_invalidated=YES;
+    for (NSString *identifier in [self->_sockets.allKeys copy]) [self closeSocket:identifier];
+    [super invalidate];
+  });
+}
+@end

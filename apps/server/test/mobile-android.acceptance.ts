@@ -51,7 +51,7 @@ it('proves packaged Hermes gateway and cold IME from another app', async () => {
     await approval;
     expect(test.stdout).toContain('OK (1 test)');
     expect(fake.requests.length).toBeGreaterThanOrEqual(2);
-    expect(peer.stats).toMatchObject({ rejected: 1, sessions: 2, errors: 1, pausedAudio: 0 });
+    expect(peer.stats).toMatchObject({ rejected: 1, sessions: 3, errors: 1, malformed: 1, pausedAudio: 0 });
     expect(peer.stats.resumedAudio).toBeGreaterThan(0);
   } finally {
     await run('shell', 'rm', '-f', '/data/local/tmp/codevo-pair-token', '/data/local/tmp/codevo-runtime-token');

@@ -1,4 +1,5 @@
 import { NativeEventEmitter, Platform, TurboModuleRegistry, type TurboModule } from 'react-native';
+import { base64 } from '@scure/base';
 import type { OpenWire } from './core/connection';
 import type { PairingVault } from './core/pairing';
 
@@ -27,23 +28,85 @@ export const vault: PairingVault = {
   save: (value) => native.savePairing(value),
   remove: () => native.removePairing(),
 };
+interface SocketNative extends TurboModule {
+  addListener(eventName: string): void;
+  removeListeners(count: number): void;
+  connect(id: string, endpoint: string): Promise<void>;
+  send(id: string, data: string): Promise<void>;
+  close(id: string): void;
+}
+const socketNative = TurboModuleRegistry.getEnforcing<SocketNative>('CodevoSocket');
+let nextSocket = 0;
 export const openWire: OpenWire = (endpoint) => {
   if (new URL(endpoint).protocol !== 'wss:' && Platform.OS === 'ios') {
     throw new Error('Use a wss:// server endpoint on iPhone');
   }
-  const socket = new WebSocket(endpoint);
-  socket.binaryType = 'arraybuffer';
+  const id = String(++nextSocket);
+  let closed = false;
+  let opened = false;
+  let sending = false;
+  let buffered = 0;
+  const queue: Uint8Array[] = [];
+  let subscription: { remove(): void } | undefined;
+  let events: Parameters<ReturnType<OpenWire>['subscribe']>[0] | undefined;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    subscription?.remove();
+    queue.length = 0;
+    buffered = 0;
+    socketNative.close(id);
+  };
+  const fail = () => {
+    if (closed) return;
+    close();
+    events?.failed();
+  };
+  const pump = () => {
+    if (closed || !opened || sending) return;
+    const bytes = queue.shift();
+    if (bytes === undefined) return;
+    sending = true;
+    void socketNative.send(id, base64.encode(bytes)).then(() => {
+      if (closed) return;
+      buffered -= bytes.length;
+      sending = false;
+      pump();
+    }, fail);
+  };
   return {
-    get bufferedAmount() {
-      return socket.bufferedAmount;
+    get bufferedAmount() { return buffered; },
+    send(bytes) {
+      if (closed || bytes.length === 0 || bytes.length + buffered > 64_000) {
+        fail();
+        throw new Error('Socket queue full or closed');
+      }
+      buffered += bytes.length;
+      queue.push(bytes.slice());
+      pump();
     },
-    send: (bytes) => socket.send(bytes),
-    close: () => socket.close(),
-    subscribe: (events) => {
-      socket.onopen = () => events.open();
-      socket.onmessage = (event) => events.frame(event.data);
-      socket.onerror = () => events.failed();
-      socket.onclose = (event) => events.closed(event.code ?? 1006);
+    close,
+    subscribe(receive) {
+      if (closed || events !== undefined) throw new Error('Socket already subscribed or closed');
+      events = receive;
+      subscription = new NativeEventEmitter(socketNative).addListener('CodevoSocketEvent', (value: unknown) => {
+        if (closed || typeof value !== 'object' || value === null || !('id' in value) || value.id !== id) return;
+        if ('type' in value && value.type === 'frame' && 'data' in value && typeof value.data === 'string' && value.data.length <= 87_380) {
+          try {
+            const bytes = base64.decode(value.data);
+            if (bytes.length > 65_535) throw new Error('Oversized server frame');
+            receive.frame(bytes.buffer);
+          } catch { fail(); }
+          return;
+        }
+        fail();
+      });
+      void socketNative.connect(id, endpoint).then(() => {
+        if (closed) return;
+        opened = true;
+        receive.open();
+        pump();
+      }, fail);
     },
   };
 };

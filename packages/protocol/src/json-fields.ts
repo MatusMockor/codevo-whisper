@@ -1,4 +1,4 @@
-import { decode } from '@stablelib/utf8';
+import { hex } from '@scure/base';
 import { badMessage } from './errors';
 
 export type JsonObject = Record<string, unknown>;
@@ -9,7 +9,7 @@ const CONTROL_CHARACTERS = /\p{Cc}/u;
 
 function parseJson(bytes: Uint8Array): unknown {
   try {
-    return JSON.parse(decode(bytes).replace(/^\uFEFF/u, ''));
+    return JSON.parse(decodeURIComponent(hex.encode(bytes).replace(/../g, '%$&')).replace(/^\uFEFF/u, ''));
   } catch (error) {
     throw badMessage('message is not valid UTF-8 JSON', error);
   }

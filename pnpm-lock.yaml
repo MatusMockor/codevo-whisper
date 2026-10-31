@@ -250,9 +250,6 @@ importers:
       '@scure/base':
         specifier: 2.4.0
         version: 2.4.0
-      '@stablelib/utf8':
-        specifier: 2.1.0
-        version: 2.1.0
     devDependencies:
       '@types/node':
         specifier: 24.19.2
