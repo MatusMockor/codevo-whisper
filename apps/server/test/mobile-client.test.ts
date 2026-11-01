@@ -1,12 +1,12 @@
 import { afterEach, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { encodePairingToken } from '@codevo-whisper/protocol';
+import { encodePairingToken, generateKeyPair } from '@codevo-whisper/protocol';
 import { startHarness } from './support/server-harness';
 import { startFakeSttServer } from './support/fake-stt-server';
 import { createTempDir } from './support/temp-dir';
 import { openPairingWindow } from './support/admin';
 import { pcmSeconds } from './support/pcm';
-import { pairDevice, parsePairing, startSession } from '../../mobile/src/core/pairing';
+import { pairDevice, parsePairing, serializePairing, startSession } from '../../mobile/src/core/pairing';
 import type { OpenWire } from '../../mobile/src/core/connection';
 
 const cleanup: (() => Promise<void>)[] = [];
@@ -115,4 +115,56 @@ it('rejection and changed server key preserve the previous protected pairing', a
   const wrong = { ...parsePairing(original), serverPublicKey: new Uint8Array(32).fill(7) };
   await expect(startSession(wrong, 'wrong-key', 'auto', open, new AbortController().signal)).rejects.toThrow();
   expect(stored).toBe(original);
+});
+
+it.each(['replacement', 'first'] as const)('cancels %s pairing during the protected write without retaining the new pairing', async (mode) => {
+  const dir = await createTempDir();
+  cleanup.push(() => dir.remove());
+  const fake = await startFakeSttServer();
+  cleanup.push(() => fake.close());
+  const server = await startHarness(dir.path, fake.url);
+  cleanup.push(() => server.close());
+  const original = mode === 'first' ? null : serializePairing({
+    deviceKey: generateKeyPair(),
+    serverPublicKey: generateKeyPair().publicKey,
+    endpoint: 'wss://previous.example.test',
+    deviceId: 'old-device',
+  });
+  let stored = original;
+  const saving = Promise.withResolvers<void>();
+  const finishSave = Promise.withResolvers<void>();
+  let firstWrite = true;
+  const vault = {
+    load: () => Promise.resolve(stored),
+    save: async (value: string) => {
+      if (firstWrite) {
+        firstWrite = false;
+        saving.resolve();
+        await finishSave.promise;
+      }
+      stored = value;
+    },
+    remove: () => {
+      stored = null;
+      return Promise.resolve();
+    },
+  };
+  const window = await openPairingWindow(server.config.adminSocket);
+  cleanup.push(async () => { window.admin.close(); });
+  const controller = new AbortController();
+  const outcome = pairDevice({
+    token: encodePairingToken({ ...window.token, endpoint: server.url }),
+    name: 'Mobile',
+    vault,
+    open,
+    signal: controller.signal,
+    awaitingApproval: () => undefined,
+  }).then(() => 'approved', (error: unknown) => error);
+  expect(await window.admin.next()).toMatchObject({ event: 'request' });
+  window.admin.send({ decision: 'approve' });
+  await saving.promise;
+  controller.abort();
+  finishSave.resolve();
+  expect.soft(await outcome).toMatchObject({ message: 'Pairing cancelled' });
+  expect((await vault.load()) === original).toBe(true);
 });
