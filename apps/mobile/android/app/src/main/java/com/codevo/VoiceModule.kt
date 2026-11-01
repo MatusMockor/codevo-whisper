@@ -26,6 +26,19 @@ class VoiceModule(context:ReactApplicationContext):ReactContextBaseJavaModule(co
     @ReactMethod fun loadPairing(promise:Promise)=perform(promise) { vault.load() }
     @ReactMethod fun savePairing(value:String,promise:Promise)=perform(promise) { vault.save(value);null }
     @ReactMethod fun removePairing(promise:Promise)=perform(promise) { app.voice.cancel("Pairing removed");vault.remove();null }
+    @ReactMethod fun getLanguage(promise:Promise)=perform(promise) { app.voice.language.wire }
+    @ReactMethod fun setLanguage(value:String,promise:Promise)=perform(promise) { app.voice.selectLanguage(value);null }
+    @ReactMethod fun runLanguage(id:String,promise:Promise)=perform(promise) { app.voice.runLanguage(id) }
+    @ReactMethod fun setupStatus(promise:Promise)=perform(promise) {
+        val manager=app.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val own=android.content.ComponentName(app,VoiceInputService::class.java)
+        val enabled=manager.enabledInputMethodList.any { it.packageName==own.packageName && it.serviceName==own.className }
+        val selected=android.content.ComponentName.unflattenFromString(Settings.Secure.getString(app.contentResolver,Settings.Secure.DEFAULT_INPUT_METHOD) ?: "")==own
+        Arguments.createMap().apply {
+            putBoolean("microphone",app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED)
+            putString("keyboard",if(selected && enabled) "selected" else if(enabled) "enabled" else "disabled")
+        }
+    }
     @ReactMethod fun beginCompanion(promise:Promise)=perform(promise) { app.voice.startCompanion() }
     @ReactMethod fun ready(id:String,promise:Promise)=perform(promise) { app.voice.ready(id) }
     @ReactMethod fun capture(id:String,promise:Promise)=perform(promise) { app.voice.capture(id);null }

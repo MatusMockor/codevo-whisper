@@ -1,0 +1,47 @@
+
+com.codevo.KeyboardMeasurementTest:
+Error in keyboardKeepsIntrinsicContentWhenNavigationInsetsGrow(com.codevo.KeyboardMeasurementTest):
+java.lang.AssertionError: Navigation must grow the wrapped keyboard, preserving every control expected:<550> but was:<418>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.codevo.KeyboardMeasurementTest.keyboardKeepsIntrinsicContentWhenNavigationInsetsGrow$lambda$5(KeyboardMeasurementTest.kt:27)
+	at com.codevo.KeyboardMeasurementTest$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:462)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2266)
+	at android.os.Handler.handleCallback(Handler.java:938)
+	at android.os.Handler.dispatchMessage(Handler.java:99)
+	at android.os.Looper.loopOnce(Looper.java:201)
+	at android.os.Looper.loop(Looper.java:288)
+	at android.app.ActivityThread.main(ActivityThread.java:7839)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:548)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1003)
+
+
+Time: 0.005
+There was 1 failure:
+1) keyboardKeepsIntrinsicContentWhenNavigationInsetsGrow(com.codevo.KeyboardMeasurementTest)
+java.lang.AssertionError: Navigation must grow the wrapped keyboard, preserving every control expected:<550> but was:<418>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.codevo.KeyboardMeasurementTest.keyboardKeepsIntrinsicContentWhenNavigationInsetsGrow$lambda$5(KeyboardMeasurementTest.kt:27)
+	at com.codevo.KeyboardMeasurementTest$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:462)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2266)
+	at android.os.Handler.handleCallback(Handler.java:938)
+	at android.os.Handler.dispatchMessage(Handler.java:99)
+	at android.os.Looper.loopOnce(Looper.java:201)
+	at android.os.Looper.loop(Looper.java:288)
+	at android.app.ActivityThread.main(ActivityThread.java:7839)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:548)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1003)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+

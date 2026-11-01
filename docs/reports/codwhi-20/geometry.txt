@@ -1,0 +1,279 @@
+nav2-font1.0-portrait
+web=true iteration=0 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=true iteration=1 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=true iteration=2 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=0 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=1 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=2 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=63 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+
+nav2-font1.0-landscape
+web=true iteration=0 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":866,\"focused\":true}" input=Rect(128, 429 - 2400, 557)
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=true iteration=1 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":866,\"focused\":true}" input=Rect(128, 429 - 2400, 557)
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=true iteration=2 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":866,\"focused\":true}" input=Rect(128, 429 - 2400, 557)
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=0 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=1 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=2 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=63 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2242, 575 - 2368, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+
+nav2-font1.3-portrait
+web=true iteration=0 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=true iteration=1 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=true iteration=2 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=0 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=1 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=2 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=63 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+
+nav2-font1.3-landscape
+web=true iteration=0 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":866,\"focused\":true}" input=Rect(128, 426 - 2400, 554)
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=true iteration=1 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":866,\"focused\":true}" input=Rect(128, 426 - 2400, 554)
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=true iteration=2 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":866,\"focused\":true}" input=Rect(128, 426 - 2400, 554)
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=0 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=1 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=2 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=63 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2226, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2242, 573 - 2368, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+
+nav0-font1.0-portrait
+web=true iteration=0 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=true iteration=1 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=true iteration=2 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":659.047607421875,\"caretBottom\":632.3809814453125,\"height\":659.047607421875,\"width\":412,\"focused\":true}" input=Rect(0, 1748 - 1080, 1875)
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=0 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=1 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+web=false iteration=2 display=1080x2400 screen=2400 ime=526 imeTop=1874 nav=126 visibleBottom=1874 editorBottom=1874 caretBottom=1845 font=1.0 density=420
+control=Record bounds=Rect(349, 2116 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2116 - 158, 2242)
+control=Setup bounds=Rect(922, 1895 - 1048, 2021)
+control=Language: Slovak bounds=Rect(174, 2116 - 333, 2242)
+
+nav0-font1.0-landscape
+web=true iteration=0 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":818,\"focused\":true}" input=Rect(128, 429 - 2276, 557)
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=true iteration=1 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":818,\"focused\":true}" input=Rect(128, 429 - 2276, 557)
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=true iteration=2 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=0 caretBottom=89 font=1.0 density=420
+webResult="{\"bottom\":186.2857208251953,\"caretBottom\":159.61904907226562,\"height\":186.2857208251953,\"width\":818,\"focused\":true}" input=Rect(128, 429 - 2276, 557)
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=0 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=1 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+web=false iteration=2 display=2400x1080 screen=1080 ime=526 imeTop=554 nav=0 visibleBottom=554 editorBottom=554 caretBottom=525 font=1.0 density=420
+control=Record bounds=Rect(477, 796 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 796 - 286, 922)
+control=Setup bounds=Rect(2116, 575 - 2242, 701)
+control=Language: Slovak bounds=Rect(302, 796 - 461, 922)
+
+nav0-font1.3-portrait
+web=true iteration=0 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=true iteration=1 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=true iteration=2 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":658.2857055664062,\"caretBottom\":637.7142944335938,\"height\":658.2857055664062,\"width\":412,\"focused\":true}" input=Rect(0, 1746 - 1080, 1873)
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=0 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=1 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+web=false iteration=2 display=1080x2400 screen=2400 ime=528 imeTop=1872 nav=126 visibleBottom=1872 editorBottom=1872 caretBottom=1843 font=1.3 density=420
+control=Record bounds=Rect(387, 2114 - 906, 2242)
+control=Switch keyboard bounds=Rect(32, 2115 - 158, 2241)
+control=Setup bounds=Rect(922, 1893 - 1048, 2019)
+control=Language: Slovak bounds=Rect(174, 2115 - 371, 2241)
+
+nav0-font1.3-landscape
+web=true iteration=0 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":818,\"focused\":true}" input=Rect(128, 426 - 2276, 554)
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=true iteration=1 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":818,\"focused\":true}" input=Rect(128, 426 - 2276, 554)
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=true iteration=2 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=0 caretBottom=103 font=1.3 density=420
+webResult="{\"bottom\":185.14285278320312,\"caretBottom\":164.57142639160156,\"height\":185.14285278320312,\"width\":818,\"focused\":true}" input=Rect(128, 426 - 2276, 554)
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=0 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=1 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)
+web=false iteration=2 display=2400x1080 screen=1080 ime=528 imeTop=552 nav=0 visibleBottom=552 editorBottom=552 caretBottom=523 font=1.3 density=420
+control=Record bounds=Rect(515, 794 - 2100, 922)
+control=Switch keyboard bounds=Rect(160, 795 - 286, 921)
+control=Setup bounds=Rect(2116, 573 - 2242, 699)
+control=Language: Slovak bounds=Rect(302, 795 - 499, 921)

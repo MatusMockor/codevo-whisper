@@ -10,6 +10,7 @@
 
 @implementation CodevoVoice {
   NSString *_runId;
+  NSString *_runLanguage;
   BOOL _finishing;
   AVAudioEngine *_engine;
   AVAudioConverter *_converter;
@@ -77,9 +78,25 @@ RCT_EXPORT_METHOD(removePairing:(RCTPromiseResolveBlock)resolve rejecter:(RCTPro
 RCT_EXPORT_METHOD(requestMicrophone:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
   [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) { resolve(@(granted)); }];
 }
+- (NSString *)selectedLanguage {
+  return [[NSUserDefaults standardUserDefaults] stringForKey:@"voice-language"] ?: @"auto";
+}
+RCT_EXPORT_METHOD(getLanguage:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) { resolve([self selectedLanguage]); }
+RCT_EXPORT_METHOD(setLanguage:(NSString *)value resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  if (_runId || ![@[@"auto",@"sk",@"en",@"cs"] containsObject:value]) { reject(@"settings_error",@"Language unavailable during recording or invalid",nil);return; }
+  [[NSUserDefaults standardUserDefaults] setObject:value forKey:@"voice-language"];
+  resolve(nil);
+}
+RCT_EXPORT_METHOD(runLanguage:(NSString *)run resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  if (![_runId isEqualToString:run]) { reject(@"recording_error",@"Recording cancelled",nil);return; }
+  resolve(_runLanguage);
+}
+RCT_EXPORT_METHOD(setupStatus:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@{@"microphone":@([AVAudioSession sharedInstance].recordPermission==AVAudioSessionRecordPermissionGranted),@"keyboard":@"notApplicable"});
+}
 RCT_EXPORT_METHOD(beginCompanion:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
   if (_runId || UIApplication.sharedApplication.applicationState!=UIApplicationStateActive) { reject(@"recording_error",@"Recorder unavailable",nil);return; }
-  @synchronized(self) { _runId=NSUUID.UUID.UUIDString;_finishing=NO; } resolve(_runId);
+  @synchronized(self) { _runId=NSUUID.UUID.UUIDString;_runLanguage=[self selectedLanguage];_finishing=NO; } resolve(_runId);
 }
 RCT_EXPORT_METHOD(ready:(NSString *)run resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) { resolve(@([_runId isEqualToString:run])); }
 - (void)enqueuePCM:(NSData *)data run:(NSString *)run {

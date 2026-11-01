@@ -1,5 +1,5 @@
 import { base64 } from '@scure/base';
-import type { Language } from '@codevo-whisper/protocol';
+import { parseLanguage } from './core/settings';
 import { parsePairing, startSession } from './core/pairing';
 import type { MobileSession } from './core/session';
 import { native, openWire, subscribeVoice, vault } from './platform';
@@ -7,7 +7,6 @@ import { native, openWire, subscribeVoice, vault } from './platform';
 export type RecordingState = 'Connecting' | 'Recording' | 'Finishing';
 export async function runRecording(
   runId: string,
-  language: Language,
   onState: (state: RecordingState) => void = () => undefined,
 ): Promise<string> {
   const abort = new AbortController();
@@ -77,6 +76,7 @@ export async function runRecording(
     if (abort.signal.aborted) {
       throw new Error('Recording cancelled');
     }
+    const language = parseLanguage(await native.runLanguage(runId));
     session = await startSession(parsePairing(stored), runId, language, openWire, abort.signal);
     void session.completion.catch(() => {
       rejectEnd(new Error('Server session failed'));
@@ -108,7 +108,7 @@ export async function runHeadless(data: unknown): Promise<void> {
     return;
   }
   try {
-    await runRecording(data.runId, 'auto');
+    await runRecording(data.runId);
   } catch {
     return;
   }

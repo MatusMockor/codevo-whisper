@@ -12,13 +12,15 @@ import { startMobileRuntimePeer } from './support/mobile-runtime-peer';
 
 const exec = promisify(execFile);
 it('proves packaged Hermes gateway and cold IME from another app', async () => {
+  const serial = process.env.ANDROID_SERIAL;
+  if (serial === undefined || !/^emulator-\d+$/.test(serial)) throw new Error('Android acceptance requires an explicit emulator ANDROID_SERIAL; it clears app data');
   const data = await mkdtemp(join(tmpdir(), 'codevo-android-'));
   await chmod(data, 0o700);
   const fake = await startFakeSttServer({ delayMs: 1200, respond: () => ({ status: 200, body: { text: 'Ahoj z mobilu' } }) });
   const peer = await startMobileRuntimePeer();
   const server = await startHarness(data, fake.url, {}, { publicEndpoint: 'ws://10.0.2.2:18787', port: 18787 });
   const adb = process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, 'platform-tools/adb') : 'adb';
-  const run = (...args: string[]) => exec(adb, args, { timeout: 180_000, maxBuffer: 2_000_000 });
+  const run = (...args: string[]) => exec(adb, ['-s', serial, ...args], { timeout: 180_000, maxBuffer: 2_000_000 });
   const android = resolve(import.meta.dirname, '../../mobile/android');
   try {
     await run('install', '-r', join(android, 'app/build/outputs/apk/verification/app-verification.apk'));
@@ -47,9 +49,10 @@ it('proves packaged Hermes gateway and cold IME from another app', async () => {
       await window.admin.next();
       window.admin.close();
     })();
-    const test = await run('shell', 'am', 'instrument', '-w', 'com.codevo.fixture.test/androidx.test.runner.AndroidJUnitRunner');
+    const test = await run('shell', 'am', 'instrument', '-w', '-e', 'class', 'com.codevo.fixture.KeyboardTest', 'com.codevo.fixture.test/androidx.test.runner.AndroidJUnitRunner');
     await approval;
     expect(test.stdout).toContain('OK (2 tests)');
+    expect(fake.requests.some((request) => request.language === 'sk')).toBe(true);
     expect(fake.requests.length).toBeGreaterThanOrEqual(2);
     expect(peer.stats).toMatchObject({ rejected: 1, sessions: 3, errors: 1, malformed: 1, pausedAudio: 0 });
     expect(peer.stats.resumedAudio).toBeGreaterThan(0);

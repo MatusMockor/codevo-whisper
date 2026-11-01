@@ -6,7 +6,7 @@ import android.media.MediaRecorder
 import android.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 
-class PcmCapture(private val frame: (Int, String) -> Unit, private val ended: () -> Unit, private val failed: () -> Unit) {
+class PcmCapture(private val frame: (Int, String, Float) -> Unit, private val ended: () -> Unit, private val failed: () -> Unit) {
     private val running = AtomicBoolean(false)
     private val pending = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
     private var recorder: AudioRecord? = null
@@ -16,7 +16,9 @@ class PcmCapture(private val frame: (Int, String) -> Unit, private val ended: ()
         check(thread == null)
         val size=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
         check(size > 0)
-        val record=AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,maxOf(size,12800))
+        val record=try {
+            AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,maxOf(size,12800))
+        } catch (denied: SecurityException) { throw IllegalStateException("Microphone permission required",denied) }
         if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); error("Microphone unavailable") }
         recorder=record
         try {
@@ -40,7 +42,7 @@ class PcmCapture(private val frame: (Int, String) -> Unit, private val ended: ()
                     if (filled == buffer.size) {
                         check(pending.size < 8)
                         pending.add(sequence)
-                        frame(sequence++,Base64.encodeToString(buffer,Base64.NO_WRAP))
+                        frame(sequence++,Base64.encodeToString(buffer,Base64.NO_WRAP),VoiceLevels.rms(buffer,filled))
                         filled=0
                     }
                 }
@@ -48,7 +50,7 @@ class PcmCapture(private val frame: (Int, String) -> Unit, private val ended: ()
                     check(filled % 2 == 0)
                     check(pending.size < 8)
                     pending.add(sequence)
-                    frame(sequence,Base64.encodeToString(buffer.copyOf(filled),Base64.NO_WRAP))
+                    frame(sequence,Base64.encodeToString(buffer.copyOf(filled),Base64.NO_WRAP),VoiceLevels.rms(buffer,filled))
                 }
                 ended()
             } catch (_: Exception) { failed() }

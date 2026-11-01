@@ -13,6 +13,10 @@ interface VoiceNative extends TurboModule {
   loadPairing(): Promise<string | null>;
   savePairing(value: string): Promise<void>;
   removePairing(): Promise<void>;
+  getLanguage(): Promise<unknown>;
+  setLanguage(value: string): Promise<void>;
+  runLanguage(runId: string): Promise<unknown>;
+  setupStatus(): Promise<unknown>;
   beginCompanion(): Promise<string>;
   ready(runId: string): Promise<boolean>;
   capture(runId: string): Promise<void>;

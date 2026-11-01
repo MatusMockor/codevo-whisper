@@ -1,0 +1,270 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :app
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: The option setting 'android.newDsl=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: API 'applicationVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling applicationVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'testVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling testVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'unitTestVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling unitTestVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+
+> Configure project :fixture
+WARNING: minSdkVersion (30) is greater than targetSdkVersion (28) for variant "debug". Please change the values such that minSdkVersion is less than or equal to targetSdkVersion.
+WARNING: minSdkVersion (30) is greater than targetSdkVersion (28) for variant "release". Please change the values such that minSdkVersion is less than or equal to targetSdkVersion.
+
+> Task :app:generateAutolinkingNewArchitectureFiles UP-TO-DATE
+> Task :app:generateAutolinkingPackageList UP-TO-DATE
+> Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :app:generateCodegenArtifactsFromSchema SKIPPED
+> Task :app:generateReactNativeEntryPoint UP-TO-DATE
+> Task :fixture:preBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preVerificationBuild UP-TO-DATE
+> Task :app:configureCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:configureCMakeRelWithDebInfo[x86_64]
+> Task :app:buildCMakeRelWithDebInfo[x86_64]
+> Task :app:mergeVerificationJniLibFolders UP-TO-DATE
+> Task :app:mergeVerificationNativeLibs UP-TO-DATE
+> Task :app:stripVerificationDebugSymbols UP-TO-DATE
+> Task :app:extractVerificationNativeSymbolTables UP-TO-DATE
+> Task :app:mergeVerificationNativeDebugMetadata UP-TO-DATE
+> Task :app:checkVerificationDuplicateClasses UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateVerificationBuildConfig UP-TO-DATE
+> Task :app:createBundleVerificationJsAndAssets UP-TO-DATE
+> Task :app:generateVerificationResValues UP-TO-DATE
+> Task :app:generateVerificationResources UP-TO-DATE
+> Task :app:packageVerificationResources UP-TO-DATE
+> Task :app:processVerificationNavigationResources UP-TO-DATE
+> Task :app:parseVerificationLocalResources UP-TO-DATE
+> Task :app:generateVerificationRFile UP-TO-DATE
+> Task :app:compileVerificationKotlin UP-TO-DATE
+> Task :app:javaPreCompileVerification UP-TO-DATE
+> Task :app:compileVerificationJavaWithJavac UP-TO-DATE
+> Task :app:checkVerificationAarMetadata UP-TO-DATE
+> Task :app:mapVerificationSourceSetPaths UP-TO-DATE
+> Task :app:compileVerificationNavigationResources UP-TO-DATE
+> Task :app:mergeVerificationResources UP-TO-DATE
+> Task :app:createVerificationCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksVerification UP-TO-DATE
+> Task :app:processVerificationMainManifest UP-TO-DATE
+> Task :app:processVerificationManifest UP-TO-DATE
+> Task :app:processVerificationManifestForPackage UP-TO-DATE
+> Task :app:processVerificationResources UP-TO-DATE
+> Task :app:dexBuilderVerification UP-TO-DATE
+> Task :app:desugarVerificationFileDependencies UP-TO-DATE
+> Task :app:mergeVerificationStartupProfile UP-TO-DATE
+> Task :app:mergeExtDexVerification UP-TO-DATE
+> Task :app:mergeDexVerification UP-TO-DATE
+> Task :app:mergeVerificationArtProfile UP-TO-DATE
+> Task :app:mergeVerificationGlobalSynthetics UP-TO-DATE
+> Task :app:compileVerificationArtProfile UP-TO-DATE
+> Task :app:generateVerificationAssets UP-TO-DATE
+> Task :app:mergeVerificationAssets UP-TO-DATE
+> Task :app:compressVerificationAssets UP-TO-DATE
+> Task :app:extractVerificationVersionControlInfo UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:generateVerificationLintVitalReportModel UP-TO-DATE
+> Task :app:lintVitalAnalyzeVerification UP-TO-DATE
+> Task :app:lintVitalReportVerification SKIPPED
+> Task :app:lintVitalVerification SKIPPED
+> Task :app:processVerificationJavaRes UP-TO-DATE
+> Task :app:mergeVerificationJavaResource UP-TO-DATE
+> Task :app:optimizeVerificationResources UP-TO-DATE
+> Task :app:collectVerificationDependencies UP-TO-DATE
+> Task :app:sdkVerificationDependencyData UP-TO-DATE
+> Task :app:validateSigningVerification UP-TO-DATE
+> Task :app:writeVerificationAppMetadata UP-TO-DATE
+> Task :app:writeVerificationSigningConfigVersions UP-TO-DATE
+> Task :app:packageVerification UP-TO-DATE
+> Task :app:createVerificationApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleVerification UP-TO-DATE
+> Task :app:bundleVerificationClassesToCompileJar UP-TO-DATE
+> Task :app:preVerificationAndroidTestBuild SKIPPED
+> Task :app:processVerificationAndroidTestManifest UP-TO-DATE
+> Task :app:generateVerificationAndroidTestBuildConfig UP-TO-DATE
+> Task :app:generateVerificationAndroidTestResValues UP-TO-DATE
+> Task :app:generateVerificationAndroidTestResources UP-TO-DATE
+> Task :app:packageVerificationAndroidTestResources UP-TO-DATE
+> Task :app:processVerificationAndroidTestNavigationResources UP-TO-DATE
+> Task :app:parseVerificationAndroidTestLocalResources UP-TO-DATE
+> Task :app:generateVerificationAndroidTestRFile UP-TO-DATE
+> Task :app:compileVerificationAndroidTestKotlin UP-TO-DATE
+> Task :app:javaPreCompileVerificationAndroidTest UP-TO-DATE
+> Task :app:compileVerificationAndroidTestJavaWithJavac UP-TO-DATE
+> Task :app:generateVerificationAndroidTestAssets UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestAssets UP-TO-DATE
+> Task :app:compressVerificationAndroidTestAssets UP-TO-DATE
+> Task :app:checkVerificationAndroidTestDuplicateClasses UP-TO-DATE
+> Task :app:checkVerificationAndroidTestAarMetadata UP-TO-DATE
+> Task :app:mapVerificationAndroidTestSourceSetPaths UP-TO-DATE
+> Task :app:compileVerificationAndroidTestNavigationResources UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestResources UP-TO-DATE
+> Task :app:processVerificationAndroidTestResources UP-TO-DATE
+> Task :app:dexBuilderVerificationAndroidTest UP-TO-DATE
+> Task :app:desugarVerificationAndroidTestFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexVerificationAndroidTest UP-TO-DATE
+> Task :app:mergeDexVerificationAndroidTest UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestGlobalSynthetics UP-TO-DATE
+> Task :app:processVerificationAndroidTestJavaRes UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestJavaResource UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestJniLibFolders UP-TO-DATE
+> Task :app:mergeVerificationAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripVerificationAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningVerificationAndroidTest UP-TO-DATE
+> Task :app:writeVerificationAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :app:packageVerificationAndroidTest UP-TO-DATE
+> Task :app:createVerificationAndroidTestApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleVerificationAndroidTest UP-TO-DATE
+> Task :app:bundleVerificationClassesToRuntimeJar UP-TO-DATE
+> Task :app:compileVerificationUnitTestKotlin UP-TO-DATE
+> Task :app:preVerificationUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileVerificationUnitTest UP-TO-DATE
+> Task :app:compileVerificationUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processVerificationUnitTestJavaRes UP-TO-DATE
+> Task :app:testVerificationUnitTest UP-TO-DATE
+> Task :app:generateVerificationAndroidTestLintModel UP-TO-DATE
+> Task :app:generateVerificationLintReportModel UP-TO-DATE
+> Task :app:generateVerificationUnitTestLintModel UP-TO-DATE
+> Task :app:lintAnalyzeVerification UP-TO-DATE
+> Task :app:lintAnalyzeVerificationAndroidTest UP-TO-DATE
+> Task :app:lintAnalyzeVerificationUnitTest UP-TO-DATE
+> Task :app:lintReportVerification UP-TO-DATE
+> Task :app:lintVerification
+> Task :fixture:preDebugBuild UP-TO-DATE
+> Task :fixture:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :fixture:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :fixture:generateDebugResources UP-TO-DATE
+> Task :fixture:packageDebugResources
+> Task :fixture:processDebugNavigationResources UP-TO-DATE
+> Task :fixture:parseDebugLocalResources UP-TO-DATE
+> Task :fixture:generateDebugRFile UP-TO-DATE
+> Task :fixture:compileDebugKotlin UP-TO-DATE
+> Task :fixture:javaPreCompileDebug UP-TO-DATE
+> Task :fixture:compileDebugJavaWithJavac NO-SOURCE
+> Task :fixture:generateDebugAssets UP-TO-DATE
+> Task :fixture:mergeDebugAssets UP-TO-DATE
+> Task :fixture:compressDebugAssets UP-TO-DATE
+> Task :fixture:generateDebugGlobalSynthetics
+> Task :fixture:processDebugJavaRes UP-TO-DATE
+> Task :fixture:mergeDebugJavaResource UP-TO-DATE
+> Task :fixture:checkDebugDuplicateClasses UP-TO-DATE
+> Task :fixture:desugarDebugFileDependencies
+> Task :fixture:checkDebugAarMetadata UP-TO-DATE
+> Task :fixture:mapDebugSourceSetPaths UP-TO-DATE
+> Task :fixture:compileDebugNavigationResources UP-TO-DATE
+> Task :fixture:mergeLibDexDebug
+> Task :fixture:mergeDebugResources
+> Task :fixture:createDebugCompatibleScreenManifests
+> Task :fixture:extractDeepLinksDebug UP-TO-DATE
+> Task :fixture:processDebugMainManifest
+> Task :fixture:processDebugManifest
+> Task :fixture:mergeDebugJniLibFolders UP-TO-DATE
+> Task :fixture:mergeDebugNativeLibs NO-SOURCE
+> Task :fixture:stripDebugDebugSymbols NO-SOURCE
+> Task :fixture:validateSigningDebug UP-TO-DATE
+> Task :fixture:writeDebugAppMetadata UP-TO-DATE
+> Task :fixture:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :fixture:preDebugAndroidTestBuild SKIPPED
+> Task :fixture:generateDebugAndroidTestResources UP-TO-DATE
+> Task :fixture:packageDebugAndroidTestResources
+> Task :fixture:processDebugAndroidTestNavigationResources UP-TO-DATE
+> Task :fixture:parseDebugAndroidTestLocalResources UP-TO-DATE
+> Task :fixture:generateDebugAndroidTestRFile UP-TO-DATE
+> Task :fixture:javaPreCompileDebugAndroidTest UP-TO-DATE
+> Task :fixture:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :fixture:mergeDebugAndroidTestAssets UP-TO-DATE
+> Task :fixture:compressDebugAndroidTestAssets UP-TO-DATE
+> Task :fixture:mergeExtDexDebug
+> Task :fixture:generateDebugAndroidTestGlobalSynthetics
+> Task :fixture:checkDebugAndroidTestDuplicateClasses UP-TO-DATE
+> Task :fixture:desugarDebugAndroidTestFileDependencies
+> Task :fixture:processDebugManifestForPackage
+> Task :fixture:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :fixture:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :fixture:mergeLibDexDebugAndroidTest
+> Task :fixture:compileDebugAndroidTestNavigationResources UP-TO-DATE
+> Task :fixture:processDebugAndroidTestManifest
+> Task :fixture:mergeDebugAndroidTestJniLibFolders UP-TO-DATE
+> Task :fixture:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :fixture:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :fixture:validateSigningDebugAndroidTest UP-TO-DATE
+> Task :fixture:writeDebugAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :fixture:processDebugResources
+> Task :fixture:mergeDebugAndroidTestResources
+> Task :fixture:dexBuilderDebug
+> Task :fixture:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :fixture:mergeProjectDexDebug
+> Task :fixture:compileDebugAndroidTestKotlin UP-TO-DATE
+> Task :fixture:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+> Task :fixture:processDebugAndroidTestJavaRes UP-TO-DATE
+> Task :fixture:mergeDebugAndroidTestJavaResource UP-TO-DATE
+> Task :fixture:mergeExtDexDebugAndroidTest
+> Task :fixture:processDebugAndroidTestResources
+> Task :fixture:dexBuilderDebugAndroidTest
+> Task :fixture:mergeProjectDexDebugAndroidTest
+> Task :fixture:packageDebug
+> Task :fixture:createDebugApkListingFileRedirect
+> Task :fixture:assembleDebug
+> Task :fixture:packageDebugAndroidTest
+> Task :fixture:createDebugAndroidTestApkListingFileRedirect
+> Task :fixture:assembleDebugAndroidTest
+
+[Incubating] Problems report is available at: file:///home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 12s
+178 actionable tasks: 32 executed, 146 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.1/userguide/configuration_cache_enabling.html

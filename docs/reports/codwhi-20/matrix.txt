@@ -1,0 +1,16 @@
+nav2-font1.0-portrait geometry passed
+nav2-font1.0-landscape geometry passed
+nav2-font1.3-portrait geometry passed
+nav2-font1.3-landscape geometry passed
+nav0-font1.0-portrait geometry passed
+nav0-font1.0-landscape geometry passed
+nav0-font1.3-portrait geometry passed
+nav0-font1.3-landscape geometry passed
+nav2-font1.0-portrait preview passed
+nav2-font1.0-landscape preview passed
+nav2-font1.3-portrait preview passed
+nav2-font1.3-landscape preview passed
+nav0-font1.0-portrait preview passed
+nav0-font1.0-landscape preview passed
+nav0-font1.3-portrait preview passed
+nav0-font1.3-landscape preview passed

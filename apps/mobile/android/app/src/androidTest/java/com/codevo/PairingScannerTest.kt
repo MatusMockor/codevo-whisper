@@ -21,7 +21,19 @@ class PairingScannerTest {
         require(Build.MODEL.startsWith("sdk_gphone")) { "Use a disposable emulator for scanner acceptance" }
         val flags = if (clearTask) "-f 0x10008000" else ""
         device.executeShellCommand("am start -W $flags -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.codevo.mobile/com.codevo.MainActivity")
+        var scrolls=0
+        while (!device.hasObject(By.text("Codevo Voice")) && scrolls++<8) {
+            device.swipe(device.displayWidth/2,device.displayHeight/4,device.displayWidth/2,device.displayHeight*3/4,15)
+        }
         waitText("Codevo Voice")
+        device.wait(Until.gone(By.desc("Loading protected pairing")),10000)
+        if (PairingVault(instrumentation.targetContext).load()!=null) waitText("Paired server")
+        device.findObject(By.text("Pairing settings"))?.click()
+        repeat(6) {
+            if (device.hasObject(By.text("Scan QR"))) return
+            device.swipe(device.displayWidth/2,device.displayHeight*3/4,device.displayWidth/2,device.displayHeight/2,15)
+        }
+        waitText("Scan QR")
     }
     private fun cameraClosed() {
         repeat(30) {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { base64 } from '@scure/base';
 import { createHandshake, decodeClientMessage, decodeOpeningFrame, encodeServerMessage, generateKeyPair, PROLOGUE_SESSION, SecureTransport, type ServerMessage } from '@codevo-whisper/protocol';
 import { serializePairing } from '../src/core/pairing';
-import { runRecording } from '../src/runtime';
+import { runHeadless, runRecording } from '../src/runtime';
 import { MobileSession } from '../src/core/session';
 
 const bridge = vi.hoisted(() => {
@@ -11,6 +11,7 @@ const bridge = vi.hoisted(() => {
   const listeners = new Set<{ name: string; receive(value: unknown): void }>();
   const voice = {
     loadPairing: vi.fn<() => Promise<string | null>>(() => Promise.resolve(null)),
+    runLanguage: vi.fn(() => Promise.resolve('auto')),
     ready: vi.fn(() => Promise.resolve(true)), capture: vi.fn(() => Promise.resolve()),
     stopCapture: vi.fn(() => Promise.resolve()), terminal: vi.fn(() => Promise.resolve()),
     complete: vi.fn(() => Promise.resolve(true)), acknowledge: vi.fn(),
@@ -139,7 +140,7 @@ it('a stalled uplink releases native capture and prevents late editor completion
     if (message.type === 'audio') return new Promise<void>((resolve, reject) => bridge.pending.push({ resolve, reject }));
     return Promise.resolve();
   });
-  const recording = runRecording('stalled-editor', 'auto');
+  const recording = runRecording('stalled-editor');
   const result = expect(recording).rejects.toThrow('Server session failed');
   await vi.advanceTimersByTimeAsync(0);
   expect(bridge.voice.capture).toHaveBeenCalledWith('stalled-editor');
@@ -154,5 +155,39 @@ it('a stalled uplink releases native capture and prevents late editor completion
   await vi.advanceTimersByTimeAsync(0);
   expect(bridge.voice.terminal).toHaveBeenCalledWith('stalled-editor', 'Server session failed');
   expect(bridge.voice.stopCapture).toHaveBeenCalledWith('stalled-editor');
+  expect(bridge.voice.complete).not.toHaveBeenCalled();
+});
+
+it('headless recording sends the immutable native language snapshot through Noise start', async () => {
+  const server = generateKeyPair();
+  bridge.voice.loadPairing.mockResolvedValue(serializePairing({ deviceKey: generateKeyPair(), serverPublicKey: server.publicKey, endpoint: 'wss://example.invalid', deviceId: 'device' }));
+  bridge.voice.runLanguage.mockResolvedValueOnce('sk');
+  const starts: unknown[] = [];
+  let transport: SecureTransport | undefined;
+  const emit = (name: string, value: unknown) => {
+    for (const listener of bridge.listeners) if (listener.name === name) listener.receive(value);
+  };
+  bridge.socket.send.mockImplementation((id: string, data: string) => {
+    const respond = (bytes: Uint8Array) => { void Promise.resolve().then(() => emit('CodevoSocketEvent', { id, type: 'frame', data: base64.encode(bytes) })); };
+    const bytes = base64.decode(data);
+    if (transport === undefined) {
+      const handshake = createHandshake({ pattern: 'IK', initiator: false, staticKey: server, prologue: PROLOGUE_SESSION });
+      handshake.readMessage(decodeOpeningFrame(bytes).noiseMessage);
+      respond(handshake.writeMessage(new Uint8Array()));
+      transport = new SecureTransport(handshake.result());
+      return Promise.resolve();
+    }
+    {
+      const message = decodeClientMessage(transport.open(bytes));
+      if (message.type === 'hello') respond(transport.seal(encodeServerMessage({ type: 'ready', serverVersion: 'test' })));
+      if (message.type === 'start') starts.push(message);
+    }
+    return Promise.resolve();
+  });
+  const recording = runHeadless({ runId: 'language-snapshot' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(starts).toEqual([expect.objectContaining({ type: 'start', language: 'sk' })]);
+  emit('CodevoVoiceEvent', { type: 'cancel', runId: 'language-snapshot' });
+  await recording;
   expect(bridge.voice.complete).not.toHaveBeenCalled();
 });

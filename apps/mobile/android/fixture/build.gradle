@@ -5,8 +5,8 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.codevo.fixture"
-        minSdkVersion 24
-        targetSdkVersion 36
+        minSdkVersion 30
+        targetSdkVersion 28
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

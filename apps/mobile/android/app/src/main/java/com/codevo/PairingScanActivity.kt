@@ -27,13 +27,13 @@ class PairingScanActivity : Activity() {
         val spacing = (24 * resources.displayMetrics.density).toInt()
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(16, 26, 26))
+            setBackgroundColor(Color.rgb(15, 19, 27))
             setPadding(spacing, spacing * 2, spacing, spacing)
         }
         layout.addView(TextView(this).apply {
             setText(R.string.pairing_scan_title)
             textSize = 23f
-            setTextColor(Color.rgb(241, 245, 236))
+            setTextColor(Color.rgb(232, 236, 242))
         })
         scanner = DecoratedBarcodeView(this).apply {
             setStatusText(getString(R.string.pairing_scan_hint))
@@ -58,8 +58,8 @@ class PairingScanActivity : Activity() {
         layout.addView(Button(this).apply {
             setText(R.string.pairing_scan_cancel)
             isAllCaps = false
-            setTextColor(Color.rgb(231, 255, 244))
-            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(37, 69, 59))
+            setTextColor(Color.rgb(232, 236, 242))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(22, 27, 37))
             minHeight = (52 * resources.displayMetrics.density).toInt()
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, -2))

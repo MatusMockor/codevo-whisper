@@ -16,8 +16,13 @@ import java.util.UUID
 class VoiceCoordinator(private val app: MainApplication) {
     private val main=Handler(Looper.getMainLooper())
     var ime: VoiceInputService? = null
-    private data class Run(val id:String, val ime:Boolean, var ready:Boolean=false, var finishing:Boolean=false, var capture:PcmCapture?=null)
+    private data class Run(val id:String, val ime:Boolean, val language:VoiceLanguage, var ready:Boolean=false, var finishing:Boolean=false, var capture:PcmCapture?=null)
     private var run:Run?=null
+    private val preferences=VoicePreferences(app)
+    private val levels=VoiceLevels()
+    val language get()=preferences.language
+    fun selectLanguage(value:String) { check(run==null);preferences.setLanguage(value);update(keyboardState.message,keyboardState.phase) }
+    fun runLanguage(id:String):String { val current=run;check(current!=null && current.id==id);return current.language.wire }
     private val tasks=mutableMapOf<Int,HeadlessJsTaskContext>()
     var keyboardState=KeyboardState(VoicePhase.IDLE,"Open Codevo Voice to pair and allow microphone")
         private set
@@ -28,7 +33,7 @@ class VoiceCoordinator(private val app: MainApplication) {
         if (run != null || locked()) return
         val id=UUID.randomUUID().toString()
         if (ime?.beginLease(id) != true) return
-        run=Run(id,true)
+        run=Run(id,true,language)
         update("Connecting…",VoicePhase.CONNECTING)
         val host=app.reactHost
         fun launch(context:ReactContext) {
@@ -63,7 +68,7 @@ class VoiceCoordinator(private val app: MainApplication) {
     fun startCompanion():String {
         check(run==null && !locked())
         val id=UUID.randomUUID().toString()
-        run=Run(id,false)
+        run=Run(id,false,language)
         update("Connecting…",VoicePhase.CONNECTING)
         return id
     }
@@ -77,7 +82,14 @@ class VoiceCoordinator(private val app: MainApplication) {
         val current=run ?: error("Recording cancelled")
         check(current.id==id && current.ready && !current.finishing && !locked())
         val capture=PcmCapture(
-            {sequence,pcm -> main.post { if (run===current) emit("pcm",id,sequence,pcm) } },
+            {sequence,pcm,level -> main.post { if (run===current) {
+                emit("pcm",id,sequence,pcm)
+                if (keyboardState.phase==VoicePhase.RECORDING) {
+                    levels.update(VoicePhase.RECORDING,level)
+                    keyboardState=keyboardState.copy(levels=levels.values)
+                    ime?.render()
+                }
+            } } },
             { main.post { if (run===current) emit("ended",id) } },
             { main.post { if (run===current) cancel("Microphone stopped or audio queue full",VoicePhase.ERROR) } }
         )
@@ -122,7 +134,10 @@ class VoiceCoordinator(private val app: MainApplication) {
         update(message,phase)
     }
     fun companionHidden() { if (run?.ime==false) cancel("Recording stopped when app left foreground") }
-    private fun update(value:String,phase:VoicePhase) { keyboardState=KeyboardState(phase,value);ime?.render() }
+    private fun update(value:String,phase:VoicePhase) {
+        if (phase!=VoicePhase.RECORDING) levels.update(phase)
+        keyboardState=KeyboardState(phase,value,language,levels.values);ime?.render()
+    }
     private fun emit(type:String, id:String, sequence:Int?=null, pcm:String?=null) {
         val context=app.reactHost.currentReactContext ?: return
         val data=Arguments.createMap().apply {

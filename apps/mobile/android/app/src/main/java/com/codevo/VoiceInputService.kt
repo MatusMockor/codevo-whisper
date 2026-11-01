@@ -8,7 +8,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.text.InputType
 import android.view.View
-import android.view.ViewGroup.LayoutParams
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
@@ -30,9 +30,7 @@ class VoiceInputService:InputMethodService() {
     }
     override fun onCreateInputView():View {
         return VoiceKeyboardView(this,
-            onHeightChanged={ heightPx ->
-                window.window?.let { if (it.attributes.height!=heightPx) it.setLayout(LayoutParams.MATCH_PARENT,heightPx) }
-            },
+            onLanguage={ voice.selectLanguage(it.wire) },
             onPrimary={ if (voice.keyboardState.phase==VoicePhase.RECORDING) voice.requestStop() else voice.startIme() },
             onCancel={ voice.cancel() },
             onSwitch={
@@ -47,8 +45,13 @@ class VoiceInputService:InputMethodService() {
             }
         ).also { keyboard=it;render() }
     }
+    override fun onKeyDown(keyCode:Int,event:KeyEvent):Boolean {
+        if (keyCode==KeyEvent.KEYCODE_BACK && keyboard?.dismissLanguages()==true) return true
+        return super.onKeyDown(keyCode,event)
+    }
     override fun onEvaluateFullscreenMode()=false
     override fun onStartInput(attribute:EditorInfo?,restarting:Boolean) {
+        keyboard?.dismissLanguages()
         voice.cancel("Ready")
         super.onStartInput(attribute,restarting)
         val input=attribute?.inputType ?: 0
@@ -68,7 +71,7 @@ class VoiceInputService:InputMethodService() {
     }
     override fun onFinishInput() { voice.cancel("Editor closed");lease.open(null);super.onFinishInput() }
     override fun onUnbindInput() { voice.cancel("Editor unbound");lease.open(null);super.onUnbindInput() }
-    override fun onWindowHidden() { voice.cancel("Keyboard hidden");super.onWindowHidden() }
+    override fun onWindowHidden() { keyboard?.dismissLanguages();voice.cancel("Keyboard hidden");super.onWindowHidden() }
     override fun onDestroy() {
         voice.cancel("Keyboard stopped");voice.ime=null;unregisterReceiver(screenOff);super.onDestroy()
     }

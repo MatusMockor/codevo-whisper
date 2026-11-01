@@ -1,0 +1,36 @@
+
+com.codevo.fixture.GeometryTest:
+Error in nativeBottomComposer(com.codevo.fixture.GeometryTest):
+java.lang.AssertionError: Control clipped or too small: Rect(198, 2234 - 1036, 2268) target=132
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.codevo.fixture.GeometryTest.checkGeometry(GeometryTest.kt:74)
+	at com.codevo.fixture.GeometryTest.nativeBottomComposer(GeometryTest.kt:86)
+
+Error in browserBottomComposer(com.codevo.fixture.GeometryTest):
+java.lang.AssertionError: Control clipped or too small: Rect(198, 2234 - 1036, 2268) target=132
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.codevo.fixture.GeometryTest.checkGeometry(GeometryTest.kt:74)
+	at com.codevo.fixture.GeometryTest.browserBottomComposer(GeometryTest.kt:87)
+
+
+Time: 10.08
+There were 2 failures:
+1) nativeBottomComposer(com.codevo.fixture.GeometryTest)
+java.lang.AssertionError: Control clipped or too small: Rect(198, 2234 - 1036, 2268) target=132
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.codevo.fixture.GeometryTest.checkGeometry(GeometryTest.kt:74)
+	at com.codevo.fixture.GeometryTest.nativeBottomComposer(GeometryTest.kt:86)
+2) browserBottomComposer(com.codevo.fixture.GeometryTest)
+java.lang.AssertionError: Control clipped or too small: Rect(198, 2234 - 1036, 2268) target=132
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.codevo.fixture.GeometryTest.checkGeometry(GeometryTest.kt:74)
+	at com.codevo.fixture.GeometryTest.browserBottomComposer(GeometryTest.kt:87)
+
+FAILURES!!!
+Tests run: 2,  Failures: 2
+
+
