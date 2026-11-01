@@ -1,0 +1,60 @@
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/server
+
+ ❯ |server| test/mobile-client.test.ts (4 tests | 2 failed) 1168ms
+   × cancels replacement pairing during the protected write without retaining the new pairing 20ms
+   × cancels first pairing during the protected write without retaining the new pairing 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |server| test/mobile-client.test.ts > cancels replacement pairing during the protected write without retaining the new pairing
+ FAIL  |server| test/mobile-client.test.ts > cancels first pairing during the protected write without retaining the new pairing
+AssertionError: expected 'approved' to match object { message: 'Pairing cancelled' }
+
+- Expected:
+{
+  "message": "Pairing cancelled",
+}
+
++ Received:
+"approved"
+
+ ❯ test/mobile-client.test.ts:168:30
+    166|   controller.abort();
+    167|   finishSave.resolve();
+    168|   expect.soft(await outcome).toMatchObject({ message: 'Pairing cancell…
+       |                              ^
+    169|   expect((await vault.load()) === original).toBe(true);
+    170| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |server| test/mobile-client.test.ts > cancels replacement pairing during the protected write without retaining the new pairing
+ FAIL  |server| test/mobile-client.test.ts > cancels first pairing during the protected write without retaining the new pairing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/mobile-client.test.ts:169:45
+    167|   finishSave.resolve();
+    168|   expect.soft(await outcome).toMatchObject({ message: 'Pairing cancell…
+    169|   expect((await vault.load()) === original).toBe(true);
+       |                                             ^
+    170| });
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  19:47:54
+   Duration  1.35s (tests 91%, import 5%, transform 4%)
+
+undefined
+/home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/mobile-client.test.ts

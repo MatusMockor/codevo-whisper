@@ -92,6 +92,10 @@ export async function pairDevice(args: {
     }
     const pairing = { deviceKey, serverPublicKey: token.serverPublicKey, endpoint: token.endpoint, deviceId: response.deviceId };
     await args.vault.save(serializePairing(pairing));
+    if (args.signal.aborted) {
+      await (existing === null ? args.vault.remove() : args.vault.save(existing));
+      throw new Error('Pairing cancelled');
+    }
     return pairing;
   } finally {
     connection.close();

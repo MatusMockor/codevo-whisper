@@ -117,7 +117,11 @@ it('rejection and changed server key preserve the previous protected pairing', a
   expect(stored).toBe(original);
 });
 
-it.each(['replacement', 'first'] as const)('cancels %s pairing during the protected write without retaining the new pairing', async (mode) => {
+it.each((['replacement', 'first'] as const).flatMap((mode) => [
+  { mode, storage: 'working', expectedError: 'Pairing cancelled' },
+  { mode, storage: 'save fails', expectedError: 'Save failed' },
+  { mode, storage: 'rollback fails', expectedError: 'Rollback failed' },
+]))('cancels $mode pairing during the protected write when storage is $storage', async ({ mode, storage, expectedError }) => {
   const dir = await createTempDir();
   cleanup.push(() => dir.remove());
   const fake = await startFakeSttServer();
@@ -137,20 +141,25 @@ it.each(['replacement', 'first'] as const)('cancels %s pairing during the protec
   const vault = {
     load: () => Promise.resolve(stored),
     save: async (value: string) => {
-      if (firstWrite) {
-        firstWrite = false;
-        saving.resolve();
-        await finishSave.promise;
+      if (!firstWrite) {
+        if (storage === 'rollback fails') throw new Error('Rollback failed');
+        stored = value;
+        return;
       }
+      firstWrite = false;
+      saving.resolve();
+      await finishSave.promise;
+      if (storage === 'save fails') throw new Error('Save failed');
       stored = value;
     },
     remove: () => {
+      if (storage === 'rollback fails') throw new Error('Rollback failed');
       stored = null;
       return Promise.resolve();
     },
   };
   const window = await openPairingWindow(server.config.adminSocket);
-  cleanup.push(async () => { window.admin.close(); });
+  cleanup.push(() => { window.admin.close(); return Promise.resolve(); });
   const controller = new AbortController();
   const outcome = pairDevice({
     token: encodePairingToken({ ...window.token, endpoint: server.url }),
@@ -165,6 +174,39 @@ it.each(['replacement', 'first'] as const)('cancels %s pairing during the protec
   await saving.promise;
   controller.abort();
   finishSave.resolve();
-  expect.soft(await outcome).toMatchObject({ message: 'Pairing cancelled' });
-  expect((await vault.load()) === original).toBe(true);
+  expect.soft(await outcome).toMatchObject({ message: expectedError });
+  expect((await vault.load()) === original).toBe(storage !== 'rollback fails');
+});
+
+it('cancellation in the approval callback preserves the previous protected pairing', async () => {
+  const dir = await createTempDir();
+  cleanup.push(() => dir.remove());
+  const fake = await startFakeSttServer();
+  cleanup.push(() => fake.close());
+  const server = await startHarness(dir.path, fake.url);
+  cleanup.push(() => server.close());
+  const original = serializePairing({
+    deviceKey: generateKeyPair(),
+    serverPublicKey: generateKeyPair().publicKey,
+    endpoint: 'wss://previous.example.test',
+    deviceId: 'old-device',
+  });
+  let stored: string | null = original;
+  const window = await openPairingWindow(server.config.adminSocket);
+  cleanup.push(() => { window.admin.close(); return Promise.resolve(); });
+  const controller = new AbortController();
+  const outcome = await pairDevice({
+    token: encodePairingToken({ ...window.token, endpoint: server.url }),
+    name: 'Mobile',
+    vault: {
+      load: () => Promise.resolve(stored),
+      save: (value) => { stored = value; return Promise.resolve(); },
+      remove: () => { stored = null; return Promise.resolve(); },
+    },
+    open,
+    signal: controller.signal,
+    awaitingApproval: () => controller.abort(),
+  }).then(() => 'approved', (error: unknown) => error);
+  expect(outcome).toMatchObject({ message: 'Connection cancelled' });
+  expect(stored === original).toBe(true);
 });
