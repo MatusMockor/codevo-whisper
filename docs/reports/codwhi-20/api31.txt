@@ -1,0 +1,8 @@
+
+com.codevo.fixture.GeometryTest:...
+
+Time: 18.831
+
+OK (3 tests)
+
+

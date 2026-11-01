@@ -1,0 +1,9 @@
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:37:40
+   Duration  76.68s (tests 100%)
+

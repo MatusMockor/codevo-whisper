@@ -1,0 +1,4 @@
+1d8b1e3c3d6d11d8accf70236d96abcc46028c58d12ad6ad7048326d7dc437cb  apps/mobile/android/app/build/outputs/apk/verification/app-verification.apk
+296ec1465f4d7aa2cec76e2380f58686f7444d7f0b46ef1b28f622e8126c8b7e  apps/mobile/android/app/build/outputs/apk/androidTest/verification/app-verification-androidTest.apk
+6095b216f8e267601b3281923bbeaeea71a3f892c6df67bb269600a305aa868e  apps/mobile/android/fixture/build/outputs/apk/debug/fixture-debug.apk
+3291d18364f2c571128af95c9d1339a332b8e21d0256de429512e5c6e623568a  apps/mobile/android/fixture/build/outputs/apk/androidTest/debug/fixture-debug-androidTest.apk

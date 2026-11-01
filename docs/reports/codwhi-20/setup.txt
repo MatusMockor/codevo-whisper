@@ -1,0 +1,8 @@
+
+com.codevo.fixture.SetupStatusTest:.
+
+Time: 6.223
+
+OK (1 test)
+
+

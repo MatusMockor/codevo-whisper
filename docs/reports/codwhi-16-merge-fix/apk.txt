@@ -1,0 +1,178 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :app
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: The option setting 'android.newDsl=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: API 'applicationVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling applicationVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'testVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling testVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'unitTestVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling unitTestVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+
+> Configure project :fixture
+WARNING: minSdkVersion (30) is greater than targetSdkVersion (28) for variant "debug". Please change the values such that minSdkVersion is less than or equal to targetSdkVersion.
+WARNING: minSdkVersion (30) is greater than targetSdkVersion (28) for variant "release". Please change the values such that minSdkVersion is less than or equal to targetSdkVersion.
+
+> Task :app:generateAutolinkingNewArchitectureFiles UP-TO-DATE
+> Task :app:generateAutolinkingPackageList UP-TO-DATE
+> Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :app:generateCodegenArtifactsFromSchema SKIPPED
+> Task :app:generateReactNativeEntryPoint UP-TO-DATE
+> Task :fixture:preBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preVerificationBuild UP-TO-DATE
+> Task :app:configureCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:configureCMakeRelWithDebInfo[x86_64]
+> Task :app:buildCMakeRelWithDebInfo[x86_64]
+> Task :app:mergeVerificationJniLibFolders UP-TO-DATE
+> Task :app:mergeVerificationNativeLibs UP-TO-DATE
+> Task :app:stripVerificationDebugSymbols UP-TO-DATE
+> Task :app:extractVerificationNativeSymbolTables UP-TO-DATE
+> Task :app:mergeVerificationNativeDebugMetadata UP-TO-DATE
+> Task :app:checkVerificationDuplicateClasses UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateVerificationBuildConfig UP-TO-DATE
+
+> Task :app:createBundleVerificationJsAndAssets
+
+                        ▒▒▓▓▓▓▒▒
+                     ▒▓▓▓▒▒░░▒▒▓▓▓▒
+                  ▒▓▓▓▓░░░▒▒▒▒░░░▓▓▓▓▒
+                 ▓▓▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▓▓
+                 ▓▓░░░░░▒▓▓▓▓▓▓▒░░░░░▓▓
+                 ▓▓░░▓▓▒░░░▒▒░░░▒▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▒▒▒▒▓▓▓▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▓▓▓▓▓▓▓▓▒░░▓▓
+                 ▓▓▒░░▒▒▓▓▓▓▓▓▓▓▒░░░▒▓▓
+                  ▒▓▓▓▒░░░▒▓▓▒░░░▒▓▓▓▒
+                     ▒▓▓▓▒░░░░▒▓▓▓▒
+                        ▒▒▓▓▓▓▒▒
+
+
+ WARN  the transform cache was reset.
+                Welcome to Metro v0.87.2
+              Fast - Scalable - Integrated
+
+
+transform[stderr]: (node:2548388) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+transform[stderr]: (node:2548407) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+transform[stderr]: (node:2548401) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+transform[stderr]: (node:2548413) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+transform[stderr]: (node:2548389) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+transform[stderr]: (node:2548390) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+LOG:Writing bundle output to: /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile/android/app/build/generated/assets/react/verification/index.android.bundle
+LOG:Writing sourcemap output to: /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile/android/app/build/intermediates/sourcemaps/react/verification/index.android.bundle.packager.map
+LOG:Done writing bundle output
+LOG:Done writing sourcemap output
+
+> Task :app:generateVerificationResValues UP-TO-DATE
+> Task :app:generateVerificationResources UP-TO-DATE
+> Task :app:packageVerificationResources UP-TO-DATE
+> Task :app:processVerificationNavigationResources UP-TO-DATE
+> Task :app:parseVerificationLocalResources UP-TO-DATE
+> Task :app:generateVerificationRFile UP-TO-DATE
+> Task :app:compileVerificationKotlin UP-TO-DATE
+> Task :app:javaPreCompileVerification UP-TO-DATE
+> Task :app:compileVerificationJavaWithJavac UP-TO-DATE
+> Task :app:checkVerificationAarMetadata UP-TO-DATE
+> Task :app:mapVerificationSourceSetPaths UP-TO-DATE
+> Task :app:compileVerificationNavigationResources UP-TO-DATE
+> Task :app:mergeVerificationResources UP-TO-DATE
+> Task :app:createVerificationCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksVerification UP-TO-DATE
+> Task :app:processVerificationMainManifest UP-TO-DATE
+> Task :app:processVerificationManifest UP-TO-DATE
+> Task :app:processVerificationManifestForPackage UP-TO-DATE
+> Task :app:processVerificationResources UP-TO-DATE
+> Task :app:dexBuilderVerification UP-TO-DATE
+> Task :app:desugarVerificationFileDependencies UP-TO-DATE
+> Task :app:mergeVerificationStartupProfile UP-TO-DATE
+> Task :app:mergeExtDexVerification UP-TO-DATE
+> Task :app:mergeDexVerification UP-TO-DATE
+> Task :app:mergeVerificationArtProfile UP-TO-DATE
+> Task :app:mergeVerificationGlobalSynthetics UP-TO-DATE
+> Task :app:compileVerificationArtProfile UP-TO-DATE
+> Task :app:generateVerificationAssets UP-TO-DATE
+> Task :app:mergeVerificationAssets
+> Task :app:extractVerificationVersionControlInfo UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:compressVerificationAssets
+> Task :app:generateVerificationLintVitalReportModel UP-TO-DATE
+> Task :app:lintVitalAnalyzeVerification UP-TO-DATE
+> Task :app:lintVitalReportVerification UP-TO-DATE
+> Task :app:lintVitalVerification
+> Task :app:processVerificationJavaRes UP-TO-DATE
+> Task :app:mergeVerificationJavaResource UP-TO-DATE
+> Task :app:optimizeVerificationResources UP-TO-DATE
+> Task :app:collectVerificationDependencies UP-TO-DATE
+> Task :app:sdkVerificationDependencyData UP-TO-DATE
+> Task :app:validateSigningVerification UP-TO-DATE
+> Task :app:writeVerificationAppMetadata UP-TO-DATE
+> Task :app:writeVerificationSigningConfigVersions UP-TO-DATE
+> Task :app:packageVerification
+> Task :app:createVerificationApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleVerification
+
+[Incubating] Problems report is available at: file:///home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 12s
+71 actionable tasks: 9 executed, 62 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.1/userguide/configuration_cache_enabling.html

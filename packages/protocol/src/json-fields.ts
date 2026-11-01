@@ -1,15 +1,15 @@
+import { hex } from '@scure/base';
 import { badMessage } from './errors';
 
 export type JsonObject = Record<string, unknown>;
 
 export type StringRule = { maxChars: number; pattern?: RegExp; printable?: boolean };
 
-const utf8 = new TextDecoder('utf-8', { fatal: true });
 const CONTROL_CHARACTERS = /\p{Cc}/u;
 
 function parseJson(bytes: Uint8Array): unknown {
   try {
-    return JSON.parse(utf8.decode(bytes));
+    return JSON.parse(decodeURIComponent(hex.encode(bytes).replace(/../g, '%$&')).replace(/^\uFEFF/u, ''));
   } catch (error) {
     throw badMessage('message is not valid UTF-8 JSON', error);
   }

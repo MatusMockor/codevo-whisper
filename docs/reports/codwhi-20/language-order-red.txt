@@ -1,0 +1,44 @@
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile
+
+stderr | test/app-language.test.ts > keeps the newer keyboard selection when a stale mount read resolves
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+
+stderr | test/app-language.test.ts > keeps the newer keyboard selection when a stale foreground read resolves
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+
+ ❯ |mobile| test/app-language.test.ts (6 tests | 2 failed | 4 skipped) 41ms
+   × keeps the newer keyboard selection when a stale mount read resolves 36ms
+   × keeps the newer keyboard selection when a stale foreground read resolves 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |mobile| test/app-language.test.ts > keeps the newer keyboard selection when a stale mount read resolves
+ FAIL  |mobile| test/app-language.test.ts > keeps the newer keyboard selection when a stale foreground read resolves
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/app-language.test.ts:148:30
+    146|   expect(selected('Slovak')).toBe(true);
+    147|   await act(() => Promise.resolve(resolveRead('auto')));
+    148|   expect(selected('Slovak')).toBe(true);
+       |                              ^
+    149|   await press('Record');
+    150|   expect(starts).toEqual(['sk']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 skipped (6)
+   Start at  17:26:44
+   Duration  196ms (import 35%, transform 32%, tests 32%, worker 2%)
+
+undefined
+/home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/app-language.test.ts -t stale

@@ -1,0 +1,9 @@
+android/.gradle/
+android/.kotlin/
+android/**/build/
+android/**/.cxx/
+android/local.properties
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+*.xcuserstate

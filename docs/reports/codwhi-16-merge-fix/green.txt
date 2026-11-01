@@ -1,0 +1,9 @@
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/server
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  19:51:08
+   Duration  1.44s (tests 91%, transform 4%, import 4%)
+

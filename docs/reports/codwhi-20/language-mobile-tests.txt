@@ -1,0 +1,13 @@
+buildq: waiting (another job runs in the checkout /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355)
+
+> @codevo-whisper/mobile@0.1.0 test /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile
+> vitest run
+
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile
+
+
+ Test Files  5 passed (5)
+      Tests  32 passed (32)
+   Start at  17:27:17
+   Duration  226ms (tests 50%, import 33%, transform 14%, worker 3%)

@@ -1,0 +1,4 @@
+
+> @codevo-whisper/mobile@0.1.0 typecheck /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355/apps/mobile
+> tsc -p tsconfig.json
+

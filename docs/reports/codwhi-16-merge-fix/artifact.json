@@ -1,0 +1,24 @@
+{
+  "baseCommit": "a54efabad72589751565e97ff8f1c4fa340a3e94",
+  "redTestCommit": "cf710c6",
+  "sourceSha256": {
+    "apps/mobile/src/core/pairing.ts": "9922cc9d2eb54c4da8c505659defb8d1cf3d9d9e3339b1ff92c292affff3fd9d",
+    "apps/server/test/mobile-client.test.ts": "3f4ae8b5df9b3016e54605ced947860b5cc10ac063285330601636fa7fe9348d"
+  },
+  "apk": {
+    "path": "apps/mobile/android/app/build/outputs/apk/verification/app-verification.apk",
+    "sha256": "0589ad53414909f05c1dc664f514707ae176f2e3fee60fa18493b651c2956e64",
+    "signatureVerified": true,
+    "bundlePath": "assets/index.android.bundle",
+    "bundleBytes": 1372188,
+    "bundleMagicHex": "c61fbc03c103191f",
+    "bundleSha256": "ca74d5a0c06d1a6be55f781967d21104a9a9613ec384f94c4599b3d2715e6d8e"
+  },
+  "phoneInstalledSource": "a54efabad72589751565e97ff8f1c4fa340a3e94 (parent report; unchanged by this run)",
+  "limits": [
+    "No phone or emulator actions",
+    "No native geometry rerun",
+    "No Apple build or runtime check",
+    "No independent review performed by this worker"
+  ]
+}

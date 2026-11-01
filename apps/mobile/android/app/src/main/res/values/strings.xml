@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Codevo Voice</string>
+    <string name="pairing_scan_title">Scan pairing QR</string>
+    <string name="pairing_scan_hint">Point at the QR printed by the Codevo server pairing command</string>
+    <string name="pairing_scan_cancel">Cancel</string>
+</resources>

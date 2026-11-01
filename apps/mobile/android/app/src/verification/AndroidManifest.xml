@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name="com.codevo.KeyboardPreviewActivity" android:configChanges="orientation|screenSize" android:exported="true" /></application></manifest>

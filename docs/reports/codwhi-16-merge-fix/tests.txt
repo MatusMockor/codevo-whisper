@@ -1,0 +1,10 @@
+buildq: waiting (another job runs in the checkout /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355)
+
+ RUN  v5.0.5 /home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355
+
+
+ Test Files  20 passed (20)
+      Tests  166 passed (166)
+   Start at  19:50:19
+   Duration  4.30s (tests 90%, import 7%, transform 3%)
+
