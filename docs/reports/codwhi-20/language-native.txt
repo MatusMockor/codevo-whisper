@@ -1,0 +1,7 @@
+
+com.codevo.KeyboardMeasurementTest:.
+com.codevo.VoiceSettingsTest:.
+
+Time: 0.016
+
+OK (2 tests)

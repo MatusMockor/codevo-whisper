@@ -24,6 +24,8 @@ The shared app queries actual microphone permission and own-IME enabled/selected
 
 ## Validation commands
 
+This section records the original `c0ac2437f53914a3d3241a4f8eecaccbcc2fbd05` fit verification. The language-sync delta has separate results below. Its geometry matrix was not rerun.
+
 All heavy work uses `buildq`, Gradle uses `--max-workers=6`, and every adb acceptance operation has an explicit emulator serial.
 
 ```sh
@@ -48,7 +50,7 @@ The inset-growth test is red against the intermediate constrained implementation
 
 Review evidence is committed under `docs/reports/codwhi-20/`. `baseline-red.txt`, `insets-red.txt`, `insets-green.txt`, `api31.txt`, `matrix.txt`, and `geometry.txt` hold the root-cause and geometry evidence. Before, native/browser after, ready, real captured-audio recording, synthetic waveform, finishing, error, landscape/font1.3, and completed setup PNGs are included. The synthetic waveform preview is explicitly labelled and does not open a microphone. The actual recording screenshot uses the existing captured PCM stream.
 
-No dependencies were added. An API-31 SDK image and isolated AVD were used only for validation. iOS was not built or run on Linux. Independent review is pending with the parent; no cross-family verdict, merge readiness, physical pass, or task completion is claimed.
+The original fit implementation added no dependencies. The later language-sync regression adds test-only React renderer dependencies, detailed below. An API-31 SDK image and isolated AVD were used only for validation. iOS was not built or run on Linux. Independent review is pending with the parent; no cross-family verdict, merge readiness, physical pass, or task completion is claimed.
 
 Additional focused checks use these exact classes:
 
@@ -81,9 +83,35 @@ Run the same methods before and after the reviewed app update. The optional expe
 
 Paths are relative to this worktree, `/home/matcer/.t3/worktrees/codevo-whisper/t3-d806b355`.
 
-- App `apps/mobile/android/app/build/outputs/apk/verification/app-verification.apk`. SHA-256 `748f69fa09117361f9c5abcd7cecfed29a46c9c8f3a8bdd301f226bb3a10498c`.
+- App `apps/mobile/android/app/build/outputs/apk/verification/app-verification.apk`. SHA-256 `1d8b1e3c3d6d11d8accf70236d96abcc46028c58d12ad6ad7048326d7dc437cb`.
 - Inert fixture `apps/mobile/android/fixture/build/outputs/apk/debug/fixture-debug.apk`. SHA-256 `6095b216f8e267601b3281923bbeaeea71a3f892c6df67bb269600a305aa868e`.
 - Safe fixture tests `apps/mobile/android/fixture/build/outputs/apk/androidTest/debug/fixture-debug-androidTest.apk`. The final hash is in `docs/reports/codwhi-20/artifact-sha256.txt`.
 - Development signing certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, unchanged from the installed base. Package identity remains `com.codevo.mobile`. The parent uses install-r after review, preserving pairing.
 
 The two physical-safe methods capture only when the synthetic fixture owns focus and the device is unlocked. They refuse screenshots outside that fixture. The parent still needs to inspect and install the fixture/test APKs, collect old-app geometry, obtain a fresh independent sol review, install the reviewed app without clearing data, and rerun the same geometry methods. No worker action on the phone substitutes for those checks.
+
+
+## P1 mounted language synchronization
+
+Code delta `b3121c05d0c53d60f4b73a39de83759478da6edf`, after the red regression commit `fc08d64`. The accepted review at `c0ac243` found that native keyboard language changes could leave the mounted companion highlighting Auto while the attempt sent Slovak. Expanding Pairing settings, focusing Device name, selecting Slovak, and dismissing the keyboard does not leave the Activity. Mount and foreground refreshes could not observe that change.
+
+`VoiceCoordinator.selectLanguage` now broadcasts the persisted value on a separate `CodevoLanguageChanged` event. Both keyboard selection and the RN setter use this coordinator. The iOS setter broadcasts the same event after persisting its value. `subscribeLanguage` validates the unknown payload through the existing protocol-language parser. PCM/run events keep their existing contract. The App subscribes before its initial read and unsubscribes on unmount. A local version counter prevents older mount or foreground reads from replacing newer events or reads. RN selection uses the authoritative event instead of a follow-up asynchronous read. The state remains the existing `Language` union. Active-run rejection, disabled controls, and immutable attempt snapshots remain in place.
+
+The actual App test failed against `c0ac243` with `AssertionError: expected false to be true` at its rendered Slovak radio. Both delayed mount and foreground reads fail with that same mismatch when the ordering guard is removed. The final six focused tests pass. They render real React state/effects and the real App/runtime/platform code, stub only React Native host/native boundaries, and decrypt the real Noise start message. They cover foreground selection, both stale reads, an older setter completion, valid and malformed settings events during an active recording, and delivery stopping after unsubscribe. No generic React implementation was added.
+
+`react-test-renderer@19.3.0` and `@types/react-test-renderer@19.3.0` are exact, test-only dependencies. They match React and provide the missing App renderer without a custom hooks framework. The upstream renderer deprecation notice is retained in the red evidence. Shipped behavior is also exercised through packaged Hermes and Android native code.
+
+Fresh checks for this delta:
+
+- Six focused App/settings tests pass. All 32 mobile JS tests pass across five files.
+- Mobile TypeScript, scoped ESLint, and source diff whitespace checks pass.
+- Verification app and both instrumentation APKs assemble. Android lint reports zero errors and 28 warnings.
+- All six JVM tests pass after forcing `:app:testVerificationUnitTest --rerun`.
+- `KeyboardMeasurementTest` and `VoiceSettingsTest` pass on `emulator-5580`, `OK (2 tests)`.
+- Revised packaged gateway acceptance passes on `emulator-5580` in 83.61 seconds. Its existing two-method Android fixture now switches the companion to Auto, opens its Device-name Codevo keyboard, selects Slovak, dismisses the keyboard, and asserts the same mounted companion displays Slovak before Record. There is no Activity launch between those actions. The last request received by the synthetic STT must carry `sk`, so an earlier keyboard recording cannot satisfy the companion assertion. Original insertion, cancel/hide, password, pairing replacement, backpressure, and malformed/server-error checks also pass.
+
+The exact commands remain the build and acceptance commands above. The forced JVM command is `buildq apps/mobile/android/gradlew -p apps/mobile/android :app:testVerificationUnitTest --rerun --no-daemon --max-workers=6`. The focused App command is `pnpm --filter @codevo-whisper/mobile exec vitest run test/app-language.test.ts`. Native checks use explicit `adb -s emulator-5580 shell am instrument -w -e class com.codevo.KeyboardMeasurementTest,com.codevo.VoiceSettingsTest com.codevo.mobile.test/androidx.test.runner.AndroidJUnitRunner`.
+
+New evidence is in `docs/reports/codwhi-20/language-{red,order-red,green,mobile-tests,build,jvm,gateway,native,checks,apk-signature}.txt`. Updated hashes are in `artifact-sha256.txt`. The app APK SHA-256 is `1d8b1e3c3d6d11d8accf70236d96abcc46028c58d12ad6ad7048326d7dc437cb`. The development signing certificate remains `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. The fixture-test APK SHA-256 is `3291d18364f2c571128af95c9d1339a332b8e21d0256de429512e5c6e623568a`; its physical-safe geometry methods are unchanged.
+
+The source fit, PCM capture, native preference schema, and runtime attempt snapshot are byte-identical to `c0ac243`. The earlier full API31/API36 geometry matrix is retained evidence, not a rerun claim. iOS is source-only on Linux. This worker touched no physical phone or its protected pairing, production server, or GPU service. The parent's prior physical baseline was inconclusive because the phone changed foreground; it is not a fit pass. The parent owns fresh delta review, physical acceptance, app installation, and merge. No PR monitoring, merge, or task completion ran here. The scoped diff adds no code comments or lint suppressions. Independent comment/review agents were not spawned under the parent's explicit no-delegation instruction.
