@@ -49,7 +49,7 @@ it('proves packaged Hermes gateway and cold IME from another app', async () => {
     })();
     const test = await run('shell', 'am', 'instrument', '-w', 'com.codevo.fixture.test/androidx.test.runner.AndroidJUnitRunner');
     await approval;
-    expect(test.stdout).toContain('OK (1 test)');
+    expect(test.stdout).toContain('OK (2 tests)');
     expect(fake.requests.length).toBeGreaterThanOrEqual(2);
     expect(peer.stats).toMatchObject({ rejected: 1, sessions: 3, errors: 1, malformed: 1, pausedAudio: 0 });
     expect(peer.stats.resumedAudio).toBeGreaterThan(0);

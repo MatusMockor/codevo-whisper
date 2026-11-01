@@ -16,15 +16,52 @@ class KeyboardTest {
     private val instrumentation=InstrumentationRegistry.getInstrumentation()
     private val device=UiDevice.getInstance(instrumentation)
     private fun waitText(text:String,timeout:Long=20000) = device.wait(Until.findObject(By.text(text)),timeout) ?: error("Missing UI: $text")
-    private fun click(text:String) { waitText(text).click() }
+    private fun click(text:String) {
+        if (text=="Switch keyboard") {
+            device.wait(Until.findObject(By.desc(text)),20000)?.click() ?: error("Missing control: $text")
+        } else waitText(text).click()
+    }
+    private fun capture(name:String) {
+        assertTrue(device.takeScreenshot(File(instrumentation.targetContext.getExternalFilesDir(null),"$name.png")))
+    }
     private fun launchFixture() {
         val context=instrumentation.targetContext
         context.startActivity(Intent(context,EditorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         device.wait(Until.hasObject(By.desc("First editor")),10000)
         device.findObject(By.desc("First editor")).click()
         waitText("Record")
+        device.waitForIdle()
+    }
+    @Test fun compactIdleKeyboardControls() {
+        val landscape=InstrumentationRegistry.getArguments().getString("orientation")=="landscape"
+        if (landscape) device.setOrientationLeft()
+        else device.setOrientationNatural()
+        device.executeShellCommand("ime enable com.codevo.mobile/com.codevo.VoiceInputService")
+        device.executeShellCommand("ime set com.codevo.mobile/com.codevo.VoiceInputService")
+        launchFixture()
+        assertEquals("Requested orientation must match actual display ${device.displayWidth}x${device.displayHeight}",landscape,device.displayWidth>device.displayHeight)
+        assertFalse("Cancel is only relevant during a run",device.hasObject(By.text("Cancel")))
+        assertFalse("One primary action replaces separate idle Stop",device.hasObject(By.text("Stop")))
+        assertTrue(waitText("Record").isEnabled)
+        assertTrue(device.hasObject(By.desc("Switch keyboard")))
+        waitText("Setup")
+        val minimumTarget=(48*instrumentation.targetContext.resources.displayMetrics.density).toInt()
+        capture("ready")
+        for (control in listOf(waitText("Record"),waitText("Setup"),device.findObject(By.desc("Switch keyboard")))) {
+            val bounds=control.visibleBounds
+            val label=control.text ?: control.contentDescription
+            assertTrue("$label must be at least 48dp wide: $bounds",bounds.width()>=minimumTarget)
+            assertTrue("$label must be at least 48dp tall: $bounds",bounds.height()>=minimumTarget)
+            assertTrue(bounds.bottom<=device.displayHeight)
+        }
+        device.findObject(By.desc("Password")).click()
+        waitText("Voice typing is disabled for this field")
+        assertFalse(waitText("Record").isEnabled)
+        assertFalse(device.hasObject(By.text("Cancel")))
+        capture("password")
     }
     @Test fun packagedHermesPairingAndColdKeyboard() {
+        device.setOrientationNatural()
         device.executeShellCommand("am start -n com.codevo.mobile/com.codevo.MainActivity")
         val token=device.executeShellCommand("cat /data/local/tmp/codevo-pair-token").trim()
         require(token.startsWith("cw1:"))
@@ -41,13 +78,27 @@ class KeyboardTest {
         device.executeShellCommand("ime set com.codevo.mobile/com.codevo.VoiceInputService")
         click("Record")
         waitText("Voice operation failed. Check permission, pairing and keyboard setup.")
+        assertTrue(waitText("Record").isEnabled)
+        assertFalse(device.hasObject(By.text("Cancel")))
+        capture("permission-error")
         assertEquals("First editor",device.findObject(By.desc("First editor")).text)
         device.executeShellCommand("pm grant com.codevo.mobile android.permission.RECORD_AUDIO")
         click("Record")
         waitText("Recording",30000)
+        assertTrue(waitText("Stop").isEnabled)
+        assertTrue(waitText("Cancel").isEnabled)
+        assertFalse(device.hasObject(By.text("Record")))
+        capture("recording")
         Thread.sleep(1500)
         click("Stop")
+        waitText("Finishing…")
+        assertFalse(waitText("Finishing").isEnabled)
+        assertTrue(waitText("Cancel").isEnabled)
+        capture("finishing")
         waitText("Done",30000)
+        assertTrue(waitText("Record").isEnabled)
+        assertFalse(device.hasObject(By.text("Cancel")))
+        capture("done")
         assertEquals("Ahoj z mobilu",device.findObject(By.desc("First editor")).text)
         Thread.sleep(1000)
         assertEquals("Ahoj z mobilu",device.findObject(By.desc("First editor")).text)
@@ -98,6 +149,7 @@ class KeyboardTest {
         assertEquals("Flow respected Č 👋 100%",device.findObject(By.desc("First editor")).text)
         click("Record");waitText("Recording");Thread.sleep(1000);click("Stop")
         waitText("Server error: stt_unavailable")
+        capture("server-error")
         assertEquals("Flow respected Č 👋 100%",device.findObject(By.desc("First editor")).text)
         click("Record");waitText("Recording");Thread.sleep(1000);click("Stop")
         waitText("Server authentication or protocol failed")

@@ -19,7 +19,7 @@ class VoiceCoordinator(private val app: MainApplication) {
     private data class Run(val id:String, val ime:Boolean, var ready:Boolean=false, var finishing:Boolean=false, var capture:PcmCapture?=null)
     private var run:Run?=null
     private val tasks=mutableMapOf<Int,HeadlessJsTaskContext>()
-    var status="Open Codevo Voice to pair and allow microphone"
+    var keyboardState=KeyboardState(VoicePhase.IDLE,"Open Codevo Voice to pair and allow microphone")
         private set
 
     fun locked():Boolean=(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
@@ -29,7 +29,7 @@ class VoiceCoordinator(private val app: MainApplication) {
         val id=UUID.randomUUID().toString()
         if (ime?.beginLease(id) != true) return
         run=Run(id,true)
-        update("Connecting…")
+        update("Connecting…",VoicePhase.CONNECTING)
         val host=app.reactHost
         fun launch(context:ReactContext) {
             val taskContext=HeadlessJsTaskContext.getInstance(context)
@@ -58,13 +58,13 @@ class VoiceCoordinator(private val app: MainApplication) {
         }
         host.addReactInstanceEventListener(listener)
         host.start()
-        main.postDelayed({ if (run?.id==id && run?.ready==false) cancel("Voice runtime did not start. Reopen Codevo Voice.") },20000)
+        main.postDelayed({ if (run?.id==id && run?.ready==false) cancel("Voice runtime did not start. Reopen Codevo Voice.",VoicePhase.ERROR) },20000)
     }
     fun startCompanion():String {
         check(run==null && !locked())
         val id=UUID.randomUUID().toString()
         run=Run(id,false)
-        update("Connecting…")
+        update("Connecting…",VoicePhase.CONNECTING)
         return id
     }
     fun ready(id:String):Boolean {
@@ -79,11 +79,11 @@ class VoiceCoordinator(private val app: MainApplication) {
         val capture=PcmCapture(
             {sequence,pcm -> main.post { if (run===current) emit("pcm",id,sequence,pcm) } },
             { main.post { if (run===current) emit("ended",id) } },
-            { main.post { if (run===current) cancel("Microphone stopped or audio queue full") } }
+            { main.post { if (run===current) cancel("Microphone stopped or audio queue full",VoicePhase.ERROR) } }
         )
         current.capture=capture
         capture.start()
-        update("Recording")
+        update("Recording",VoicePhase.RECORDING)
     }
     fun acknowledge(id:String, sequence:Int) { if (run?.id==id) run?.capture?.acknowledge(sequence) }
     fun requestStop() {
@@ -91,7 +91,7 @@ class VoiceCoordinator(private val app: MainApplication) {
         if (current.finishing) return
         if (current.ime && ime?.finishLease(current.id)!=true) { cancel("Editor changed");return }
         current.finishing=true
-        update("Finishing…")
+        update("Finishing…",VoicePhase.FINISHING)
         emit("stop",current.id)
     }
     fun stopCapture(id:String) {
@@ -106,23 +106,23 @@ class VoiceCoordinator(private val app: MainApplication) {
         run=null
         current.capture?.stop()
         val committed= !current.ime || ime?.commitLease(id,text)==true
-        update(if (committed) "Done" else "Editor changed. Text was not inserted.")
+        update(if (committed) "Done" else "Editor changed. Text was not inserted.",if (committed) VoicePhase.DONE else VoicePhase.ERROR)
         return committed
     }
     fun terminal(id:String, message:String) {
         if (run?.id!=id) return
-        cancel(message)
+        cancel(message,VoicePhase.ERROR)
     }
-    fun cancel(message:String="Cancelled") {
+    fun cancel(message:String="Cancelled",phase:VoicePhase=VoicePhase.IDLE) {
         ime?.invalidateLease()
         val current=run
         run=null
         current?.capture?.stop()
         if (current!=null) emit("cancel",current.id)
-        update(message)
+        update(message,phase)
     }
     fun companionHidden() { if (run?.ime==false) cancel("Recording stopped when app left foreground") }
-    private fun update(value:String) { status=value;ime?.showStatus(value) }
+    private fun update(value:String,phase:VoicePhase) { keyboardState=KeyboardState(phase,value);ime?.render() }
     private fun emit(type:String, id:String, sequence:Int?=null, pcm:String?=null) {
         val context=app.reactHost.currentReactContext ?: return
         val data=Arguments.createMap().apply {
