@@ -1,0 +1,5 @@
+com.codevo.PairingScannerTest:.
+
+Time: 3.899
+
+OK (1 test)

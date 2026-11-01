@@ -2,6 +2,10 @@ import { NativeEventEmitter, Platform, TurboModuleRegistry, type TurboModule } f
 import { base64 } from '@scure/base';
 import type { OpenWire } from './core/connection';
 import type { PairingVault } from './core/pairing';
+import type { PairingScanNative } from './core/pairing-scanner';
+
+interface PairingScannerNative extends TurboModule, PairingScanNative {}
+export const pairingScannerNative = TurboModuleRegistry.getEnforcing<PairingScannerNative>('CodevoPairingScanner');
 
 interface VoiceNative extends TurboModule {
   addListener(eventName: string): void;

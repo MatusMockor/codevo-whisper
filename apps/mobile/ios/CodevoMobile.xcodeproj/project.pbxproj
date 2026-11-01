@@ -12,6 +12,7 @@
 		761780ED2CA45674006654EE  = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE ; };
 		761780EF2CA45674006654EF  = {isa = PBXBuildFile; fileRef = 761780EE2CA45674006654EF ; };
 		81AB9BB82411601600AC10FF  = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF ; };
+C0DE00190000000000000001  = {isa = PBXBuildFile; fileRef = C0DE00190000000000000002 ; };
 C0DE00100000000000000001  = {isa = PBXBuildFile; fileRef = C0DE00100000000000000002 ; };
 
 
@@ -27,6 +28,7 @@ C0DE00100000000000000001  = {isa = PBXBuildFile; fileRef = C0DE00100000000000000
 		761780EE2CA45674006654EF  = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SceneDelegate.swift; path = CodevoMobile/SceneDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF  = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = CodevoMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE  = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+C0DE00190000000000000002  = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CodevoMobile/CodevoPairingScanner.mm; sourceTree = "<group>"; };
 C0DE00100000000000000002  = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CodevoMobile/CodevoVoice.mm; sourceTree = "<group>"; };
 
 
@@ -46,6 +48,7 @@ C0DE00100000000000000002  = {isa = PBXFileReference; lastKnownFileType = sourcec
 			isa = PBXGroup;
 			children = (
 				C0DE00100000000000000002 ,
+				C0DE00190000000000000002 ,
 				13B07FB51A68108700A75B9A ,
 				761780EC2CA45674006654EE ,
 				761780EE2CA45674006654EF ,
@@ -251,6 +254,7 @@ C0DE00100000000000000002  = {isa = PBXFileReference; lastKnownFileType = sourcec
 			buildActionMask = 2147483647;
 			files = (
 				C0DE00100000000000000001 ,
+C0DE00190000000000000001 ,
 				761780ED2CA45674006654EE ,
 				761780EF2CA45674006654EF ,
 			);

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Linking,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -14,7 +15,8 @@ import {
 } from 'react-native';
 import { fingerprint, type Language } from '@codevo-whisper/protocol';
 import { pairDevice, parsePairing } from './core/pairing';
-import { native, openWire, vault } from './platform';
+import { MAX_PAIRING_TOKEN_LENGTH, PairingScanner, type ScanState } from './core/pairing-scanner';
+import { native, openWire, pairingScannerNative, vault } from './platform';
 import { runRecording, type RecordingState } from './runtime';
 
 type PairState = { kind: 'idle' } | { kind: 'connecting' } | { kind: 'approval'; connection: string; device: string; server: string };
@@ -22,6 +24,8 @@ export function App() {
   const [paired, setPaired] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
+  const [scan, setScan] = useState<ScanState>({ kind: 'idle' });
+  const [scanner] = useState(() => new PairingScanner(pairingScannerNative, setScan, setToken));
   const [name, setName] = useState(Platform.OS === 'android' ? 'Android phone' : 'iPhone');
   const [pairing, setPairing] = useState<PairState>({ kind: 'idle' });
   const [language, setLanguage] = useState<Language>('auto');
@@ -52,12 +56,15 @@ export function App() {
     });
     return () => {
       mounted = false;
+      scanner.cancel();
       pairingAbort.current?.abort();
       subscription.remove();
     };
-  }, []);
+  }, [scanner]);
   const failure = (error: unknown) => setError(error instanceof Error ? error.message : 'Operation failed');
   async function pair() {
+    if (scanner.state.kind === 'scanning') return;
+    scanner.clear();
     setError('');
     setPairing({ kind: 'connecting' });
     const abort = new AbortController();
@@ -87,8 +94,10 @@ export function App() {
     return (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)) === PermissionsAndroid.RESULTS.GRANTED;
   }
   async function record() {
+    if (scanner.state.kind === 'scanning') return;
     setError('');
     setText('');
+    setRecording('Connecting');
     try {
       if (!(await microphone())) {
         setError('Microphone permission is required. Allow it in system settings.');
@@ -103,7 +112,7 @@ export function App() {
       setRecording(null);
     }
   }
-  const busy = pairing.kind !== 'idle' || recording !== null || loading;
+  const busy = pairing.kind !== 'idle' || recording !== null || loading || scan.kind === 'scanning';
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Codevo Voice</Text>
@@ -122,20 +131,48 @@ export function App() {
           </Text>
         )}
         <Text style={styles.body}>
-          Run the server pairing command. Paste its cw1 token, compare the connection fingerprint, then approve on the server. Use a wss://
-          endpoint for release builds.
+          Run the server pairing command. Scan its QR or paste its cw1 token, compare the connection fingerprint, then approve on the server.
+          Use a wss:// endpoint for release builds.
         </Text>
         <Text style={styles.label}>Pairing token</Text>
         <TextInput
           accessibilityLabel="Pairing token"
           value={token}
-          onChangeText={setToken}
+          onChangeText={(value) => {
+            scanner.clear();
+            setToken(value);
+          }}
           editable={!busy}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
+          maxLength={MAX_PAIRING_TOKEN_LENGTH}
           style={styles.input}
         />
+        <Action
+          title={scan.kind === 'scanning' ? 'Scanning QR…' : 'Scan QR'}
+          disabled={busy}
+          onPress={() => { void scanner.start(busy); }}
+        />
+        {scan.kind === 'result' && (
+          <Text accessibilityLiveRegion="polite" style={styles.body}>
+            QR scanned. Choose {paired ? 'Replace pairing' : 'Pair server'} to continue.
+          </Text>
+        )}
+        {scan.kind === 'error' && (
+          <View>
+            <Text accessibilityRole="alert" style={styles.error}>{scan.message}</Text>
+            {scan.settings && (
+              <Action
+                title="Open app settings"
+                disabled={busy}
+                onPress={() => {
+                  void Linking.openSettings().catch(() => setError('Open Camera permission in system app settings, or paste the token.'));
+                }}
+              />
+            )}
+          </View>
+        )}
         <Text style={styles.label}>Device name</Text>
         <TextInput
           accessibilityLabel="Device name"

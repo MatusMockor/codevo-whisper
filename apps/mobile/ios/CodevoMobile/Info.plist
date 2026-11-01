@@ -31,6 +31,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan the QR code printed by your Codevo server to enter its pairing token.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record speech to transcribe on your paired Codevo server.</string>
 	<key>RCTNewArchEnabled</key>

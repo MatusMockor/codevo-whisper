@@ -26,7 +26,7 @@ it('proves packaged Hermes gateway and cold IME from another app', async () => {
     await run('install', '-r', join(android, 'fixture/build/outputs/apk/androidTest/debug/fixture-debug-androidTest.apk'));
     await run('shell', 'pm', 'clear', 'com.codevo.mobile');
     await run('install', '-r', join(android, 'app/build/outputs/apk/androidTest/verification/app-verification-androidTest.apk'));
-    const vaultTest = await run('shell', 'am', 'instrument', '-w', 'com.codevo.mobile.test/androidx.test.runner.AndroidJUnitRunner');
+    const vaultTest = await run('shell', 'am', 'instrument', '-w', '-e', 'class', 'com.codevo.VaultTest', 'com.codevo.mobile.test/androidx.test.runner.AndroidJUnitRunner');
     expect(vaultTest.stdout).toContain('OK (1 test)');
     await run('shell', 'settings', 'put', 'system', 'screen_off_timeout', '600000');
     await run('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1');

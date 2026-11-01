@@ -1,0 +1,7 @@
+Native lint on scanner branch:
+Lint found 1 error and 19 warnings. First failure:
+/home/matcer/.t3/worktrees/codevo-whisper/t3-ad944fc6/apps/mobile/android/app/src/main/java/com/codevo/PcmCapture.kt:19: Error: Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with checkPermission) or explicitly handle a potential SecurityException [MissingPermission]
+
+Native lint on clean archived b4bd568abef9316ad87b58d163e229c5b7ac39e8:
+Lint found 1 error and 19 warnings. First failure:
+/home/matcer/.t3/worktrees/codevo-whisper/t3-ad944fc6/apps/mobile/android/build/codwhi19-base-check/apps/mobile/android/app/src/main/java/com/codevo/PcmCapture.kt:19: Error: Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with checkPermission) or explicitly handle a potential SecurityException [MissingPermission]
