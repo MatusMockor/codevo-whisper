@@ -47,6 +47,7 @@ vi.mock('react-native', () => ({
   },
 }));
 import { App } from '../src/App';
+import { subscribeLanguage } from '../src/platform';
 
 let app: ReactTestRenderer | undefined;
 const starts: Language[] = [];
@@ -77,7 +78,7 @@ async function press(label: string) {
   expect(node.props.disabled).toBeFalsy();
   const onPress: unknown = node.props.onPress;
   if (typeof onPress !== 'function') throw new Error('Missing press action');
-  await act(() => Promise.resolve(Reflect.apply(onPress, undefined, []))); 
+  await act(() => Promise.resolve(Reflect.apply(onPress, undefined, [])));
 }
 async function mount() { await act(() => { app = create(createElement(App)); return Promise.resolve(); }); }
 
@@ -127,4 +128,65 @@ it('shows a foreground keyboard selection in the mounted companion and sends the
   await press('Record');
   expect(starts).toEqual(['sk']);
   expect(radio('Slovak').props.disabled).toBe(true);
+});
+
+it.each(['mount', 'foreground'])('keeps the newer keyboard selection when a stale %s read resolves', async (phase) => {
+  let resolveRead: (value: unknown) => void = () => { throw new Error('Read not started'); };
+  const delayRead = () => bridge.voice.getLanguage.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve; }));
+  if (phase === 'mount') delayRead();
+  await mount();
+  if (phase === 'foreground') {
+    delayRead();
+    await act(() => {
+      for (const receive of bridge.foreground) receive('active');
+      return Promise.resolve();
+    });
+  }
+  await act(() => Promise.resolve(keyboardLanguage('sk')));
+  expect(selected('Slovak')).toBe(true);
+  await act(() => Promise.resolve(resolveRead('auto')));
+  expect(selected('Slovak')).toBe(true);
+  await press('Record');
+  expect(starts).toEqual(['sk']);
+});
+
+it('uses authoritative companion events and ignores an older setter completion', async () => {
+  await mount();
+  let complete: () => void = () => { throw new Error('Setter not started'); };
+  bridge.voice.setLanguage.mockImplementationOnce((value) => {
+    keyboardLanguage(value);
+    return new Promise<void>((resolve) => { complete = resolve; });
+  });
+  await press('English');
+  expect(selected('English')).toBe(true);
+  await act(() => Promise.resolve(keyboardLanguage('cs')));
+  await act(() => Promise.resolve(complete()));
+  expect(selected('Czech')).toBe(true);
+});
+
+it('reports malformed settings without changing language or cancelling an active recording', async () => {
+  await mount();
+  await press('Slovak');
+  await press('Record');
+  await act(() => {
+    emit('CodevoLanguageChanged', 'sk');
+    for (const invalid of ['de', null, { language: 'en' }, 1]) emit('CodevoLanguageChanged', invalid);
+    return Promise.resolve();
+  });
+  expect(selected('Slovak')).toBe(true);
+  expect(starts).toEqual(['sk']);
+  expect(screen().findByProps({ accessibilityLiveRegion: 'polite' }).props.children).toEqual(['Recording', '…']);
+  expect(screen().findByProps({ children: 'Voice language could not be read. Reopen Codevo Voice.' })).toBeDefined();
+});
+
+it('stops delivering settings and malformed payloads after unsubscribing', () => {
+  const values: Language[] = [];
+  const errors: string[] = [];
+  const unsubscribe = subscribeLanguage((value) => values.push(value), () => errors.push('invalid'));
+  emit('CodevoLanguageChanged', 'sk');
+  unsubscribe();
+  emit('CodevoLanguageChanged', 'en');
+  emit('CodevoLanguageChanged', null);
+  expect(values).toEqual(['sk']);
+  expect(errors).toEqual([]);
 });

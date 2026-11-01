@@ -21,7 +21,7 @@
 RCT_EXPORT_MODULE(CodevoVoice)
 + (BOOL)requiresMainQueueSetup { return YES; }
 - (dispatch_queue_t)methodQueue { return dispatch_get_main_queue(); }
-- (NSArray<NSString *> *)supportedEvents { return @[@"CodevoVoiceEvent"]; }
+- (NSArray<NSString *> *)supportedEvents { return @[@"CodevoVoiceEvent",@"CodevoLanguageChanged"]; }
 - (instancetype)init {
   if ((self = [super init])) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(background:) name:UIApplicationDidEnterBackgroundNotification object:nil];
@@ -85,6 +85,7 @@ RCT_EXPORT_METHOD(getLanguage:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromi
 RCT_EXPORT_METHOD(setLanguage:(NSString *)value resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
   if (_runId || ![@[@"auto",@"sk",@"en",@"cs"] containsObject:value]) { reject(@"settings_error",@"Language unavailable during recording or invalid",nil);return; }
   [[NSUserDefaults standardUserDefaults] setObject:value forKey:@"voice-language"];
+  [self sendEventWithName:@"CodevoLanguageChanged" body:[self selectedLanguage]];
   resolve(nil);
 }
 RCT_EXPORT_METHOD(runLanguage:(NSString *)run resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {

@@ -16,7 +16,7 @@ import {
 import { fingerprint, type Language } from '@codevo-whisper/protocol';
 import { pairDevice, parsePairing } from './core/pairing';
 import { MAX_PAIRING_TOKEN_LENGTH, PairingScanner, type ScanState } from './core/pairing-scanner';
-import { native, openWire, pairingScannerNative, vault } from './platform';
+import { native, openWire, pairingScannerNative, subscribeLanguage, vault } from './platform';
 import { runRecording, type RecordingState } from './runtime';
 import { parseLanguage, parseSetupStatus, setupSteps, type SetupStatus } from './core/settings';
 
@@ -38,6 +38,11 @@ export function App() {
   const pairingAbort = useRef<AbortController | null>(null);
   useEffect(() => {
     let mounted = true;
+    let languageVersion = 0;
+    const unsubscribeLanguage = subscribeLanguage((selected) => {
+      languageVersion++;
+      setLanguage(selected);
+    }, () => setError('Voice language could not be read. Reopen Codevo Voice.'));
     void vault
       .load()
       .then((value) => {
@@ -53,10 +58,14 @@ export function App() {
         }
       });
     const refresh = () => {
+      const version = ++languageVersion;
       void Promise.all([native.getLanguage(), native.setupStatus()]).then(([selected, status]) => {
         const language = parseLanguage(selected);
         const setup = parseSetupStatus(status);
-        if (mounted) { setLanguage(language); setSetup(setup); }
+        if (mounted) {
+          if (version === languageVersion) setLanguage(language);
+          setSetup(setup);
+        }
       }).catch(() => { if (mounted) { setSetup(null); setError('Setup status could not be read. Reopen Codevo Voice.'); } });
     };
     refresh();
@@ -68,6 +77,7 @@ export function App() {
     });
     return () => {
       mounted = false;
+      unsubscribeLanguage();
       scanner.cancel();
       pairingAbort.current?.abort();
       subscription.remove();
@@ -142,7 +152,7 @@ export function App() {
             key={value}
             disabled={busy}
             onPress={() => {
-              void native.setLanguage(value).then(() => native.getLanguage()).then((selected) => setLanguage(parseLanguage(selected))).catch(failure);
+              void native.setLanguage(value).catch(failure);
             }}
             style={[styles.language, language === value && styles.selected]}
           >

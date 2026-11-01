@@ -138,6 +138,23 @@ class KeyboardTest {
         repeat(8) {
             if (!device.hasObject(By.text("Record"))) device.swipe(device.displayWidth/2,device.displayHeight*4/5,device.displayWidth/2,device.displayHeight/4,20)
         }
+        click("Auto")
+        assertTrue(waitText("Auto").isSelected)
+        click("Pairing settings")
+        repeat(8) {
+            if (!device.hasObject(By.desc("Device name"))) device.swipe(device.displayWidth/2,device.displayHeight*4/5,device.displayWidth/2,device.displayHeight/3,15)
+        }
+        device.wait(Until.findObject(By.desc("Device name")),5000)?.click() ?: error("Device name field missing")
+        device.wait(Until.findObject(By.desc("Language: Auto")),5000)?.click() ?: error("Companion keyboard missing")
+        device.wait(Until.findObject(By.desc("Language Slovak")),5000)?.click() ?: error("Language menu missing")
+        assertTrue(device.hasObject(By.desc("Language: Slovak")))
+        device.pressBack()
+        repeat(8) {
+            if (!device.hasObject(By.text("Companion recorder"))) device.swipe(device.displayWidth/2,device.displayHeight/3,device.displayWidth/2,device.displayHeight*4/5,15)
+        }
+        assertTrue("Mounted companion must display the keyboard selection without an Activity transition",waitText("Slovak").isSelected)
+        assertFalse(waitText("Auto").isSelected)
+        click("Hide pairing settings")
         click("Record");waitText("Recording…");Thread.sleep(1000);click("Stop")
         waitText("Ahoj z mobilu")
         repeat(8) {

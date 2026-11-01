@@ -3,6 +3,8 @@ import { base64 } from '@scure/base';
 import type { OpenWire } from './core/connection';
 import type { PairingVault } from './core/pairing';
 import type { PairingScanNative } from './core/pairing-scanner';
+import { parseLanguage } from './core/settings';
+import type { Language } from '@codevo-whisper/protocol';
 
 interface PairingScannerNative extends TurboModule, PairingScanNative {}
 export const pairingScannerNative = TurboModuleRegistry.getEnforcing<PairingScannerNative>('CodevoPairingScanner');
@@ -31,6 +33,16 @@ interface VoiceNative extends TurboModule {
   requestMicrophone?(): Promise<boolean>;
 }
 export const native = TurboModuleRegistry.getEnforcing<VoiceNative>('CodevoVoice');
+export function subscribeLanguage(receive: (language: Language) => void, fail: () => void): () => void {
+  const subscription = new NativeEventEmitter(native).addListener('CodevoLanguageChanged', (value: unknown) => {
+    try {
+      receive(parseLanguage(value));
+    } catch {
+      fail();
+    }
+  });
+  return () => subscription.remove();
+}
 export const vault: PairingVault = {
   load: () => native.loadPairing(),
   save: (value) => native.savePairing(value),

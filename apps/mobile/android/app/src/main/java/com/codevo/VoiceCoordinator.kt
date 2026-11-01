@@ -21,7 +21,12 @@ class VoiceCoordinator(private val app: MainApplication) {
     private val preferences=VoicePreferences(app)
     private val levels=VoiceLevels()
     val language get()=preferences.language
-    fun selectLanguage(value:String) { check(run==null);preferences.setLanguage(value);update(keyboardState.message,keyboardState.phase) }
+    fun selectLanguage(value:String) {
+        check(run==null)
+        preferences.setLanguage(value)
+        update(keyboardState.message,keyboardState.phase)
+        app.reactHost.currentReactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit("CodevoLanguageChanged",language.wire)
+    }
     fun runLanguage(id:String):String { val current=run;check(current!=null && current.id==id);return current.language.wire }
     private val tasks=mutableMapOf<Int,HeadlessJsTaskContext>()
     var keyboardState=KeyboardState(VoicePhase.IDLE,"Open Codevo Voice to pair and allow microphone")
