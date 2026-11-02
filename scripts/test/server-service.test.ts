@@ -100,6 +100,24 @@ describe('install-server-service.sh', () => {
     expect(env).toContain('STT_THREADS="6"\n');
   });
 
+  it('runs its own copy of the worker so removing the desktop app keeps the service working', () => {
+    write(join(home, 'worker'), 'worker v1', 0o755);
+    expect(install().status).toBe(0);
+    rmSync(join(home, 'worker'));
+
+    const rerun = spawnSync(join(repo, 'scripts', 'install-server-service.sh'), [], {
+      encoding: 'utf8',
+      env: { PATH: `${bin}:${process.env['PATH'] ?? ''}`, HOME: home, STT_MODEL_PATH: join(home, 'model.gguf') },
+    });
+
+    expect(rerun.stderr).toBe('');
+    expect(rerun.status).toBe(0);
+    const worker = join(home, '.local/share/codevo-whisper-server/bin/cw-stt-worker');
+    expect(readFileSync(worker, 'utf8')).toBe('worker v1');
+    expect(mode(worker)).toBe(0o755);
+    expect(read('.config/codevo-whisper-server/env')).toContain(`STT_WORKER_BINARY="${worker}"\n`);
+  });
+
   it('refuses to install without the model', () => {
     const result = install({ STT_MODEL_PATH: join(home, 'missing.gguf') });
 
