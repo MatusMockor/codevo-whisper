@@ -37,13 +37,20 @@ static void findSession() {
   if(g_variant_is_of_type(boxed,G_VARIANT_TYPE("(so)"))) {g_variant_get(boxed,"(&s&o)",&id,&session);sessionPath=session;}
   g_variant_unref(boxed);g_variant_unref(prop);
 }
+static bool screenSaverActive() {
+  auto bus=g_bus_get_sync(G_BUS_TYPE_SESSION,nullptr,nullptr);if(!bus)return true;
+  auto result=g_dbus_connection_call_sync(bus,"org.gnome.ScreenSaver","/org/gnome/ScreenSaver","org.gnome.ScreenSaver","GetActive",nullptr,G_VARIANT_TYPE("(b)"),G_DBUS_CALL_FLAGS_NONE,300,nullptr,nullptr);
+  g_object_unref(bus);if(!result)return true;
+  gboolean active=true;g_variant_get(result,"(b)",&active);g_variant_unref(result);return active;
+}
 bool seatActive() {
   if(sessionPath.empty()) return false;
   auto result=call(sessionPath.c_str(),"org.freedesktop.DBus.Properties","GetAll",g_variant_new("(s)","org.freedesktop.login1.Session"),G_VARIANT_TYPE("(a{sv})"));
   if(!result)return false;
   GVariant* props;g_variant_get(result,"(@a{sv})",&props);gboolean active=false,locked=true;
   bool known=g_variant_lookup(props,"Active","b",&active) && g_variant_lookup(props,"LockedHint","b",&locked);
-  g_variant_unref(props);g_variant_unref(result);return known && active && !locked;
+  g_variant_unref(props);g_variant_unref(result);
+  return known && active && (!locked || !screenSaverActive());
 }
 bool accessibilityEnabled(bool request) {
   GError* error=nullptr;
