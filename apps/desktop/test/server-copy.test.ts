@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { connectTime, pairedOn, pairingStep, serverIntroduction, statusPill } from '../src/renderer/server/server-copy';
-import { PAIR_COMMAND } from '../src/shared/server';
+import { connectTime, pairedOn, pairingStep, statusPill } from '../src/renderer/server/server-copy';
+import { PAIR_COMMAND, revokeCommand } from '../src/shared/server';
 
 describe('server copy', () => {
   it('labels every server status', () => {
@@ -25,8 +25,8 @@ describe('server copy', () => {
     expect(pairingStep(false)).toEqual({ command: PAIR_COMMAND, note: 'Príkaz otvorí párovacie okno na 10 minút a vypíše párovací token, ktorý začína cw1:.' });
   });
 
-  it('names the computer by platform in the introduction', () => {
-    expect(serverIntroduction(true)).toContain('Zvuk sa zašifruje už na tomto počítači,');
-    expect(serverIntroduction(false)).toContain('Zvuk sa zašifruje už na tomto Macu,');
+  it('gives the native revoke command on Linux and the Docker one elsewhere', () => {
+    expect(revokeCommand('ab12cd34', true)).toBe('codevo-whisper-server revoke ab12cd34');
+    expect(revokeCommand('ab12cd34', false)).toBe('docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper revoke ab12cd34');
   });
 });

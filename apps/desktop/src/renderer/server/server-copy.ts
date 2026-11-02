@@ -60,6 +60,3 @@ export function pairingStep(linux: boolean): { command: string; note: string } {
   return { command: PAIR_COMMAND, note: PAIRING_NOTE };
 }
 
-export function serverIntroduction(linux: boolean): string {
-  return `Codevo Whisper vie prepisovať aj na serveri, ktorý vlastníte, napríklad na domácom počítači s grafickou kartou. Zvuk sa zašifruje už na tomto ${linux ? 'počítači' : 'Macu'}, prepis sa vracia šifrovane a server zvuk ani text zámerne neukladá.`;
-}

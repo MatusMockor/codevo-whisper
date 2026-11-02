@@ -58,7 +58,7 @@ test('pairs by pasting the token, shows the same fingerprint as the server and s
   await expect(card).toContainText(paired.deviceId);
   await expect(card).toContainText(request.deviceName);
   await expect(card.locator('[data-fingerprint="device"]')).toHaveText(request.deviceFingerprint);
-  await expect(page.getByText(`Server pozná tento Mac ako ${paired.deviceId}.`)).toBeVisible();
+  await expect(page.getByText(`Server pozná tento počítač ako ${paired.deviceId}.`)).toBeVisible();
 
   await app.close();
   await start();
@@ -93,7 +93,7 @@ test('Kde beží prepis offers the server orders only after pairing and disconne
 
   await openTab('Server');
   await page.getByRole('button', { name: 'Odpojiť server' }).click();
-  const command = `codevo-whisper revoke ${paired.deviceId}`;
+  const command = `revoke ${paired.deviceId}`;
   await expect(page.locator('.server-card')).toContainText(command);
   await page.getByRole('button', { name: 'Áno, odpojiť' }).click();
 

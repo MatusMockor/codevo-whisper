@@ -39,7 +39,7 @@ function Progress({ pairing }: { pairing: PairingView }) {
   if (pairing.kind === 'paired') {
     return (
       <p className="pair-ok" role="status">
-        Spárované. Server pozná tento Mac ako {pairing.deviceId}.
+        Spárované. Server pozná tento počítač ako {pairing.deviceId}.
       </p>
     );
   }

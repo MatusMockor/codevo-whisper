@@ -23,8 +23,8 @@ function DisconnectConfirm({ server, onCancel, onDisconnected }: { server: Paire
 
   return (
     <div className="confirm">
-      <p>Zmaže sa iba párovanie na tomto Macu a prepis sa prepne na Lokálne. Server bude toto zariadenie poznať, kým ho na ňom neodvoláte:</p>
-      <CommandBox command={revokeCommand(server.deviceId)} />
+      <p>Zmaže sa iba párovanie na tomto počítači a prepis sa prepne na Lokálne. Server bude toto zariadenie poznať, kým ho na ňom neodvoláte:</p>
+      <CommandBox command={revokeCommand(server.deviceId, navigator.userAgent.includes('Linux'))} />
       {failed && (
         <p className="field-note warn" role="alert">
           Server sa nepodarilo odpojiť.
@@ -48,7 +48,7 @@ function UseServer({ engineOrder }: { engineOrder: readonly EngineId[] }) {
   }
   return (
     <div className="use-server">
-      <p>Prepis zatiaľ beží lokálne na tomto Macu.</p>
+      <p>Prepis zatiaľ beží lokálne na tomto počítači.</p>
       <button type="button" className="btn primary" onClick={() => saveSettings({ engineOrder: ['server', 'local'] })}>
         Prepisovať na serveri
       </button>
@@ -81,7 +81,7 @@ export function ServerCard({ server, engineOrder, onDisconnected }: ServerCardPr
           <LockIcon />
           End-to-end šifrované
         </span>
-        <p>Zvuk sa šifruje už na tomto Macu a prepis sa vracia šifrovane. Domáca sieť, VPN aj tunel prenášajú iba šifrované dáta a nevedia ich prečítať.</p>
+        <p>Zvuk sa šifruje už na tomto počítači a prepis sa vracia šifrovane. Domáca sieť, VPN aj tunel prenášajú iba šifrované dáta a nevedia ich prečítať.</p>
       </div>
       <dl className="kv">
         <div>
