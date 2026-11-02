@@ -3,7 +3,7 @@ import { LockIcon, ServerIcon } from '../components/Icons';
 import { CommandBox } from '../server/CommandBox';
 import { PairingCard } from '../server/PairingCard';
 import { ServerCard } from '../server/ServerCard';
-import { STORAGE_WARNINGS } from '../server/server-copy';
+import { serverIntroduction, STORAGE_WARNINGS } from '../server/server-copy';
 import { useServer } from '../server/use-server';
 import { useSettings } from '../settings/use-settings';
 
@@ -19,10 +19,7 @@ function Introduction() {
           <p>Zatiaľ nie je spárovaný žiadny server.</p>
         </div>
       </div>
-      <p className="srv-text">
-        Codevo Whisper vie prepisovať aj na serveri, ktorý vlastníte, napríklad na domácom počítači s grafickou kartou. Zvuk sa zašifruje už na tomto Macu, prepis sa vracia
-        šifrovane a server zvuk ani text zámerne neukladá.
-      </p>
+      <p className="srv-text">{serverIntroduction(navigator.userAgent.includes('Linux'))}</p>
       <div className="e2e">
         <span className="e2e-badge">
           <LockIcon />
