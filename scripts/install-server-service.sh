@@ -56,7 +56,12 @@ rm -rf "$app_dir/server" "$app_dir/stt"
 cp -r "$root/apps/server/dist" "$app_dir/server"
 cp -r "$root/apps/stt/dist" "$app_dir/stt"
 echo '{"type":"module"}' > "$app_dir/package.json"
-[[ "$worker_source" -ef "$worker" ]] || install -D -m 755 "$worker_source" "$worker"
+if [[ ! "$worker_source" -ef "$worker" ]]; then
+  mkdir -p "$app_dir/bin"
+  rm -f "$worker"
+  cp "$worker_source" "$worker"
+  chmod 755 "$worker"
+fi
 
 mkdir -p -m 700 "$state_dir"
 chmod 700 "$state_dir"
