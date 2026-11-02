@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
-import { PAIR_COMMAND, type PairingView, type VaultAvailability } from '../../shared/server';
+import type { PairingView, VaultAvailability } from '../../shared/server';
 import { CommandBox } from './CommandBox';
-import { PAIRING_FAILURES } from './server-copy';
+import { PAIRING_FAILURES, pairingStep } from './server-copy';
 
 type PairingCardProps = { pairing: PairingView; storage: VaultAvailability; replacing: boolean };
 
@@ -39,7 +39,7 @@ function Progress({ pairing }: { pairing: PairingView }) {
   if (pairing.kind === 'paired') {
     return (
       <p className="pair-ok" role="status">
-        Spárované. Server pozná tento Mac ako {pairing.deviceId}.
+        Spárované. Server pozná tento počítač ako {pairing.deviceId}.
       </p>
     );
   }
@@ -58,6 +58,7 @@ export function PairingCard({ pairing, storage, replacing }: PairingCardProps) {
   const tokenId = useId();
   const busy = isBusy(pairing);
   const blocked = storage !== 'available';
+  const step = pairingStep(navigator.userAgent.includes('Linux'));
 
   function pair(): void {
     window.codevo.pairServer(token).catch((error: unknown) => console.error('Starting the pairing failed', error));
@@ -71,8 +72,8 @@ export function PairingCard({ pairing, storage, replacing }: PairingCardProps) {
         <li>
           <div>
             <p>Na serveri spustite príkaz</p>
-            <CommandBox command={PAIR_COMMAND} />
-            <p className="note">Príkaz otvorí párovacie okno na 10 minút a vypíše párovací token, ktorý začína cw1:.</p>
+            <CommandBox command={step.command} />
+            <p className="note">{step.note}</p>
           </div>
         </li>
         <li>

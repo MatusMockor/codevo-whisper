@@ -34,6 +34,7 @@ export const MAX_PAIRING_TOKEN_CHARS = 1024;
 
 export const PAIR_COMMAND = 'docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper pair';
 
-export function revokeCommand(deviceId: string): string {
+export function revokeCommand(deviceId: string, linux = false): string {
+  if (linux) return `codevo-whisper-server revoke ${deviceId}`;
   return `docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper revoke ${deviceId}`;
 }

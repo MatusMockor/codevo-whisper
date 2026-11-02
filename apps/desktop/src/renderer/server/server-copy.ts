@@ -1,4 +1,4 @@
-import type { PairingFailure, ServerStatus, VaultAvailability } from '../../shared/server';
+import { PAIR_COMMAND, type PairingFailure, type ServerStatus, type VaultAvailability } from '../../shared/server';
 
 export type PillTone = 'ok' | 'warn' | 'muted';
 
@@ -50,3 +50,13 @@ export function pairedOn(iso: string): string {
 export function connectTime(status: ServerStatus): string {
   return status.kind === 'online' ? `${status.connectMs} ms` : '–';
 }
+
+const PAIRING_NOTE = 'Príkaz otvorí párovacie okno na 10 minút a vypíše párovací token, ktorý začína cw1:.';
+
+export function pairingStep(linux: boolean): { command: string; note: string } {
+  if (linux) {
+    return { command: 'codevo-whisper-server pair', note: `${PAIRING_NOTE} Ak server beží v Dockeri, spustite ${PAIR_COMMAND}.` };
+  }
+  return { command: PAIR_COMMAND, note: PAIRING_NOTE };
+}
+

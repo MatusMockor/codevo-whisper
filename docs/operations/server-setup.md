@@ -1,6 +1,6 @@
 # Codevo Whisper server - setup
 
-The server is a Docker Compose project with two services:
+The server runs as a Docker Compose project with two services, or natively on a Linux desktop with the Codevo Whisper app installed (see [Native (systemd, without Docker)](#native-systemd-without-docker)):
 
 - `gateway` - the encrypted WebSocket endpoint for paired devices, the admin socket and the `codevo-whisper` CLI. It is the only service that publishes a port, on `127.0.0.1:8787` by default.
 - `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is mounted read-only; provisioning runs as the separate `stt-provision` service.
@@ -68,9 +68,9 @@ The command opens a pairing window (10 minutes, one device), prints the `cw1:` t
 
 The token works for one device only. The window closes when a device is paired or rejected, when it expires, when the `pair` command is interrupted, after 20 failed attempts in total, and when the gateway restarts. An address with 5 failed attempts is refused for the rest of the window. A failed attempt (wrong token secret, replayed handshake) does not close the window on its own.
 
-### In the macOS app
+### In the desktop app
 
-Open **Server** in the app, copy the pair command if you need it, paste the whole `cw1:` line into **Párovací token** and press **Spárovať**. The app shows the connection fingerprint; answer `y` on the server only if it matches. The device name is the computer name. The device key, the pinned server key and the endpoint are stored encrypted with the system key store (macOS Keychain through Electron `safeStorage`); on Linux the app refuses to pair when only the `basic_text` backend is available.
+Open **Server** in the app, copy the pair command if you need it (on Linux the app shows `codevo-whisper-server pair`), paste the whole `cw1:` line into **Párovací token** and press **Spárovať**. The app shows the connection fingerprint; answer `y` on the server only if it matches. The device name is the computer name. The device key, the pinned server key and the endpoint are stored encrypted with the system key store (macOS Keychain through Electron `safeStorage`); on Linux the app refuses to pair when only the `basic_text` backend is available.
 
 Then choose the order in **Nastavenia > Kde beží prepis**: "Lokálne", "Server", "Server, potom lokálne" or "Lokálne, potom server". The engine is picked when a dictation starts and never changes during it. If the connection drops during a dictation, the app reconnects once and sends the whole recording again (up to 2 minutes of audio).
 
@@ -100,6 +100,47 @@ $COMPOSE logs -f stt
 ```
 
 The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`) and engine error status codes. Neither logs audio or text.
+
+## Native (systemd, without Docker)
+
+On a Linux machine with the Codevo Whisper desktop app, the gateway and the sidecar can run as two systemd user services that reuse the app's STT worker and model. No Docker, no GPU passthrough.
+
+Requirements: Node.js 24+ and pnpm on `PATH`, the desktop app installed (`/opt/Codevo Whisper`) and Parakeet Ultra downloaded in it (`~/.config/Codevo Whisper/models/parakeet-ultra-q8.gguf`).
+
+```bash
+CW_PUBLIC_ENDPOINT=wss://<host>.ts.net scripts/install-server-service.sh
+```
+
+The script builds `apps/server` and `apps/stt`, copies both bundles to `~/.local/share/codevo-whisper-server/`, so the checkout can be deleted afterwards, and writes:
+
+- `~/.config/codevo-whisper-server/env` (mode 0600): the settings. Override any of `CW_PUBLIC_ENDPOINT` (default `ws://127.0.0.1:8787`), `CW_BIND`, `CW_PORT`, `STT_PORT`, `STT_BACKEND`, `STT_THREADS`, `STT_WORKER_BINARY`, `STT_MODEL_PATH` in the environment of the install command. A later run keeps the values of the previous one unless overridden.
+- `~/.local/state/codevo-whisper-server/` (mode 0700): server key, device registry and admin socket. If it has no key yet, the pairings from `~/.local/state/codevo-phone-server/data` are copied over.
+- `codevo-whisper-stt.service` and `codevo-whisper-gateway.service` in `~/.config/systemd/user/`, enabled and restarted.
+- `~/.local/bin/codevo-whisper-server`, the `codevo-whisper` CLI bound to the service's admin socket.
+
+Run it again after pulling changes or switching the Node.js version; the units use the absolute `node` path found at install time. User services stop at logout; `loginctl enable-linger` keeps them running.
+
+```bash
+codevo-whisper-server pair
+codevo-whisper-server devices
+codevo-whisper-server revoke <id>
+codevo-whisper-server status
+journalctl --user -u codevo-whisper-gateway -f
+journalctl --user -u codevo-whisper-stt -f
+```
+
+Tailscale: keep `CW_BIND=127.0.0.1`, run `tailscale serve --bg 8787` and install with `CW_PUBLIC_ENDPOINT=wss://<host>.ts.net` (the MagicDNS name of the machine). Pair devices only after the endpoint is set; tokens carry it.
+
+Uninstall:
+
+```bash
+systemctl --user disable --now codevo-whisper-gateway.service codevo-whisper-stt.service
+rm ~/.config/systemd/user/codevo-whisper-{gateway,stt}.service ~/.local/bin/codevo-whisper-server
+rm -r ~/.local/share/codevo-whisper-server ~/.config/codevo-whisper-server
+systemctl --user daemon-reload
+```
+
+`~/.local/state/codevo-whisper-server` holds the server key and the paired devices; delete it too only if every device should pair again.
 
 ## Reaching the gateway from other networks
 

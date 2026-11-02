@@ -19,6 +19,7 @@ export type ServerServiceDeps = {
   settings: Pick<SettingsStore, 'get' | 'update'>;
   logger: Logger;
   clock?: () => number;
+  linux?: boolean;
 };
 
 export const FOCUS_CHECK_INTERVAL_MS = 15_000;
@@ -124,7 +125,7 @@ export class ServerService {
       await this.deps.settings.update({ engineOrder: LOCAL_ONLY });
     }
     this.deps.status.reset();
-    return { revokeCommand: pairing === null ? null : revokeCommand(pairing.deviceId) };
+    return { revokeCommand: pairing === null ? null : revokeCommand(pairing.deviceId, this.deps.linux) };
   }
 
   dispose(): void {
