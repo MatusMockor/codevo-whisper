@@ -32,7 +32,7 @@ Clipboard transactions distinguish Copy from paste and restore from leave. Copy 
 
 ## Release packages
 
-Every release tag publishes the AppImage and the deb for x64 and arm64 to the GitHub release, together with `latest-linux.yml`, `latest-linux-arm64.yml` and `SHA256SUMS-linux-<arch>`; `release.yml` builds them through the reusable `release-linux.yml` and verifies the manifests before and after the upload (see `docs/operations/release.md`, Linux). The AppImage updates in the app from those manifests. The deb is a manual package: the app only reads the manifest version, shows the newer version and links to the release page.
+Every release tag publishes the AppImage and the deb for x64 and arm64 to the GitHub release, together with `latest-linux.yml`, `latest-linux-arm64.yml` and `SHA256SUMS-linux-<arch>`; `release.yml` builds them through the reusable `release-linux.yml` and verifies the manifests before and after the upload (see `docs/operations/release.md`, Linux). The AppImage updates in the app from those manifests. The deb is a manual package: the app only reads the manifest version, shows the newer version and links to the release page. On hosts that restrict unprivileged user namespaces (Ubuntu 24.04 default `kernel.apparmor_restrict_unprivileged_userns=1`), electron-builder's AppImage launcher adds `--no-sandbox`, so the AppImage runs without the Chromium sandbox; the deb installs an AppArmor profile for `/opt/Codevo Whisper/codevo-whisper` and keeps it.
 
 ## Build without publishing
 

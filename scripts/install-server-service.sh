@@ -24,13 +24,16 @@ if [[ -f "$env_file" ]]; then
   done < "$env_file"
 fi
 
+worker_source="${STT_WORKER_BINARY:-/opt/Codevo Whisper/resources/bin/x64/cw-stt-worker-vulkan}"
+worker="$app_dir/bin/cw-stt-worker"
+
 settings=(
   "STT_HOST=127.0.0.1"
   "STT_PORT=${STT_PORT:-8001}"
   "STT_BACKEND=${STT_BACKEND:-vulkan}"
   "STT_THREADS=${STT_THREADS:-4}"
   "STT_ENGINE=worker"
-  "STT_WORKER_BINARY=${STT_WORKER_BINARY:-/opt/Codevo Whisper/resources/bin/x64/cw-stt-worker-vulkan}"
+  "STT_WORKER_BINARY=$worker"
   "STT_MODEL_PATH=${STT_MODEL_PATH:-$HOME/.config/Codevo Whisper/models/parakeet-ultra-q8.gguf}"
   "CW_BIND=${CW_BIND:-127.0.0.1}"
   "CW_PORT=${CW_PORT:-8787}"
@@ -43,7 +46,7 @@ for setting in "${settings[@]}"; do
   export "$setting"
 done
 
-[[ -x "$STT_WORKER_BINARY" ]] || fail "STT worker not found: $STT_WORKER_BINARY. Install the Codevo Whisper desktop app or set STT_WORKER_BINARY."
+[[ -x "$worker_source" ]] || fail "STT worker not found: $worker_source. Install the Codevo Whisper desktop app or set STT_WORKER_BINARY."
 [[ -f "$STT_MODEL_PATH" ]] || fail "model not found: $STT_MODEL_PATH. Download Parakeet Ultra in the desktop app or set STT_MODEL_PATH."
 
 pnpm --dir "$root" --filter @codevo-whisper/server --filter @codevo-whisper/stt build
@@ -53,6 +56,7 @@ rm -rf "$app_dir/server" "$app_dir/stt"
 cp -r "$root/apps/server/dist" "$app_dir/server"
 cp -r "$root/apps/stt/dist" "$app_dir/stt"
 echo '{"type":"module"}' > "$app_dir/package.json"
+[[ "$worker_source" -ef "$worker" ]] || install -D -m 755 "$worker_source" "$worker"
 
 mkdir -p -m 700 "$state_dir"
 chmod 700 "$state_dir"

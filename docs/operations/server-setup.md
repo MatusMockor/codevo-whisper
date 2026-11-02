@@ -111,14 +111,14 @@ Requirements: Node.js 24+ and pnpm on `PATH`, the desktop app installed (`/opt/C
 CW_PUBLIC_ENDPOINT=wss://<host>.ts.net scripts/install-server-service.sh
 ```
 
-The script builds `apps/server` and `apps/stt`, copies both bundles to `~/.local/share/codevo-whisper-server/`, so the checkout can be deleted afterwards, and writes:
+The script builds `apps/server` and `apps/stt`, copies both bundles and the STT worker to `~/.local/share/codevo-whisper-server/`, so the checkout and the desktop package can be removed or replaced afterwards (deb or AppImage), and writes:
 
 - `~/.config/codevo-whisper-server/env` (mode 0600): the settings. Override any of `CW_PUBLIC_ENDPOINT` (default `ws://127.0.0.1:8787`), `CW_BIND`, `CW_PORT`, `STT_PORT`, `STT_BACKEND`, `STT_THREADS`, `STT_WORKER_BINARY`, `STT_MODEL_PATH` in the environment of the install command. A later run keeps the values of the previous one unless overridden.
 - `~/.local/state/codevo-whisper-server/` (mode 0700): server key, device registry and admin socket. If it has no key yet, the pairings from `~/.local/state/codevo-phone-server/data` are copied over.
 - `codevo-whisper-stt.service` and `codevo-whisper-gateway.service` in `~/.config/systemd/user/`, enabled and restarted.
 - `~/.local/bin/codevo-whisper-server`, the `codevo-whisper` CLI bound to the service's admin socket.
 
-Run it again after pulling changes or switching the Node.js version; the units use the absolute `node` path found at install time. User services stop at logout; `loginctl enable-linger` keeps them running.
+Later runs keep the copied worker; to replace it, pass `STT_WORKER_BINARY` (from an AppImage: `./Codevo*.AppImage --appimage-extract 'resources/bin/x64/cw-stt-worker-vulkan'`). Run it again after pulling changes or switching the Node.js version; the units use the absolute `node` path found at install time. User services stop at logout; `loginctl enable-linger` keeps them running.
 
 ```bash
 codevo-whisper-server pair
