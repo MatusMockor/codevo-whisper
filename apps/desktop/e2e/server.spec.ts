@@ -1,6 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pairingStep } from '../src/renderer/server/server-copy';
 import type { Settings } from '../src/shared/settings';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
@@ -38,7 +39,7 @@ test.afterEach(async () => {
 test('pairs by pasting the token, shows the same fingerprint as the server and survives a relaunch', async () => {
   await openTab('Server');
   await expect(page.getByRole('heading', { name: 'Spárovať server' })).toBeVisible();
-  await expect(page.locator('.term')).toContainText('codevo-whisper pair');
+  await expect(page.locator('.term')).toContainText(pairingStep(process.platform === 'linux').command);
   const window = await gateway.openPairingWindow();
 
   await page.getByRole('textbox', { name: 'Párovací token' }).fill(window.token);
