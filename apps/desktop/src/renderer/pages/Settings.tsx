@@ -1,4 +1,5 @@
 import { MicrophonePicker } from '../components/MicrophonePicker';
+import { AiSection } from '../settings/AiSection';
 import { DictationSection } from '../settings/DictationSection';
 import { EngineSection } from '../settings/EngineSection';
 import { HistorySection } from '../settings/HistorySection';
@@ -45,6 +46,7 @@ export function Settings() {
       <InsertionSection settings={value} />
       {permissions.permissions.kind === 'ready' && permissions.permissions.value.platform === 'linux' && <SettingsGroup title="Prístup k systému"><InputPermissionsStep permissions={permissions.permissions} refresh={permissions.refresh} /></SettingsGroup>}
       <TranscriptSection settings={value} />
+      <AiSection settings={value} />
       <HistorySection />
       <SystemSection launchAtLogin={value.launchAtLogin} />
     </div>
