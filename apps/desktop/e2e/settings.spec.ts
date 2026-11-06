@@ -33,6 +33,9 @@ const DEFAULTS: Settings = {
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,
+  aiBaseUrl: null,
+  aiModel: '',
+  aiPolish: false,
 };
 
 let app: ElectronApplication;

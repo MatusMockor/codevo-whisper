@@ -1,3 +1,4 @@
+import { isAiBaseUrl, isAiModel } from '../../shared/ai';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords, isEngineOrder, type Settings } from '../../shared/settings';
 
@@ -68,6 +69,9 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   overlay: oneOf(['indicator', 'live']),
   launchAtLogin: isBoolean,
   onboardingDone: isBoolean,
+  aiBaseUrl: (value: unknown): value is string | null => value === null || isAiBaseUrl(value),
+  aiModel: isAiModel,
+  aiPolish: isBoolean,
 });
 
 export const SETTINGS_KEYS = Object.freeze(Object.keys(SETTINGS_FIELDS)) as ReadonlyArray<keyof Settings>;
