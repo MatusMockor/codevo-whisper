@@ -3,6 +3,7 @@ import type { HistoryPolicy, HistoryView } from './history';
 import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
 import type { HotkeyRecordResult } from './hotkey-record';
+import type { Meeting, MeetingSummary } from './meetings';
 import type { AudioDevice } from './microphones';
 import type { ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
@@ -53,6 +54,12 @@ export type IpcInvokeApi = {
   getAiKeyState(): Promise<AiKeyState>;
   setAiKey(key: string | null): Promise<AiKeyState>;
   checkAi(baseUrl: string): Promise<AiCheck>;
+  getMeetings(): Promise<MeetingSummary[]>;
+  getMeeting(id: string): Promise<Meeting | null>;
+  startMeeting(): Promise<MeetingSummary>;
+  stopMeeting(): Promise<void>;
+  retranscribeMeeting(id: string): Promise<void>;
+  deleteMeeting(id: string): Promise<void>;
 };
 
 export type IpcEvents = {
@@ -67,6 +74,7 @@ export type IpcEvents = {
   'microphone-level': number;
   'server-changed': ServerView;
   'update-status-changed': UpdateStatus;
+  'meetings-changed': MeetingSummary[];
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -118,6 +126,12 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getAiKeyState: 'ai:key-state',
   setAiKey: 'ai:set-key',
   checkAi: 'ai:check',
+  getMeetings: 'meetings:list',
+  getMeeting: 'meetings:get',
+  startMeeting: 'meetings:start',
+  stopMeeting: 'meetings:stop',
+  retranscribeMeeting: 'meetings:retranscribe',
+  deleteMeeting: 'meetings:delete',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -132,4 +146,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'microphone-level': 'microphones:level',
   'server-changed': 'server:changed',
   'update-status-changed': 'updates:status-changed',
+  'meetings-changed': 'meetings:changed',
 });

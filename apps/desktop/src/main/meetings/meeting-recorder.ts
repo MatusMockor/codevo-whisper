@@ -18,7 +18,7 @@ export type MeetingRecorderDeps = {
   store: MeetingStore;
   capture: MeetingCaptureHost;
   systemAudio: () => SystemAudioPlan;
-  microphoneId: () => string | null;
+  microphoneId: () => Promise<string | null>;
   logger: Logger;
   clock?: () => number;
   systemSilenceMs?: number;
@@ -86,7 +86,7 @@ export class MeetingRecorder {
     const recording: Recording = { id: record.id, startedAt, files, plan, silence: null, unsubscribe: this.deps.capture.onMeetingFrame((frame) => this.receive(recording, frame)) };
     this.recording = recording;
     try {
-      const result = parseMeetingStartResult(await this.deps.capture.request({ type: 'meeting-start', deviceId: this.deps.microphoneId(), system: plan.kind === 'capture-window' }));
+      const result = parseMeetingStartResult(await this.deps.capture.request({ type: 'meeting-start', deviceId: await this.deps.microphoneId(), system: plan.kind === 'capture-window' }));
       if (plan.kind === 'capture-window' && result.system === 'failed') {
         await this.failSystem(recording, CAPTURE_FAILED_NOTE);
       }

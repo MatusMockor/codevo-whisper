@@ -11,3 +11,7 @@ export function resolveWorkerBinary(location: TranscribeBinaryLocation): string 
   }
   return join(location.appPath, 'resources', 'bin', location.arch, name);
 }
+
+export function resolveTranscribeCli(location: TranscribeBinaryLocation): string {
+  return join(location.isPackaged ? location.resourcesPath : join(location.appPath, 'resources'), 'bin', location.arch, 'transcribe-cli');
+}

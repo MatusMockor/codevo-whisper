@@ -5,6 +5,7 @@ import type { HistoryView } from '../shared/history';
 import type { AppStatus } from '../shared/app-status';
 import type { OutputAudioView } from '../shared/recording-audio';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
+import type { Meeting, MeetingSummary } from '../shared/meetings';
 import type { AudioDevice } from '../shared/microphones';
 import type { ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
@@ -71,6 +72,12 @@ const api: IpcApi = {
   getAiKeyState: () => ipcRenderer.invoke(INVOKE_CHANNELS.getAiKeyState) as Promise<AiKeyState>,
   setAiKey: (key) => ipcRenderer.invoke(INVOKE_CHANNELS.setAiKey, key) as Promise<AiKeyState>,
   checkAi: (baseUrl) => ipcRenderer.invoke(INVOKE_CHANNELS.checkAi, baseUrl) as Promise<AiCheck>,
+  getMeetings: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMeetings) as Promise<MeetingSummary[]>,
+  getMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.getMeeting, id) as Promise<Meeting | null>,
+  startMeeting: () => ipcRenderer.invoke(INVOKE_CHANNELS.startMeeting) as Promise<MeetingSummary>,
+  stopMeeting: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMeeting) as Promise<void>,
+  retranscribeMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.retranscribeMeeting, id) as Promise<void>,
+  deleteMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteMeeting, id) as Promise<void>,
   on: subscribe,
 };
 

@@ -1,4 +1,4 @@
-import { app, powerMonitor, session, shell } from 'electron';
+import { app, desktopCapturer, powerMonitor, session, shell, webContents } from 'electron';
 import { join } from 'node:path';
 import { prewarmWhenShown } from '../audio/capture-prewarm';
 import { CaptureWindow } from '../audio/capture-window';
@@ -21,6 +21,7 @@ import { MACOS_PERMISSION_LINKS } from '../permissions/macos-permission-links';
 import { PermissionsService } from '../permissions/permissions-service';
 import { appFrameCheck } from '../security/app-frame';
 import { installContentSecurityPolicy } from '../security/content-security-policy';
+import { installDisplayMediaHandler } from '../security/display-media';
 import { installPermissionHandlers } from '../security/permissions';
 import { PauseState } from '../session/pause-state';
 import { SessionCoordinator } from '../session/session-coordinator';
@@ -37,6 +38,7 @@ import type { OverlayState } from '../../shared/overlay-contract';
 import { createAiServices } from './ai-wiring';
 import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
+import { createMeetings, type Meetings } from './meeting-wiring';
 import { createInputHelper } from './input-helper-factory';
 import { createModels } from './model-wiring';
 import { createServerServices } from './server-wiring';
@@ -63,6 +65,11 @@ function installSecurity(captureWindow: CaptureWindow, mainWindow: MainWindowCon
     isCaptureFrame: (contents, url) => captureWindow.isCaptureFrame(contents, url),
     isAppFrame: appFrameCheck(source, (contents) => mainWindow.ownsContents(contents)),
   });
+  installDisplayMediaHandler(session.defaultSession, {
+    isCaptureFrame: (contents, url) => captureWindow.isCaptureFrame(contents, url),
+    contentsOf: (frame) => webContents.fromFrame(frame) ?? null,
+    screens: () => desktopCapturer.getSources({ types: ['screen'] }),
+  });
   if (source.kind !== 'file') {
     return;
   }
@@ -78,13 +85,15 @@ export function composeApplication(logger: Logger): Application {
   const mainWindow = new MainWindowController(logger, e2e ? backgroundPresentation : foregroundPresentation);
   const disposers: Array<() => void> = [];
   let sessions: SessionCoordinator | null = null;
+  let meetings: Meetings | null = null;
   const history = new HistoryStore(join(app.getPath('userData'), 'history.json'), logger);
   const shutdown = async (): Promise<void> => {
+    await meetings?.shutdown();
     await sessions?.shutdown();
     await capture.settled();
     await history.settled();
   };
-  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false) || history.isBusy(), settled: shutdown }, () => app.quit(), logger);
+  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false) || history.isBusy() || (meetings?.isBusy() ?? false), settled: shutdown }, () => app.quit(), logger);
   const allowShutdown = (): void => quitGate.systemShuttingDown();
   const recordingShell = e2e ? new RecordingDesktopShell() : null;
   const desktopShell: DesktopShell = recordingShell ?? shell;
@@ -116,6 +125,8 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
+    meetings = createMeetings({ captureWindow, capture, models: models.manager, settings, window: mainWindow, logger });
+    await meetings.load();
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();
     const permissions = new PermissionsService({
@@ -161,6 +172,7 @@ export function composeApplication(logger: Logger): Application {
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
       ai,
+      meetings,
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
     const overlay = new OverlayWindow(rendererSource('overlay'), logger);

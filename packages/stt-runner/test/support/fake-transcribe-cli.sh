@@ -36,6 +36,11 @@ case "${FAKE_CLI_MODE:-text}" in
   stdout)
     cat "$FAKE_CLI_STDOUT_FILE"
     ;;
+  words-per-wav)
+    name="$(basename "$wav" .wav)"
+    cp "$wav" "$FAKE_CLI_STDOUT_DIR/$name.seen.wav"
+    cat "$FAKE_CLI_STDOUT_DIR/$name.txt"
+    ;;
   oversize)
     head -c 16001 /dev/zero | tr '\0' 'a' > "$output"
     ;;

@@ -61,7 +61,7 @@ let capture: FakeMeetingCapture;
 let source: FakeSystemSource;
 
 function recorder(plan: () => SystemAudioPlan = () => ({ kind: 'source', source }), systemSilenceMs = 60_000): MeetingRecorder {
-  return new MeetingRecorder({ store, capture, systemAudio: plan, microphoneId: () => 'mic-1', logger: new RecordingLogger(), clock: () => now, systemSilenceMs });
+  return new MeetingRecorder({ store, capture, systemAudio: plan, microphoneId: () => Promise.resolve('mic-1'), logger: new RecordingLogger(), clock: () => now, systemSilenceMs });
 }
 
 beforeEach(async () => {

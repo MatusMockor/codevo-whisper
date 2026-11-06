@@ -52,6 +52,7 @@ mac:
   notarize: false
   extendInfo:
     NSMicrophoneUsageDescription: Codevo Whisper potrebuje mikrofón na diktovanie. Mikrofón je zapnutý iba počas diktovania.
+    NSAudioCaptureUsageDescription: Codevo Whisper nahráva zvuk systému iba počas stretnutia, ktoré sami spustíte. Nahrávka ostáva na tomto počítači.
     ElectronSquirrelPreventDowngrades: true
 dmg:
   sign: true
