@@ -1,4 +1,5 @@
-export { pcmToWav } from './wav';
+export { pcmToWav, wavHeader } from './wav';
+export { runProcess, type ProcessLimits } from './run-process';
 export {
   DEFAULT_TIMEOUT_MS,
   MAX_OUTPUT_BYTES,

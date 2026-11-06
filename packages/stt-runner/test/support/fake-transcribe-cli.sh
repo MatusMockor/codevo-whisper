@@ -33,6 +33,9 @@ case "${FAKE_CLI_MODE:-text}" in
     fi
     printf ' %s:%s \n' "$first_sample" "$data_bytes" > "$output"
     ;;
+  stdout)
+    cat "$FAKE_CLI_STDOUT_FILE"
+    ;;
   oversize)
     head -c 16001 /dev/zero | tr '\0' 'a' > "$output"
     ;;
