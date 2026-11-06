@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, rejectArguments, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateAiBaseUrl, validateAiKey, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('accepts recording audio preferences and rejects malformed percentages and output ids', () => {
@@ -37,6 +37,19 @@ describe('validateSettingsPatch', () => {
     }
     expect(() => validateSettingsPatch({ removeFillerWords: 1 })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ appendTrailingSpace: 'true' })).toThrow(IpcValidationError);
+  });
+  it('accepts http and https AI endpoints with bounded model names and rejects anything else', () => {
+    const patch = { aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', aiPolish: true };
+    expect(validateSettingsPatch(patch)).toEqual(patch);
+    expect(validateSettingsPatch({ aiBaseUrl: 'https://llm.example.com/v1/', aiModel: '' })).toEqual({ aiBaseUrl: 'https://llm.example.com/v1/', aiModel: '' });
+    expect(validateSettingsPatch({ aiBaseUrl: null })).toEqual({ aiBaseUrl: null });
+    for (const aiBaseUrl of ['', 'file:///etc/passwd', 'ftp://host/v1', 'javascript:alert(1)', 'http://user:secret@host/v1', 'http://host/v1?x=1', 'http://host/v1#x', ' http://host/v1', `http://host/${'a'.repeat(512)}`, 'localhost:11434', 7]) {
+      expect(() => validateSettingsPatch({ aiBaseUrl })).toThrow(IpcValidationError);
+    }
+    for (const aiModel of [null, ' qwen', 'qwen\n', 'a\u0000b', 'm'.repeat(201)]) {
+      expect(() => validateSettingsPatch({ aiModel })).toThrow(IpcValidationError);
+    }
+    expect(() => validateSettingsPatch({ aiPolish: 'on' })).toThrow(IpcValidationError);
   });
   it.each(['hold', 'toggle', 'smart'])('accepts %s dictation mode at the IPC boundary', (mode) => {
     expect(validateSettingsPatch({ mode })).toEqual({ mode });
@@ -213,6 +226,23 @@ describe('resident settings IPC', () => {
     }
     for (const patch of [{ localModelUnload: 0 }, { localModelUnload: '5' }, { localModelUnload: 30 }, { localAcceleration: 'metal' }]) {
       expect(() => validateSettingsPatch(patch)).toThrow(IpcValidationError);
+    }
+  });
+});
+
+describe('AI IPC arguments', () => {
+  it('accepts an http or https server address and a bounded key or null', () => {
+    expect(validateAiBaseUrl('http://127.0.0.1:11434/v1')).toBe('http://127.0.0.1:11434/v1');
+    expect(validateAiKey('sk-local')).toBe('sk-local');
+    expect(validateAiKey(null)).toBeNull();
+  });
+
+  it('rejects other schemes, embedded credentials and malformed keys', () => {
+    for (const url of ['file:///tmp/x', 'http://a:b@host/v1', '', 42]) {
+      expect(() => validateAiBaseUrl(url)).toThrow(IpcValidationError);
+    }
+    for (const key of ['', ' sk', 'sk\nX-Injected: 1', 'k'.repeat(4097), 7, undefined]) {
+      expect(() => validateAiKey(key)).toThrow(IpcValidationError);
     }
   });
 });

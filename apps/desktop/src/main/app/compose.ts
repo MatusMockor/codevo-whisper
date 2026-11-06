@@ -34,6 +34,7 @@ import { OverlayWindow } from '../windows/overlay-window';
 import { rendererSource } from '../windows/renderer-source';
 import { backgroundPresentation, foregroundPresentation } from '../windows/window-presentation';
 import type { OverlayState } from '../../shared/overlay-contract';
+import { createAiServices } from './ai-wiring';
 import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
 import { createInputHelper } from './input-helper-factory';
@@ -128,6 +129,7 @@ export function composeApplication(logger: Logger): Application {
       inputReady: input.promise,
     });
     const server = createServerServices({ settings, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const ai = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
@@ -158,6 +160,7 @@ export function composeApplication(logger: Logger): Application {
       source: rendererSource(),
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
+      ai,
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
     const overlay = new OverlayWindow(rendererSource('overlay'), logger);
@@ -177,6 +180,7 @@ export function composeApplication(logger: Logger): Application {
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
       openServer: () => mainWindow.open('server'),
+      polish: (text, signal) => ai.polish(text, signal),
       logger,
     });
     sessions = coordinator;

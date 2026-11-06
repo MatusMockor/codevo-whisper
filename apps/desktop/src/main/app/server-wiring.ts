@@ -23,7 +23,7 @@ export type ServerWiringDeps = { settings: SettingsStore; window: MainWindowEven
 
 export type ServerServices = { engine: RemoteEngine; service: ServerService; dispose(): void };
 
-function vaultFor(context: VaultContext): SecretVault {
+export function vaultFor(context: VaultContext): SecretVault {
   if (vaultKind(context) === 'insecure-test') {
     return new InsecureTestVault();
   }

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
+import type { AiCheck, AiKeyState } from '../shared/ai';
 import type { HistoryView } from '../shared/history';
 import type { AppStatus } from '../shared/app-status';
 import type { OutputAudioView } from '../shared/recording-audio';
@@ -67,6 +68,9 @@ const api: IpcApi = {
   checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,
   installUpdate: () => ipcRenderer.invoke(INVOKE_CHANNELS.installUpdate) as Promise<InstallOutcome>,
   openUpdateDownload: () => ipcRenderer.invoke(INVOKE_CHANNELS.openUpdateDownload) as Promise<void>,
+  getAiKeyState: () => ipcRenderer.invoke(INVOKE_CHANNELS.getAiKeyState) as Promise<AiKeyState>,
+  setAiKey: (key) => ipcRenderer.invoke(INVOKE_CHANNELS.setAiKey, key) as Promise<AiKeyState>,
+  checkAi: (baseUrl) => ipcRenderer.invoke(INVOKE_CHANNELS.checkAi, baseUrl) as Promise<AiCheck>,
   on: subscribe,
 };
 
