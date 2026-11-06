@@ -1,4 +1,4 @@
-export const PAGE_IDS = ['home', 'server', 'settings', 'privacy'] as const;
+export const PAGE_IDS = ['home', 'meetings', 'server', 'settings', 'privacy'] as const;
 
 export type PageId = (typeof PAGE_IDS)[number];
 

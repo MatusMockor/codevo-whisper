@@ -6,6 +6,7 @@ export type PageDefinition = { id: PageId; label: string };
 
 export const PAGES: readonly PageDefinition[] = [
   { id: 'home', label: 'Domov' },
+  { id: 'meetings', label: 'Stretnutia' },
   { id: 'server', label: 'Server' },
   { id: 'settings', label: 'Nastavenia' },
   { id: 'privacy', label: 'Súkromie' },

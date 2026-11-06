@@ -5,6 +5,16 @@ function HomeIcon() {
   return <path d="M2.5 7.2L8 2.5l5.5 4.7V13a1 1 0 0 1-1 1h-3v-4h-3v4h-3a1 1 0 0 1-1-1z" />;
 }
 
+function MeetingIcon() {
+  return (
+    <>
+      <circle cx="5.5" cy="5.5" r="2.2" />
+      <circle cx="11" cy="6.5" r="1.8" />
+      <path d="M1.8 13.5c.5-2.3 2-3.6 3.7-3.6s3.2 1.3 3.7 3.6M9.6 10.4c.4-.3.9-.5 1.4-.5 1.5 0 2.7 1.1 3.1 3.1" />
+    </>
+  );
+}
+
 function ServerIcon() {
   return (
     <>
@@ -36,6 +46,7 @@ function ShieldIcon() {
 
 const ICONS: Record<PageId, () => JSX.Element> = {
   home: HomeIcon,
+  meetings: MeetingIcon,
   server: ServerIcon,
   settings: SlidersIcon,
   privacy: ShieldIcon,
