@@ -1,13 +1,13 @@
 import { app, BrowserWindow, ipcMain, type IpcMainEvent, type WebContents } from 'electron';
 import { fileURLToPath } from 'node:url';
-import { CAPTURE_CHANNELS, type CaptureRequest, type RawAudioDevice } from '../../shared/capture-contract';
+import { CAPTURE_CHANNELS, type CaptureRequest, type MeetingFrame, type RawAudioDevice } from '../../shared/capture-contract';
 import { Listeners } from '../helper/listeners';
 import { isTrustedSenderUrl } from '../ipc/trusted-sender';
 import type { Logger } from '../logging/logger';
 import { loadSource } from '../windows/load-source';
 import type { RendererSource } from '../windows/renderer-source';
 import type { CaptureHost } from './capture-host';
-import { parseDeviceList, parseFrame, parseLevel, parseReply } from './capture-payloads';
+import { parseDeviceList, parseFrame, parseLevel, parseMeetingFrame, parseReply } from './capture-payloads';
 import { CaptureRequests } from './capture-requests';
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -44,6 +44,7 @@ export class CaptureWindow implements CaptureHost {
   private quitting = false;
   private readonly requests = new CaptureRequests();
   private readonly frames: Listeners<Uint8Array>;
+  private readonly meetingFrames: Listeners<MeetingFrame>;
   private readonly levels: Listeners<number>;
   private readonly devices: Listeners<RawAudioDevice[]>;
 
@@ -52,6 +53,7 @@ export class CaptureWindow implements CaptureHost {
     private readonly logger: Logger,
   ) {
     this.frames = new Listeners(logger, 'A capture frame listener failed');
+    this.meetingFrames = new Listeners(logger, 'A meeting frame listener failed');
     this.levels = new Listeners(logger, 'A capture level listener failed');
     this.devices = new Listeners(logger, 'A capture device listener failed');
     app.once('before-quit', () => {
@@ -62,6 +64,9 @@ export class CaptureWindow implements CaptureHost {
     });
     this.listen(CAPTURE_CHANNELS.frame, (payload) => {
       this.frames.emit(parseFrame(payload));
+    });
+    this.listen(CAPTURE_CHANNELS.meetingFrame, (payload) => {
+      this.meetingFrames.emit(parseMeetingFrame(payload));
     });
     this.listen(CAPTURE_CHANNELS.level, (payload) => {
       this.levels.emit(parseLevel(payload));
@@ -84,7 +89,7 @@ export class CaptureWindow implements CaptureHost {
   }
 
   async request(request: CaptureRequest): Promise<unknown> {
-    if (request.type === 'stop' && this.ready === null) {
+    if ((request.type === 'stop' || request.type === 'meeting-stop') && this.ready === null) {
       return null;
     }
     const contents = await this.ensure();
@@ -121,6 +126,10 @@ export class CaptureWindow implements CaptureHost {
 
   onFrame(listener: (pcm: Uint8Array) => void): () => void {
     return this.frames.add(listener);
+  }
+
+  onMeetingFrame(listener: (frame: MeetingFrame) => void): () => void {
+    return this.meetingFrames.add(listener);
   }
 
   onLevel(listener: (rms: number) => void): () => void {
