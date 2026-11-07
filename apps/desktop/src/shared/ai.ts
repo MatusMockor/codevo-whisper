@@ -2,9 +2,19 @@ import type { Settings } from './settings';
 
 export type AiKeyState = 'none' | 'stored' | 'vault-unavailable';
 
-export type AiFailure = 'timeout' | 'aborted' | 'unreachable' | 'unauthorized' | 'http' | 'too-large' | 'bad-response';
+export type AiFailure = 'timeout' | 'aborted' | 'unreachable' | 'unauthorized' | 'http' | 'too-large' | 'bad-response' | 'codex-not-found' | 'codex-logged-out' | 'codex-failed';
 
 export type AiCheck = { ok: true; models: string[] } | { ok: false; error: AiFailure };
+
+export type CodexCheck = { ok: true } | { ok: false; error: AiFailure };
+
+export type AiProvider = 'server' | 'codex';
+
+export const CODEX_EFFORTS = Object.freeze(['none', 'low', 'medium', 'high'] as const);
+
+export type CodexEffort = (typeof CODEX_EFFORTS)[number];
+
+const CODEX_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 
 const MAX_URL_CHARS = 512;
 const MAX_MODEL_CHARS = 200;
@@ -35,8 +45,16 @@ export function isAiKey(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_KEY_CHARS && value.trim() === value && !CONTROL_CHARACTERS.test(value);
 }
 
-export function canPolish(settings: Pick<Settings, 'aiBaseUrl' | 'aiModel' | 'aiPolish'>): boolean {
-  return settings.aiPolish && settings.aiBaseUrl !== null && settings.aiModel !== '';
+export function isCodexModel(value: unknown): value is string {
+  return typeof value === 'string' && CODEX_MODEL.test(value);
+}
+
+export function isAiConfigured(settings: Pick<Settings, 'aiProvider' | 'aiBaseUrl' | 'aiModel'>): boolean {
+  return settings.aiProvider === 'codex' || (settings.aiBaseUrl !== null && settings.aiModel !== '');
+}
+
+export function canPolish(settings: Pick<Settings, 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'aiPolish'>): boolean {
+  return settings.aiPolish && isAiConfigured(settings);
 }
 
 function isPrivateIpv4(host: string): boolean {

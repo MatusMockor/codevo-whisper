@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, rejectArguments, validateAiBaseUrl, validateAiKey, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateAiBaseUrl, validateAiKey, validateCodexTarget, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('accepts recording audio preferences and rejects malformed percentages and output ids', () => {
@@ -50,6 +50,16 @@ describe('validateSettingsPatch', () => {
       expect(() => validateSettingsPatch({ aiModel })).toThrow(IpcValidationError);
     }
     expect(() => validateSettingsPatch({ aiPolish: 'on' })).toThrow(IpcValidationError);
+  });
+  it('accepts the Codex CLI provider with a plain model name and a known effort', () => {
+    const patch = { aiProvider: 'codex', codexModel: 'gpt-6-luna', codexEffort: 'medium' };
+    expect(validateSettingsPatch(patch)).toEqual(patch);
+    for (const codexEffort of ['none', 'low', 'medium', 'high']) {
+      expect(validateSettingsPatch({ codexEffort })).toEqual({ codexEffort });
+    }
+    for (const invalid of [{ aiProvider: 'openai' }, { codexEffort: 'max' }, { codexEffort: 'minimal' }, { codexModel: '' }, { codexModel: '--dangerously-bypass-approvals-and-sandbox' }, { codexModel: 'gpt 6' }, { codexModel: 'm'.repeat(101) }, { codexModel: 'a"b' }]) {
+      expect(() => validateSettingsPatch(invalid)).toThrow(IpcValidationError);
+    }
   });
   it.each(['hold', 'toggle', 'smart'])('accepts %s dictation mode at the IPC boundary', (mode) => {
     expect(validateSettingsPatch({ mode })).toEqual({ mode });
@@ -243,6 +253,13 @@ describe('AI IPC arguments', () => {
     }
     for (const key of ['', ' sk', 'sk\nX-Injected: 1', 'k'.repeat(4097), 7, undefined]) {
       expect(() => validateAiKey(key)).toThrow(IpcValidationError);
+    }
+  });
+
+  it('accepts a Codex model and effort to check and rejects anything a setting would reject', () => {
+    expect(validateCodexTarget('gpt-6-luna', 'low')).toEqual({ model: 'gpt-6-luna', effort: 'low' });
+    for (const [model, effort] of [['-c', 'low'], ['', 'low'], ['gpt-6-luna', 'max'], [7, 'low'], ['gpt-6-luna', undefined]]) {
+      expect(() => validateCodexTarget(model, effort)).toThrow(IpcValidationError);
     }
   });
 });

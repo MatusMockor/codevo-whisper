@@ -311,7 +311,8 @@
   gap: 6px;
 }
 
-.ai-field label {
+.ai-field label,
+.ai-label {
   font-size: 14px;
   font-weight: 560;
 }
@@ -328,4 +329,8 @@
 
 .ai-inline input {
   flex: 1;
+}
+
+.ai-field .seg {
+  justify-self: start;
 }

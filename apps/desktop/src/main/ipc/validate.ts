@@ -1,4 +1,4 @@
-import { isAiBaseUrl, isAiKey } from '../../shared/ai';
+import { isAiBaseUrl, isAiKey, type CodexEffort } from '../../shared/ai';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
@@ -83,6 +83,13 @@ export function validateAiKey(input: unknown): string | null {
     throw new IpcValidationError('Invalid AI key');
   }
   return input;
+}
+
+export function validateCodexTarget(model: unknown, effort: unknown): { model: string; effort: CodexEffort } {
+  if (!SETTINGS_FIELDS.codexModel(model) || !SETTINGS_FIELDS.codexEffort(effort)) {
+    throw new IpcValidationError('Invalid Codex model or effort');
+  }
+  return { model, effort };
 }
 
 export function rejectArguments(args: readonly unknown[]): void {

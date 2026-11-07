@@ -1,12 +1,12 @@
 import { formatClock, MEETING_DATE, turnLine, type Meeting, type NotesFailure } from '../../shared/meetings';
-import { chat, LlmError, type LlmEndpoint } from '../ai/llm-client';
+import { LlmError, type Complete } from '../ai/llm-client';
 import { notesMessages } from '../ai/prompts';
 import type { Logger } from '../logging/logger';
 import type { MeetingStore } from './meeting-store';
 
 export type MeetingNotesDeps = {
   store: Pick<MeetingStore, 'get' | 'meeting' | 'update' | 'writeNotes'>;
-  endpoint: () => Promise<LlmEndpoint | null>;
+  provider: () => Promise<Complete | null>;
   logger: Logger;
   timeoutMs?: number;
 };
@@ -68,11 +68,11 @@ export class MeetingNotes {
   private async write(id: string): Promise<NotesFailure | null> {
     const meeting = await this.deps.store.meeting(id);
     if (meeting === null || meeting.turns.length === 0) return 'empty';
-    const endpoint = await this.deps.endpoint();
-    if (endpoint === null) return 'not-configured';
+    const complete = await this.deps.provider();
+    if (complete === null) return 'not-configured';
     const text = transcript(meeting);
     if (text.length > MAX_TRANSCRIPT_CHARS) return 'too-long';
-    const notes = await chat({ endpoint, messages: notesMessages(text), timeoutMs: this.deps.timeoutMs ?? NOTES_TIMEOUT_MS, signal: this.controller.signal });
+    const notes = await complete(notesMessages(text), { timeoutMs: this.deps.timeoutMs ?? NOTES_TIMEOUT_MS, signal: this.controller.signal });
     if (notes === '') return 'bad-response';
     await this.deps.store.writeNotes(id, notes);
     return null;

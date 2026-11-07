@@ -62,6 +62,13 @@ describe('SettingsStore', () => {
     await writeFile(file, JSON.stringify({ aiBaseUrl: 'file:///etc/passwd', aiModel: 42, aiPolish: 'yes' }));
     expect(await new SettingsStore(file).load()).toMatchObject({ aiBaseUrl: null, aiModel: '', aiPolish: false });
   });
+  it('defaults the AI provider to the configured server and keeps a stored Codex choice', async () => {
+    expect(await new SettingsStore(file).load()).toMatchObject({ aiProvider: 'server', codexModel: 'gpt-6-luna', codexEffort: 'low' });
+    await new SettingsStore(file).update({ aiProvider: 'codex', codexModel: 'gpt-6-sol', codexEffort: 'high' });
+    expect(await new SettingsStore(file).load()).toMatchObject({ aiProvider: 'codex', codexModel: 'gpt-6-sol', codexEffort: 'high' });
+    await writeFile(file, JSON.stringify({ aiProvider: 'shell', codexModel: '-x', codexEffort: 'max' }));
+    expect(await new SettingsStore(file).load()).toMatchObject({ aiProvider: 'server', codexModel: 'gpt-6-luna', codexEffort: 'low' });
+  });
   it('returns defaults for a missing file', async () => {
     const store = new SettingsStore(file);
 

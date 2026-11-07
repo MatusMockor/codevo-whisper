@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { serverProvider } from '../src/main/ai/llm-client';
 import { polish } from '../src/main/ai/polish';
 import { completion, json, startFakeLlmServer, type FakeLlmServer } from './fake-llm-server';
 import { RecordingLogger } from './recording-logger';
@@ -24,7 +25,7 @@ async function polishWith(reply: (request: { body: string }) => string | null, t
     json(response, 200, completion(content));
   });
   const logger = new RecordingLogger();
-  const text = await polish(RAW, { endpoint: { baseUrl: server.baseUrl, model: 'qwen2.5:1.5b', apiKey: SECRET_KEY }, signal: new AbortController().signal, logger, timeoutMs });
+  const text = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'qwen2.5:1.5b', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger, timeoutMs });
   return { text, logger, requests: server.requests };
 }
 
@@ -51,7 +52,7 @@ describe('polish', () => {
   it('keeps the input when the server fails, without logging the transcript or the key', async () => {
     server = await startFakeLlmServer((_request, response) => json(response, 500, { error: 'boom' }));
     const logger = new RecordingLogger();
-    const text = await polish(RAW, { endpoint: { baseUrl: server.baseUrl, model: 'm', apiKey: SECRET_KEY }, signal: new AbortController().signal, logger });
+    const text = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'm', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger });
     expect(text).toBe(RAW);
     expect(logger.warns).toHaveLength(1);
     expect(logged(logger)).not.toContain(RAW);
@@ -68,7 +69,7 @@ describe('polish', () => {
   it('keeps the input when the dictation is cancelled', async () => {
     server = await startFakeLlmServer(() => undefined);
     const controller = new AbortController();
-    const run = polish(RAW, { endpoint: { baseUrl: server.baseUrl, model: 'm', apiKey: null }, signal: controller.signal, logger: new RecordingLogger() });
+    const run = polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'm', apiKey: null }), signal: controller.signal, logger: new RecordingLogger() });
     controller.abort();
     expect(await run).toBe(RAW);
   });

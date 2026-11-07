@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isAiConfigured } from '../../shared/ai';
 import type { Live } from '../home/live-value';
 import { formatClock, MEETING_DATE, turnLine, type Meeting, type MeetingSummary } from '../../shared/meetings';
 import { useSettings } from '../settings/use-settings';
@@ -10,7 +11,7 @@ type Action = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'pending' } | { k
 function useAiReady(): boolean | null {
   const settings = useSettings();
   if (settings.kind !== 'ready') return settings.kind === 'loading' ? null : false;
-  return settings.value.aiBaseUrl !== null && settings.value.aiModel !== '';
+  return isAiConfigured(settings.value);
 }
 
 function Transcript({ summary, meeting }: { summary: MeetingSummary; meeting: Live<Meeting | null> }) {

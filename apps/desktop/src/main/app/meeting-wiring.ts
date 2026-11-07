@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { meetingFileName, meetingMarkdown } from '../../shared/meeting-markdown';
-import type { LlmEndpoint } from '../ai/llm-client';
+import type { Complete } from '../ai/llm-client';
 import type { AudioCapture } from '../audio/audio-capture';
 import { resolveDevice } from '../audio/device-resolver';
 import { localBackend, type LocalEngineArch } from '../engines/local-backend';
@@ -26,7 +26,7 @@ export type MeetingWiringDeps = {
   diarizer: Diarizer;
   settings: SettingsStore;
   window: MainWindowEvents;
-  endpoint: () => Promise<LlmEndpoint | null>;
+  provider: () => Promise<Complete | null>;
   logger: Logger;
 };
 
@@ -65,7 +65,7 @@ async function exportMeeting(store: MeetingStore, id: string): Promise<boolean> 
   return true;
 }
 
-export function createMeetings({ captureWindow, capture, models, diarizer, settings, window, endpoint, logger }: MeetingWiringDeps): Meetings {
+export function createMeetings({ captureWindow, capture, models, diarizer, settings, window, provider, logger }: MeetingWiringDeps): Meetings {
   const arch: LocalEngineArch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const store = new MeetingStore(join(app.getPath('userData'), 'meetings'), logger);
   const recorder = new MeetingRecorder({
@@ -87,7 +87,7 @@ export function createMeetings({ captureWindow, capture, models, diarizer, setti
     diarizer: () => diarizer.modelPath(),
     logger,
   });
-  const notes = new MeetingNotes({ store, endpoint, logger });
+  const notes = new MeetingNotes({ store, provider, logger });
   store.onChange((meetings) => window.send('meetings-changed', meetings));
   diarizer.onChange((view) => window.send('diarizer-changed', view));
   return {

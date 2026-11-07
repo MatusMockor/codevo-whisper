@@ -127,7 +127,7 @@ export function composeApplication(logger: Logger): Application {
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
     const ai = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
-    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, endpoint: () => ai.endpoint(), logger });
+    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, provider: () => ai.provider(), logger });
     await meetings.load();
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();

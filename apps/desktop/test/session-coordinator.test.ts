@@ -911,8 +911,20 @@ describe('SessionCoordinator', () => {
     expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
   });
 
+  it('polishes through Codex CLI without a server address once the user picks it', async () => {
+    const harness = await prepared({
+      settings: { aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
+      polish: () => Promise.resolve('Upravené cez Codex.'),
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravené cez Codex.']);
+  });
+
   it.each([
     ['polish is off', { aiPolish: false, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' }],
+    ['polish is off with Codex chosen', { aiPolish: false, aiProvider: 'codex' as const }],
     ['no model is chosen', { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: '' }],
     ['no endpoint is set', { aiPolish: true, aiBaseUrl: null, aiModel: 'qwen2.5:1.5b' }],
   ])('never calls the AI when %s', async (_case, settings) => {
