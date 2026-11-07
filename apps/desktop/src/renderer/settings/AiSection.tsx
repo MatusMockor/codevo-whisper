@@ -178,7 +178,7 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiBaseUrl' |
           </span>
         </div>
       </div>
-      <SettingsRow title="Upraviť diktát cez AI" description="Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis.">
+      <SettingsRow title="Upraviť diktát cez AI" description="Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.">
         <Switch
           label="Upraviť diktát cez AI"
           checked={settings.aiPolish && ready}
