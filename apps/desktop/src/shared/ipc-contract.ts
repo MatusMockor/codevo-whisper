@@ -5,7 +5,7 @@ import type { OutputAudioView } from './recording-audio';
 import type { HotkeyRecordResult } from './hotkey-record';
 import type { Meeting, MeetingSummary } from './meetings';
 import type { AudioDevice } from './microphones';
-import type { ModelCatalogView, ModelState } from './models';
+import type { DiarizerView, ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
 import type { PermissionGuide, PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
@@ -60,6 +60,10 @@ export type IpcInvokeApi = {
   stopMeeting(): Promise<void>;
   retranscribeMeeting(id: string): Promise<void>;
   deleteMeeting(id: string): Promise<void>;
+  getDiarizer(): Promise<DiarizerView>;
+  downloadDiarizer(): Promise<void>;
+  pauseDiarizer(): Promise<void>;
+  deleteDiarizer(): Promise<void>;
 };
 
 export type IpcEvents = {
@@ -75,6 +79,7 @@ export type IpcEvents = {
   'server-changed': ServerView;
   'update-status-changed': UpdateStatus;
   'meetings-changed': MeetingSummary[];
+  'diarizer-changed': DiarizerView;
 };
 
 export type IpcEventName = keyof IpcEvents;
@@ -132,6 +137,10 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   stopMeeting: 'meetings:stop',
   retranscribeMeeting: 'meetings:retranscribe',
   deleteMeeting: 'meetings:delete',
+  getDiarizer: 'diarizer:get',
+  downloadDiarizer: 'diarizer:download',
+  pauseDiarizer: 'diarizer:pause',
+  deleteDiarizer: 'diarizer:delete',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({
@@ -147,4 +156,5 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'server-changed': 'server:changed',
   'update-status-changed': 'updates:status-changed',
   'meetings-changed': 'meetings:changed',
+  'diarizer-changed': 'diarizer:changed',
 });

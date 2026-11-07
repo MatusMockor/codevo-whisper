@@ -10,6 +10,7 @@ import { MeetingRecorder, type MeetingCaptureHost, type SystemAudioPlan } from '
 import { MeetingStore } from '../meetings/meeting-store';
 import { MeetingTranscriber } from '../meetings/meeting-transcriber';
 import type { ModelManager } from '../models/model-manager';
+import type { Diarizer } from '../models/diarizer';
 import type { SettingsStore } from '../settings/settings-store';
 import type { MainWindowEvents } from '../windows/main-window-controller';
 import { desktopAppRoot } from './app-root';
@@ -18,6 +19,7 @@ export type MeetingWiringDeps = {
   captureWindow: MeetingCaptureHost;
   capture: Pick<AudioCapture, 'listDevices'>;
   models: ModelManager;
+  diarizer: Diarizer;
   settings: SettingsStore;
   window: MainWindowEvents;
   logger: Logger;
@@ -27,6 +29,7 @@ export type Meetings = {
   store: MeetingStore;
   recorder: MeetingRecorder;
   transcriber: MeetingTranscriber;
+  diarizer: Diarizer;
   modelReady(): boolean;
   load(): Promise<void>;
   isBusy(): boolean;
@@ -44,7 +47,7 @@ function systemAudioPlan(): SystemAudioPlan {
   return { kind: 'unsupported', note: 'Zvuk systému vyžaduje macOS 14.2 alebo novší.' };
 }
 
-export function createMeetings({ captureWindow, capture, models, settings, window, logger }: MeetingWiringDeps): Meetings {
+export function createMeetings({ captureWindow, capture, models, diarizer, settings, window, logger }: MeetingWiringDeps): Meetings {
   const arch: LocalEngineArch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const store = new MeetingStore(join(app.getPath('userData'), 'meetings'), logger);
   const recorder = new MeetingRecorder({
@@ -63,13 +66,16 @@ export function createMeetings({ captureWindow, capture, models, settings, windo
       const backend = localBackend(arch, settings.get().localAcceleration);
       return backend === 'auto' ? 'cpu' : backend;
     },
+    diarizer: () => diarizer.modelPath(),
     logger,
   });
   store.onChange((meetings) => window.send('meetings-changed', meetings));
+  diarizer.onChange((view) => window.send('diarizer-changed', view));
   return {
     store,
     recorder,
     transcriber,
+    diarizer,
     modelReady: () => models.states().some((state) => state.id === settings.get().localModelId && state.status === 'ready'),
     load: () => store.load(),
     isBusy: () => recorder.isBusy() || transcriber.isBusy(),

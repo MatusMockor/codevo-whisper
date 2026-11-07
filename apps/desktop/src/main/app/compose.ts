@@ -126,7 +126,7 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
-    meetings = createMeetings({ captureWindow, capture, models: models.manager, settings, window: mainWindow, logger });
+    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, logger });
     await meetings.load();
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();

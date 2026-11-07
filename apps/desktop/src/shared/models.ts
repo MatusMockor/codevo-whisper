@@ -16,3 +16,5 @@ export type ModelInfo = {
 };
 
 export type ModelCatalogView = { models: ModelInfo[]; defaultModelId: string };
+
+export type DiarizerView = { model: ModelInfo; state: ModelState };
