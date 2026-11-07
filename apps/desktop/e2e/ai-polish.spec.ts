@@ -1,5 +1,4 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
@@ -15,7 +14,6 @@ type Exchange = { method: string; path: string; request: string; response: strin
 const OLLAMA = 'http://127.0.0.1:11434';
 const MODEL = 'qwen2.5:1.5b';
 const RAW = 'prepis zo servera';
-const SHOTS = '/tmp/cw24/slice1';
 
 let app: ElectronApplication | null = null;
 let page: Page;
@@ -111,12 +109,8 @@ function section() {
 
 async function shoot(name: string): Promise<void> {
   await section().scrollIntoViewIfNeeded();
-  await section().screenshot({ path: `${SHOTS}/${name}` });
+  await section().screenshot({ path: test.info().outputPath(name) });
 }
-
-test.beforeAll(async () => {
-  await mkdir(SHOTS, { recursive: true });
-});
 
 test.afterEach(async () => {
   await app?.close();
@@ -166,6 +160,18 @@ test('settings connect to the local Ollama and the dictation is inserted as the 
   await section().getByLabel('Adresa servera (OpenAI-compatible)').fill('https://llm.example.com/v1');
   await expect(section().getByText('Text sa odošle mimo tento počítač.')).toBeVisible();
   await shoot('ai-settings-non-local.png');
+});
+
+test('an invalid address draft still shows polish as on and lets the user turn it off', async () => {
+  await start({ aiBaseUrl: 'http://127.0.0.1:9/v1', aiModel: MODEL, aiPolish: true });
+  await page.getByRole('tab', { name: 'Nastavenia' }).click();
+  const polishSwitch = section().getByRole('switch', { name: 'Upraviť diktát cez AI' });
+  await section().getByLabel('Adresa servera (OpenAI-compatible)').fill('ftp://bad');
+  await expect(polishSwitch).toHaveAttribute('aria-checked', 'true');
+  await expect(polishSwitch).toBeEnabled();
+  await polishSwitch.click();
+  await expect(polishSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ aiBaseUrl: 'http://127.0.0.1:9/v1', aiPolish: false });
 });
 
 test.describe('an endpoint that cannot polish', () => {

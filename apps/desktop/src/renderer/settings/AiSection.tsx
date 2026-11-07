@@ -181,13 +181,19 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiBaseUrl' |
       <SettingsRow title="Upraviť diktát cez AI" description="Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.">
         <Switch
           label="Upraviť diktát cez AI"
-          checked={settings.aiPolish && ready}
-          disabled={!ready}
-          onChange={(aiPolish) => saveSettings({ aiBaseUrl: urlValue, aiModel: modelValue, aiPolish }, (saved) => {
-            if (!saved) return;
-            setUrl(null);
-            setModel(null);
-          })}
+          checked={settings.aiPolish}
+          disabled={!settings.aiPolish && !ready}
+          onChange={(aiPolish) => {
+            if (!aiPolish) {
+              saveSettings({ aiPolish });
+              return;
+            }
+            saveSettings({ aiBaseUrl: urlValue, aiModel: modelValue, aiPolish }, (saved) => {
+              if (!saved) return;
+              setUrl(null);
+              setModel(null);
+            });
+          }}
         />
       </SettingsRow>
     </SettingsGroup>
