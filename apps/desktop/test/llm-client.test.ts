@@ -48,15 +48,9 @@ describe('chat', () => {
     expect(await run()).toBe('');
   });
 
-  it('unwraps an answer the model echoed back in the transcript JSON and keeps any other JSON as text', async () => {
-    const replies = ['{"transcript": "Zajtra o jedenástej."}', '<think>x</think> {"transcript":"Ahoj."} ', '{"transcript":"a","extra":1}', '{"transcript":7}', '{"transcript": "nedokonč'];
-    server = await startFakeLlmServer((_request, response) => json(response, 200, completion(replies.shift() ?? '')));
-    const run = () => chat({ endpoint: endpoint(server!), messages: MESSAGES, timeoutMs: 2_000 });
-    expect(await run()).toBe('Zajtra o jedenástej.');
-    expect(await run()).toBe('Ahoj.');
-    expect(await run()).toBe('{"transcript":"a","extra":1}');
-    expect(await run()).toBe('{"transcript":7}');
-    expect(await run()).toBe('{"transcript": "nedokonč');
+  it('returns a JSON answer as the model wrote it', async () => {
+    server = await startFakeLlmServer((_request, response) => json(response, 200, completion('{"transcript": "Zajtra o jedenástej."}')));
+    expect(await chat({ endpoint: endpoint(server), messages: MESSAGES, timeoutMs: 2_000 })).toBe('{"transcript": "Zajtra o jedenástej."}');
   });
 
   it('reports a non-200 answer, and a rejected key separately', async () => {

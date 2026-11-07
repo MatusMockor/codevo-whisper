@@ -26,18 +26,8 @@ export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MODELS_TIMEOUT_MS = 5_000;
 const THINK_BLOCKS = /<think>[\s\S]*?(?:<\/think>|$)/g;
 
-function unwrapTranscript(text: string): string {
-  if (!text.startsWith('{')) return text;
-  try {
-    const body: unknown = JSON.parse(text);
-    return isPlainRecord(body) && Object.keys(body).length === 1 && typeof body['transcript'] === 'string' ? body['transcript'].trim() : text;
-  } catch {
-    return text;
-  }
-}
-
 export function completionText(raw: string): string {
-  return unwrapTranscript(raw.replace(THINK_BLOCKS, '').trim());
+  return raw.replace(THINK_BLOCKS, '').trim();
 }
 
 function endpointUrl(baseUrl: string, path: string): string {

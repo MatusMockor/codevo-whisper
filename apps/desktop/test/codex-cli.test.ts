@@ -75,6 +75,10 @@ describe('codexProvider', () => {
   it('unwraps an answer echoed back as transcript JSON and strips reasoning blocks', async () => {
     expect(await complete('answer', { FAKE_CODEX_ANSWER: '{"transcript": "Zajtra o jedenástej."}' })).toBe('Zajtra o jedenástej.');
     expect(await complete('answer', { FAKE_CODEX_ANSWER: '<think>hmm</think> Ahoj.' })).toBe('Ahoj.');
+    expect(await complete('answer', { FAKE_CODEX_ANSWER: '<think>x</think> {"transcript":"Ahoj."} ' })).toBe('Ahoj.');
+    for (const json of ['{"transcript":"a","extra":1}', '{"transcript":7}', '{"transcript": "nedokonč']) {
+      expect(await complete('answer', { FAKE_CODEX_ANSWER: json })).toBe(json);
+    }
   });
 
   it('reports a logged-out CLI apart from any other failed run, a missing answer and an oversized one', async () => {

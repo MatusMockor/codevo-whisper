@@ -4,6 +4,7 @@ import { access, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import type { CodexCheck, CodexEffort } from '../../shared/ai';
+import { isPlainRecord } from '../settings/settings-fields';
 import { completionText, LlmError, MAX_RESPONSE_BYTES, type ChatMessage, type Complete } from './llm-client';
 
 export type CodexTarget = { model: string; effort: CodexEffort; env?: NodeJS.ProcessEnv };
@@ -120,6 +121,16 @@ async function readAnswer(file: string): Promise<string> {
   return readFile(file, 'utf8');
 }
 
+function unwrapTranscript(text: string): string {
+  if (!text.startsWith('{')) return text;
+  try {
+    const body: unknown = JSON.parse(text);
+    return isPlainRecord(body) && Object.keys(body).length === 1 && typeof body['transcript'] === 'string' ? body['transcript'].trim() : text;
+  } catch {
+    return text;
+  }
+}
+
 function prompt(messages: readonly ChatMessage[]): string {
   return messages.map((message) => message.content).join('\n\n');
 }
@@ -135,7 +146,7 @@ export function codexProvider(target: CodexTarget): Complete {
       const output = join(workdir, 'answer.txt');
       const { code, stderr } = await run(binary, execArgs(target, workdir, output), { env, input: prompt(messages), timeoutMs, signal });
       if (code !== 0) throw new LlmError(LOGGED_OUT.test(stderr) ? 'codex-logged-out' : 'codex-failed', `Codex CLI exited with ${code ?? 'a signal'}`);
-      return completionText(await readAnswer(output));
+      return unwrapTranscript(completionText(await readAnswer(output)));
     } finally {
       await rm(workdir, { recursive: true, force: true });
     }
