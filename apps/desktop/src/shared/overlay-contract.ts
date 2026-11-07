@@ -11,7 +11,7 @@ export type OverlayState =
   | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string; live?: LiveText }
   | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText }
   | { kind: 'inserted'; appName: string; notice?: string }
-  | { kind: 'copied' }
+  | { kind: 'copied'; notice?: string }
   | { kind: 'blocked'; reason: BlockedReason }
   | { kind: 'error'; message: string; action?: OverlayAction };
 

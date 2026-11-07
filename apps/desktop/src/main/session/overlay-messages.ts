@@ -122,7 +122,7 @@ const POLISH_NOTICES: Partial<Record<AiFailure, string>> = Object.freeze({
 
 export function withPolishNotice(state: TerminalState, failure: AiFailure | null): TerminalState {
   const notice = failure === null ? undefined : POLISH_NOTICES[failure];
-  return state.kind === 'inserted' && notice !== undefined ? { ...state, notice } : state;
+  return (state.kind === 'inserted' || state.kind === 'copied') && notice !== undefined ? { ...state, notice } : state;
 }
 
 export function pasteLastState(outcome: PasteLastOutcome, appName: string): OverlayState {

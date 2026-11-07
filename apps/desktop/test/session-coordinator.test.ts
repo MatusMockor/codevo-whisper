@@ -938,6 +938,17 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit', notice });
   });
 
+  it('tells the user why Codex CLI did not polish a dictation copied to the clipboard', async () => {
+    const harness = await prepared({
+      settings: { insertion: 'clipboard', aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
+      polish: (text) => Promise.resolve({ text, failure: 'codex-logged-out' }),
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'copied', notice: 'Codex CLI nie je prihlásený. Spustite `codex login`.' });
+  });
+
   it.each([
     ['polish is off', { aiPolish: false, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' }],
     ['polish is off with Codex chosen', { aiPolish: false, aiProvider: 'codex' as const }],
