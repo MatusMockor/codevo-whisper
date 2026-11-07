@@ -156,6 +156,20 @@ describe('checkCodex', () => {
     expect(await checkCodex({ model: 'gpt-6-luna', effort: 'low', env: { PATH: join(dir, 'none'), HOME: join(dir, 'none') } })).toEqual({ ok: false, error: 'codex-not-found' });
   });
 
+  it.each(['login-hang', 'hang'])('stops a cancelled check in %s and removes its private directory', async (mode) => {
+    const controller = new AbortController();
+    const check = checkCodex({ model: 'gpt-6-luna', effort: 'low', env: env(mode) }, controller.signal);
+    await expect.poll(() => readFile(join(dir, 'pid'), 'utf8').catch(() => '')).not.toBe('');
+    controller.abort();
+    expect(await check).toEqual({ ok: false, error: 'aborted' });
+    const pid = Number(await readFile(join(dir, 'pid'), 'utf8'));
+    await expect.poll(() => isRunning(pid)).toBe(false);
+    if (mode === 'hang') {
+      const args = await recordedArgs();
+      await expect(stat(args[args.indexOf('-C') + 1] ?? '')).rejects.toThrow();
+    }
+  });
+
   it('reports a failed run of the CLI', async () => {
     expect(await checkCodex({ model: 'gpt-6-luna', effort: 'low', env: env('fail') })).toEqual({ ok: false, error: 'codex-failed' });
   });

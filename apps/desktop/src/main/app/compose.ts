@@ -35,7 +35,7 @@ import { OverlayWindow } from '../windows/overlay-window';
 import { rendererSource } from '../windows/renderer-source';
 import { backgroundPresentation, foregroundPresentation } from '../windows/window-presentation';
 import type { OverlayState } from '../../shared/overlay-contract';
-import { createAiServices } from './ai-wiring';
+import { createAiServices, type AiServices } from './ai-wiring';
 import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
 import { createMeetings, type Meetings } from './meeting-wiring';
@@ -87,14 +87,16 @@ export function composeApplication(logger: Logger): Application {
   const disposers: Array<() => void> = [];
   let sessions: SessionCoordinator | null = null;
   let meetings: Meetings | null = null;
+  let ai: AiServices | null = null;
   const history = new HistoryStore(join(app.getPath('userData'), 'history.json'), logger);
   const shutdown = async (): Promise<void> => {
     await meetings?.shutdown();
+    await ai?.shutdown();
     await sessions?.shutdown();
     await capture.settled();
     await history.settled();
   };
-  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false) || history.isBusy() || (meetings?.isBusy() ?? false), settled: shutdown }, () => app.quit(), logger);
+  const quitGate = new QuitGate({ isBusy: () => capture.isBusy() || (sessions?.isBusy() ?? false) || history.isBusy() || (meetings?.isBusy() ?? false) || (ai?.isBusy() ?? false), settled: shutdown }, () => app.quit(), logger);
   const allowShutdown = (): void => quitGate.systemShuttingDown();
   const recordingShell = e2e ? new RecordingDesktopShell() : null;
   const desktopShell: DesktopShell = recordingShell ?? shell;
@@ -126,8 +128,9 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
-    const ai = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
-    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, provider: () => ai.provider(), logger });
+    const aiServices = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
+    ai = aiServices;
+    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, provider: () => aiServices.provider(), logger });
     await meetings.load();
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();
@@ -172,7 +175,7 @@ export function composeApplication(logger: Logger): Application {
       source: rendererSource(),
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
-      ai,
+      ai: aiServices,
       meetings,
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
@@ -193,7 +196,7 @@ export function composeApplication(logger: Logger): Application {
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
       openServer: () => mainWindow.open('server'),
-      polish: (text, signal) => ai.polish(text, signal),
+      polish: (text, signal) => aiServices.polish(text, signal),
       logger,
     });
     sessions = coordinator;

@@ -2,6 +2,11 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "login" ]]; then
+  if [[ "${FAKE_CODEX_MODE:-answer}" == "login-hang" ]]; then
+    sleep 30 &
+    echo "$!" > "$FAKE_CODEX_DIR/pid"
+    wait
+  fi
   [[ "${FAKE_CODEX_MODE:-answer}" == "logged-out" ]] && { echo "Not logged in" >&2; exit 1; }
   echo "Logged in using ChatGPT" >&2
   exit 0

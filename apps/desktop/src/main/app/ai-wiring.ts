@@ -21,11 +21,15 @@ export type AiServices = {
   checkCodex(model: string, effort: CodexEffort): Promise<CodexCheck>;
   polish(text: string, signal: AbortSignal): Promise<string>;
   provider(): Promise<Complete | null>;
+  isBusy(): boolean;
+  shutdown(): Promise<void>;
 };
 
 export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiringDeps): AiServices {
   const keys = new AiKeyStore(join(app.getPath('userData'), AI_KEY_FILE), vaultFor({ e2e, isPackaged }), logger);
   const provider = (): Promise<Complete | null> => chooseProvider(settings.get(), () => keys.get());
+  const stopping = new AbortController();
+  const checks = new Set<Promise<CodexCheck>>();
   return {
     keyState: () => keys.state(),
     setKey: (key) => keys.set(key),
@@ -37,11 +41,20 @@ export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiring
         throw error;
       }
     },
-    checkCodex: (model, effort) => checkCodex({ model, effort }),
+    checkCodex: (model, effort) => {
+      const check = checkCodex({ model, effort }, stopping.signal).finally(() => checks.delete(check));
+      checks.add(check);
+      return check;
+    },
     polish: async (text, signal) => {
       const complete = await provider();
       return complete === null ? text : polish(text, { complete, signal, logger });
     },
     provider,
+    isBusy: () => checks.size > 0,
+    shutdown: async () => {
+      stopping.abort();
+      await Promise.allSettled(checks);
+    },
   };
 }

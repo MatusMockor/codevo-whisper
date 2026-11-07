@@ -153,14 +153,14 @@ export function codexProvider(target: CodexTarget): Complete {
   };
 }
 
-export async function checkCodex(target: CodexTarget): Promise<CodexCheck> {
+export async function checkCodex(target: CodexTarget, signal?: AbortSignal): Promise<CodexCheck> {
   const env = target.env ?? process.env;
   try {
     const binary = await findCodex(env);
     if (binary === null) throw notFound();
-    const login = await run(binary, ['login', 'status'], { env, input: '', timeoutMs: LOGIN_TIMEOUT_MS });
+    const login = await run(binary, ['login', 'status'], { env, input: '', timeoutMs: LOGIN_TIMEOUT_MS, signal });
     if (login.code !== 0) return { ok: false, error: 'codex-logged-out' };
-    await codexProvider({ ...target, env })([{ role: 'user', content: CHECK_PROMPT }], { timeoutMs: CHECK_TIMEOUT_MS });
+    await codexProvider({ ...target, env })([{ role: 'user', content: CHECK_PROMPT }], { timeoutMs: CHECK_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) });
     return { ok: true };
   } catch (error) {
     if (error instanceof LlmError) return { ok: false, error: error.reason };
