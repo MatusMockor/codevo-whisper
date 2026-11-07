@@ -116,23 +116,22 @@ export class MeetingTranscriber {
         await this.cli(['--model', model, '--backend', this.deps.backend(), ...(language === 'auto' ? [] : ['--language', language]), '--threads', this.threads(), '--timestamps', 'word', '--quiet', wav], timeoutMs),
       );
       if (track !== 'system' || words.length === 0) return { words };
-      const segments = await this.speakers(record.id, wav, timeoutMs);
-      return segments === null ? { words } : { words, segments };
+      return { words, segments: await this.speakers(record.id, wav, timeoutMs) };
     } finally {
       await rm(wav, { force: true });
     }
   }
 
-  private async speakers(id: string, wav: string, timeoutMs: number): Promise<SpeakerSegment[] | null> {
+  private async speakers(id: string, wav: string, timeoutMs: number): Promise<SpeakerSegment[]> {
     try {
       const diarizer = await this.deps.diarizer();
-      if (diarizer === null) return null;
+      if (diarizer === null) return [];
       await this.deps.store.update(id, { phase: { kind: 'transcribing', step: 'speakers' } });
       return parseDiarization(await this.cli(['--model', diarizer, '--backend', 'cpu', '--threads', this.threads(), '--quiet', wav], timeoutMs));
     } catch (error) {
       if (this.controller.signal.aborted) throw error;
       this.deps.logger.error(`Speakers of meeting ${id} could not be recognized`, error);
-      return null;
+      return [];
     }
   }
 
