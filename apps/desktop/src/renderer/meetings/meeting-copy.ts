@@ -22,7 +22,7 @@ const NOTES_FAILURE: Record<NotesFailure, string> = {
   'codex-not-found': 'Codex CLI sa nenašiel. Nainštalujte ho alebo skontrolujte PATH.',
   'codex-logged-out': 'Codex CLI nie je prihlásený. Spustite `codex login`.',
   'codex-failed': 'Codex CLI skončil s chybou. Skontrolujte model v Nastaveniach a verziu Codex CLI.',
-  'not-configured': 'Najprv nastavte AI server a model v Nastaveniach v časti „AI úprava textu“.',
+  'not-configured': 'Najprv v Nastaveniach v časti „AI úprava textu“ nastavte AI server a model alebo zvoľte Codex CLI.',
   'too-long': 'Prepis je na poznámky príliš dlhý (viac ako 200 000 znakov).',
   empty: 'V prepise nie je žiadna reč, z ktorej by sa dali vytvoriť poznámky.',
   unexpected: 'Poznámky sa nepodarilo vytvoriť. Skúste to znova.',

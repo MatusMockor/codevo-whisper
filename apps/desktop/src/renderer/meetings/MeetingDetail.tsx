@@ -83,7 +83,7 @@ function Notes({ summary, meeting, onOpenSettings }: { summary: MeetingSummary; 
       </div>
       {provider === 'none' ? (
         <p className="note" id="meeting-notes-hint">
-          Poznámky vytvára AI server. Nastavte jeho adresu a model v Nastaveniach v časti „AI úprava textu“.
+          Poznámky vytvára AI server alebo Codex CLI. Nastavte ich v Nastaveniach v časti „AI úprava textu“.
           <button type="button" className="linkbtn" onClick={onOpenSettings}>
             Otvoriť Nastavenia
           </button>
