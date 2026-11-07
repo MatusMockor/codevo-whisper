@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MeetingDetail } from '../meetings/MeetingDetail';
-import { formatClock, phaseLabel } from '../meetings/meeting-copy';
+import { formatClock } from '../../shared/meetings';
+import { phaseLabel } from '../meetings/meeting-copy';
 import { RecordCard } from '../meetings/RecordCard';
 import { SpeakersCard } from '../meetings/SpeakersCard';
 import { useLocalModelReady, useMeetings } from '../meetings/use-meetings';
@@ -47,7 +48,7 @@ export function Meetings({ onOpenSettings }: { onOpenSettings: () => void }) {
           </ol>
         )}
       </section>
-      {selected !== null && <MeetingDetail key={selected.id} summary={selected} />}
+      {selected !== null && <MeetingDetail key={selected.id} summary={selected} onOpenSettings={onOpenSettings} />}
     </div>
   );
 }

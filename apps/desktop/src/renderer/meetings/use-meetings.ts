@@ -21,7 +21,7 @@ export function useLocalModelReady(): boolean | null {
 export function useMeeting(summary: MeetingSummary): Live<Meeting | null> {
   const [meeting, setMeeting] = useState<Live<Meeting | null>>({ kind: 'loading' });
   const { id } = summary;
-  const phase = JSON.stringify(summary.phase);
+  const revision = JSON.stringify([summary.phase, summary.notesPending, summary.notesError]);
 
   useEffect(() => {
     let active = true;
@@ -37,7 +37,7 @@ export function useMeeting(summary: MeetingSummary): Live<Meeting | null> {
     return () => {
       active = false;
     };
-  }, [id, phase]);
+  }, [id, revision]);
 
   return meeting;
 }
