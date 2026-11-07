@@ -40,8 +40,8 @@ it('creates a private meeting directory with a validated id and lists newest fir
 it('persists updates and turns across a reload', async () => {
   const store = await loaded();
   const meeting = await store.create({ startedAt: Date.now(), systemAudio: 'recording', systemAudioNote: null });
-  await store.update(meeting.id, { phase: { kind: 'ready' }, durationMs: 61_000, tracks: { mic: { startOffsetMs: 12 }, system: null } });
-  await store.writeTurns(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Ahoj' }]);
+  await store.update(meeting.id, { durationMs: 61_000, tracks: { mic: { startOffsetMs: 12 }, system: null } });
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Ahoj' }]);
 
   const reloaded = await loaded();
 
@@ -121,4 +121,18 @@ it('loads a meeting saved before notes existed', async () => {
   await writeFile(join(dir, id, 'meeting.json'), JSON.stringify(record));
 
   expect((await loaded()).list()).toEqual([expect.objectContaining({ id, notesPending: false, notesError: null })]);
+});
+
+it('drops the notes and their failure when a new transcript replaces the old one', async () => {
+  const store = await loaded();
+  const meeting = await store.create({ startedAt: Date.now(), systemAudio: 'recording', systemAudioNote: null });
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Vydanie bude v piatok.' }]);
+  await store.writeNotes(meeting.id, '## Zhrnutie\n\nVydanie bude v piatok.');
+  await store.update(meeting.id, { notesError: 'timeout' });
+
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Vydanie bude v pondelok.' }]);
+
+  for (const current of [store, await loaded()]) {
+    await expect(current.meeting(meeting.id)).resolves.toMatchObject({ phase: { kind: 'ready' }, turns: [{ text: 'Vydanie bude v pondelok.' }], notes: null, notesError: null });
+  }
 });

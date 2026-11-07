@@ -33,8 +33,8 @@ async function readyMeeting(turns: Turn[] = TURNS): Promise<{ store: MeetingStor
   const store = new MeetingStore(join(dir, 'meetings'), new RecordingLogger());
   await store.load();
   const { id } = await store.create({ startedAt: new Date(2026, 10, 7, 9, 5).getTime(), systemAudio: 'recording', systemAudioNote: null });
-  await store.writeTurns(id, turns);
-  await store.update(id, { phase: { kind: 'ready' }, durationMs: 754_000 });
+  await store.update(id, { durationMs: 754_000 });
+  await store.finishTranscript(id, turns);
   return { store, id };
 }
 
