@@ -26,7 +26,7 @@ export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCard
     );
   }
 
-  if (modelReady === false) {
+  if (modelReady === false && recording === null) {
     return (
       <div className="card meeting-record">
         <h2>Nové stretnutie</h2>

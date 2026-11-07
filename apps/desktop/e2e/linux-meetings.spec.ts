@@ -89,6 +89,31 @@ test('a meeting records the mic and the real system audio and shows a speaker-at
   expect(stored).toMatchObject({ phase: { kind: 'ready' }, systemAudio: 'recording', tracks: { mic: { startOffsetMs: expect.any(Number) as unknown }, system: { startOffsetMs: expect.any(Number) as unknown } } });
 });
 
+test('removing the local model during a meeting keeps the recording and its stop button', async () => {
+  test.setTimeout(120_000);
+  await startMeeting();
+
+  await page.evaluate(async () => {
+    const removed = new Promise<void>((resolve) => {
+      const unsubscribe = window.codevo.on('model-states-changed', (states) => {
+        if (!states.some((state) => state.id === 'parakeet-ultra-q8' && state.status === 'ready')) {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
+    await window.codevo.deleteModel('parakeet-ultra-q8');
+    await removed;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  await expect(page.getByRole('timer', { name: 'Dĺžka nahrávania' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Nahrávané stopy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Zastaviť a prepísať' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Lokálny model nie je stiahnutý.' })).toBeVisible();
+  await expect(page.getByText('Najprv si v Nastaveniach stiahnite', { exact: false })).toBeVisible();
+});
+
 test.describe('long meeting', () => {
   test.skip(process.env['CW_E2E_LONG'] !== '1', 'Set CW_E2E_LONG=1 to run the 10 minute meeting check');
 
