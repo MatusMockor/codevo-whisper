@@ -2,6 +2,7 @@ import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { INVOKE_CHANNELS, type IpcInvokeApi } from '../../shared/ipc-contract';
 import type { SettingsStore } from '../settings/settings-store';
 import type { RendererSource } from '../windows/renderer-source';
+import { aiHandlers, type AiHandlerDeps } from './ai-handlers';
 import { broadcast } from './broadcast';
 import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
 import { historyHandlers, type HistoryHandlerDeps } from './history-handlers';
@@ -20,7 +21,8 @@ export type IpcDependencies = CoreHandlerDeps &
   ModelHandlerDeps &
   MicrophoneHandlerDeps &
   ServerHandlerDeps &
-  UpdateHandlerDeps & {
+  UpdateHandlerDeps &
+  AiHandlerDeps & {
     settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
     source: RendererSource;
   };
@@ -34,6 +36,7 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...microphoneHandlers(dependencies),
     ...serverHandlers(dependencies),
     ...updateHandlers(dependencies),
+    ...aiHandlers(dependencies),
   };
 }
 

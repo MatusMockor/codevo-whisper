@@ -61,6 +61,9 @@ export type Settings = {
   overlay: OverlayMode;
   launchAtLogin: boolean;
   onboardingDone: boolean;
+  aiBaseUrl: string | null;
+  aiModel: string;
+  aiPolish: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
@@ -86,6 +89,9 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   overlay: 'indicator',
   launchAtLogin: false,
   onboardingDone: false,
+  aiBaseUrl: null,
+  aiModel: '',
+  aiPolish: false,
 });
 
 export function isCustomWords(value: unknown): value is readonly string[] {

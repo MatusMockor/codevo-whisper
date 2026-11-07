@@ -54,6 +54,14 @@ describe('SettingsStore', () => {
     await writeFile(file, JSON.stringify({ customWords: ['two words'], removeFillerWords: true, appendTrailingSpace: 'yes' }));
     expect(await new SettingsStore(file).load()).toMatchObject({ customWords: [], removeFillerWords: true, appendTrailingSpace: false });
   });
+  it('defaults AI polish off with no endpoint and drops a stored endpoint that is not http or https', async () => {
+    const store = new SettingsStore(file);
+    expect(await store.load()).toMatchObject({ aiBaseUrl: null, aiModel: '', aiPolish: false });
+    await store.update({ aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', aiPolish: true });
+    expect(await new SettingsStore(file).load()).toMatchObject({ aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', aiPolish: true });
+    await writeFile(file, JSON.stringify({ aiBaseUrl: 'file:///etc/passwd', aiModel: 42, aiPolish: 'yes' }));
+    expect(await new SettingsStore(file).load()).toMatchObject({ aiBaseUrl: null, aiModel: '', aiPolish: false });
+  });
   it('returns defaults for a missing file', async () => {
     const store = new SettingsStore(file);
 

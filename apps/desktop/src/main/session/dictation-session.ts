@@ -1,3 +1,4 @@
+import { canPolish } from '../../shared/ai';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
 import type { DictationOptions, EngineDictation, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
@@ -6,6 +7,7 @@ import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
 import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
+import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -34,6 +36,7 @@ export type DictationSessionDeps = {
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
+  polish(text: string, signal: AbortSignal): Promise<string>;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
   clock: () => number;
@@ -67,6 +70,7 @@ export class DictationSession {
   private readonly language: Language;
   private readonly transcriptSettings: TranscriptSettings;
   private readonly partials: boolean;
+  private readonly polishing: boolean;
   private readonly live: LiveTranscript | null;
   private lastLevel = 0;
   private notice: ProcessingNotice;
@@ -95,6 +99,7 @@ export class DictationSession {
     this.language = language;
     this.transcriptSettings = Object.freeze({ language, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
     this.partials = overlay === 'live';
+    this.polishing = canPolish(deps.settings.get());
     this.live = this.partials ? new LiveTranscript() : null;
     this.microphone = microphone;
     const { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume } = deps.settings.get();
@@ -316,7 +321,9 @@ export class DictationSession {
     if (rawText === null) {
       return;
     }
-    const text = this.finalize(rawText);
+    const text = this.polishing ? await this.polished(rawText) : processFinalTranscript({ text: rawText, settings: this.transcriptSettings });
+    if (this.controller.signal.aborted) return;
+    this.remember(text);
     if (text === '') {
       await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
       return;
@@ -351,10 +358,19 @@ export class DictationSession {
     return failureState(error.reason, textSoFar !== '');
   }
 
+  private async polished(rawText: string): Promise<string> {
+    const processed = processFinalTranscript({ text: rawText, settings: { ...this.transcriptSettings, appendTrailingSpace: false } });
+    if (processed === '') return '';
+    return sanitizeInsertionText(await this.deps.polish(processed, this.controller.signal), this.transcriptSettings);
+  }
+
   private finalize(text: string): string {
-    const processed = processFinalTranscript({ text, settings: this.transcriptSettings });
-    if (processed !== '') this.deps.lastTranscript.set(processed, this.transcriptSettings);
-    return processed;
+    return this.remember(processFinalTranscript({ text, settings: this.transcriptSettings }));
+  }
+
+  private remember(text: string): string {
+    if (text !== '') this.deps.lastTranscript.set(text, this.transcriptSettings);
+    return text;
   }
 
   private insert(text: string, target: AppTarget | null): Promise<InsertionOutcome | null> {

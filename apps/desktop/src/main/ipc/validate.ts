@@ -1,3 +1,4 @@
+import { isAiBaseUrl, isAiKey } from '../../shared/ai';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
@@ -68,6 +69,20 @@ export function validatePairingToken(input: unknown): string {
     throw new IpcValidationError('Invalid pairing token');
   }
   return input.trim();
+}
+
+export function validateAiBaseUrl(input: unknown): string {
+  if (!isAiBaseUrl(input)) {
+    throw new IpcValidationError('Invalid AI server address');
+  }
+  return input;
+}
+
+export function validateAiKey(input: unknown): string | null {
+  if (input !== null && !isAiKey(input)) {
+    throw new IpcValidationError('Invalid AI key');
+  }
+  return input;
 }
 
 export function rejectArguments(args: readonly unknown[]): void {

@@ -32,6 +32,7 @@ export type SessionCoordinatorDeps = {
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
   openServer?: () => void;
+  polish?: (text: string, signal: AbortSignal) => Promise<string>;
   clock?: () => number;
   logger?: Logger;
 };
@@ -219,6 +220,7 @@ export class SessionCoordinator {
           this.logger.error('The completed transcript could not be saved to history', undefined);
         });
       },
+      polish: this.deps.polish ?? ((text) => Promise.resolve(text)),
       captureLane: this.captureLane,
       pipeline: this.pipeline,
       clock: this.deps.clock ?? Date.now,

@@ -8,7 +8,7 @@ UI mockup: `~/.t3/scratch/2026-10-25-moja-otazka-pouzivam-t3-code-3289f38e/mocku
 
 A Wispr-Flow-like dictation app for macOS and Linux. Hold a hotkey, speak, see the transcript live in a floating overlay, release, and the text is inserted at the cursor of the focused app.
 
-Audio and transcripts never go to a third-party cloud service. Transcription runs either on the user's own server (reached over any network, end-to-end encrypted) or locally on the user's machine with a downloaded model.
+Audio never leaves the machine except to the user's own server. Transcription runs either on that server (reached over any network, end-to-end encrypted) or locally on the user's machine with a downloaded model. Transcript text leaves the machine only when the user turns on AI text cleanup and only to the endpoint they configured.
 
 Public open-source project, released as signed builds.
 
@@ -21,7 +21,7 @@ Public open-source project, released as signed builds.
 - Real streaming ASR models. Live text uses rolling re-transcription (section 6).
 - Hiding traffic metadata. Network observers can still see addresses, timing and message sizes.
 - History search, export, and sync. Local opt-in text history is included by the approved CODWHI-7 reversal of the original no-history decision.
-- LLM text cleanup. The STT model's own punctuation is used as is, to keep latency low.
+- LLM text cleanup by default. Cleanup is optional and off by default. It runs only through an OpenAI-compatible endpoint the user configures (Ollama, LM Studio, a llama.cpp server or their own server). There is no default endpoint, and an address outside loopback and private ranges shows a warning that the text leaves the computer. Meeting notes will use the same client (CODWHI-24).
 
 ## 2. Decisions already made
 

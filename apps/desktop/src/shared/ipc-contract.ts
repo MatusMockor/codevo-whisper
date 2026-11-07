@@ -1,3 +1,4 @@
+import type { AiCheck, AiKeyState } from './ai';
 import type { HistoryPolicy, HistoryView } from './history';
 import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
@@ -49,6 +50,9 @@ export type IpcInvokeApi = {
   checkForUpdates(): Promise<UpdateStatus>;
   installUpdate(): Promise<InstallOutcome>;
   openUpdateDownload(): Promise<void>;
+  getAiKeyState(): Promise<AiKeyState>;
+  setAiKey(key: string | null): Promise<AiKeyState>;
+  checkAi(baseUrl: string): Promise<AiCheck>;
 };
 
 export type IpcEvents = {
@@ -111,6 +115,9 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   checkForUpdates: 'updates:check',
   installUpdate: 'updates:install',
   openUpdateDownload: 'updates:open-download',
+  getAiKeyState: 'ai:key-state',
+  setAiKey: 'ai:set-key',
+  checkAi: 'ai:check',
 });
 
 export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.freeze({

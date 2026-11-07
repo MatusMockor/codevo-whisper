@@ -282,7 +282,8 @@
   color: var(--ink-3);
 }
 
-.transcript-words textarea {
+.transcript-words textarea,
+.ai-field input {
   width: 100%;
   min-width: 0;
   padding: 10px 12px;
@@ -297,4 +298,34 @@
 
 .transcript-words .btn {
   justify-self: end;
+}
+
+.ai-fields {
+  display: grid;
+  gap: 14px;
+  padding: 12px 16px;
+}
+
+.ai-field {
+  display: grid;
+  gap: 6px;
+}
+
+.ai-field label {
+  font-size: 14px;
+  font-weight: 560;
+}
+
+.ai-field input:disabled {
+  opacity: .6;
+}
+
+.ai-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-inline input {
+  flex: 1;
 }

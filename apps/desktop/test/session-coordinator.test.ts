@@ -37,7 +37,7 @@ const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes',
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { polish?: (text: string, signal: AbortSignal) => Promise<string>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -108,6 +108,7 @@ async function prepared(setup: Setup = {}) {
     pause,
     overlay: (state) => states.push(state),
     openSettings: () => settingsOpened.push('settings'),
+    ...(setup.polish === undefined ? {} : { polish: setup.polish }),
     logger,
   });
   coordinator.start();
@@ -889,6 +890,61 @@ describe('SessionCoordinator', () => {
     expect(harness.lastTranscript.get()).toBe('ahoj [201~svet');
     expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'ahoj [201~svet' }] });
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+  });
+
+  it('inserts, remembers and stores the AI-polished text when polish is on', async () => {
+    const received: string[] = [];
+    const harness = await prepared({
+      settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', appendTrailingSpace: true },
+      polish: (text) => {
+        received.push(text);
+        return Promise.resolve('Upravený\u202e text.');
+      },
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text. ']);
+    expect(received).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.lastTranscript.get()).toBe('Upravený text. ');
+    expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'Upravený text. ' }] });
+    expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
+  });
+
+  it.each([
+    ['polish is off', { aiPolish: false, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' }],
+    ['no model is chosen', { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: '' }],
+    ['no endpoint is set', { aiPolish: true, aiBaseUrl: null, aiModel: 'qwen2.5:1.5b' }],
+  ])('never calls the AI when %s', async (_case, settings) => {
+    let calls = 0;
+    const harness = await prepared({ settings, polish: (text) => { calls++; return Promise.resolve(text); } });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(calls).toBe(0);
+  });
+
+  it('cancels the AI request and inserts nothing when the app shuts down during polish', async () => {
+    const aborted = Promise.withResolvers<void>();
+    let calls = 0;
+    const harness = await prepared({
+      settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
+      polish: (text, signal) => {
+        calls++;
+        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve(text); }));
+      },
+    });
+
+    await dictate(harness, 7);
+    await expect.poll(() => calls).toBe(1);
+    await harness.coordinator.shutdown();
+    await aborted.promise;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
   });
 
   it('treats a transcript with only control and invisible characters as silence', async () => {
