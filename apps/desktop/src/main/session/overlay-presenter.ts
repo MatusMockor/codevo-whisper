@@ -6,7 +6,7 @@ export const NOTICE_MS = 4000;
 const HIDDEN: OverlayState = { kind: 'hidden' };
 
 export function holdMs(state: OverlayState): number {
-  return state.kind === 'blocked' || state.kind === 'error' ? NOTICE_MS : RESULT_MS;
+  return state.kind === 'blocked' || state.kind === 'error' || (state.kind === 'inserted' && state.notice !== undefined) ? NOTICE_MS : RESULT_MS;
 }
 
 export class OverlayPresenter {

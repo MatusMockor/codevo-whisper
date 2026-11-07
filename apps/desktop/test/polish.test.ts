@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { serverProvider } from '../src/main/ai/llm-client';
+import { LlmError, serverProvider } from '../src/main/ai/llm-client';
 import { polish } from '../src/main/ai/polish';
 import { completion, json, startFakeLlmServer, type FakeLlmServer } from './fake-llm-server';
 import { RecordingLogger } from './recording-logger';
@@ -25,14 +25,15 @@ async function polishWith(reply: (request: { body: string }) => string | null, t
     json(response, 200, completion(content));
   });
   const logger = new RecordingLogger();
-  const text = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'qwen2.5:1.5b', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger, timeoutMs });
-  return { text, logger, requests: server.requests };
+  const { text, failure } = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'qwen2.5:1.5b', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger, timeoutMs });
+  return { text, failure, logger, requests: server.requests };
 }
 
 describe('polish', () => {
   it('sends the transcript as JSON in its own user message after the instructions and returns the edit', async () => {
-    const { text, requests } = await polishWith(() => 'Zajtra o jedenástej mám poradu.');
+    const { text, failure, requests } = await polishWith(() => 'Zajtra o jedenástej mám poradu.');
     expect(text).toBe('Zajtra o jedenástej mám poradu.');
+    expect(failure).toBeNull();
     const { messages } = JSON.parse(requests[0]?.body ?? '') as { messages: Array<{ role: string; content: string }> };
     expect(messages.map((message) => message.role)).toEqual(['system', 'user']);
     expect(JSON.parse(messages[1]?.content ?? '')).toEqual({ transcript: RAW });
@@ -52,8 +53,8 @@ describe('polish', () => {
   it('keeps the input when the server fails, without logging the transcript or the key', async () => {
     server = await startFakeLlmServer((_request, response) => json(response, 500, { error: 'boom' }));
     const logger = new RecordingLogger();
-    const text = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'm', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger });
-    expect(text).toBe(RAW);
+    const result = await polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'm', apiKey: SECRET_KEY }), signal: new AbortController().signal, logger });
+    expect(result).toEqual({ text: RAW, failure: 'http' });
     expect(logger.warns).toHaveLength(1);
     expect(logged(logger)).not.toContain(RAW);
     expect(logged(logger)).not.toContain(SECRET_KEY);
@@ -61,8 +62,9 @@ describe('polish', () => {
 
   it('keeps the input when the server does not answer within the timeout', async () => {
     const started = Date.now();
-    const { text } = await polishWith(() => null, 200);
+    const { text, failure } = await polishWith(() => null, 200);
     expect(text).toBe(RAW);
+    expect(failure).toBe('timeout');
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
@@ -71,6 +73,11 @@ describe('polish', () => {
     const controller = new AbortController();
     const run = polish(RAW, { complete: serverProvider({ baseUrl: server.baseUrl, model: 'm', apiKey: null }), signal: controller.signal, logger: new RecordingLogger() });
     controller.abort();
-    expect(await run).toBe(RAW);
+    expect((await run).text).toBe(RAW);
+  });
+
+  it('keeps the input and reports why when Codex CLI cannot polish', async () => {
+    const complete = () => Promise.reject(new LlmError('codex-logged-out', 'Codex CLI exited with 1'));
+    expect(await polish(RAW, { complete, signal: new AbortController().signal, logger: new RecordingLogger() })).toEqual({ text: RAW, failure: 'codex-logged-out' });
   });
 });

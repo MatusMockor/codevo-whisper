@@ -126,14 +126,17 @@ function Content({ state, levels, onAction }: OverlayProps) {
   }
   if (state.kind === 'inserted') {
     return (
-      <StatusPill>
-        <span className="orb done">
-          <CheckIcon />
-        </span>
-        <span className="ov-status">
-          Vložené{state.appName !== '' && <small>{state.appName}</small>}
-        </span>
-      </StatusPill>
+      <>
+        {state.notice !== undefined && <p className="ov-notice">{state.notice}</p>}
+        <StatusPill>
+          <span className="orb done">
+            <CheckIcon />
+          </span>
+          <span className="ov-status">
+            Vložené{state.appName !== '' && <small>{state.appName}</small>}
+          </span>
+        </StatusPill>
+      </>
     );
   }
   if (state.kind === 'copied') {

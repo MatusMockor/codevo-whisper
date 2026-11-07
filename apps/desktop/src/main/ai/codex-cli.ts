@@ -66,6 +66,10 @@ function aborted(): LlmError {
   return new LlmError('aborted', 'the request was cancelled');
 }
 
+async function loggedIn(binary: string, env: NodeJS.ProcessEnv, signal: AbortSignal | undefined): Promise<boolean> {
+  return (await run(binary, ['login', 'status'], { env, input: '', timeoutMs: LOGIN_TIMEOUT_MS, signal })).code === 0;
+}
+
 function run(binary: string, args: readonly string[], { env, input, timeoutMs, signal }: RunOptions): Promise<{ code: number | null; stderr: string }> {
   if (signal?.aborted === true) return Promise.reject(aborted());
   return new Promise((resolve, reject) => {
@@ -147,6 +151,9 @@ export function codexProvider(target: CodexTarget): Complete {
       const { code, stderr } = await run(binary, execArgs(target, workdir, output), { env, input: prompt(messages), timeoutMs, signal });
       if (code !== 0) throw new LlmError(LOGGED_OUT.test(stderr) ? 'codex-logged-out' : 'codex-failed', `Codex CLI exited with ${code ?? 'a signal'}`);
       return unwrapTranscript(completionText(await readAnswer(output)));
+    } catch (error) {
+      if (error instanceof LlmError && error.reason === 'timeout' && !(await loggedIn(binary, env, signal))) throw new LlmError('codex-logged-out', 'Codex CLI is not logged in');
+      throw error;
     } finally {
       await rm(workdir, { recursive: true, force: true });
     }
@@ -158,8 +165,7 @@ export async function checkCodex(target: CodexTarget, signal?: AbortSignal): Pro
   try {
     const binary = await findCodex(env);
     if (binary === null) throw notFound();
-    const login = await run(binary, ['login', 'status'], { env, input: '', timeoutMs: LOGIN_TIMEOUT_MS, signal });
-    if (login.code !== 0) return { ok: false, error: 'codex-logged-out' };
+    if (!(await loggedIn(binary, env, signal))) return { ok: false, error: 'codex-logged-out' };
     await codexProvider({ ...target, env })([{ role: 'user', content: CHECK_PROMPT }], { timeoutMs: CHECK_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) });
     return { ok: true };
   } catch (error) {

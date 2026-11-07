@@ -1,5 +1,6 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
+import type { AiFailure } from '../../shared/ai';
 import type { OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
@@ -29,6 +30,8 @@ export const MESSAGES = Object.freeze({
   serverTooLong: 'Diktovanie je pre server príliš dlhé',
   serverConnectionLost: 'Spojenie so serverom sa prerušilo',
   serverProtocol: 'Server poslal neplatnú odpoveď',
+  codexNotFound: 'Codex CLI sa nenašiel. Nainštalujte ho alebo skontrolujte PATH.',
+  codexLoggedOut: 'Codex CLI nie je prihlásený. Spustite `codex login`.',
 });
 
 export function errorState(message: string): ErrorState {
@@ -110,6 +113,16 @@ export function insertionState(outcome: InsertionOutcome | null, appName: string
     return errorState(MESSAGES.insertFailed);
   }
   return INSERTION_STATES[outcome](appName);
+}
+
+const POLISH_NOTICES: Partial<Record<AiFailure, string>> = Object.freeze({
+  'codex-not-found': MESSAGES.codexNotFound,
+  'codex-logged-out': MESSAGES.codexLoggedOut,
+});
+
+export function withPolishNotice(state: TerminalState, failure: AiFailure | null): TerminalState {
+  const notice = failure === null ? undefined : POLISH_NOTICES[failure];
+  return state.kind === 'inserted' && notice !== undefined ? { ...state, notice } : state;
 }
 
 export function pasteLastState(outcome: PasteLastOutcome, appName: string): OverlayState {

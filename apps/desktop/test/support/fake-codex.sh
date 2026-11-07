@@ -7,7 +7,7 @@ if [[ "${1:-}" == "login" ]]; then
     echo "$!" > "$FAKE_CODEX_DIR/pid"
     wait
   fi
-  [[ "${FAKE_CODEX_MODE:-answer}" == "logged-out" ]] && { echo "Not logged in" >&2; exit 1; }
+  [[ "${FAKE_CODEX_MODE:-answer}" == "logged-out" || "${FAKE_CODEX_MODE:-answer}" == "hang-logged-out" ]] && { echo "Not logged in" >&2; exit 1; }
   echo "Logged in using ChatGPT" >&2
   exit 0
 fi
@@ -39,7 +39,7 @@ case "${FAKE_CODEX_MODE:-answer}" in
     echo "error: unexpected argument '--disable' found" >&2
     exit 2
     ;;
-  hang)
+  hang | hang-logged-out)
     sleep 30 &
     echo "$!" > "$FAKE_CODEX_DIR/pid"
     wait

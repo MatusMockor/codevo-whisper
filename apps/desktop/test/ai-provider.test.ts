@@ -41,7 +41,7 @@ function choose(overrides: Partial<ProviderSettings>) {
 async function polished(overrides: Partial<ProviderSettings>): Promise<string> {
   const complete = await choose(overrides);
   if (complete === null) throw new Error('no provider');
-  return polish(RAW, { complete, signal: new AbortController().signal, logger: new RecordingLogger() });
+  return (await polish(RAW, { complete, signal: new AbortController().signal, logger: new RecordingLogger() })).text;
 }
 
 it('polishes through the configured server by default and never starts Codex', async () => {

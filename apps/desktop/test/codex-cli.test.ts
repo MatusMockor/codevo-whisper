@@ -108,6 +108,12 @@ describe('codexProvider', () => {
     await expect.poll(() => isRunning(pid)).toBe(false);
   });
 
+  it('reports a CLI that times out while logged out as logged out', async () => {
+    expect((await failure(complete('hang-logged-out', {}, 300))).reason).toBe('codex-logged-out');
+    const pid = Number(await readFile(join(dir, 'pid'), 'utf8'));
+    await expect.poll(() => isRunning(pid)).toBe(false);
+  });
+
   it('kills the CLI when the caller aborts and reports it apart from a timeout', async () => {
     const controller = new AbortController();
     const run = complete('hang', {}, 10_000, controller.signal);

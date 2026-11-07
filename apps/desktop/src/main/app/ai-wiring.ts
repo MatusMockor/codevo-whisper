@@ -4,7 +4,7 @@ import type { AiCheck, AiKeyState, CodexCheck, CodexEffort } from '../../shared/
 import { AiKeyStore } from '../ai/ai-key-store';
 import { checkCodex } from '../ai/codex-cli';
 import { listModels, LlmError, type Complete } from '../ai/llm-client';
-import { polish } from '../ai/polish';
+import { polish, type Polished } from '../ai/polish';
 import { chooseProvider } from '../ai/provider';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -19,7 +19,7 @@ export type AiServices = {
   setKey(key: string | null): Promise<AiKeyState>;
   check(baseUrl: string): Promise<AiCheck>;
   checkCodex(model: string, effort: CodexEffort): Promise<CodexCheck>;
-  polish(text: string, signal: AbortSignal): Promise<string>;
+  polish(text: string, signal: AbortSignal): Promise<Polished>;
   provider(): Promise<Complete | null>;
   isBusy(): boolean;
   shutdown(): Promise<void>;
@@ -48,7 +48,7 @@ export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiring
     },
     polish: async (text, signal) => {
       const complete = await provider();
-      return complete === null ? text : polish(text, { complete, signal, logger });
+      return complete === null ? { text, failure: null } : polish(text, { complete, signal, logger });
     },
     provider,
     isBusy: () => checks.size > 0,

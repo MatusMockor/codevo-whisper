@@ -1,4 +1,5 @@
 import { canPolish } from '../../shared/ai';
+import type { Polished } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
 import type { DictationOptions, EngineDictation, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
@@ -16,7 +17,7 @@ import type { Language, MicrophoneSetting } from '../../shared/settings';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
-import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError } from './overlay-messages';
+import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError, withPolishNotice } from './overlay-messages';
 import { processFinalTranscript, type TranscriptSettings } from './process-final-transcript';
 
 export type SessionOverlay = {
@@ -36,7 +37,7 @@ export type DictationSessionDeps = {
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
-  polish(text: string, signal: AbortSignal): Promise<string>;
+  polish(text: string, signal: AbortSignal): Promise<Polished>;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
   clock: () => number;
@@ -321,7 +322,7 @@ export class DictationSession {
     if (rawText === null) {
       return;
     }
-    const text = this.polishing ? await this.polished(rawText) : processFinalTranscript({ text: rawText, settings: this.transcriptSettings });
+    const { text, failure } = this.polishing ? await this.polished(rawText) : { text: processFinalTranscript({ text: rawText, settings: this.transcriptSettings }), failure: null };
     if (this.controller.signal.aborted) return;
     this.remember(text);
     if (text === '') {
@@ -331,7 +332,7 @@ export class DictationSession {
     this.deps.transcribed(text, pcm);
     const target = await this.target;
     const outcome = await this.insert(text, target);
-    await this.chooseTerminal({ kind: 'result', state: insertionState(outcome, target?.name ?? '') });
+    await this.chooseTerminal({ kind: 'result', state: withPolishNotice(insertionState(outcome, target?.name ?? ''), failure) });
   }
 
   private async transcribe(dictation: EngineDictation): Promise<string | null> {
@@ -358,10 +359,11 @@ export class DictationSession {
     return failureState(error.reason, textSoFar !== '');
   }
 
-  private async polished(rawText: string): Promise<string> {
+  private async polished(rawText: string): Promise<Polished> {
     const processed = processFinalTranscript({ text: rawText, settings: { ...this.transcriptSettings, appendTrailingSpace: false } });
-    if (processed === '') return '';
-    return sanitizeInsertionText(await this.deps.polish(processed, this.controller.signal), this.transcriptSettings);
+    if (processed === '') return { text: '', failure: null };
+    const { text, failure } = await this.deps.polish(processed, this.controller.signal);
+    return { text: sanitizeInsertionText(text, this.transcriptSettings), failure };
   }
 
   private finalize(text: string): string {
