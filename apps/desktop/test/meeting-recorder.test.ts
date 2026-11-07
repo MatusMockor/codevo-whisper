@@ -190,6 +190,16 @@ it('stays busy until a stop has settled', async () => {
   expect(meetings.isBusy()).toBe(false);
 });
 
+it('stops the system source without waiting for the capture window to answer the stop', async () => {
+  const meetings = recorder();
+  await meetings.start();
+  capture.stopReply = new Promise(() => undefined);
+
+  void meetings.stop();
+
+  await vi.waitFor(() => expect(source.stops).toBe(1));
+});
+
 it('stops as a no-op when nothing records', async () => {
   await expect(recorder().stop()).resolves.toBeNull();
   expect(capture.requests).toEqual([]);

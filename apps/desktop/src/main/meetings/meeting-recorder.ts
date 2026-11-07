@@ -95,7 +95,7 @@ export class MeetingRecorder {
       }
     } catch (error) {
       this.recording = null;
-      await this.stopCapture();
+      await this.stopTracks(recording);
       await this.release(recording);
       await store.delete(record.id);
       throw error;
@@ -150,7 +150,7 @@ export class MeetingRecorder {
     const recording = this.recording;
     if (recording === null) return null;
     this.recording = null;
-    await this.stopCapture();
+    await this.stopTracks(recording);
     const stoppedAt = this.clock();
     await this.release(recording);
     const phase: MeetingPhase = recording.writeFailed ? { kind: 'failed', error: WRITE_FAILED_ERROR } : { kind: 'stopped' };
@@ -167,16 +167,16 @@ export class MeetingRecorder {
     });
   }
 
-  private async stopCapture(): Promise<void> {
-    await this.deps.capture.request({ type: 'meeting-stop' }).catch((error: unknown) => {
+  private async stopTracks(recording: Recording): Promise<void> {
+    const capture = this.deps.capture.request({ type: 'meeting-stop' }).catch((error: unknown) => {
       this.deps.logger.error('The meeting capture could not be stopped', error);
     });
+    await Promise.all([capture, recording.plan.kind === 'source' ? recording.plan.source.stop() : undefined]);
   }
 
   private async release(recording: Recording): Promise<void> {
     if (recording.silence !== null) clearTimeout(recording.silence);
     recording.unsubscribe();
-    if (recording.plan.kind === 'source') await recording.plan.source.stop();
     await Promise.all(Object.values(recording.files).map((file) => this.close(file)));
   }
 
