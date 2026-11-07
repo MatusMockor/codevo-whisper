@@ -1,9 +1,11 @@
 import { app } from 'electron';
 import { join } from 'node:path';
-import type { AiCheck, AiKeyState } from '../../shared/ai';
+import type { AiCheck, AiKeyState, CodexCheck, CodexEffort } from '../../shared/ai';
 import { AiKeyStore } from '../ai/ai-key-store';
-import { listModels, LlmError, type LlmEndpoint } from '../ai/llm-client';
-import { polish } from '../ai/polish';
+import { checkCodex } from '../ai/codex-cli';
+import { listModels, LlmError, type Complete } from '../ai/llm-client';
+import { polish, type Polished } from '../ai/polish';
+import { chooseProvider } from '../ai/provider';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import { vaultFor } from './server-wiring';
@@ -16,16 +18,18 @@ export type AiServices = {
   keyState(): Promise<AiKeyState>;
   setKey(key: string | null): Promise<AiKeyState>;
   check(baseUrl: string): Promise<AiCheck>;
-  polish(text: string, signal: AbortSignal): Promise<string>;
-  endpoint(): Promise<LlmEndpoint | null>;
+  checkCodex(model: string, effort: CodexEffort): Promise<CodexCheck>;
+  polish(text: string, signal: AbortSignal): Promise<Polished>;
+  provider(): Promise<Complete | null>;
+  isBusy(): boolean;
+  shutdown(): Promise<void>;
 };
 
 export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiringDeps): AiServices {
   const keys = new AiKeyStore(join(app.getPath('userData'), AI_KEY_FILE), vaultFor({ e2e, isPackaged }), logger);
-  const endpoint = async (): Promise<LlmEndpoint | null> => {
-    const { aiBaseUrl, aiModel } = settings.get();
-    return aiBaseUrl === null || aiModel === '' ? null : { baseUrl: aiBaseUrl, model: aiModel, apiKey: await keys.get() };
-  };
+  const provider = (): Promise<Complete | null> => chooseProvider(settings.get(), () => keys.get());
+  const stopping = new AbortController();
+  const checks = new Set<Promise<CodexCheck>>();
   return {
     keyState: () => keys.state(),
     setKey: (key) => keys.set(key),
@@ -37,10 +41,20 @@ export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiring
         throw error;
       }
     },
-    polish: async (text, signal) => {
-      const target = await endpoint();
-      return target === null ? text : polish(text, { endpoint: target, signal, logger });
+    checkCodex: (model, effort) => {
+      const check = checkCodex({ model, effort }, stopping.signal).finally(() => checks.delete(check));
+      checks.add(check);
+      return check;
     },
-    endpoint,
+    polish: async (text, signal) => {
+      const complete = await provider();
+      return complete === null ? { text, failure: null } : polish(text, { complete, signal, logger });
+    },
+    provider,
+    isBusy: () => checks.size > 0,
+    shutdown: async () => {
+      stopping.abort();
+      await Promise.allSettled(checks);
+    },
   };
 }

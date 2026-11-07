@@ -1,6 +1,9 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { dirname, join } from 'node:path';
+import { findCodex } from '../src/main/ai/codex-cli';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import type { Settings } from '../src/shared/settings';
@@ -20,6 +23,7 @@ let page: Page;
 let dir: string | null = null;
 let gateway: LocalGateway | null = null;
 const servers: Server[] = [];
+const originalEnv = { PATH: process.env['PATH'], HOME: process.env['HOME'] };
 
 async function ollamaOffers(model: string): Promise<boolean> {
   try {
@@ -120,7 +124,39 @@ test.afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); })));
   if (dir !== null) await removeUserDataDir(dir);
   dir = null;
+  restoreEnv();
 });
+
+function restoreEnv(): void {
+  process.env['PATH'] = originalEnv.PATH;
+  process.env['HOME'] = originalEnv.HOME;
+}
+
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function startWithCodex(codex: string | null): Promise<void> {
+  const home = test.info().outputPath('home');
+  await mkdir(home, { recursive: true });
+  process.env['PATH'] = codex === null ? '/usr/bin:/bin' : `${dirname(codex)}:/usr/bin:/bin`;
+  process.env['HOME'] = home;
+  await start({ aiPolish: true, aiProvider: 'codex' });
+  restoreEnv();
+}
+
+async function overlayNotice(notice: string, screenshot: string): Promise<void> {
+  const overlay = launched().windows().find((window) => window.url().endsWith('/overlay/overlay.html'));
+  expect(overlay).toBeTruthy();
+  await expect(overlay!.getByText(notice, { exact: true })).toBeVisible();
+  await expect(overlay!.getByText('Vložené')).toBeVisible();
+  await overlay!.screenshot({ path: test.info().outputPath(screenshot) });
+}
 
 test('settings connect to the local Ollama and the dictation is inserted as the model edited it', async () => {
   test.skip(!(await ollamaOffers(MODEL)), `requires Ollama at ${OLLAMA} with ${MODEL}`);
@@ -197,4 +233,58 @@ test.describe('an endpoint that cannot polish', () => {
     expect(afterReleaseMs).toBeGreaterThan(7_500);
     expect(afterReleaseMs).toBeLessThan(12_000);
   });
+});
+
+test.describe('Codex CLI that cannot polish', () => {
+  test('a missing CLI inserts the raw transcript and says so', async () => {
+    await startWithCodex(null);
+    await pair();
+    const { text, afterReleaseMs } = await dictate();
+    expect(text).toBe(RAW);
+    expect(afterReleaseMs).toBeLessThan(5_000);
+    await overlayNotice('Codex CLI sa nenašiel. Nainštalujte ho alebo skontrolujte PATH.', 'overlay-codex-not-found.png');
+  });
+
+  test('a logged-out CLI inserts the raw transcript after the timeout and says so', async () => {
+    const real = await findCodex();
+    test.skip(real === null, 'requires the Codex CLI');
+    test.setTimeout(60_000);
+    await startWithCodex(real);
+    await pair();
+    const { text } = await dictate();
+    expect(text).toBe(RAW);
+    await overlayNotice('Codex CLI nie je prihlásený. Spustite `codex login`.', 'overlay-codex-logged-out.png');
+  });
+});
+
+test('quitting during the Codex CLI check stops it and removes its private directory', async () => {
+  const bin = test.info().outputPath('bin');
+  const record = test.info().outputPath('record');
+  await mkdir(bin, { recursive: true });
+  await mkdir(record, { recursive: true });
+  await writeFile(join(bin, 'codex'), `#!/usr/bin/env bash
+[[ "$1" == login ]] && exit 0
+while [[ $# -gt 0 ]]; do
+  [[ "$1" == -C ]] && echo "$2" > "${record}/workdir"
+  shift
+done
+sleep 60 &
+echo "$!" > "${record}/descendant"
+echo "$$" > "${record}/pid"
+wait
+`);
+  await chmod(join(bin, 'codex'), 0o755);
+  process.env['PATH'] = `${bin}:${originalEnv.PATH ?? ''}`;
+  await start({ aiProvider: 'codex' });
+  await page.getByRole('tab', { name: 'Nastavenia' }).click();
+  await section().getByRole('button', { name: 'Overiť Codex CLI' }).click();
+  await expect.poll(() => readFile(join(record, 'pid'), 'utf8').catch(() => '')).not.toBe('');
+  const [pid, descendant] = await Promise.all(['pid', 'descendant'].map(async (file) => Number(await readFile(join(record, file), 'utf8'))));
+  const workdir = (await readFile(join(record, 'workdir'), 'utf8')).trim();
+
+  const closed = await Promise.race([launched().close().then(() => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000))]);
+  app = null;
+
+  expect({ closed, child: isRunning(pid!), descendant: isRunning(descendant!) }).toEqual({ closed: true, child: false, descendant: false });
+  await expect(stat(workdir)).rejects.toThrow();
 });

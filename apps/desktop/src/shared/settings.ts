@@ -1,3 +1,4 @@
+import type { AiProvider, CodexEffort } from './ai';
 import type { HotkeyBinding } from './hotkey';
 
 export type HotkeySetting = (HotkeyBinding & { label: string }) | null;
@@ -64,6 +65,9 @@ export type Settings = {
   aiBaseUrl: string | null;
   aiModel: string;
   aiPolish: boolean;
+  aiProvider: AiProvider;
+  codexModel: string;
+  codexEffort: CodexEffort;
 };
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
@@ -92,6 +96,9 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   aiBaseUrl: null,
   aiModel: '',
   aiPolish: false,
+  aiProvider: 'server',
+  codexModel: 'gpt-6-luna',
+  codexEffort: 'low',
 });
 
 export function isCustomWords(value: unknown): value is readonly string[] {

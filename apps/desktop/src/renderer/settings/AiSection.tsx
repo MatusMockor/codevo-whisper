@@ -1,11 +1,24 @@
 import { useEffect, useId, useState } from 'react';
-import { isAiBaseUrl, isAiKey, isLocalAddress, type AiCheck, type AiFailure, type AiKeyState } from '../../shared/ai';
+import { isAiBaseUrl, isAiKey, isCodexModel, isLocalAddress, type AiCheck, type AiFailure, type AiKeyState, type AiProvider, type CodexCheck, type CodexEffort } from '../../shared/ai';
 import type { Settings } from '../../shared/settings';
+import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { Switch } from '../components/Switch';
 import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
-type CheckState = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done'; result: AiCheck };
+type CheckState<T> = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done'; result: T };
+
+const PROVIDERS: ReadonlyArray<SegmentOption<AiProvider>> = [
+  { id: 'server', label: 'Vlastný server' },
+  { id: 'codex', label: 'Codex CLI' },
+];
+
+const EFFORTS: ReadonlyArray<SegmentOption<CodexEffort>> = [
+  { id: 'none', label: 'Žiadna' },
+  { id: 'low', label: 'Nízka (odporúčané)' },
+  { id: 'medium', label: 'Stredná' },
+  { id: 'high', label: 'Vysoká' },
+];
 
 const FAILURES: Readonly<Record<AiFailure, string>> = {
   timeout: 'Server neodpovedal včas.',
@@ -15,12 +28,100 @@ const FAILURES: Readonly<Record<AiFailure, string>> = {
   http: 'Server vrátil chybu.',
   'too-large': 'Odpoveď servera je príliš veľká.',
   'bad-response': 'Server neodpovedá ako OpenAI-compatible API.',
+  'codex-not-found': 'Codex CLI sa nenašiel. Nainštalujte ho alebo skontrolujte PATH.',
+  'codex-logged-out': 'Codex CLI nie je prihlásený. Spustite `codex login`.',
+  'codex-failed': 'Codex CLI skončil s chybou. Skontrolujte model a verziu Codex CLI.',
+};
+
+const CODEX_FAILURES: Readonly<Partial<Record<AiFailure, string>>> = {
+  timeout: 'Codex CLI neodpovedal včas.',
+  'too-large': 'Odpoveď Codex CLI je príliš veľká.',
+  'bad-response': 'Codex CLI nevrátil žiadnu odpoveď.',
 };
 
 function checkMessage(result: AiCheck): string {
   if (!result.ok) return FAILURES[result.error];
   if (result.models.length === 0) return 'Spojenie funguje, server však neponúka žiadny model.';
   return `Spojenie funguje. Dostupné modely: ${result.models.length}.`;
+}
+
+function codexCheckMessage(result: CodexCheck): string {
+  if (result.ok) return 'Codex CLI funguje.';
+  return CODEX_FAILURES[result.error] ?? FAILURES[result.error];
+}
+
+function CodexFields({ settings }: { settings: Pick<Settings, 'codexModel' | 'codexEffort'> }) {
+  const modelId = useId();
+  const [model, setModel] = useState<string | null>(null);
+  const [check, setCheck] = useState<CheckState<CodexCheck>>({ kind: 'idle' });
+
+  const modelValue = (model ?? settings.codexModel).trim();
+  const modelValid = isCodexModel(modelValue);
+
+  function saveModel(): void {
+    if (!modelValid || modelValue === settings.codexModel) return;
+    saveSettings({ codexModel: modelValue }, (saved) => saved && setModel(null));
+  }
+
+  function verify(): void {
+    saveModel();
+    setCheck({ kind: 'checking' });
+    window.codevo.checkCodex(modelValue, settings.codexEffort).then(
+      (result) => setCheck({ kind: 'done', result }),
+      (error: unknown) => {
+        console.error('Checking Codex CLI failed', error);
+        setCheck({ kind: 'done', result: { ok: false, error: 'codex-failed' } });
+      },
+    );
+  }
+
+  return (
+    <div className="ai-fields">
+      <p className="field-note warn">Text diktátu aj prepis stretnutia sa odošle do OpenAI pod vaším účtom v Codex CLI a čerpá limity vášho predplatného ChatGPT, približne 7 000 tokenov na jeden diktát.</p>
+      <div className="ai-field">
+        <label htmlFor={modelId}>Model</label>
+        <input
+          id={modelId}
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="gpt-6-luna"
+          value={model ?? settings.codexModel}
+          aria-invalid={!modelValid}
+          aria-describedby={`${modelId}-note`}
+          onChange={(event) => {
+            setModel(event.target.value);
+            setCheck({ kind: 'idle' });
+          }}
+          onBlur={saveModel}
+          onKeyDown={(event) => event.key === 'Enter' && saveModel()}
+        />
+        <span id={`${modelId}-note`} className={modelValid ? 'field-note' : 'field-note warn'} role={modelValid ? undefined : 'alert'}>
+          {modelValid ? 'Odporúčané: gpt-6-luna s nízkou úrovňou uvažovania.' : 'Zadajte názov modelu bez medzier, napríklad gpt-6-luna.'}
+        </span>
+      </div>
+      <div className="ai-field">
+        <span className="ai-label">Úroveň uvažovania</span>
+        <SegmentedControl
+          label="Úroveň uvažovania"
+          options={EFFORTS}
+          value={settings.codexEffort}
+          onChange={(codexEffort) => {
+            setCheck({ kind: 'idle' });
+            saveSettings({ codexEffort });
+          }}
+        />
+      </div>
+      <div className="ai-inline">
+        <button type="button" className="btn" disabled={!modelValid || check.kind === 'checking'} onClick={verify}>
+          {check.kind === 'checking' ? 'Overuje sa…' : 'Overiť Codex CLI'}
+        </button>
+        <span className={check.kind === 'done' && !check.result.ok ? 'field-note warn' : 'field-note'} aria-live="polite">
+          {check.kind === 'done' ? codexCheckMessage(check.result) : ''}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function ApiKeyField({ state, onChange }: { state: AiKeyState | null; onChange: (state: AiKeyState) => void }) {
@@ -80,12 +181,12 @@ function ApiKeyField({ state, onChange }: { state: AiKeyState | null; onChange: 
   );
 }
 
-export function AiSection({ settings }: { settings: Pick<Settings, 'aiBaseUrl' | 'aiModel' | 'aiPolish'> }) {
+export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'aiPolish' | 'codexModel' | 'codexEffort'> }) {
   const urlId = useId();
   const modelId = useId();
   const [url, setUrl] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
-  const [check, setCheck] = useState<CheckState>({ kind: 'idle' });
+  const [check, setCheck] = useState<CheckState<AiCheck>>({ kind: 'idle' });
   const [keyState, setKeyState] = useState<AiKeyState | null>(null);
 
   useEffect(() => {
@@ -95,7 +196,8 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiBaseUrl' |
   const urlValue = (url ?? settings.aiBaseUrl ?? '').trim();
   const modelValue = (model ?? settings.aiModel).trim();
   const urlValid = urlValue === '' || isAiBaseUrl(urlValue);
-  const ready = urlValue !== '' && urlValid && modelValue !== '';
+  const codex = settings.aiProvider === 'codex';
+  const ready = codex || (urlValue !== '' && urlValid && modelValue !== '');
   const models = check.kind === 'done' && check.result.ok ? check.result.models : [];
 
   function saveUrl(): void {
@@ -123,68 +225,86 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiBaseUrl' |
 
   return (
     <SettingsGroup title="AI úprava textu">
-      <p className="sbox-lead">Po prepise môže diktát upraviť jazykový model na serveri, ktorý si nastavíte, napríklad Ollama alebo LM Studio. Bez adresy sa text nikam neposiela.</p>
-      <div className="ai-fields">
-        <div className="ai-field">
-          <label htmlFor={urlId}>Adresa servera (OpenAI-compatible)</label>
-          <input
-            id={urlId}
-            type="url"
-            inputMode="url"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="http://127.0.0.1:11434/v1"
-            value={url ?? settings.aiBaseUrl ?? ''}
-            aria-invalid={!urlValid}
-            aria-describedby={`${urlId}-note`}
-            onChange={(event) => {
-              setUrl(event.target.value);
-              setCheck({ kind: 'idle' });
-            }}
-            onBlur={saveUrl}
-            onKeyDown={(event) => event.key === 'Enter' && saveUrl()}
-          />
-          <span id={`${urlId}-note`} className={urlValid && (urlValue === '' || isLocalAddress(urlValue)) ? 'field-note' : 'field-note warn'} role={urlValid ? undefined : 'alert'}>
-            {!urlValid ? 'Zadajte adresu začínajúcu http:// alebo https://, bez mena, hesla a parametrov.' : urlValue !== '' && !isLocalAddress(urlValue) ? 'Text sa odošle mimo tento počítač.' : 'Adresa končí spravidla na /v1.'}
-          </span>
+      <p className="sbox-lead">
+        {codex
+          ? 'Po prepise môže diktát a poznámky zo stretnutí upraviť model OpenAI cez Codex CLI, v ktorom ste prihlásený.'
+          : 'Po prepise môže diktát upraviť jazykový model na serveri, ktorý si nastavíte, napríklad Ollama alebo LM Studio. Bez adresy sa text nikam neposiela.'}
+      </p>
+      <SettingsRow title="Poskytovateľ" description="Codex CLI používa váš účet ChatGPT. Vlastný server môže bežať aj na tomto počítači.">
+        <SegmentedControl label="Poskytovateľ AI" options={PROVIDERS} value={settings.aiProvider} onChange={(aiProvider) => saveSettings({ aiProvider })} />
+      </SettingsRow>
+      {codex ? (
+        <CodexFields settings={settings} />
+      ) : (
+        <div className="ai-fields">
+          <div className="ai-field">
+            <label htmlFor={urlId}>Adresa servera (OpenAI-compatible)</label>
+            <input
+              id={urlId}
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="http://127.0.0.1:11434/v1"
+              value={url ?? settings.aiBaseUrl ?? ''}
+              aria-invalid={!urlValid}
+              aria-describedby={`${urlId}-note`}
+              onChange={(event) => {
+                setUrl(event.target.value);
+                setCheck({ kind: 'idle' });
+              }}
+              onBlur={saveUrl}
+              onKeyDown={(event) => event.key === 'Enter' && saveUrl()}
+            />
+            <span id={`${urlId}-note`} className={urlValid && (urlValue === '' || isLocalAddress(urlValue)) ? 'field-note' : 'field-note warn'} role={urlValid ? undefined : 'alert'}>
+              {!urlValid ? 'Zadajte adresu začínajúcu http:// alebo https://, bez mena, hesla a parametrov.' : urlValue !== '' && !isLocalAddress(urlValue) ? 'Text sa odošle mimo tento počítač.' : 'Adresa končí spravidla na /v1.'}
+            </span>
+          </div>
+          <div className="ai-field">
+            <label htmlFor={modelId}>Model</label>
+            <input
+              id={modelId}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              list={`${modelId}-list`}
+              placeholder="qwen2.5:1.5b"
+              value={model ?? settings.aiModel}
+              onChange={(event) => setModel(event.target.value)}
+              onBlur={saveModel}
+              onKeyDown={(event) => event.key === 'Enter' && saveModel()}
+            />
+            <datalist id={`${modelId}-list`}>
+              {models.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
+          <ApiKeyField state={keyState} onChange={setKeyState} />
+          <div className="ai-inline">
+            <button type="button" className="btn" disabled={urlValue === '' || !urlValid || check.kind === 'checking'} onClick={verify}>
+              {check.kind === 'checking' ? 'Overuje sa…' : 'Overiť pripojenie'}
+            </button>
+            <span className={check.kind === 'done' && !check.result.ok ? 'field-note warn' : 'field-note'} aria-live="polite">
+              {check.kind === 'done' ? checkMessage(check.result) : ''}
+            </span>
+          </div>
         </div>
-        <div className="ai-field">
-          <label htmlFor={modelId}>Model</label>
-          <input
-            id={modelId}
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            list={`${modelId}-list`}
-            placeholder="qwen2.5:1.5b"
-            value={model ?? settings.aiModel}
-            onChange={(event) => setModel(event.target.value)}
-            onBlur={saveModel}
-            onKeyDown={(event) => event.key === 'Enter' && saveModel()}
-          />
-          <datalist id={`${modelId}-list`}>
-            {models.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
-        <ApiKeyField state={keyState} onChange={setKeyState} />
-        <div className="ai-inline">
-          <button type="button" className="btn" disabled={urlValue === '' || !urlValid || check.kind === 'checking'} onClick={verify}>
-            {check.kind === 'checking' ? 'Overuje sa…' : 'Overiť pripojenie'}
-          </button>
-          <span className={check.kind === 'done' && !check.result.ok ? 'field-note warn' : 'field-note'} aria-live="polite">
-            {check.kind === 'done' ? checkMessage(check.result) : ''}
-          </span>
-        </div>
-      </div>
-      <SettingsRow title="Upraviť diktát cez AI" description="Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.">
+      )}
+      <SettingsRow
+        title="Upraviť diktát cez AI"
+        description={
+          codex
+            ? 'Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak Codex CLI neodpovie do 8 sekúnd, vloží sa pôvodný prepis.'
+            : 'Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.'
+        }
+      >
         <Switch
           label="Upraviť diktát cez AI"
           checked={settings.aiPolish}
           disabled={!settings.aiPolish && !ready}
           onChange={(aiPolish) => {
-            if (!aiPolish) {
+            if (!aiPolish || codex) {
               saveSettings({ aiPolish });
               return;
             }

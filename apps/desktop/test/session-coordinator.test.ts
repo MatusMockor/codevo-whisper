@@ -29,6 +29,7 @@ import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { QuitGate } from '../src/main/app/quit-gate';
+import type { Polished } from '../src/main/ai/polish';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
@@ -37,7 +38,7 @@ const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes',
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { polish?: (text: string, signal: AbortSignal) => Promise<string>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -898,7 +899,7 @@ describe('SessionCoordinator', () => {
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', appendTrailingSpace: true },
       polish: (text) => {
         received.push(text);
-        return Promise.resolve('Upravený\u202e text.');
+        return Promise.resolve({ text: 'Upravený\u202e text.', failure: null });
       },
     });
 
@@ -911,13 +912,51 @@ describe('SessionCoordinator', () => {
     expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
   });
 
+  it('polishes through Codex CLI without a server address once the user picks it', async () => {
+    const harness = await prepared({
+      settings: { aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
+      polish: () => Promise.resolve({ text: 'Upravené cez Codex.', failure: null }),
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravené cez Codex.']);
+  });
+
+  it.each([
+    ['codex-not-found', 'Codex CLI sa nenašiel. Nainštalujte ho alebo skontrolujte PATH.'],
+    ['codex-logged-out', 'Codex CLI nie je prihlásený. Spustite `codex login`.'],
+  ] as const)('inserts the raw text and tells the user why Codex CLI did not polish it (%s)', async (failure, notice) => {
+    const harness = await prepared({
+      settings: { aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
+      polish: (text) => Promise.resolve({ text, failure }),
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit', notice });
+  });
+
+  it('tells the user why Codex CLI did not polish a dictation copied to the clipboard', async () => {
+    const harness = await prepared({
+      settings: { insertion: 'clipboard', aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
+      polish: (text) => Promise.resolve({ text, failure: 'codex-logged-out' }),
+    });
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'copied', notice: 'Codex CLI nie je prihlásený. Spustite `codex login`.' });
+  });
+
   it.each([
     ['polish is off', { aiPolish: false, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' }],
+    ['polish is off with Codex chosen', { aiPolish: false, aiProvider: 'codex' as const }],
     ['no model is chosen', { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: '' }],
     ['no endpoint is set', { aiPolish: true, aiBaseUrl: null, aiModel: 'qwen2.5:1.5b' }],
   ])('never calls the AI when %s', async (_case, settings) => {
     let calls = 0;
-    const harness = await prepared({ settings, polish: (text) => { calls++; return Promise.resolve(text); } });
+    const harness = await prepared({ settings, polish: (text) => { calls++; return Promise.resolve({ text, failure: null }); } });
 
     await dictate(harness, 7);
 
@@ -932,7 +971,7 @@ describe('SessionCoordinator', () => {
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
       polish: (text, signal) => {
         calls++;
-        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve(text); }));
+        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
       },
     });
 

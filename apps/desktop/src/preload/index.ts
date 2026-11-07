@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
-import type { AiCheck, AiKeyState } from '../shared/ai';
+import type { AiCheck, AiKeyState, CodexCheck } from '../shared/ai';
 import type { HistoryView } from '../shared/history';
 import type { AppStatus } from '../shared/app-status';
 import type { OutputAudioView } from '../shared/recording-audio';
@@ -72,6 +72,7 @@ const api: IpcApi = {
   getAiKeyState: () => ipcRenderer.invoke(INVOKE_CHANNELS.getAiKeyState) as Promise<AiKeyState>,
   setAiKey: (key) => ipcRenderer.invoke(INVOKE_CHANNELS.setAiKey, key) as Promise<AiKeyState>,
   checkAi: (baseUrl) => ipcRenderer.invoke(INVOKE_CHANNELS.checkAi, baseUrl) as Promise<AiCheck>,
+  checkCodex: (model, effort) => ipcRenderer.invoke(INVOKE_CHANNELS.checkCodex, model, effort) as Promise<CodexCheck>,
   getMeetings: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMeetings) as Promise<MeetingSummary[]>,
   getMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.getMeeting, id) as Promise<Meeting | null>,
   startMeeting: () => ipcRenderer.invoke(INVOKE_CHANNELS.startMeeting) as Promise<MeetingSummary>,

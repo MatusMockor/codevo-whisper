@@ -1,4 +1,4 @@
-import { isAiBaseUrl, isAiModel } from '../../shared/ai';
+import { CODEX_EFFORTS, isAiBaseUrl, isAiModel, isCodexModel } from '../../shared/ai';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords, isEngineOrder, type Settings } from '../../shared/settings';
 
@@ -72,6 +72,9 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   aiBaseUrl: (value: unknown): value is string | null => value === null || isAiBaseUrl(value),
   aiModel: isAiModel,
   aiPolish: isBoolean,
+  aiProvider: oneOf(['server', 'codex']),
+  codexModel: isCodexModel,
+  codexEffort: oneOf(CODEX_EFFORTS),
 });
 
 export const SETTINGS_KEYS = Object.freeze(Object.keys(SETTINGS_FIELDS)) as ReadonlyArray<keyof Settings>;

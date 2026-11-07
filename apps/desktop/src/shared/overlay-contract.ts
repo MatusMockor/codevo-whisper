@@ -10,8 +10,8 @@ export type OverlayState =
   | { kind: 'hidden' }
   | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string; live?: LiveText }
   | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText }
-  | { kind: 'inserted'; appName: string }
-  | { kind: 'copied' }
+  | { kind: 'inserted'; appName: string; notice?: string }
+  | { kind: 'copied'; notice?: string }
   | { kind: 'blocked'; reason: BlockedReason }
   | { kind: 'error'; message: string; action?: OverlayAction };
 

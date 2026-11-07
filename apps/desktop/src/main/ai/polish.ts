@@ -1,8 +1,11 @@
+import type { AiFailure } from '../../shared/ai';
 import type { Logger } from '../logging/logger';
-import { chat, LlmError, type LlmEndpoint } from './llm-client';
+import { LlmError, type Complete } from './llm-client';
 import { polishMessages } from './prompts';
 
-export type PolishOptions = { endpoint: LlmEndpoint; signal: AbortSignal; logger: Logger; timeoutMs?: number };
+export type PolishOptions = { complete: Complete; signal: AbortSignal; logger: Logger; timeoutMs?: number };
+
+export type Polished = { text: string; failure: AiFailure | null };
 
 const POLISH_TIMEOUT_MS = 8_000;
 
@@ -10,15 +13,17 @@ function plausibleEdit(input: string, output: string): boolean {
   return output.length >= input.length * 0.3 && output.length <= input.length * 2 + 40;
 }
 
-export async function polish(text: string, { endpoint, signal, logger, timeoutMs = POLISH_TIMEOUT_MS }: PolishOptions): Promise<string> {
+export async function polish(text: string, { complete, signal, logger, timeoutMs = POLISH_TIMEOUT_MS }: PolishOptions): Promise<Polished> {
   try {
-    const edited = await chat({ endpoint, messages: polishMessages(text), timeoutMs, signal });
+    const edited = await complete(polishMessages(text), { timeoutMs, signal });
     if (plausibleEdit(text, edited)) {
-      return edited;
+      return { text: edited, failure: null };
     }
     logger.warn('The polished dictation was discarded, inserting the raw transcript', { inputChars: text.length, outputChars: edited.length });
   } catch (error) {
-    logger.warn('The dictation polish failed, inserting the raw transcript', { reason: error instanceof LlmError ? error.reason : 'unexpected' });
+    const reason = error instanceof LlmError ? error.reason : null;
+    logger.warn('The dictation polish failed, inserting the raw transcript', { reason: reason ?? 'unexpected' });
+    return { text, failure: reason };
   }
-  return text;
+  return { text, failure: null };
 }

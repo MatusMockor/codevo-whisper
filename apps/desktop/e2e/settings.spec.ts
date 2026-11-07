@@ -36,6 +36,9 @@ const DEFAULTS: Settings = {
   aiBaseUrl: null,
   aiModel: '',
   aiPolish: false,
+  aiProvider: 'server',
+  codexModel: 'gpt-6-luna',
+  codexEffort: 'low',
 };
 
 let app: ElectronApplication;

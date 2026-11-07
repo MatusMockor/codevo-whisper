@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import type { ChatMessage, LlmEndpoint } from '../src/main/ai/llm-client';
+import { serverProvider, type ChatMessage, type LlmEndpoint } from '../src/main/ai/llm-client';
 import { MeetingNotes } from '../src/main/meetings/meeting-notes';
 import { MeetingStore } from '../src/main/meetings/meeting-store';
 import type { Turn } from '../src/shared/meetings';
@@ -38,7 +38,7 @@ async function readyMeeting(turns: Turn[] = TURNS): Promise<{ store: MeetingStor
 }
 
 function notesFor(store: MeetingStore, endpoint: LlmEndpoint | null, timeoutMs?: number): MeetingNotes {
-  return new MeetingNotes({ store, endpoint: () => Promise.resolve(endpoint), logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+  return new MeetingNotes({ store, provider: () => Promise.resolve(endpoint === null ? null : serverProvider(endpoint)), logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
 }
 
 function endpoint(fake: FakeLlmServer): LlmEndpoint {

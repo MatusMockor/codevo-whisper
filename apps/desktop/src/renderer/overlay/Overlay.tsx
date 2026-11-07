@@ -126,24 +126,30 @@ function Content({ state, levels, onAction }: OverlayProps) {
   }
   if (state.kind === 'inserted') {
     return (
-      <StatusPill>
-        <span className="orb done">
-          <CheckIcon />
-        </span>
-        <span className="ov-status">
-          Vložené{state.appName !== '' && <small>{state.appName}</small>}
-        </span>
-      </StatusPill>
+      <>
+        {state.notice !== undefined && <p className="ov-notice">{state.notice}</p>}
+        <StatusPill>
+          <span className="orb done">
+            <CheckIcon />
+          </span>
+          <span className="ov-status">
+            Vložené{state.appName !== '' && <small>{state.appName}</small>}
+          </span>
+        </StatusPill>
+      </>
     );
   }
   if (state.kind === 'copied') {
     return (
-      <StatusPill>
-        <span className="orb done">
-          <CopyIcon />
-        </span>
-        <span className="ov-status">{navigator.userAgent.includes('Linux') ? 'Skopírované - vlož cez Ctrl+V' : 'Skopírované - vlož cez ⌘V'}</span>
-      </StatusPill>
+      <>
+        {state.notice !== undefined && <p className="ov-notice">{state.notice}</p>}
+        <StatusPill>
+          <span className="orb done">
+            <CopyIcon />
+          </span>
+          <span className="ov-status">{navigator.userAgent.includes('Linux') ? 'Skopírované - vlož cez Ctrl+V' : 'Skopírované - vlož cez ⌘V'}</span>
+        </StatusPill>
+      </>
     );
   }
   if (state.kind === 'blocked') {

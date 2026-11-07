@@ -5,7 +5,11 @@ export type LlmEndpoint = { baseUrl: string; model: string; apiKey: string | nul
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
-export type ChatRequest = { endpoint: LlmEndpoint; messages: readonly ChatMessage[]; timeoutMs: number; signal?: AbortSignal };
+export type CompleteOptions = { timeoutMs: number; signal?: AbortSignal };
+
+export type ChatRequest = CompleteOptions & { endpoint: LlmEndpoint; messages: readonly ChatMessage[] };
+
+export type Complete = (messages: readonly ChatMessage[], options: CompleteOptions) => Promise<string>;
 
 export class LlmError extends Error {
   override readonly name = 'LlmError';
@@ -18,9 +22,13 @@ export class LlmError extends Error {
   }
 }
 
-const MAX_RESPONSE_BYTES = 1024 * 1024;
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MODELS_TIMEOUT_MS = 5_000;
 const THINK_BLOCKS = /<think>[\s\S]*?(?:<\/think>|$)/g;
+
+export function completionText(raw: string): string {
+  return raw.replace(THINK_BLOCKS, '').trim();
+}
 
 function endpointUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/${path}`;
@@ -88,12 +96,16 @@ function completionContent(body: unknown): string {
   if (isPlainRecord(first) && first['finish_reason'] === 'length') {
     throw new LlmError('bad-response', 'the completion was cut off at the token limit');
   }
-  return content.replace(THINK_BLOCKS, '').trim();
+  return completionText(content);
 }
 
 export async function chat({ endpoint, messages, timeoutMs, signal }: ChatRequest): Promise<string> {
   const body = JSON.stringify({ model: endpoint.model, messages, temperature: 0.2, stream: false });
   return completionContent(await requestJson(endpointUrl(endpoint.baseUrl, 'chat/completions'), { method: 'POST', apiKey: endpoint.apiKey, body, timeoutMs, signal }));
+}
+
+export function serverProvider(endpoint: LlmEndpoint): Complete {
+  return (messages, options) => chat({ endpoint, messages, ...options });
 }
 
 export async function listModels(endpoint: Pick<LlmEndpoint, 'baseUrl' | 'apiKey'>): Promise<string[]> {

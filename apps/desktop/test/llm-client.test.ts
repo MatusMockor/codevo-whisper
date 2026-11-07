@@ -48,6 +48,11 @@ describe('chat', () => {
     expect(await run()).toBe('');
   });
 
+  it('returns a JSON answer as the model wrote it', async () => {
+    server = await startFakeLlmServer((_request, response) => json(response, 200, completion('{"transcript": "Zajtra o jedenástej."}')));
+    expect(await chat({ endpoint: endpoint(server), messages: MESSAGES, timeoutMs: 2_000 })).toBe('{"transcript": "Zajtra o jedenástej."}');
+  });
+
   it('reports a non-200 answer, and a rejected key separately', async () => {
     const statuses = [500, 401];
     server = await startFakeLlmServer((_request, response) => json(response, statuses.shift() ?? 500, { error: 'nope' }));

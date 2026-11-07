@@ -1,4 +1,4 @@
-import type { AiCheck, AiKeyState } from './ai';
+import type { AiCheck, AiKeyState, CodexCheck, CodexEffort } from './ai';
 import type { HistoryPolicy, HistoryView } from './history';
 import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
@@ -54,6 +54,7 @@ export type IpcInvokeApi = {
   getAiKeyState(): Promise<AiKeyState>;
   setAiKey(key: string | null): Promise<AiKeyState>;
   checkAi(baseUrl: string): Promise<AiCheck>;
+  checkCodex(model: string, effort: CodexEffort): Promise<CodexCheck>;
   getMeetings(): Promise<MeetingSummary[]>;
   getMeeting(id: string): Promise<Meeting | null>;
   startMeeting(): Promise<MeetingSummary>;
@@ -133,6 +134,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getAiKeyState: 'ai:key-state',
   setAiKey: 'ai:set-key',
   checkAi: 'ai:check',
+  checkCodex: 'ai:check-codex',
   getMeetings: 'meetings:list',
   getMeeting: 'meetings:get',
   startMeeting: 'meetings:start',

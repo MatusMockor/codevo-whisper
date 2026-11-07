@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isAiConfigured, type AiProvider } from '../../shared/ai';
 import type { Live } from '../home/live-value';
 import { formatClock, MEETING_DATE, turnLine, type Meeting, type MeetingSummary } from '../../shared/meetings';
 import { useSettings } from '../settings/use-settings';
@@ -7,11 +8,16 @@ import { useMeeting } from './use-meetings';
 
 type Action = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'pending' } | { kind: 'exported' } | { kind: 'failed'; message: string };
 
-function useAiReady(): boolean | null {
+function useNotesProvider(): AiProvider | 'none' | null {
   const settings = useSettings();
-  if (settings.kind !== 'ready') return settings.kind === 'loading' ? null : false;
-  return settings.value.aiBaseUrl !== null && settings.value.aiModel !== '';
+  if (settings.kind !== 'ready') return settings.kind === 'loading' ? null : 'none';
+  return isAiConfigured(settings.value) ? settings.value.aiProvider : 'none';
 }
+
+const NOTES_HINTS: Readonly<Record<AiProvider, string>> = {
+  server: 'Lokálne servery ako Ollama majú predvolene malé kontextové okno. Pri dlhých stretnutiach ho zväčšite, napríklad premennou OLLAMA_CONTEXT_LENGTH. Pre spoľahlivé poznámky použite model so 7B a viac parametrami, menšie modely si vymýšľajú.',
+  codex: 'Poznámky vytvára Codex CLI. Prepis stretnutia sa odošle do OpenAI pod vaším účtom a čerpá limity vášho predplatného ChatGPT.',
+};
 
 function Transcript({ summary, meeting }: { summary: MeetingSummary; meeting: Live<Meeting | null> }) {
   const { phase } = summary;
@@ -52,12 +58,12 @@ function Transcript({ summary, meeting }: { summary: MeetingSummary; meeting: Li
 }
 
 function Notes({ summary, meeting, onOpenSettings }: { summary: MeetingSummary; meeting: Live<Meeting | null>; onOpenSettings: () => void }) {
-  const aiReady = useAiReady();
+  const provider = useNotesProvider();
   const [failed, setFailed] = useState(false);
   const loaded = meeting.kind === 'ready' ? meeting.value : null;
   const notes = loaded?.notes ?? null;
   const hasSpeech = (loaded?.turns.length ?? 0) > 0;
-  const canGenerate = aiReady === true && summary.phase.kind === 'ready' && hasSpeech && !summary.notesPending;
+  const canGenerate = provider !== null && provider !== 'none' && summary.phase.kind === 'ready' && hasSpeech && !summary.notesPending;
 
   function generate(): void {
     setFailed(false);
@@ -75,16 +81,16 @@ function Notes({ summary, meeting, onOpenSettings }: { summary: MeetingSummary; 
           {notes === null ? 'Vytvoriť poznámky' : 'Vytvoriť znova'}
         </button>
       </div>
-      {aiReady === false ? (
+      {provider === 'none' ? (
         <p className="note" id="meeting-notes-hint">
-          Poznámky vytvára AI server. Nastavte jeho adresu a model v Nastaveniach v časti „AI úprava textu“.
+          Poznámky vytvára AI server alebo Codex CLI. Nastavte ich v Nastaveniach v časti „AI úprava textu“.
           <button type="button" className="linkbtn" onClick={onOpenSettings}>
             Otvoriť Nastavenia
           </button>
         </p>
       ) : (
         <p className="note" id="meeting-notes-hint">
-          Lokálne servery ako Ollama majú predvolene malé kontextové okno. Pri dlhých stretnutiach ho zväčšite, napríklad premennou OLLAMA_CONTEXT_LENGTH. Pre spoľahlivé poznámky použite model so 7B a viac parametrami, menšie modely si vymýšľajú.
+          {NOTES_HINTS[provider ?? 'server']}
         </p>
       )}
       {summary.notesPending && (
