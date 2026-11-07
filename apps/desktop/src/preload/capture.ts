@@ -16,6 +16,9 @@ const bridge: CaptureBridge = {
   frame: (pcm) => {
     ipcRenderer.send(CAPTURE_CHANNELS.frame, pcm);
   },
+  meetingFrame: (frame) => {
+    ipcRenderer.send(CAPTURE_CHANNELS.meetingFrame, frame);
+  },
   level: (rms) => {
     ipcRenderer.send(CAPTURE_CHANNELS.level, rms);
   },

@@ -7,6 +7,7 @@ import { broadcast } from './broadcast';
 import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
 import { historyHandlers, type HistoryHandlerDeps } from './history-handlers';
 import type { InvokeHandlers } from './invoke-handlers';
+import { meetingHandlers, type MeetingHandlerDeps } from './meeting-handlers';
 import { microphoneHandlers, type MicrophoneHandlerDeps } from './microphone-handlers';
 import { modelHandlers, type ModelHandlerDeps } from './model-handlers';
 import { permissionHandlers, type PermissionHandlerDeps } from './permission-handlers';
@@ -22,7 +23,8 @@ export type IpcDependencies = CoreHandlerDeps &
   MicrophoneHandlerDeps &
   ServerHandlerDeps &
   UpdateHandlerDeps &
-  AiHandlerDeps & {
+  AiHandlerDeps &
+  MeetingHandlerDeps & {
     settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
     source: RendererSource;
   };
@@ -37,6 +39,7 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...serverHandlers(dependencies),
     ...updateHandlers(dependencies),
     ...aiHandlers(dependencies),
+    ...meetingHandlers(dependencies),
   };
 }
 

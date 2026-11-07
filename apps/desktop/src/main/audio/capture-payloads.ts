@@ -1,4 +1,4 @@
-import { CAPTURE_LIMITS, type CaptureReply, type CaptureStartResult, type RawAudioDevice } from '../../shared/capture-contract';
+import { CAPTURE_LIMITS, type CaptureReply, type CaptureStartResult, type MeetingCaptureResult, type MeetingFrame, type RawAudioDevice } from '../../shared/capture-contract';
 import { PCM_BYTES_PER_SAMPLE } from '../../shared/pcm';
 import { IpcValidationError } from '../ipc/validate';
 import { isPlainRecord } from '../settings/settings-fields';
@@ -51,6 +51,28 @@ export function parseStartResult(value: unknown): CaptureStartResult {
     throw new IpcValidationError('Start result must carry a label and a fallback flag');
   }
   return { label: value['label'], fallback: value['fallback'] };
+}
+
+const MEETING_SYSTEM_STATES: ReadonlyArray<MeetingCaptureResult['system']> = ['recording', 'failed', 'off'];
+
+export function parseMeetingFrame(value: unknown): MeetingFrame {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['track', 'pcm'])) {
+    throw new IpcValidationError('Meeting frame must be a plain object');
+  }
+  const { track } = value;
+  if (track !== 'mic' && track !== 'system') {
+    throw new IpcValidationError('Meeting frame has an unknown track');
+  }
+  return { track, pcm: parseFrame(value['pcm']) };
+}
+
+export function parseMeetingStartResult(value: unknown): MeetingCaptureResult {
+  const started = parseStartResult(value);
+  const system = MEETING_SYSTEM_STATES.find((state) => isPlainRecord(value) && value['system'] === state);
+  if (system === undefined) {
+    throw new IpcValidationError('Meeting start result must carry a system audio state');
+  }
+  return { ...started, system };
 }
 
 function isRequestId(value: unknown): value is number {

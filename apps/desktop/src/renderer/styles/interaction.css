@@ -110,7 +110,7 @@ label:has(> input:disabled) {
   background: var(--hover);
 }
 
-:is(.btn, .ov-btn, .seg button, .nav button, .hk, .switch, .select, .linkbtn, .radio input, .model-pick input):focus-visible {
+:is(.btn, .ov-btn, .seg button, .nav button, .hk, .switch, .select, .linkbtn, .radio input, .model-pick input, .meeting-pick):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

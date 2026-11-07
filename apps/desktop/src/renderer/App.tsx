@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { panelId, Sidebar, tabId } from './components/Sidebar';
 import { pageFromHash, PAGES, type PageId } from './navigation';
 import { Home } from './pages/Home';
+import { Meetings } from './pages/Meetings';
 import { Onboarding } from './pages/Onboarding';
 import { Privacy } from './pages/Privacy';
 import { Server } from './pages/Server';
@@ -15,6 +16,9 @@ function pageLabel(page: PageId): string {
 function PageContent({ page, onSelect }: { page: PageId; onSelect: (page: PageId) => void }) {
   if (page === 'home') {
     return <Home onOpenSettings={() => onSelect('settings')} onOpenServer={() => onSelect('server')} />;
+  }
+  if (page === 'meetings') {
+    return <Meetings onOpenSettings={() => onSelect('settings')} />;
   }
   if (page === 'settings') {
     return <Settings />;

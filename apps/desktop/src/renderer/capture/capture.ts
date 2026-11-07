@@ -1,9 +1,11 @@
-import type { CaptureCommand, CaptureMode, CaptureReply, CaptureStartResult, RawAudioDevice } from '../../shared/capture-contract';
+import type { CaptureCommand, CaptureMode, CaptureReply, CaptureStartResult, MeetingCaptureResult, RawAudioDevice } from '../../shared/capture-contract';
+import { MeetingCapture } from './meeting-capture';
 import { MicrophoneSession } from './microphone-session';
 
 const bridge = window.codevoCapture;
 
 let session: MicrophoneSession | null = null;
+let meeting: MeetingCapture | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 async function listDevices(): Promise<RawAudioDevice[]> {
@@ -34,12 +36,34 @@ async function start(deviceId: string | null, mode: CaptureMode): Promise<Captur
   return { label: session.label, fallback: session.fallback };
 }
 
+async function stopMeeting(): Promise<null> {
+  const current = meeting;
+  meeting = null;
+  await current?.close();
+  return null;
+}
+
+async function startMeeting(deviceId: string | null, system: boolean): Promise<MeetingCaptureResult> {
+  await stopMeeting();
+  const opened = await MeetingCapture.open(deviceId, system, (frame) => {
+    bridge.meetingFrame(frame);
+  });
+  meeting = opened.capture;
+  return opened.result;
+}
+
 function execute(command: CaptureCommand): Promise<unknown> {
   if (command.type === 'list-devices') {
     return listDevices();
   }
   if (command.type === 'start') {
     return start(command.deviceId, command.mode);
+  }
+  if (command.type === 'meeting-start') {
+    return startMeeting(command.deviceId, command.system);
+  }
+  if (command.type === 'meeting-stop') {
+    return stopMeeting();
   }
   return stop();
 }

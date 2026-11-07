@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDeviceList, parseFrame, parseLevel, parseReply, parseStartResult } from '../src/main/audio/capture-payloads';
+import { parseDeviceList, parseFrame, parseLevel, parseMeetingFrame, parseMeetingStartResult, parseReply, parseStartResult } from '../src/main/audio/capture-payloads';
 import { IpcValidationError } from '../src/main/ipc/validate';
 
 describe('capture payloads', () => {
@@ -55,6 +55,28 @@ describe('capture payloads', () => {
   it('rejects malformed replies', () => {
     for (const value of [null, { id: 0, ok: true, value: 1 }, { id: 1.5, ok: true }, { id: 2, ok: 'yes' }, { id: 2, ok: false, error: 3 }]) {
       expect(() => parseReply(value)).toThrow(IpcValidationError);
+    }
+  });
+});
+
+describe('meeting capture payloads', () => {
+  it('accepts a frame tagged with a known track', () => {
+    const pcm = new Uint8Array(3200);
+
+    expect(parseMeetingFrame({ track: 'mic', pcm })).toEqual({ track: 'mic', pcm });
+    expect(parseMeetingFrame({ track: 'system', pcm })).toEqual({ track: 'system', pcm });
+  });
+
+  it('rejects unknown tracks, extra keys and invalid PCM', () => {
+    for (const value of [{ track: 'other', pcm: new Uint8Array(2) }, { track: 'mic', pcm: new Uint8Array(3) }, { track: 'mic', pcm: new Uint8Array(2), extra: 1 }, { track: 'mic' }, new Uint8Array(2), null]) {
+      expect(() => parseMeetingFrame(value)).toThrow(IpcValidationError);
+    }
+  });
+
+  it('accepts a meeting start result with a known system state', () => {
+    expect(parseMeetingStartResult({ label: 'Mic', fallback: false, system: 'failed' })).toEqual({ label: 'Mic', fallback: false, system: 'failed' });
+    for (const value of [{ label: 'Mic', fallback: false, system: 'maybe' }, { label: 'Mic', fallback: false }, null]) {
+      expect(() => parseMeetingStartResult(value)).toThrow(IpcValidationError);
     }
   });
 });

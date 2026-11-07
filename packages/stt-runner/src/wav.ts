@@ -9,11 +9,11 @@ function writeAscii(view: DataView, offset: number, text: string): void {
   }
 }
 
-export function pcmToWav(pcm: Uint8Array, sampleRate = 16000): Uint8Array {
-  const wav = new Uint8Array(HEADER_BYTES + pcm.byteLength);
-  const view = new DataView(wav.buffer);
+export function wavHeader(dataBytes: number, sampleRate = 16000): Uint8Array {
+  const header = new Uint8Array(HEADER_BYTES);
+  const view = new DataView(header.buffer);
   writeAscii(view, 0, 'RIFF');
-  view.setUint32(4, HEADER_BYTES - 8 + pcm.byteLength, true);
+  view.setUint32(4, HEADER_BYTES - 8 + dataBytes, true);
   writeAscii(view, 8, 'WAVE');
   writeAscii(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
@@ -24,7 +24,13 @@ export function pcmToWav(pcm: Uint8Array, sampleRate = 16000): Uint8Array {
   view.setUint16(32, CHANNELS * BYTES_PER_SAMPLE, true);
   view.setUint16(34, BITS_PER_SAMPLE, true);
   writeAscii(view, 36, 'data');
-  view.setUint32(40, pcm.byteLength, true);
+  view.setUint32(40, dataBytes, true);
+  return header;
+}
+
+export function pcmToWav(pcm: Uint8Array, sampleRate = 16000): Uint8Array {
+  const wav = new Uint8Array(HEADER_BYTES + pcm.byteLength);
+  wav.set(wavHeader(pcm.byteLength, sampleRate));
   wav.set(pcm, HEADER_BYTES);
   return wav;
 }
