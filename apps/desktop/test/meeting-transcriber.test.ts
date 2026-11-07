@@ -93,6 +93,7 @@ it('transcribes each track with word timestamps and stores a speaker-attributed 
     ],
   });
   expect(phases).toEqual(['{"kind":"transcribing","step":"mic"}', '{"kind":"transcribing","step":"system"}', '{"kind":"ready"}']);
+  expect(store.get(id)?.language).toBe('sk');
   const micWav = await readFile(join(cliDir, 'mic.seen.wav'));
   expect(micWav.toString('ascii', 0, 4)).toBe('RIFF');
   expect(micWav.readUInt32LE(40)).toBe(3200);

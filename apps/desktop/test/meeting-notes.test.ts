@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -29,17 +29,17 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-async function readyMeeting(turns: Turn[] = TURNS): Promise<{ store: MeetingStore; id: string }> {
+async function readyMeeting(turns: Turn[] = TURNS, language: Language = 'sk'): Promise<{ store: MeetingStore; id: string }> {
   const store = new MeetingStore(join(dir, 'meetings'), new RecordingLogger());
   await store.load();
   const { id } = await store.create({ startedAt: new Date(2026, 10, 7, 9, 5).getTime(), systemAudio: 'recording', systemAudioNote: null });
   await store.update(id, { durationMs: 754_000 });
-  await store.finishTranscript(id, turns);
+  await store.finishTranscript(id, turns, language);
   return { store, id };
 }
 
-function notesFor(store: MeetingStore, endpoint: LlmEndpoint | null, timeoutMs?: number, language: Language = 'sk'): MeetingNotes {
-  return new MeetingNotes({ store, endpoint: () => Promise.resolve(endpoint), language: () => language, logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+function notesFor(store: MeetingStore, endpoint: LlmEndpoint | null, timeoutMs?: number): MeetingNotes {
+  return new MeetingNotes({ store, endpoint: () => Promise.resolve(endpoint), logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
 }
 
 function endpoint(fake: FakeLlmServer): LlmEndpoint {
@@ -71,13 +71,31 @@ it('stores the notes from one completion over the meeting header and one line pe
   await expect(store.meeting(id)).resolves.toMatchObject({ notes: NOTES, notesPending: false, notesError: null });
 });
 
-it('leaves the language to the model when the transcription language is automatic', async () => {
+it('names the language the meeting was transcribed in', async () => {
   server = await startFakeLlmServer((_request, response) => json(response, 200, completion(NOTES)));
-  const { store, id } = await readyMeeting();
+  const { store, id } = await readyMeeting(TURNS, 'en');
 
-  await notesFor(store, endpoint(server), undefined, 'auto').generate(id);
+  await notesFor(store, endpoint(server)).generate(id);
 
-  expect(sentMessages(server)[1]?.content).not.toContain('Language:');
+  expect(sentMessages(server)[1]?.content.split('\n')).toContain('Language: English');
+});
+
+it('leaves the language to the model when the meeting was transcribed automatically or before its language was kept', async () => {
+  server = await startFakeLlmServer((_request, response) => json(response, 200, completion(NOTES)));
+  const automatic = await readyMeeting(TURNS, 'auto');
+  const id = '20261107-090503-abcdef';
+  const legacy = join(dir, 'legacy', id);
+  await mkdir(legacy, { recursive: true });
+  await writeFile(join(legacy, 'meeting.json'), JSON.stringify({ id, title: 'Stretnutie', startedAt: 1, durationMs: 2, phase: { kind: 'ready' }, systemAudio: 'recording', systemAudioNote: null, tracks: { mic: null, system: null } }));
+  await writeFile(join(legacy, 'transcript.json'), JSON.stringify(TURNS));
+  const store = new MeetingStore(join(dir, 'legacy'), new RecordingLogger());
+  await store.load();
+
+  await notesFor(automatic.store, endpoint(server)).generate(automatic.id);
+  await notesFor(store, endpoint(server)).generate(id);
+
+  expect(server.requests).toHaveLength(2);
+  for (const request of server.requests) expect(request.body).not.toContain('Language:');
 });
 
 it('marks the meeting while notes are generated and runs one generation per meeting at a time', async () => {
