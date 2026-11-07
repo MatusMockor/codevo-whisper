@@ -2,10 +2,12 @@
 set -euo pipefail
 
 output=""
+model=""
 args=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output) output="$2"; shift 2 ;;
+    --model) model="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -14,6 +16,11 @@ wav="${args[${#args[@]}-1]}"
 if [[ -n "${FAKE_CLI_ARGS_FILE:-}" ]]; then
   printf '%s\n' "${args[@]}" >> "$FAKE_CLI_ARGS_FILE"
   printf -- '--\n' >> "$FAKE_CLI_ARGS_FILE"
+fi
+
+if [[ -n "${FAKE_CLI_FAIL_MODEL:-}" && "$model" == "$FAKE_CLI_FAIL_MODEL" ]]; then
+  echo "model load failed" >&2
+  exit 3
 fi
 
 if [[ -n "${FAKE_CLI_DELAY_S:-}" ]]; then

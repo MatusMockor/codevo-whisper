@@ -4,13 +4,14 @@ import { rm, stat } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import type { MeetingTrack, Word } from '../../shared/meetings';
+import type { MeetingTrack, SpeakerSegment } from '../../shared/meetings';
 import { PCM_BYTES_PER_SAMPLE, PCM_BYTES_PER_SECOND } from '../../shared/pcm';
 import type { Settings } from '../../shared/settings';
 import type { ActiveModel } from '../engines/active-model';
 import type { Logger } from '../logging/logger';
 import { attributeSpeakers, type TrackWords } from './attribute-speakers';
 import { parseCliWords } from './cli-words';
+import { parseDiarization } from './diarization';
 import type { MeetingRecord, MeetingStore } from './meeting-store';
 
 export type MeetingTranscriberDeps = {
@@ -19,6 +20,7 @@ export type MeetingTranscriberDeps = {
   models: Pick<ActiveModel, 'activeModelPath' | 'verifyActive'>;
   settings: { get(): Settings };
   backend: () => TranscribeBackend;
+  diarizer: () => Promise<string | null>;
   logger: Logger;
   threads?: number;
 };
@@ -88,7 +90,7 @@ export class MeetingTranscriber {
         const info = record.tracks[track];
         if (info === null) continue;
         await store.update(id, { phase: { kind: 'transcribing', step: track } });
-        tracks.push({ track, startOffsetMs: info.startOffsetMs, words: await this.words(record, track, model) });
+        tracks.push({ track, startOffsetMs: info.startOffsetMs, ...(await this.track(record, track, model)) });
       }
       await store.writeTurns(id, attributeSpeakers(tracks));
       await store.update(id, { phase: { kind: 'ready' } });
@@ -102,21 +104,42 @@ export class MeetingTranscriber {
     }
   }
 
-  private async words(record: MeetingRecord, track: MeetingTrack, model: string): Promise<Word[]> {
+  private async track(record: MeetingRecord, track: MeetingTrack, model: string): Promise<Omit<TrackWords, 'track' | 'startOffsetMs'>> {
     const pcm = this.deps.store.trackPath(record.id, track);
     const wav = join(dirname(pcm), `${track}.wav`);
     try {
       const dataBytes = await writeWav(pcm, wav);
-      if (dataBytes === 0) return [];
+      if (dataBytes === 0) return { words: [] };
       const { language } = this.deps.settings.get();
-      const stdout = await runProcess(
-        this.deps.binary,
-        ['--model', model, '--backend', this.deps.backend(), ...(language === 'auto' ? [] : ['--language', language]), '--threads', String(this.deps.threads ?? cliThreads()), '--timestamps', 'word', '--quiet', wav],
-        { timeoutMs: Math.max(MIN_TIMEOUT_MS, (dataBytes / PCM_BYTES_PER_SECOND) * 2000), signal: this.controller.signal, stdoutLimitBytes: STDOUT_LIMIT_BYTES },
+      const timeoutMs = Math.max(MIN_TIMEOUT_MS, (dataBytes / PCM_BYTES_PER_SECOND) * 2000);
+      const words = parseCliWords(
+        await this.cli(['--model', model, '--backend', this.deps.backend(), ...(language === 'auto' ? [] : ['--language', language]), '--threads', this.threads(), '--timestamps', 'word', '--quiet', wav], timeoutMs),
       );
-      return parseCliWords(stdout);
+      if (track !== 'system' || words.length === 0) return { words };
+      return { words, segments: await this.speakers(record.id, wav, timeoutMs) };
     } finally {
       await rm(wav, { force: true });
     }
+  }
+
+  private async speakers(id: string, wav: string, timeoutMs: number): Promise<SpeakerSegment[]> {
+    try {
+      const diarizer = await this.deps.diarizer();
+      if (diarizer === null) return [];
+      await this.deps.store.update(id, { phase: { kind: 'transcribing', step: 'speakers' } });
+      return parseDiarization(await this.cli(['--model', diarizer, '--backend', 'cpu', '--threads', this.threads(), '--quiet', wav], timeoutMs));
+    } catch (error) {
+      if (this.controller.signal.aborted) throw error;
+      this.deps.logger.error(`Speakers of meeting ${id} could not be recognized`, error);
+      return [];
+    }
+  }
+
+  private cli(args: string[], timeoutMs: number): Promise<string> {
+    return runProcess(this.deps.binary, args, { timeoutMs, signal: this.controller.signal, stdoutLimitBytes: STDOUT_LIMIT_BYTES });
+  }
+
+  private threads(): string {
+    return String(this.deps.threads ?? cliThreads());
   }
 }

@@ -16,6 +16,8 @@ let cliDir: string;
 let store: MeetingStore;
 let verification: ModelVerification;
 let settings: Settings;
+let diarizer: string | null;
+let logger: RecordingLogger;
 
 function transcriber(): MeetingTranscriber {
   return new MeetingTranscriber({
@@ -24,8 +26,9 @@ function transcriber(): MeetingTranscriber {
     models: { activeModelPath: () => Promise.resolve('/models/parakeet.gguf'), verifyActive: () => Promise.resolve(verification) },
     settings: { get: () => settings },
     backend: () => 'cpu',
+    diarizer: () => Promise.resolve(diarizer),
     threads: 3,
-    logger: new RecordingLogger(),
+    logger,
   });
 }
 
@@ -39,8 +42,18 @@ async function stoppedMeeting(tracks: MeetingRecord['tracks'], audio: { mic?: nu
   return meeting.id;
 }
 
-async function cliPrints(track: 'mic' | 'system', words: string[]): Promise<void> {
-  await writeFile(join(cliDir, `${track}.txt`), `segments: 1\n  [   0.00 ->    9.00] ignored\nwords: ${words.length}\n${words.join('\n')}\n  realtime:   4x\n`);
+async function cliPrints(track: 'mic' | 'system', words: string[], speakers: string[] = []): Promise<void> {
+  await writeFile(
+    join(cliDir, `${track}.txt`),
+    `segments: 1\n  [   0.00 ->    9.00] ignored\nwords: ${words.length}\n${words.join('\n')}\nspeaker segments: ${speakers.length}\n${speakers.join('\n')}\n  realtime:   4x\n`,
+  );
+}
+
+async function cliCalls(): Promise<string[][]> {
+  return (await readFile(join(dir, 'args.txt'), 'utf8'))
+    .split('--\n')
+    .filter((call) => call !== '')
+    .map((call) => call.trim().split('\n'));
 }
 
 beforeEach(async () => {
@@ -51,6 +64,8 @@ beforeEach(async () => {
   await store.load();
   verification = 'ok';
   settings = { ...DEFAULT_SETTINGS, language: 'sk' };
+  diarizer = null;
+  logger = new RecordingLogger();
   vi.stubEnv('FAKE_CLI_MODE', 'words-per-wav');
   vi.stubEnv('FAKE_CLI_STDOUT_DIR', cliDir);
   vi.stubEnv('FAKE_CLI_ARGS_FILE', join(dir, 'args.txt'));
@@ -85,6 +100,55 @@ it('transcribes each track with word timestamps and stores a speaker-attributed 
   const args = (await readFile(join(dir, 'args.txt'), 'utf8')).split('--\n')[0]?.trim().split('\n');
   expect(args?.slice(0, -1)).toEqual(['--model', '/models/parakeet.gguf', '--backend', 'cpu', '--language', 'sk', '--threads', '3', '--timestamps', 'word', '--quiet']);
   expect(await readdir(join(dir, 'meetings', id))).not.toContain('mic.wav');
+});
+
+it('labels remote speakers with the diarizer on the system track once it is downloaded', async () => {
+  const id = await stoppedMeeting({ mic: { startOffsetMs: 0 }, system: { startOffsetMs: 1000 } }, { mic: 3201, system: 6400 });
+  await cliPrints('mic', ['  [   0.00 ->    0.40] Ahoj']);
+  await cliPrints('system', ['  [   0.50 ->    0.90] Dobrý', '  [   4.00 ->    4.40] Hello'], ['  [   0.32 ->    2.40] S1', '  [   3.90 ->    6.00] S2']);
+  diarizer = '/models/sortformer.gguf';
+  const phases: string[] = [];
+  store.onChange((list) => phases.push(JSON.stringify(list[0]?.phase)));
+
+  await transcriber().transcribe(id);
+
+  await expect(store.meeting(id)).resolves.toMatchObject({
+    phase: { kind: 'ready' },
+    turns: [
+      { speaker: 'Ja', t0Ms: 0, t1Ms: 400, text: 'Ahoj' },
+      { speaker: 'Hovoriaci 1', t0Ms: 1500, t1Ms: 1900, text: 'Dobrý' },
+      { speaker: 'Hovoriaci 2', t0Ms: 5000, t1Ms: 5400, text: 'Hello' },
+    ],
+  });
+  expect(phases.slice(-3)).toEqual(['{"kind":"transcribing","step":"system"}', '{"kind":"transcribing","step":"speakers"}', '{"kind":"ready"}']);
+  const calls = await cliCalls();
+  expect(calls).toHaveLength(3);
+  expect(calls[2]?.slice(0, -1)).toEqual(['--model', '/models/sortformer.gguf', '--backend', 'cpu', '--threads', '3', '--quiet']);
+  expect(calls[2]?.at(-1)).toBe(join(dir, 'meetings', id, 'system.wav'));
+  expect(await readdir(join(dir, 'meetings', id))).not.toContain('system.wav');
+});
+
+it('keeps the track labels and logs it when the diarizer fails', async () => {
+  const id = await stoppedMeeting({ mic: null, system: { startOffsetMs: 0 } }, { system: 6400 });
+  await cliPrints('system', ['  [   0.50 ->    0.90] Dobrý'], ['  [   0.32 ->    2.40] S1']);
+  diarizer = '/models/sortformer.gguf';
+  vi.stubEnv('FAKE_CLI_FAIL_MODEL', diarizer);
+
+  await transcriber().transcribe(id);
+
+  await expect(store.meeting(id)).resolves.toMatchObject({ phase: { kind: 'ready' }, turns: [{ speaker: 'Ostatní', text: 'Dobrý' }] });
+  expect(logger.errors.map((entry) => entry.message)).toEqual([`Speakers of meeting ${id} could not be recognized`]);
+});
+
+it('does not run the diarizer when the system track has no words', async () => {
+  const id = await stoppedMeeting({ mic: null, system: { startOffsetMs: 0 } }, { system: 6400 });
+  await cliPrints('system', []);
+  diarizer = '/models/sortformer.gguf';
+
+  await transcriber().transcribe(id);
+
+  expect(store.get(id)?.phase).toEqual({ kind: 'ready' });
+  expect(await cliCalls()).toHaveLength(1);
 });
 
 it('skips a track that recorded nothing', async () => {

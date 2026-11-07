@@ -14,7 +14,8 @@ function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady 
   };
   const recorder = { start: vi.fn(() => Promise.reject(new Error('unused'))), stop: vi.fn(() => Promise.resolve(ID)) };
   const transcriber = { transcribe: vi.fn(() => Promise.resolve()) };
-  return { store, recorder, transcriber, api: meetingHandlers({ meetings: { store, recorder, transcriber, modelReady: () => modelReady } }) };
+  const diarizer = { view: vi.fn(), download: vi.fn(() => Promise.resolve()), pause: vi.fn(), delete: vi.fn(() => Promise.resolve()) };
+  return { store, recorder, transcriber, diarizer, api: meetingHandlers({ meetings: { store, recorder, transcriber, diarizer, modelReady: () => modelReady } }) };
 }
 
 it('rejects meeting ids that could leave the meetings directory', async () => {
@@ -52,4 +53,13 @@ it('keeps a meeting that is still recording or transcribing', async () => {
   const { api, store } = handlers({ kind: 'ready' });
   await api.deleteMeeting(ID);
   expect(store.delete).toHaveBeenCalledWith(ID);
+});
+
+it('downloads the diarizer only on a call without arguments', async () => {
+  const { api, diarizer } = handlers();
+
+  await expect(api.downloadDiarizer('../other-model')).rejects.toThrow(IpcValidationError);
+  expect(diarizer.download).not.toHaveBeenCalled();
+  await api.downloadDiarizer();
+  expect(diarizer.download).toHaveBeenCalledOnce();
 });

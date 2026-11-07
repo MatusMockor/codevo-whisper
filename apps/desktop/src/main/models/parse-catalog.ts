@@ -5,7 +5,7 @@ import { parseEntry } from './parse-entry';
 
 const SCHEMA_VERSION = 1;
 
-export type ParsedCatalog = { defaults: CatalogDefaults; models: readonly CatalogEntry[] };
+export type ParsedCatalog = { defaults: CatalogDefaults; models: readonly CatalogEntry[]; diarizer: CatalogEntry };
 
 function parseModels(raw: unknown): CatalogEntry[] {
   if (!Array.isArray(raw) || raw.length === 0) {
@@ -41,5 +41,5 @@ export function parseCatalog(raw: unknown): ParsedCatalog {
     throw new CatalogError(`catalog: unsupported schema ${String(record['schema'])}`);
   }
   const models = parseModels(record['models']);
-  return { defaults: parseDefaults(record['defaults'], models), models };
+  return { defaults: parseDefaults(record['defaults'], models), models, diarizer: parseEntry(requireRecord(record['diarizer'], 'catalog diarizer'), models.length) };
 }

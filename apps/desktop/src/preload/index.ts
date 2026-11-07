@@ -7,7 +7,7 @@ import type { OutputAudioView } from '../shared/recording-audio';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
 import type { Meeting, MeetingSummary } from '../shared/meetings';
 import type { AudioDevice } from '../shared/microphones';
-import type { ModelCatalogView, ModelState } from '../shared/models';
+import type { DiarizerView, ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
@@ -78,6 +78,10 @@ const api: IpcApi = {
   stopMeeting: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMeeting) as Promise<void>,
   retranscribeMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.retranscribeMeeting, id) as Promise<void>,
   deleteMeeting: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteMeeting, id) as Promise<void>,
+  getDiarizer: () => ipcRenderer.invoke(INVOKE_CHANNELS.getDiarizer) as Promise<DiarizerView>,
+  downloadDiarizer: () => ipcRenderer.invoke(INVOKE_CHANNELS.downloadDiarizer) as Promise<void>,
+  pauseDiarizer: () => ipcRenderer.invoke(INVOKE_CHANNELS.pauseDiarizer) as Promise<void>,
+  deleteDiarizer: () => ipcRenderer.invoke(INVOKE_CHANNELS.deleteDiarizer) as Promise<void>,
   on: subscribe,
 };
 

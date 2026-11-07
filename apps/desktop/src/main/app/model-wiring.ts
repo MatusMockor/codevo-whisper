@@ -6,6 +6,7 @@ import { resolveWorkerBinary } from '../engines/transcribe-binary';
 import type { Logger } from '../logging/logger';
 import { resolveModelCatalog } from '../models/catalog-path';
 import { catalogView } from '../models/catalog-view';
+import { createDiarizer, type Diarizer } from '../models/diarizer';
 import { loadCatalog, type CatalogPlatform } from '../models/model-catalog';
 import { ModelManager } from '../models/model-manager';
 import type { WarmUp } from '../models/warm-up';
@@ -17,7 +18,7 @@ import { desktopAppRoot } from './app-root';
 const MODELS_DIR = 'models';
 const WARM_UP_STAMP_FILE = 'warm-up.json';
 
-export type Models = { manager: ModelManager; engine: LocalEngine; catalog: ModelCatalogView; checkInBackground(): void; dispose(): Promise<void> };
+export type Models = { manager: ModelManager; engine: LocalEngine; catalog: ModelCatalogView; diarizer: Diarizer; checkInBackground(): void; dispose(): Promise<void> };
 
 function localArch(arch: string): LocalEngineArch {
   return arch === 'arm64' ? 'arm64' : 'x64';
@@ -45,8 +46,9 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
   const binary = resolveWorkerBinary({ ...location, arch });
   const warmUp: WarmUp = (modelPath) => engine.warmUp(modelPath);
   const catalog = loadCatalog(resolveModelCatalog(location));
+  const dir = join(app.getPath('userData'), MODELS_DIR);
   const manager = new ModelManager({
-    dir: join(app.getPath('userData'), MODELS_DIR),
+    dir,
     catalog: catalog.models,
     settings,
     warmUp,
@@ -58,6 +60,7 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
     engine,
     dispose: () => engine.dispose(),
     catalog: catalogView(catalog, catalogPlatform(arch)),
+    diarizer: createDiarizer({ dir, entry: catalog.diarizer, settings, logger }),
     checkInBackground: () => {
       checkModels(manager, warmUp, logger).catch((error: unknown) => {
         logger.error('The background model check failed', error);

@@ -14,7 +14,7 @@ export type ModelActionsView = {
   cancelPrompt: () => void;
 };
 
-const FAILURES: Readonly<Record<ModelAction, string>> = {
+export const MODEL_FAILURES: Readonly<Record<ModelAction, string>> = {
   download: 'Sťahovanie zlyhalo. Skontrolujte pripojenie na internet a skúste to znova.',
   continue: 'Sťahovanie zlyhalo. Skontrolujte pripojenie na internet a skúste to znova.',
   pause: 'Sťahovanie sa nepodarilo pozastaviť.',
@@ -43,7 +43,7 @@ export function useModelActions(settings: Pick<Settings, 'language' | 'localMode
     setErrors(({ [model.id]: _cleared, ...rest }) => rest);
     invoke(model.id, action).catch((error: unknown) => {
       console.error(`Model action ${action} failed for ${model.id}`, error);
-      setErrors((current) => ({ ...current, [model.id]: FAILURES[action] }));
+      setErrors((current) => ({ ...current, [model.id]: MODEL_FAILURES[action] }));
     });
   }
 
@@ -66,7 +66,7 @@ export function useModelActions(settings: Pick<Settings, 'language' | 'localMode
         () => perform(prompt.model, prompt.action),
         (error: unknown) => {
           console.error('Saving the language failed', error);
-          setErrors((current) => ({ ...current, [prompt.model.id]: FAILURES[prompt.action] }));
+          setErrors((current) => ({ ...current, [prompt.model.id]: MODEL_FAILURES[prompt.action] }));
         },
       );
     },

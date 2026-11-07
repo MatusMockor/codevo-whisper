@@ -5,11 +5,40 @@ export type TrackWords = { track: MeetingTrack; startOffsetMs: number; words: Wo
 type SpokenWord = Word & { speaker: string };
 
 const TURN_GAP_MS = 2000;
+const NEAREST_SEGMENT_MS = 1000;
 
 const TRACK_SPEAKERS: Record<MeetingTrack, string> = { mic: 'Ja', system: 'Ostatní' };
 
-function spoken({ track, startOffsetMs, words }: TrackWords): SpokenWord[] {
-  return words.map((word) => ({ speaker: TRACK_SPEAKERS[track], t0Ms: word.t0Ms + startOffsetMs, t1Ms: word.t1Ms + startOffsetMs, text: word.text }));
+function speakerAt(segments: readonly SpeakerSegment[], word: Word): number | null {
+  const midpoint = (word.t0Ms + word.t1Ms) / 2;
+  let nearest: number | null = null;
+  let nearestDistance = NEAREST_SEGMENT_MS;
+  for (const segment of segments) {
+    const distance = Math.max(segment.t0Ms - midpoint, midpoint - segment.t1Ms, 0);
+    if (distance === 0) return segment.speaker;
+    if (distance <= nearestDistance) {
+      nearest = segment.speaker;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+function speakerLabels(speakers: readonly (number | null)[]): Map<number | null, string> {
+  const order = [...new Set(speakers.filter((speaker) => speaker !== null))];
+  return new Map(order.length < 2 ? [] : order.map((speaker, index) => [speaker, `Hovoriaci ${index + 1}`] as const));
+}
+
+function spoken({ track, startOffsetMs, words, segments = [] }: TrackWords): SpokenWord[] {
+  const ordered = [...words].sort((a, b) => a.t0Ms - b.t0Ms);
+  const speakers = ordered.map((word) => speakerAt(segments, word));
+  const labels = speakerLabels(speakers);
+  return ordered.map((word, index) => ({
+    speaker: labels.get(speakers[index] ?? null) ?? TRACK_SPEAKERS[track],
+    t0Ms: word.t0Ms + startOffsetMs,
+    t1Ms: word.t1Ms + startOffsetMs,
+    text: word.text,
+  }));
 }
 
 export function attributeSpeakers(tracks: readonly TrackWords[]): Turn[] {

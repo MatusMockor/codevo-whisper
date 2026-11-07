@@ -10,6 +10,9 @@ import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDat
 const run = promisify(execFile);
 const MODEL = process.env['CW_E2E_MEETING_MODEL'];
 const AUDIO = process.env['CW_E2E_MEETING_AUDIO'];
+const DIARIZER = process.env['CW_E2E_DIARIZER_MODEL'];
+const SPEAKERS_AUDIO = process.env['CW_E2E_SPEAKERS_AUDIO'];
+const DIARIZER_FILE = 'sortformer-4spk-v2-1-q8.gguf';
 const SHOTS = process.env['CW_E2E_SHOTS'];
 const BYTES_PER_SECOND = 32_000;
 const NO_CAP_MS = 600_000;
@@ -23,8 +26,17 @@ async function shot(name: string): Promise<void> {
   if (SHOTS !== undefined) await page.screenshot({ path: join(SHOTS, `${name}-${OZONE.length > 0 ? 'wayland' : 'x11'}.png`) });
 }
 
-function playSample(): Promise<unknown> {
-  return run('pw-play', ['--volume', '0.3', resolve(AUDIO ?? '')]);
+function playSample(audio = AUDIO): Promise<unknown> {
+  return run('pw-play', ['--volume', '0.3', resolve(audio ?? '')]);
+}
+
+function diarizerRow() {
+  return page.getByRole('list', { name: 'Model na rozpoznávanie hovoriacich' }).getByRole('listitem');
+}
+
+async function speakerLabels(): Promise<string[]> {
+  const lines = await page.getByRole('list', { name: 'Prepis stretnutia' }).getByRole('listitem').allTextContents();
+  return [...new Set(lines.map((line) => /^\[[\d:]+\] ([^:]+):/.exec(line)?.[1] ?? ''))];
 }
 
 async function currentMeeting(): Promise<MeetingSummary> {
@@ -40,6 +52,8 @@ async function trackBytes(id: string, track: 'mic' | 'system'): Promise<number> 
 async function startMeeting(): Promise<MeetingSummary> {
   await page.getByRole('tab', { name: 'Stretnutia' }).click();
   await expect(page.getByText('Zatiaľ nemáte žiadne nahrané stretnutia.', { exact: false })).toBeVisible();
+  await expect(diarizerRow()).toContainText('Nestiahnutý');
+  await expect(page.getByText('Bez neho sa celá druhá strana označí ako Ostatní.', { exact: false })).toBeVisible();
   await shot('empty');
   await page.getByRole('button', { name: 'Začať nahrávanie' }).click();
   await expect(page.getByRole('timer', { name: 'Dĺžka nahrávania' })).toBeVisible();
@@ -112,6 +126,34 @@ test('removing the local model during a meeting keeps the recording and its stop
   await page.getByRole('button', { name: 'Zastaviť a prepísať' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Lokálny model nie je stiahnutý.' })).toBeVisible();
   await expect(page.getByText('Najprv si v Nastaveniach stiahnite', { exact: false })).toBeVisible();
+});
+
+test.describe('remote speakers', () => {
+  test.skip(DIARIZER === undefined || SPEAKERS_AUDIO === undefined, 'Set CW_E2E_DIARIZER_MODEL (Sortformer gguf) and CW_E2E_SPEAKERS_AUDIO (two remote speakers) to run the speaker e2e');
+
+  test('the downloaded diarizer splits the remote side into numbered speakers on Prepísať znova', async () => {
+    test.setTimeout(300_000);
+
+    await startMeeting();
+    await playSample(SPEAKERS_AUDIO);
+    await stopAndTranscribe(240_000);
+    expect(await speakerLabels()).not.toContainEqual(expect.stringMatching(/^Hovoriaci/));
+    await shot('speakers-without-diarizer');
+
+    await symlink(resolve(DIARIZER ?? ''), join(userDataDir, 'models', `${DIARIZER_FILE}.download`));
+    await diarizerRow().getByRole('button', { name: 'Stiahnuť: Sortformer 4spk v2.1' }).click();
+    await expect(diarizerRow()).toContainText('Používa sa', { timeout: 60_000 });
+    await shot('speakers-diarizer-ready');
+
+    await page.getByRole('button', { name: 'Prepísať znova' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /Prepisuje sa|Rozlišujú sa hovoriaci/ })).toBeVisible();
+    const transcript = page.getByRole('list', { name: 'Prepis stretnutia' });
+    await expect(transcript.getByText(/\] Hovoriaci 2: /).first()).toBeVisible({ timeout: 240_000 });
+    const labels = await speakerLabels();
+    test.info().annotations.push({ type: 'speakers', description: JSON.stringify(labels) });
+    expect(labels.filter((label) => label.startsWith('Hovoriaci')).length).toBeGreaterThanOrEqual(2);
+    await shot('speakers-ready');
+  });
 });
 
 test.describe('long meeting', () => {

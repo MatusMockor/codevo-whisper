@@ -2,7 +2,7 @@ import type { ModelCatalogView, ModelInfo } from '../../shared/models';
 import type { CatalogEntry } from './catalog-entry';
 import type { CatalogPlatform, ModelCatalog } from './model-catalog';
 
-function modelInfo(entry: CatalogEntry): ModelInfo {
+export function modelInfo(entry: CatalogEntry): ModelInfo {
   return {
     id: entry.id,
     name: entry.name,

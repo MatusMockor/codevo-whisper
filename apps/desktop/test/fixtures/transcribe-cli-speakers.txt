@@ -1,0 +1,16 @@
+audio: sortformer-2spk-mix.wav
+  samples:    192000
+  duration:   12.000 s
+  sample rate 16000 Hz mono float32
+model: diar_streaming_sortformer_4spk-v2.1-Q8_0.gguf -> ok
+  backend:    CPU
+  name:       Streaming Sortformer Diarizer 4spk v2.1
+  license:    other
+run: ok
+speaker segments: 5
+  [   0.32 ->    2.40] S1
+  [   7.36 ->    9.36] S1
+  [  10.24 ->   10.64] S1
+  [   4.24 ->    6.64] S2
+  [   9.76 ->   12.00] S2
+  realtime:   11x (1123.8 ms for 12.0 s)
