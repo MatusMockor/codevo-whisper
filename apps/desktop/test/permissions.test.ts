@@ -28,11 +28,12 @@ class FakeSession {
 const captureContents = { id: 1 } as unknown as WebContents;
 const mainContents = { id: 2 } as unknown as WebContents;
 
-function installed(): FakeSession {
+function installed(displayCapture = false): FakeSession {
   const session = new FakeSession();
   installPermissionHandlers(session.asSession(), {
     isCaptureFrame: (contents, url) => contents === captureContents && url === CAPTURE_URL,
     isAppFrame: (contents, url) => contents === mainContents && url === MAIN_URL,
+    displayCapture,
   });
   return session;
 }
@@ -54,6 +55,13 @@ function checkOutcome(session: FakeSession, contents: WebContents | null, permis
 describe('installPermissionHandlers', () => {
   it('grants microphone access to the capture window', () => {
     expect(requestOutcome(installed(), captureContents, 'media', { mediaTypes: ['audio'] })).toBe(true);
+  });
+
+  it('grants display capture for meeting system audio only to the capture window main frame, where enabled', () => {
+    const session = installed(true);
+    expect(requestOutcome(session, captureContents, 'display-capture', { mediaTypes: ['video', 'audio'] })).toBe(true);
+    expect(requestOutcome(session, captureContents, 'display-capture', { mediaTypes: ['video', 'audio'], isMainFrame: false })).toBe(false);
+    expect(requestOutcome(session, mainContents, 'display-capture', { mediaTypes: ['video', 'audio'], requestingUrl: MAIN_URL })).toBe(false);
   });
 
   it('denies camera access to the capture window', () => {

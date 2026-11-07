@@ -4,7 +4,7 @@ export type CaptureFrameCheck = (contents: WebContents | null, url: string | und
 
 export type AppFrameCheck = (contents: WebContents | null, url: string | undefined) => boolean;
 
-export type FrameChecks = { isCaptureFrame: CaptureFrameCheck; isAppFrame: AppFrameCheck };
+export type FrameChecks = { isCaptureFrame: CaptureFrameCheck; isAppFrame: AppFrameCheck; displayCapture: boolean };
 
 const CLIPBOARD_WRITE = 'clipboard-sanitized-write';
 
@@ -16,9 +16,12 @@ function requestsAudioOnly(details: PermissionRequest): boolean {
   return mediaTypes.length > 0 && mediaTypes.every((type) => type === 'audio');
 }
 
-function grantsRequest({ isCaptureFrame, isAppFrame }: FrameChecks, contents: WebContents, permission: string, details: PermissionRequest): boolean {
+function grantsRequest({ isCaptureFrame, isAppFrame, displayCapture }: FrameChecks, contents: WebContents, permission: string, details: PermissionRequest): boolean {
   if (permission === CLIPBOARD_WRITE) {
     return details.isMainFrame && isAppFrame(contents, details.requestingUrl);
+  }
+  if (permission === 'display-capture') {
+    return displayCapture && details.isMainFrame && isCaptureFrame(contents, details.requestingUrl);
   }
   if (permission !== 'media' || !details.isMainFrame || !requestsAudioOnly(details)) {
     return false;

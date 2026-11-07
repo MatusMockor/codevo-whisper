@@ -64,6 +64,7 @@ function installSecurity(captureWindow: CaptureWindow, mainWindow: MainWindowCon
   installPermissionHandlers(session.defaultSession, {
     isCaptureFrame: (contents, url) => captureWindow.isCaptureFrame(contents, url),
     isAppFrame: appFrameCheck(source, (contents) => mainWindow.ownsContents(contents)),
+    displayCapture: process.platform === 'darwin',
   });
   installDisplayMediaHandler(session.defaultSession, {
     isCaptureFrame: (contents, url) => captureWindow.isCaptureFrame(contents, url),
