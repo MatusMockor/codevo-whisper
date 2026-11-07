@@ -154,8 +154,14 @@ export class MeetingStore {
     });
   }
 
-  writeTurns(id: string, turns: Turn[]): Promise<void> {
-    return this.queue.run(() => writeFileAtomic(join(this.dir, id, TURNS_FILE), JSON.stringify(turns)));
+  finishTranscript(id: string, turns: Turn[]): Promise<void> {
+    return this.queue.run(async () => {
+      const current = this.records.get(id);
+      if (current === undefined) throw new Error(`Unknown meeting ${id}`);
+      await rm(join(this.dir, id, NOTES_FILE), { force: true });
+      await writeFileAtomic(join(this.dir, id, TURNS_FILE), JSON.stringify(turns));
+      await this.commit({ ...current, phase: { kind: 'ready' }, notesError: null });
+    });
   }
 
   writeNotes(id: string, notes: string): Promise<void> {
