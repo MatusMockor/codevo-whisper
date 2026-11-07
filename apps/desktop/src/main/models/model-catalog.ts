@@ -21,6 +21,7 @@ export class ModelCatalog {
   constructor(
     readonly models: readonly CatalogEntry[],
     private readonly defaults: CatalogDefaults,
+    readonly diarizer: CatalogEntry,
   ) {}
 
   defaultModelId(platform: CatalogPlatform): string {
@@ -45,6 +46,6 @@ function readJson(file: string): unknown {
 }
 
 export function loadCatalog(file: string): ModelCatalog {
-  const { models, defaults } = parseCatalog(readJson(file));
-  return new ModelCatalog(models, defaults);
+  const { models, defaults, diarizer } = parseCatalog(readJson(file));
+  return new ModelCatalog(models, defaults, diarizer);
 }
