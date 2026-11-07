@@ -1,7 +1,7 @@
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { finished } from 'node:stream/promises';
 import type { CaptureRequest, MeetingFrame } from '../../shared/capture-contract';
-import type { MeetingSummary, MeetingTrack } from '../../shared/meetings';
+import type { MeetingPhase, MeetingSummary, MeetingTrack } from '../../shared/meetings';
 import { parseMeetingStartResult } from '../audio/capture-payloads';
 import type { Logger } from '../logging/logger';
 import type { SystemAudioSource } from './linux-system-audio';
@@ -33,11 +33,13 @@ type Recording = {
   plan: SystemAudioPlan;
   unsubscribe: () => void;
   silence: NodeJS.Timeout | null;
+  writeFailed: boolean;
 };
 
 const SYSTEM_SILENCE_MS = 3000;
 const CAPTURE_FAILED_NOTE = 'Zvuk systému sa nepodarilo zachytiť. Povoľte Codevo Whisper v Nastaveniach systému, časť Súkromie a bezpečnosť, Nahrávanie zvuku systému. Nahráva sa iba mikrofón.';
 const SILENT_SOURCE_NOTE = 'Zvuk systému neprichádza. Nahráva sa iba mikrofón.';
+const WRITE_FAILED_ERROR = 'Nahrávku sa nepodarilo uložiť. Skontrolujte voľné miesto na disku.';
 
 export class MeetingRecorder {
   private recording: Recording | null = null;
@@ -79,11 +81,12 @@ export class MeetingRecorder {
     const startedAt = this.clock();
     const unsupported = plan.kind === 'unsupported';
     const record = await store.create({ startedAt, systemAudio: unsupported ? 'unsupported' : 'recording', systemAudioNote: unsupported ? plan.note : null });
-    const files: Recording['files'] = { mic: this.openTrack(store.trackPath(record.id, 'mic')) };
+    const failed = (error: unknown): void => this.failWrite(recording, error);
+    const files: Recording['files'] = { mic: this.openTrack(store.trackPath(record.id, 'mic'), failed) };
     if (!unsupported) {
-      files.system = this.openTrack(store.trackPath(record.id, 'system'));
+      files.system = this.openTrack(store.trackPath(record.id, 'system'), failed);
     }
-    const recording: Recording = { id: record.id, startedAt, files, plan, silence: null, unsubscribe: this.deps.capture.onMeetingFrame((frame) => this.receive(recording, frame)) };
+    const recording: Recording = { id: record.id, startedAt, files, plan, silence: null, writeFailed: false, unsubscribe: this.deps.capture.onMeetingFrame((frame) => this.receive(recording, frame)) };
     this.recording = recording;
     try {
       const result = parseMeetingStartResult(await this.deps.capture.request({ type: 'meeting-start', deviceId: await this.deps.microphoneId(), system: plan.kind === 'capture-window' }));
@@ -150,8 +153,18 @@ export class MeetingRecorder {
     await this.stopCapture();
     const stoppedAt = this.clock();
     await this.release(recording);
-    await this.deps.store.update(recording.id, { phase: { kind: 'stopped' }, durationMs: stoppedAt - recording.startedAt, tracks: this.tracks(recording) });
-    return recording.id;
+    const phase: MeetingPhase = recording.writeFailed ? { kind: 'failed', error: WRITE_FAILED_ERROR } : { kind: 'stopped' };
+    await this.deps.store.update(recording.id, { phase, durationMs: stoppedAt - recording.startedAt, tracks: this.tracks(recording) });
+    return recording.writeFailed ? null : recording.id;
+  }
+
+  private failWrite(recording: Recording, error: unknown): void {
+    this.deps.logger.error('A meeting track file could not be written', error);
+    if (recording.writeFailed) return;
+    recording.writeFailed = true;
+    this.serialize(() => (this.recording === recording ? this.end() : Promise.resolve(null))).catch((failure: unknown) => {
+      this.deps.logger.error('The meeting could not be stopped after a write failure', failure);
+    });
   }
 
   private async stopCapture(): Promise<void> {
@@ -167,11 +180,9 @@ export class MeetingRecorder {
     await Promise.all(Object.values(recording.files).map((file) => this.close(file)));
   }
 
-  private openTrack(path: string): TrackFile {
+  private openTrack(path: string, failed: (error: unknown) => void): TrackFile {
     const stream = createWriteStream(path, { flags: 'a', mode: 0o600 });
-    stream.on('error', (error) => {
-      this.deps.logger.error('A meeting track file could not be written', error);
-    });
+    stream.on('error', failed);
     return { stream, firstAt: null };
   }
 

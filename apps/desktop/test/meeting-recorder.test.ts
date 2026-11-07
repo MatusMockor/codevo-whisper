@@ -195,7 +195,7 @@ it('stops as a no-op when nothing records', async () => {
   expect(capture.requests).toEqual([]);
 });
 
-it('keeps running when a track file cannot be written', async () => {
+it('fails the meeting and keeps the saved audio when a track cannot be written', async () => {
   class UnwritableMicStore extends MeetingStore {
     override trackPath(id: string, track: 'mic' | 'system'): string {
       return track === 'mic' ? join(dir, 'missing', 'mic.pcm') : super.trackPath(id, track);
@@ -207,12 +207,14 @@ it('keeps running when a track file cannot be written', async () => {
   const meetings = new MeetingRecorder({ store, capture, systemAudio: () => ({ kind: 'source', source }), microphoneId: () => Promise.resolve(null), logger, clock: () => now });
   const meeting = await meetings.start();
 
-  capture.send({ track: 'mic', pcm: new Uint8Array(3200) });
   source.play(3200);
-  await vi.waitFor(() => expect(logger.errors).not.toHaveLength(0));
-  await meetings.stop();
+  capture.send({ track: 'mic', pcm: new Uint8Array(3200) });
 
+  await vi.waitFor(() => expect(store.get(meeting.id)?.phase).toEqual({ kind: 'failed', error: 'Nahrávku sa nepodarilo uložiť. Skontrolujte voľné miesto na disku.' }));
+  expect(meetings.isBusy()).toBe(false);
+  expect(capture.requests.at(-1)).toEqual({ type: 'meeting-stop' });
+  expect(source.stops).toBe(1);
   expect(logger.errors.map((entry) => entry.message)).toContain('A meeting track file could not be written');
-  expect(store.get(meeting.id)?.phase).toEqual({ kind: 'stopped' });
   expect((await readFile(store.trackPath(meeting.id, 'system'))).byteLength).toBe(3200);
+  await expect(meetings.stop()).resolves.toBeNull();
 });
