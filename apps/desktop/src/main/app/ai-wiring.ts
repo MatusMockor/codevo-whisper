@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { join } from 'node:path';
 import type { AiCheck, AiKeyState } from '../../shared/ai';
 import { AiKeyStore } from '../ai/ai-key-store';
-import { listModels, LlmError } from '../ai/llm-client';
+import { listModels, LlmError, type LlmEndpoint } from '../ai/llm-client';
 import { polish } from '../ai/polish';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
@@ -17,10 +17,15 @@ export type AiServices = {
   setKey(key: string | null): Promise<AiKeyState>;
   check(baseUrl: string): Promise<AiCheck>;
   polish(text: string, signal: AbortSignal): Promise<string>;
+  endpoint(): Promise<LlmEndpoint | null>;
 };
 
 export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiringDeps): AiServices {
   const keys = new AiKeyStore(join(app.getPath('userData'), AI_KEY_FILE), vaultFor({ e2e, isPackaged }), logger);
+  const endpoint = async (): Promise<LlmEndpoint | null> => {
+    const { aiBaseUrl, aiModel } = settings.get();
+    return aiBaseUrl === null || aiModel === '' ? null : { baseUrl: aiBaseUrl, model: aiModel, apiKey: await keys.get() };
+  };
   return {
     keyState: () => keys.state(),
     setKey: (key) => keys.set(key),
@@ -33,9 +38,9 @@ export function createAiServices({ settings, e2e, isPackaged, logger }: AiWiring
       }
     },
     polish: async (text, signal) => {
-      const { aiBaseUrl, aiModel } = settings.get();
-      if (aiBaseUrl === null) return text;
-      return polish(text, { endpoint: { baseUrl: aiBaseUrl, model: aiModel, apiKey: await keys.get() }, signal, logger });
+      const target = await endpoint();
+      return target === null ? text : polish(text, { endpoint: target, signal, logger });
     },
+    endpoint,
   };
 }

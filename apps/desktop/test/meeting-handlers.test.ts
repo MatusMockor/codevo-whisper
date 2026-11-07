@@ -5,27 +5,51 @@ import type { MeetingRecord } from '../src/main/meetings/meeting-store';
 
 const ID = '20261107-090503-abcdef';
 
-function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady = true) {
+function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady = true, notesPending = false) {
   const store = {
     list: () => [],
-    get: (id: string) => (id === ID ? ({ id, phase } as MeetingRecord) : null),
+    get: (id: string) => (id === ID ? ({ id, phase, notesPending } as MeetingRecord) : null),
     meeting: vi.fn(() => Promise.resolve(null)),
     delete: vi.fn(() => Promise.resolve()),
   };
   const recorder = { start: vi.fn(() => Promise.reject(new Error('unused'))), stop: vi.fn(() => Promise.resolve(ID)) };
   const transcriber = { transcribe: vi.fn(() => Promise.resolve()) };
   const diarizer = { view: vi.fn(), download: vi.fn(() => Promise.resolve()), pause: vi.fn(), delete: vi.fn(() => Promise.resolve()) };
-  return { store, recorder, transcriber, diarizer, api: meetingHandlers({ meetings: { store, recorder, transcriber, diarizer, modelReady: () => modelReady } }) };
+  const notes = { generate: vi.fn(() => Promise.resolve()) };
+  const exportMeeting = vi.fn(() => Promise.resolve(true));
+  return { store, recorder, transcriber, diarizer, notes, exportMeeting, api: meetingHandlers({ meetings: { store, recorder, transcriber, diarizer, notes, exportMeeting, modelReady: () => modelReady } }) };
 }
 
 it('rejects meeting ids that could leave the meetings directory', async () => {
-  const { api, store } = handlers();
+  const { api, store, notes, exportMeeting } = handlers();
   for (const id of ['../settings', '20261107-090503-abcdef/..', '', 42, null]) {
     await expect(api.getMeeting(id)).rejects.toThrow(IpcValidationError);
     await expect(api.deleteMeeting(id)).rejects.toThrow(IpcValidationError);
     await expect(api.retranscribeMeeting(id)).rejects.toThrow(IpcValidationError);
+    await expect(api.generateMeetingNotes(id)).rejects.toThrow(IpcValidationError);
+    await expect(api.exportMeeting(id)).rejects.toThrow(IpcValidationError);
   }
   expect(store.meeting).not.toHaveBeenCalled();
+  expect(store.delete).not.toHaveBeenCalled();
+  expect(notes.generate).not.toHaveBeenCalled();
+  expect(exportMeeting).not.toHaveBeenCalled();
+});
+
+it('starts notes and exports a meeting only for a valid id and no extra arguments', async () => {
+  const { api, notes, exportMeeting } = handlers();
+
+  await expect(api.exportMeeting(ID, '/tmp/elsewhere.md')).rejects.toThrow(IpcValidationError);
+  await api.generateMeetingNotes(ID);
+  await expect(api.exportMeeting(ID)).resolves.toBe(true);
+
+  expect(notes.generate).toHaveBeenCalledWith(ID);
+  expect(exportMeeting).toHaveBeenCalledExactlyOnceWith(ID);
+});
+
+it('keeps a meeting while its notes are generated', async () => {
+  const { api, store } = handlers({ kind: 'ready' }, true, true);
+
+  await expect(api.deleteMeeting(ID)).rejects.toThrow('Stretnutie sa nedá zmazať');
   expect(store.delete).not.toHaveBeenCalled();
 });
 

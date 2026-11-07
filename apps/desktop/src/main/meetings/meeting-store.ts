@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { isMeetingId, type Meeting, type MeetingPhase, type MeetingSummary, type MeetingTrack, type SystemAudio, type Turn } from '../../shared/meetings';
+import { isMeetingId, MEETING_DATE, type Meeting, type MeetingPhase, type MeetingSummary, type MeetingTrack, type NotesFailure, type SystemAudio, type Turn } from '../../shared/meetings';
 import { PCM_BYTES_PER_SECOND } from '../../shared/pcm';
 import { writeFileAtomic } from '../fs/atomic-write';
 import { readOptionalFile } from '../fs/read-optional-file';
@@ -14,15 +14,28 @@ export type TrackInfo = { startOffsetMs: number };
 
 export type MeetingRecord = MeetingSummary & { tracks: Record<MeetingTrack, TrackInfo | null> };
 
-export type MeetingPatch = Partial<Pick<MeetingRecord, 'phase' | 'durationMs' | 'systemAudio' | 'systemAudioNote' | 'tracks'>>;
+export type MeetingPatch = Partial<Pick<MeetingRecord, 'phase' | 'durationMs' | 'systemAudio' | 'systemAudioNote' | 'tracks' | 'notesPending' | 'notesError'>>;
 
 export type NewMeeting = { startedAt: number; systemAudio: SystemAudio; systemAudioNote: string | null };
 
 const RECORD_FILE = 'meeting.json';
 const TURNS_FILE = 'transcript.json';
+const NOTES_FILE = 'notes.md';
 const TRACKS: readonly MeetingTrack[] = ['mic', 'system'];
 const SYSTEM_AUDIO: readonly SystemAudio[] = ['recording', 'unsupported', 'failed'];
-const TITLE_FORMAT = new Intl.DateTimeFormat('sk', { dateStyle: 'medium', timeStyle: 'short' });
+const NOTES_FAILURES: Readonly<Record<NotesFailure, true>> = {
+  timeout: true,
+  aborted: true,
+  unreachable: true,
+  unauthorized: true,
+  http: true,
+  'too-large': true,
+  'bad-response': true,
+  'not-configured': true,
+  'too-long': true,
+  empty: true,
+  unexpected: true,
+};
 
 function twoDigits(value: number): string {
   return String(value).padStart(2, '0');
@@ -46,6 +59,10 @@ function isSystemAudio(value: unknown): value is SystemAudio {
   return SYSTEM_AUDIO.some((known) => known === value);
 }
 
+function isNotesFailure(value: unknown): value is NotesFailure {
+  return typeof value === 'string' && Object.hasOwn(NOTES_FAILURES, value);
+}
+
 function isTrackInfo(value: unknown): value is TrackInfo | null {
   return value === null || (isPlainRecord(value) && typeof value['startOffsetMs'] === 'number' && Number.isFinite(value['startOffsetMs']));
 }
@@ -65,11 +82,13 @@ function parseRecord(text: string, id: string): MeetingRecord | null {
     systemAudio,
     systemAudioNote,
     tracks: { mic: tracks['mic'], system: tracks['system'] },
+    notesPending: false,
+    notesError: isNotesFailure(value['notesError']) ? value['notesError'] : null,
   };
 }
 
-function summary({ id, title, startedAt, durationMs, phase, systemAudio, systemAudioNote }: MeetingRecord): MeetingSummary {
-  return { id, title, startedAt, durationMs, phase, systemAudio, systemAudioNote };
+function summary({ id, title, startedAt, durationMs, phase, systemAudio, systemAudioNote, notesPending, notesError }: MeetingRecord): MeetingSummary {
+  return { id, title, startedAt, durationMs, phase, systemAudio, systemAudioNote, notesPending, notesError };
 }
 
 export class MeetingStore {
@@ -108,7 +127,7 @@ export class MeetingStore {
     const record = this.get(id);
     if (record === null) return null;
     const turns = await readOptionalFile(join(this.dir, id, TURNS_FILE));
-    return { ...summary(record), turns: turns === null ? [] : (JSON.parse(turns) as Turn[]), notes: null, notesError: null };
+    return { ...summary(record), turns: turns === null ? [] : (JSON.parse(turns) as Turn[]), notes: await readOptionalFile(join(this.dir, id, NOTES_FILE)) };
   }
 
   trackPath(id: string, track: MeetingTrack): string {
@@ -119,7 +138,7 @@ export class MeetingStore {
     return this.queue.run(async () => {
       const id = meetingId(meeting.startedAt);
       await mkdir(join(this.dir, id), { recursive: true, mode: 0o700 });
-      const record: MeetingRecord = { id, title: `Stretnutie ${TITLE_FORMAT.format(meeting.startedAt)}`, durationMs: 0, phase: { kind: 'recording' }, tracks: { mic: null, system: null }, ...meeting };
+      const record: MeetingRecord = { id, title: `Stretnutie ${MEETING_DATE.format(meeting.startedAt)}`, durationMs: 0, phase: { kind: 'recording' }, tracks: { mic: null, system: null }, notesPending: false, notesError: null, ...meeting };
       await this.commit(record);
       return record;
     });
@@ -137,6 +156,10 @@ export class MeetingStore {
 
   writeTurns(id: string, turns: Turn[]): Promise<void> {
     return this.queue.run(() => writeFileAtomic(join(this.dir, id, TURNS_FILE), JSON.stringify(turns)));
+  }
+
+  writeNotes(id: string, notes: string): Promise<void> {
+    return this.queue.run(() => writeFileAtomic(join(this.dir, id, NOTES_FILE), notes));
   }
 
   delete(id: string): Promise<void> {
