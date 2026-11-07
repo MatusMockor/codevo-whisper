@@ -111,12 +111,14 @@ it('marks the meeting while notes are generated and runs one generation per meet
   await expect.poll(() => server?.requests.length).toBe(1);
   expect(store.get(id)?.notesPending).toBe(true);
   expect(notes.isBusy()).toBe(true);
+  expect(notes.isGenerating(id)).toBe(true);
   answer!();
   await Promise.all([first, second]);
 
   expect(server.requests).toHaveLength(1);
   expect(store.get(id)?.notesPending).toBe(false);
   expect(notes.isBusy()).toBe(false);
+  expect(notes.isGenerating(id)).toBe(false);
 });
 
 it('refuses a transcript over 200 000 characters without calling the server and keeps earlier notes', async () => {

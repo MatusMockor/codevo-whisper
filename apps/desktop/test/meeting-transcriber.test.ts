@@ -202,7 +202,9 @@ it('runs one transcription at a time', async () => {
   const both = Promise.all([meetings.transcribe(first), meetings.transcribe(second)]);
   await vi.waitFor(() => expect(store.get(first)?.phase.kind).toBe('transcribing'));
   expect(store.get(second)?.phase.kind).toBe('stopped');
+  expect([meetings.isTranscribing(first), meetings.isTranscribing(second)]).toEqual([true, true]);
   await both;
 
   expect(store.get(second)?.phase.kind).toBe('ready');
+  expect([meetings.isTranscribing(first), meetings.isTranscribing(second)]).toEqual([false, false]);
 });

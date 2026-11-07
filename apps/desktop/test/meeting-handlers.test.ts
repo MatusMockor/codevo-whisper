@@ -5,7 +5,7 @@ import type { MeetingRecord } from '../src/main/meetings/meeting-store';
 
 const ID = '20261107-090503-abcdef';
 
-function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady = true, notesPending = false) {
+function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady = true, notesPending = false, busy: { transcribing?: boolean; generating?: boolean } = {}) {
   const store = {
     list: () => [],
     get: (id: string) => (id === ID ? ({ id, phase, notesPending } as MeetingRecord) : null),
@@ -13,9 +13,9 @@ function handlers(phase: MeetingRecord['phase'] = { kind: 'ready' }, modelReady 
     delete: vi.fn(() => Promise.resolve()),
   };
   const recorder = { start: vi.fn(() => Promise.reject(new Error('unused'))), stop: vi.fn(() => Promise.resolve(ID)) };
-  const transcriber = { transcribe: vi.fn(() => Promise.resolve()) };
+  const transcriber = { transcribe: vi.fn(() => Promise.resolve()), isTranscribing: (id: string) => id === ID && busy.transcribing === true };
   const diarizer = { view: vi.fn(), download: vi.fn(() => Promise.resolve()), pause: vi.fn(), delete: vi.fn(() => Promise.resolve()) };
-  const notes = { generate: vi.fn(() => Promise.resolve()) };
+  const notes = { generate: vi.fn(() => Promise.resolve()), isGenerating: (id: string) => id === ID && busy.generating === true };
   const exportMeeting = vi.fn(() => Promise.resolve(true));
   return { store, recorder, transcriber, diarizer, notes, exportMeeting, api: meetingHandlers({ meetings: { store, recorder, transcriber, diarizer, notes, exportMeeting, modelReady: () => modelReady } }) };
 }
@@ -51,6 +51,20 @@ it('keeps a meeting while its notes are generated', async () => {
 
   await expect(api.deleteMeeting(ID)).rejects.toThrow('Stretnutie sa nedá zmazať');
   expect(store.delete).not.toHaveBeenCalled();
+});
+
+it('refuses notes while the meeting waits for or runs a new transcription', async () => {
+  const { api, notes } = handlers({ kind: 'ready' }, true, false, { transcribing: true });
+
+  await expect(api.generateMeetingNotes(ID)).rejects.toThrow('Poznámky sa nedajú vytvoriť počas prepisu.');
+  expect(notes.generate).not.toHaveBeenCalled();
+});
+
+it('refuses a new transcription while the notes are generated', async () => {
+  const { api, transcriber } = handlers({ kind: 'ready' }, true, false, { generating: true });
+
+  await expect(api.retranscribeMeeting(ID)).rejects.toThrow('Stretnutie sa nedá prepísať počas vytvárania poznámok.');
+  expect(transcriber.transcribe).not.toHaveBeenCalled();
 });
 
 it('refuses to record without a downloaded local model', async () => {
