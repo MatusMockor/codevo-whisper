@@ -42,6 +42,7 @@ const SILENT_SOURCE_NOTE = 'Zvuk systému neprichádza. Nahráva sa iba mikrofó
 export class MeetingRecorder {
   private recording: Recording | null = null;
   private transition: Promise<unknown> = Promise.resolve();
+  private pending = 0;
   private readonly clock: () => number;
 
   constructor(private readonly deps: MeetingRecorderDeps) {
@@ -49,7 +50,7 @@ export class MeetingRecorder {
   }
 
   isBusy(): boolean {
-    return this.recording !== null;
+    return this.recording !== null || this.pending > 0;
   }
 
   start(): Promise<MeetingSummary> {
@@ -61,7 +62,10 @@ export class MeetingRecorder {
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
-    const run = this.transition.then(work);
+    this.pending += 1;
+    const run = this.transition.then(work).finally(() => {
+      this.pending -= 1;
+    });
     this.transition = run.catch(() => undefined);
     return run;
   }

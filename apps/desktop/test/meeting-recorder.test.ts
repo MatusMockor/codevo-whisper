@@ -13,6 +13,7 @@ class FakeMeetingCapture {
   readonly requests: CaptureRequest[] = [];
   startResult: unknown = { label: 'Mic', fallback: false, system: 'off' };
   startError: Error | null = null;
+  stopReply: Promise<unknown> = Promise.resolve(null);
   private readonly listeners = new Set<(frame: MeetingFrame) => void>();
 
   request(request: CaptureRequest): Promise<unknown> {
@@ -20,7 +21,7 @@ class FakeMeetingCapture {
     if (request.type === 'meeting-start') {
       return this.startError === null ? Promise.resolve(this.startResult) : Promise.reject(this.startError);
     }
-    return Promise.resolve(null);
+    return this.stopReply;
   }
 
   onMeetingFrame(listener: (frame: MeetingFrame) => void): () => void {
@@ -170,6 +171,23 @@ it('removes the meeting and stops the capture when the microphone cannot be open
   expect(meetings.isBusy()).toBe(false);
   expect(source.stops).toBe(1);
   expect(capture.requests.at(-1)).toEqual({ type: 'meeting-stop' });
+});
+
+it('stays busy until a stop has settled', async () => {
+  const meetings = recorder();
+  await meetings.start();
+  let release = (): void => undefined;
+  capture.stopReply = new Promise((resolve) => {
+    release = () => resolve(null);
+  });
+
+  const stopped = meetings.stop();
+  await vi.waitFor(() => expect(capture.requests).toContainEqual({ type: 'meeting-stop' }));
+
+  expect(meetings.isBusy()).toBe(true);
+  release();
+  await stopped;
+  expect(meetings.isBusy()).toBe(false);
 });
 
 it('stops as a no-op when nothing records', async () => {
