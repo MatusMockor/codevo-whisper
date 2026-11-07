@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MeetingDetail } from '../meetings/MeetingDetail';
 import { formatClock, phaseLabel } from '../meetings/meeting-copy';
 import { RecordCard } from '../meetings/RecordCard';
+import { SpeakersCard } from '../meetings/SpeakersCard';
 import { useLocalModelReady, useMeetings } from '../meetings/use-meetings';
 
 export function Meetings({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -16,6 +17,7 @@ export function Meetings({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <div className="meetings">
       <RecordCard recording={recording} modelReady={modelReady} onOpenSettings={onOpenSettings} />
+      <SpeakersCard />
       <section className="last history" aria-labelledby="h-meetings">
         <div className="last-top">
           <h2 id="h-meetings">Nahrané stretnutia</h2>

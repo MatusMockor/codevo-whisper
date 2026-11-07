@@ -540,6 +540,7 @@
 }
 
 .meeting-record h2,
+.meeting-speakers h2,
 .meeting-detail h2 {
   margin: 0;
   font-size: 17px;
@@ -548,6 +549,10 @@
 
 .meeting-record .row-btns {
   margin-top: 16px;
+}
+
+.meeting-speakers {
+  margin-top: 22px;
 }
 
 .meeting-tracks {

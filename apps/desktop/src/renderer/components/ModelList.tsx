@@ -10,6 +10,7 @@ type ModelListProps = {
   errors: Readonly<Record<string, string>>;
   onAction: (model: ModelInfo, action: ModelAction) => void;
   selection?: ModelSelection;
+  label?: string;
 };
 
 const EMPTY_STATE: Omit<ModelState, 'id' | 'totalBytes'> = { status: 'not-downloaded', receivedBytes: 0 };
@@ -64,9 +65,9 @@ function ModelSummary({ row }: { row: ModelRow }) {
   );
 }
 
-export function ModelList({ models, states, context, errors, onAction, selection }: ModelListProps) {
+export function ModelList({ models, states, context, errors, onAction, selection, label = 'Modely na prepis' }: ModelListProps) {
   return (
-    <ul className="models" aria-label="Modely na prepis">
+    <ul className="models" aria-label={label}>
       {models.map((model) => {
         const row = modelRow(model, stateFor(model, states), context);
         return (
