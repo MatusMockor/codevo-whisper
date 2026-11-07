@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { MeetingTrack, SpeakerSegment } from '../../shared/meetings';
 import { PCM_BYTES_PER_SAMPLE, PCM_BYTES_PER_SECOND } from '../../shared/pcm';
-import type { Settings } from '../../shared/settings';
+import type { Language, Settings } from '../../shared/settings';
 import type { ActiveModel } from '../engines/active-model';
 import type { Logger } from '../logging/logger';
 import { attributeSpeakers, type TrackWords } from './attribute-speakers';
@@ -83,6 +83,7 @@ export class MeetingTranscriber {
     try {
       const record = store.get(id);
       if (record === null || this.controller.signal.aborted) return;
+      const { language } = this.deps.settings.get();
       const model = await this.deps.models.activeModelPath();
       if (model === null || (await this.deps.models.verifyActive()) !== 'ok') throw new Error(MODEL_MISSING);
       const tracks: TrackWords[] = [];
@@ -90,9 +91,9 @@ export class MeetingTranscriber {
         const info = record.tracks[track];
         if (info === null) continue;
         await store.update(id, { phase: { kind: 'transcribing', step: track } });
-        tracks.push({ track, startOffsetMs: info.startOffsetMs, ...(await this.track(record, track, model)) });
+        tracks.push({ track, startOffsetMs: info.startOffsetMs, ...(await this.track(record, track, model, language)) });
       }
-      await store.finishTranscript(id, attributeSpeakers(tracks));
+      await store.finishTranscript(id, attributeSpeakers(tracks), language);
     } catch (error) {
       if (this.controller.signal.aborted) return;
       this.deps.logger.error(`Meeting ${id} could not be transcribed`, error);
@@ -103,13 +104,12 @@ export class MeetingTranscriber {
     }
   }
 
-  private async track(record: MeetingRecord, track: MeetingTrack, model: string): Promise<Omit<TrackWords, 'track' | 'startOffsetMs'>> {
+  private async track(record: MeetingRecord, track: MeetingTrack, model: string, language: Language): Promise<Omit<TrackWords, 'track' | 'startOffsetMs'>> {
     const pcm = this.deps.store.trackPath(record.id, track);
     const wav = join(dirname(pcm), `${track}.wav`);
     try {
       const dataBytes = await writeWav(pcm, wav);
       if (dataBytes === 0) return { words: [] };
-      const { language } = this.deps.settings.get();
       const timeoutMs = Math.max(MIN_TIMEOUT_MS, (dataBytes / PCM_BYTES_PER_SECOND) * 2000);
       const words = parseCliWords(
         await this.cli(['--model', model, '--backend', this.deps.backend(), ...(language === 'auto' ? [] : ['--language', language]), '--threads', this.threads(), '--timestamps', 'word', '--quiet', wav], timeoutMs),

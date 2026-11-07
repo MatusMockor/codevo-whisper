@@ -87,7 +87,7 @@ export function createMeetings({ captureWindow, capture, models, diarizer, setti
     diarizer: () => diarizer.modelPath(),
     logger,
   });
-  const notes = new MeetingNotes({ store, endpoint, language: () => settings.get().language, logger });
+  const notes = new MeetingNotes({ store, endpoint, logger });
   store.onChange((meetings) => window.send('meetings-changed', meetings));
   diarizer.onChange((view) => window.send('diarizer-changed', view));
   return {

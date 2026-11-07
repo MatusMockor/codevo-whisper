@@ -8,7 +8,6 @@ import type { MeetingStore } from './meeting-store';
 export type MeetingNotesDeps = {
   store: Pick<MeetingStore, 'get' | 'meeting' | 'update' | 'writeNotes'>;
   endpoint: () => Promise<LlmEndpoint | null>;
-  language: () => Language;
   logger: Logger;
   timeoutMs?: number;
 };
@@ -18,9 +17,9 @@ const MAX_TRANSCRIPT_CHARS = 200_000;
 const NOT_READY = 'Poznámky sa dajú vytvoriť len z hotového prepisu.';
 const LANGUAGE_NAMES: Record<Exclude<Language, 'auto'>, string> = { sk: 'Slovak', cs: 'Czech', en: 'English' };
 
-function transcript({ title, startedAt, durationMs, turns }: Meeting, language: Language): string {
+function transcript({ title, startedAt, durationMs, turns }: Meeting, language: Language | null): string {
   const speakers = [...new Set(turns.map((turn) => turn.speaker))];
-  const header = [`Title: ${title}`, `Date: ${MEETING_DATE.format(startedAt)}`, `Duration: ${formatClock(durationMs)}`, `Speakers: ${speakers.join(', ')}`, ...(language === 'auto' ? [] : [`Language: ${LANGUAGE_NAMES[language]}`])];
+  const header = [`Title: ${title}`, `Date: ${MEETING_DATE.format(startedAt)}`, `Duration: ${formatClock(durationMs)}`, `Speakers: ${speakers.join(', ')}`, ...(language === null || language === 'auto' ? [] : [`Language: ${LANGUAGE_NAMES[language]}`])];
   return [...header, '', 'Transcript:', ...turns.map(turnLine)].join('\n');
 }
 
@@ -70,7 +69,7 @@ export class MeetingNotes {
     if (meeting === null || meeting.turns.length === 0) return 'empty';
     const endpoint = await this.deps.endpoint();
     if (endpoint === null) return 'not-configured';
-    const text = transcript(meeting, this.deps.language());
+    const text = transcript(meeting, this.deps.store.get(id)?.language ?? null);
     if (text.length > MAX_TRANSCRIPT_CHARS) return 'too-long';
     const notes = await chat({ endpoint, messages: notesMessages(text), timeoutMs: this.deps.timeoutMs ?? NOTES_TIMEOUT_MS, signal: this.controller.signal });
     if (notes === '') return 'bad-response';
