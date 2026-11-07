@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { notesFailureMessage, phaseLabel, systemAudioLabel } from '../src/renderer/meetings/meeting-copy';
+import { notesFailureMessage, phaseLabel, recordedSystemAudioLabel, systemAudioLabel } from '../src/renderer/meetings/meeting-copy';
 import { formatClock, turnLine } from '../src/shared/meetings';
 
 it('formats a clock as mm:ss and adds hours past one hour', () => {
@@ -22,6 +22,9 @@ it('names every phase and system audio state in Slovak', () => {
   expect(systemAudioLabel('recording')).toBe('nahráva sa');
   expect(systemAudioLabel('unsupported')).toBe('nedostupný');
   expect(systemAudioLabel('failed')).toBe('nenahráva sa');
+  expect(recordedSystemAudioLabel('recording')).toBe('nahraný');
+  expect(recordedSystemAudioLabel('unsupported')).toBe('nedostupný');
+  expect(recordedSystemAudioLabel('failed')).toBe('nenahraný');
 });
 
 it('explains a refused long transcript and a missing AI server in Slovak', () => {

@@ -1,6 +1,5 @@
 import type { MeetingPhase, NotesFailure, SystemAudio } from '../../shared/meetings';
 
-export { formatClock } from '../../shared/meetings';
 
 const TRANSCRIBING_STEP: Record<Extract<MeetingPhase, { kind: 'transcribing' }>['step'], string> = {
   mic: 'Prepisuje sa mikrofón',
@@ -9,6 +8,8 @@ const TRANSCRIBING_STEP: Record<Extract<MeetingPhase, { kind: 'transcribing' }>[
 };
 
 const SYSTEM_AUDIO: Record<SystemAudio, string> = { recording: 'nahráva sa', unsupported: 'nedostupný', failed: 'nenahráva sa' };
+
+const RECORDED_SYSTEM_AUDIO: Record<SystemAudio, string> = { recording: 'nahraný', unsupported: 'nedostupný', failed: 'nenahraný' };
 
 const NOTES_FAILURE: Record<NotesFailure, string> = {
   timeout: 'AI server nestihol poznámky vytvoriť včas. Skúste to znova alebo použite rýchlejší model.',
@@ -34,6 +35,10 @@ export function phaseLabel(phase: MeetingPhase): string {
 
 export function systemAudioLabel(state: SystemAudio): string {
   return SYSTEM_AUDIO[state];
+}
+
+export function recordedSystemAudioLabel(state: SystemAudio): string {
+  return RECORDED_SYSTEM_AUDIO[state];
 }
 
 export function notesFailureMessage(failure: NotesFailure): string {

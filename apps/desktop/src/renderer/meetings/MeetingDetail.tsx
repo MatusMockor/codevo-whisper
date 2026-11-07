@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Live } from '../home/live-value';
 import { formatClock, MEETING_DATE, turnLine, type Meeting, type MeetingSummary } from '../../shared/meetings';
 import { useSettings } from '../settings/use-settings';
-import { notesFailureMessage, phaseLabel, systemAudioLabel } from './meeting-copy';
+import { notesFailureMessage, phaseLabel, recordedSystemAudioLabel } from './meeting-copy';
 import { useMeeting } from './use-meetings';
 
 type Action = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'pending' } | { kind: 'exported' } | { kind: 'failed'; message: string };
@@ -84,7 +84,7 @@ function Notes({ summary, meeting, onOpenSettings }: { summary: MeetingSummary; 
         </p>
       ) : (
         <p className="note" id="meeting-notes-hint">
-          Lokálne servery ako Ollama majú predvolene malé kontextové okno. Pri dlhých stretnutiach ho zväčšite, napríklad premennou OLLAMA_CONTEXT_LENGTH.
+          Lokálne servery ako Ollama majú predvolene malé kontextové okno. Pri dlhých stretnutiach ho zväčšite, napríklad premennou OLLAMA_CONTEXT_LENGTH. Pre spoľahlivé poznámky použite model so 7B a viac parametrami, menšie modely si vymýšľajú.
         </p>
       )}
       {summary.notesPending && (
@@ -139,7 +139,7 @@ export function MeetingDetail({ summary, onOpenSettings }: { summary: MeetingSum
         </div>
       </div>
       <p className="note">
-        <time dateTime={new Date(summary.startedAt).toISOString()}>{MEETING_DATE.format(summary.startedAt)}</time> · {formatClock(summary.durationMs)} · Zvuk systému: {systemAudioLabel(summary.systemAudio)}
+        <time dateTime={new Date(summary.startedAt).toISOString()}>{MEETING_DATE.format(summary.startedAt)}</time> · {formatClock(summary.durationMs)} · Zvuk systému: {recordedSystemAudioLabel(summary.systemAudio)}
       </p>
       {summary.systemAudioNote !== null && <p className="note">{summary.systemAudioNote}</p>}
       {action.kind === 'confirm' && (
