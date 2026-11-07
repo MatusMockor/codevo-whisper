@@ -33,6 +33,10 @@ export class MeetingNotes {
     return this.running.size > 0;
   }
 
+  isGenerating(id: string): boolean {
+    return this.running.has(id);
+  }
+
   async abort(): Promise<void> {
     this.controller.abort();
     await Promise.all(this.running.values());

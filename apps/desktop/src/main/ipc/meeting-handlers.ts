@@ -12,9 +12,9 @@ export type MeetingHandlerDeps = {
   meetings: {
     store: Pick<MeetingStore, 'list' | 'get' | 'meeting' | 'delete'>;
     recorder: Pick<MeetingRecorder, 'start' | 'stop'>;
-    transcriber: Pick<MeetingTranscriber, 'transcribe'>;
+    transcriber: Pick<MeetingTranscriber, 'transcribe' | 'isTranscribing'>;
     diarizer: Pick<Diarizer, 'view' | 'download' | 'pause' | 'delete'>;
-    notes: Pick<MeetingNotes, 'generate'>;
+    notes: Pick<MeetingNotes, 'generate' | 'isGenerating'>;
     exportMeeting: (id: string) => Promise<boolean>;
     modelReady: () => boolean;
   };
@@ -56,7 +56,9 @@ export function meetingHandlers({ meetings }: MeetingHandlerDeps): HandlerGroup<
     }),
     retranscribeMeeting: (id, ...extra) =>
       new Promise<void>((resolve) => {
-        void transcriber.transcribe(meetingId(id, extra));
+        const valid = meetingId(id, extra);
+        if (notes.isGenerating(valid)) throw new Error('Stretnutie sa nedá prepísať počas vytvárania poznámok.');
+        void transcriber.transcribe(valid);
         resolve();
       }),
     deleteMeeting: async (id, ...extra) => {
@@ -67,7 +69,9 @@ export function meetingHandlers({ meetings }: MeetingHandlerDeps): HandlerGroup<
     },
     generateMeetingNotes: (id, ...extra) =>
       new Promise<void>((resolve) => {
-        void notes.generate(meetingId(id, extra));
+        const valid = meetingId(id, extra);
+        if (transcriber.isTranscribing(valid)) throw new Error('Poznámky sa nedajú vytvoriť počas prepisu.');
+        void notes.generate(valid);
         resolve();
       }),
     exportMeeting: async (id, ...extra) => meetings.exportMeeting(meetingId(id, extra)),

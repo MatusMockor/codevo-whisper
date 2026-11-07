@@ -57,6 +57,10 @@ export class MeetingTranscriber {
     return this.running > 0;
   }
 
+  isTranscribing(id: string): boolean {
+    return this.queued.has(id);
+  }
+
   abort(): Promise<void> {
     this.controller.abort();
     return this.tail;
