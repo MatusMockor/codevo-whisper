@@ -126,7 +126,8 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
-    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, logger });
+    const ai = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
+    meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, endpoint: () => ai.endpoint(), logger });
     await meetings.load();
     const pause = new PauseState(logger);
     const input = Promise.withResolvers<void>();
@@ -141,7 +142,6 @@ export function composeApplication(logger: Logger): Application {
       inputReady: input.promise,
     });
     const server = createServerServices({ settings, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
-    const ai = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);

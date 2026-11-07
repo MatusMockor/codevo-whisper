@@ -1,4 +1,5 @@
 import { isMeetingId } from '../../shared/meetings';
+import type { MeetingNotes } from '../meetings/meeting-notes';
 import type { MeetingRecorder } from '../meetings/meeting-recorder';
 import type { MeetingStore } from '../meetings/meeting-store';
 import type { MeetingTranscriber } from '../meetings/meeting-transcriber';
@@ -11,8 +12,10 @@ export type MeetingHandlerDeps = {
   meetings: {
     store: Pick<MeetingStore, 'list' | 'get' | 'meeting' | 'delete'>;
     recorder: Pick<MeetingRecorder, 'start' | 'stop'>;
-    transcriber: Pick<MeetingTranscriber, 'transcribe'>;
+    transcriber: Pick<MeetingTranscriber, 'transcribe' | 'isTranscribing'>;
     diarizer: Pick<Diarizer, 'view' | 'download' | 'pause' | 'delete'>;
+    notes: Pick<MeetingNotes, 'generate' | 'isGenerating'>;
+    exportMeeting: (id: string) => Promise<boolean>;
     modelReady: () => boolean;
   };
 };
@@ -26,9 +29,20 @@ function meetingId(id: unknown, extra: readonly unknown[]): string {
 }
 
 export function meetingHandlers({ meetings }: MeetingHandlerDeps): HandlerGroup<
-  'getMeetings' | 'getMeeting' | 'startMeeting' | 'stopMeeting' | 'retranscribeMeeting' | 'deleteMeeting' | 'getDiarizer' | 'downloadDiarizer' | 'pauseDiarizer' | 'deleteDiarizer'
+  | 'getMeetings'
+  | 'getMeeting'
+  | 'startMeeting'
+  | 'stopMeeting'
+  | 'retranscribeMeeting'
+  | 'deleteMeeting'
+  | 'generateMeetingNotes'
+  | 'exportMeeting'
+  | 'getDiarizer'
+  | 'downloadDiarizer'
+  | 'pauseDiarizer'
+  | 'deleteDiarizer'
 > {
-  const { store, recorder, transcriber, diarizer } = meetings;
+  const { store, recorder, transcriber, diarizer, notes } = meetings;
   return {
     getMeetings: withoutArguments(() => store.list()),
     getMeeting: async (id, ...extra) => store.meeting(meetingId(id, extra)),
@@ -42,15 +56,25 @@ export function meetingHandlers({ meetings }: MeetingHandlerDeps): HandlerGroup<
     }),
     retranscribeMeeting: (id, ...extra) =>
       new Promise<void>((resolve) => {
-        void transcriber.transcribe(meetingId(id, extra));
+        const valid = meetingId(id, extra);
+        if (notes.isGenerating(valid)) throw new Error('Stretnutie sa nedá prepísať počas vytvárania poznámok.');
+        void transcriber.transcribe(valid);
         resolve();
       }),
     deleteMeeting: async (id, ...extra) => {
       const valid = meetingId(id, extra);
-      const phase = store.get(valid)?.phase.kind;
-      if (phase === 'recording' || phase === 'transcribing') throw new Error('Stretnutie sa nedá zmazať počas nahrávania alebo prepisu.');
+      const record = store.get(valid);
+      if (record?.phase.kind === 'recording' || record?.phase.kind === 'transcribing' || record?.notesPending === true) throw new Error('Stretnutie sa nedá zmazať počas nahrávania, prepisu alebo vytvárania poznámok.');
       await store.delete(valid);
     },
+    generateMeetingNotes: (id, ...extra) =>
+      new Promise<void>((resolve) => {
+        const valid = meetingId(id, extra);
+        if (transcriber.isTranscribing(valid)) throw new Error('Poznámky sa nedajú vytvoriť počas prepisu.');
+        void notes.generate(valid);
+        resolve();
+      }),
+    exportMeeting: async (id, ...extra) => meetings.exportMeeting(meetingId(id, extra)),
     getDiarizer: withoutArguments(() => diarizer.view()),
     downloadDiarizer: withoutArguments(() => diarizer.download()),
     pauseDiarizer: withoutArguments(() => diarizer.pause()),

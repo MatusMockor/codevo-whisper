@@ -60,6 +60,8 @@ export type IpcInvokeApi = {
   stopMeeting(): Promise<void>;
   retranscribeMeeting(id: string): Promise<void>;
   deleteMeeting(id: string): Promise<void>;
+  generateMeetingNotes(id: string): Promise<void>;
+  exportMeeting(id: string): Promise<boolean>;
   getDiarizer(): Promise<DiarizerView>;
   downloadDiarizer(): Promise<void>;
   pauseDiarizer(): Promise<void>;
@@ -137,6 +139,8 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   stopMeeting: 'meetings:stop',
   retranscribeMeeting: 'meetings:retranscribe',
   deleteMeeting: 'meetings:delete',
+  generateMeetingNotes: 'meetings:generate-notes',
+  exportMeeting: 'meetings:export',
   getDiarizer: 'diarizer:get',
   downloadDiarizer: 'diarizer:download',
   pauseDiarizer: 'diarizer:pause',

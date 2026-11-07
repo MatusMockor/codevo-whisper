@@ -1,4 +1,5 @@
-import type { MeetingPhase, SystemAudio, Turn } from '../../shared/meetings';
+import type { MeetingPhase, NotesFailure, SystemAudio } from '../../shared/meetings';
+
 
 const TRANSCRIBING_STEP: Record<Extract<MeetingPhase, { kind: 'transcribing' }>['step'], string> = {
   mic: 'Prepisuje sa mikrofón',
@@ -8,18 +9,21 @@ const TRANSCRIBING_STEP: Record<Extract<MeetingPhase, { kind: 'transcribing' }>[
 
 const SYSTEM_AUDIO: Record<SystemAudio, string> = { recording: 'nahráva sa', unsupported: 'nedostupný', failed: 'nenahráva sa' };
 
-const pad = (value: number) => String(value).padStart(2, '0');
+const RECORDED_SYSTEM_AUDIO: Record<SystemAudio, string> = { recording: 'nahraný', unsupported: 'nedostupný', failed: 'nenahraný' };
 
-export function formatClock(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const hours = Math.floor(total / 3600);
-  const clock = `${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
-  return hours === 0 ? clock : `${hours}:${clock}`;
-}
-
-export function turnLine(turn: Turn): string {
-  return `[${formatClock(turn.t0Ms)}] ${turn.speaker}: ${turn.text}`;
-}
+const NOTES_FAILURE: Record<NotesFailure, string> = {
+  timeout: 'AI server nestihol poznámky vytvoriť včas. Skúste to znova alebo použite rýchlejší model.',
+  aborted: 'Vytváranie poznámok sa prerušilo.',
+  unreachable: 'AI server sa nepodarilo zastihnúť. Skontrolujte adresu v Nastaveniach a či server beží.',
+  unauthorized: 'AI server odmietol prístup. Skontrolujte API kľúč v Nastaveniach.',
+  http: 'AI server vrátil chybu. Pri dlhom stretnutí skúste zväčšiť kontextové okno modelu.',
+  'too-large': 'Odpoveď AI servera je príliš veľká.',
+  'bad-response': 'AI server nevrátil použiteľné poznámky. Odpoveď mohla byť prázdna alebo orezaná.',
+  'not-configured': 'Najprv nastavte AI server a model v Nastaveniach v časti „AI úprava textu“.',
+  'too-long': 'Prepis je na poznámky príliš dlhý (viac ako 200 000 znakov).',
+  empty: 'V prepise nie je žiadna reč, z ktorej by sa dali vytvoriť poznámky.',
+  unexpected: 'Poznámky sa nepodarilo vytvoriť. Skúste to znova.',
+};
 
 export function phaseLabel(phase: MeetingPhase): string {
   if (phase.kind === 'transcribing') return TRANSCRIBING_STEP[phase.step];
@@ -31,4 +35,12 @@ export function phaseLabel(phase: MeetingPhase): string {
 
 export function systemAudioLabel(state: SystemAudio): string {
   return SYSTEM_AUDIO[state];
+}
+
+export function recordedSystemAudioLabel(state: SystemAudio): string {
+  return RECORDED_SYSTEM_AUDIO[state];
+}
+
+export function notesFailureMessage(failure: NotesFailure): string {
+  return NOTES_FAILURE[failure];
 }

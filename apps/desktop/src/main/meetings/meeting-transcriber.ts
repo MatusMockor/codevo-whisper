@@ -57,6 +57,10 @@ export class MeetingTranscriber {
     return this.running > 0;
   }
 
+  isTranscribing(id: string): boolean {
+    return this.queued.has(id);
+  }
+
   abort(): Promise<void> {
     this.controller.abort();
     return this.tail;
@@ -92,8 +96,7 @@ export class MeetingTranscriber {
         await store.update(id, { phase: { kind: 'transcribing', step: track } });
         tracks.push({ track, startOffsetMs: info.startOffsetMs, ...(await this.track(record, track, model)) });
       }
-      await store.writeTurns(id, attributeSpeakers(tracks));
-      await store.update(id, { phase: { kind: 'ready' } });
+      await store.finishTranscript(id, attributeSpeakers(tracks));
     } catch (error) {
       if (this.controller.signal.aborted) return;
       this.deps.logger.error(`Meeting ${id} could not be transcribed`, error);

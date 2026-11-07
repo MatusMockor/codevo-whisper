@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { MeetingSummary } from '../../shared/meetings';
-import { formatClock, systemAudioLabel } from './meeting-copy';
+import { formatClock, type MeetingSummary } from '../../shared/meetings';
+import { systemAudioLabel } from './meeting-copy';
 import { useNow } from './use-meetings';
 
 type RecordCardProps = { recording: MeetingSummary | null; modelReady: boolean | null; onOpenSettings: () => void };

@@ -40,8 +40,8 @@ it('creates a private meeting directory with a validated id and lists newest fir
 it('persists updates and turns across a reload', async () => {
   const store = await loaded();
   const meeting = await store.create({ startedAt: Date.now(), systemAudio: 'recording', systemAudioNote: null });
-  await store.update(meeting.id, { phase: { kind: 'ready' }, durationMs: 61_000, tracks: { mic: { startOffsetMs: 12 }, system: null } });
-  await store.writeTurns(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Ahoj' }]);
+  await store.update(meeting.id, { durationMs: 61_000, tracks: { mic: { startOffsetMs: 12 }, system: null } });
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Ahoj' }]);
 
   const reloaded = await loaded();
 
@@ -99,4 +99,40 @@ it('notifies listeners with the list after every change', async () => {
   await store.delete(meeting.id);
 
   expect(seen).toEqual([1, 1, 0]);
+});
+
+it('keeps private notes and the last notes failure across a reload, but never a generation in progress', async () => {
+  const store = await loaded();
+  const meeting = await store.create({ startedAt: Date.now(), systemAudio: 'recording', systemAudioNote: null });
+  await store.writeNotes(meeting.id, '## Zhrnutie\n\nDohodli sme termín.');
+  await store.update(meeting.id, { notesPending: true, notesError: 'timeout' });
+
+  const reloaded = await loaded();
+
+  expect(reloaded.list()[0]).toMatchObject({ notesPending: false, notesError: 'timeout' });
+  await expect(reloaded.meeting(meeting.id)).resolves.toMatchObject({ notes: '## Zhrnutie\n\nDohodli sme termín.', notesPending: false, notesError: 'timeout' });
+  expect((await stat(join(dir, meeting.id, 'notes.md'))).mode & 0o777).toBe(0o600);
+});
+
+it('loads a meeting saved before notes existed', async () => {
+  const id = '20261107-090503-abcdef';
+  await mkdir(join(dir, id), { recursive: true });
+  const record = { id, title: 'Stretnutie', startedAt: 1, durationMs: 2, phase: { kind: 'ready' }, systemAudio: 'recording', systemAudioNote: null, tracks: { mic: null, system: null } };
+  await writeFile(join(dir, id, 'meeting.json'), JSON.stringify(record));
+
+  expect((await loaded()).list()).toEqual([expect.objectContaining({ id, notesPending: false, notesError: null })]);
+});
+
+it('drops the notes and their failure when a new transcript replaces the old one', async () => {
+  const store = await loaded();
+  const meeting = await store.create({ startedAt: Date.now(), systemAudio: 'recording', systemAudioNote: null });
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Vydanie bude v piatok.' }]);
+  await store.writeNotes(meeting.id, '## Zhrnutie\n\nVydanie bude v piatok.');
+  await store.update(meeting.id, { notesError: 'timeout' });
+
+  await store.finishTranscript(meeting.id, [{ speaker: 'Ja', t0Ms: 0, t1Ms: 500, text: 'Vydanie bude v pondelok.' }]);
+
+  for (const current of [store, await loaded()]) {
+    await expect(current.meeting(meeting.id)).resolves.toMatchObject({ phase: { kind: 'ready' }, turns: [{ text: 'Vydanie bude v pondelok.' }], notes: null, notesError: null });
+  }
 });
