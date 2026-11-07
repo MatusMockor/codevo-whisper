@@ -85,6 +85,9 @@ function completionContent(body: unknown): string {
   if (typeof content !== 'string') {
     throw new LlmError('bad-response', 'the response has no completion text');
   }
+  if (isPlainRecord(first) && first['finish_reason'] === 'length') {
+    throw new LlmError('bad-response', 'the completion was cut off at the token limit');
+  }
   return content.replace(THINK_BLOCKS, '').trim();
 }
 

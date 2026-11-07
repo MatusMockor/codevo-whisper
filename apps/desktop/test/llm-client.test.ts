@@ -66,6 +66,11 @@ describe('chat', () => {
     }
   });
 
+  it('rejects a completion the server cut off at its token limit', async () => {
+    server = await startFakeLlmServer((_request, response) => json(response, 200, { choices: [{ message: { content: 'Polovica' }, finish_reason: 'length' }] }));
+    expect((await failure(chat({ endpoint: endpoint(server), messages: MESSAGES, timeoutMs: 2_000 }))).reason).toBe('bad-response');
+  });
+
   it('stops reading a response larger than 1 MB', async () => {
     server = await startFakeLlmServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' });
