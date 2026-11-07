@@ -16,6 +16,8 @@ const DIARIZER_FILE = 'sortformer-4spk-v2-1-q8.gguf';
 const SHOTS = process.env['CW_E2E_SHOTS'];
 const BYTES_PER_SECOND = 32_000;
 const NO_CAP_MS = 600_000;
+const OLLAMA = 'http://127.0.0.1:11434/v1';
+const NOTES_MODEL = 'qwen2.5:1.5b';
 const OZONE = process.env['XDG_SESSION_TYPE'] === 'wayland' ? ['--ozone-platform=wayland'] : [];
 
 let app: ElectronApplication;
@@ -69,6 +71,26 @@ async function stopAndTranscribe(transcribeTimeoutMs: number): Promise<void> {
   await expect(transcript).toBeVisible({ timeout: transcribeTimeoutMs });
   await expect(transcript.getByText(/\] Ostatní: .*fellow Americans/).first()).toBeVisible();
   await shot('ready');
+}
+
+async function ollamaOffers(model: string): Promise<boolean> {
+  try {
+    const body = (await (await fetch(`${OLLAMA}/models`, { signal: AbortSignal.timeout(3_000) })).json()) as { data?: Array<{ id?: unknown }> };
+    return body.data?.some((entry) => entry.id === model) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+async function stubSaveDialog(filePath: string): Promise<void> {
+  await app.evaluate(({ dialog }, target) => {
+    const calls: unknown[] = [];
+    (globalThis as unknown as { saveDialogCalls: unknown[] }).saveDialogCalls = calls;
+    dialog.showSaveDialog = ((...args: unknown[]) => {
+      calls.push(args.at(-1));
+      return Promise.resolve({ canceled: false, filePath: target });
+    });
+  }, filePath);
 }
 
 test.skip(process.platform !== 'linux' || MODEL === undefined || AUDIO === undefined, 'Set CW_E2E_MEETING_MODEL (parakeet-ultra-q8 gguf) and CW_E2E_MEETING_AUDIO to run the meeting e2e');
@@ -126,6 +148,59 @@ test('removing the local model during a meeting keeps the recording and its stop
   await page.getByRole('button', { name: 'Zastaviť a prepísať' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Lokálny model nie je stiahnutý.' })).toBeVisible();
   await expect(page.getByText('Najprv si v Nastaveniach stiahnite', { exact: false })).toBeVisible();
+});
+
+test.describe('notes', () => {
+  test('notes come from the real local LLM as plain text and export to Markdown with the transcript', async () => {
+    test.skip(!(await ollamaOffers(NOTES_MODEL)), `Run Ollama on ${OLLAMA} with ${NOTES_MODEL} pulled to run the notes e2e`);
+    test.setTimeout(600_000);
+
+    const meeting = await startMeeting();
+    await playSample();
+    await stopAndTranscribe(240_000);
+    const create = page.getByRole('button', { name: 'Vytvoriť poznámky' });
+    await expect(create).toBeDisabled();
+    await create.scrollIntoViewIfNeeded();
+    await expect(page.getByText('v časti „AI úprava textu“', { exact: false })).toBeVisible();
+    await shot('notes-not-configured');
+
+    await page.evaluate(() => window.codevo.updateSettings({ aiBaseUrl: 'http://127.0.0.1:9/v1', aiModel: 'missing' }));
+    await create.click();
+    await expect(page.getByRole('alert')).toContainText('AI server sa nepodarilo zastihnúť', { timeout: 30_000 });
+    await expect(page.getByRole('list', { name: 'Prepis stretnutia' }).getByText(/\] Ostatní: .*fellow Americans/).first()).toBeVisible();
+    await shot('notes-unreachable');
+
+    await page.evaluate(([baseUrl, model]) => window.codevo.updateSettings({ aiBaseUrl: baseUrl, aiModel: model }), [OLLAMA, NOTES_MODEL] as const);
+    await create.click();
+    await expect(page.getByRole('status').filter({ hasText: 'Vytvárajú sa poznámky' })).toBeVisible();
+    await shot('notes-generating');
+    const shown = page.getByLabel('Poznámky zo stretnutia');
+    await expect(shown).toBeVisible({ timeout: 300_000 });
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Vytvoriť znova' })).toBeEnabled();
+    const stored = await page.evaluate((id) => window.codevo.getMeeting(id), meeting.id);
+    const notes = stored?.notes ?? '';
+    test.info().annotations.push({ type: 'notes', description: notes });
+    expect(notes).toMatch(/^#{1,3} \S/m);
+    expect(await shown.evaluate((element) => ({ tag: element.tagName, children: element.children.length, text: element.textContent }))).toEqual({ tag: 'PRE', children: 0, text: notes });
+    expect((await stat(join(userDataDir, 'meetings', meeting.id, 'notes.md'))).mode & 0o777).toBe(0o600);
+    await shot('notes-ready');
+
+    const exported = test.info().outputPath('meeting.md');
+    await stubSaveDialog(exported);
+    await page.getByRole('button', { name: 'Exportovať do Markdownu' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'exportované do Markdownu' })).toBeVisible();
+    const [options] = await app.evaluate(() => (globalThis as unknown as { saveDialogCalls: Array<{ defaultPath: string; filters: unknown }> }).saveDialogCalls);
+    expect(options?.defaultPath).toMatch(/Stretnutie .*\.md$/);
+    expect(options?.filters).toEqual([{ name: 'Markdown', extensions: ['md'] }]);
+    const markdown = await readFile(exported, 'utf8');
+    expect(markdown.startsWith(`# ${meeting.title}\n`)).toBe(true);
+    expect(markdown).toContain(notes.trim());
+    expect(markdown.indexOf(notes.trim())).toBeLessThan(markdown.indexOf('\n## Prepis\n'));
+    expect(markdown).toMatch(/^\*\*\[\d{2}:\d{2}\] Ostatní:\*\* .*fellow Americans/m);
+    expect((await stat(exported)).mode & 0o777).toBe(0o600);
+    await shot('notes-exported');
+  });
 });
 
 test.describe('remote speakers', () => {
