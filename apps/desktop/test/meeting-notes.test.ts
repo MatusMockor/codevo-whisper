@@ -6,6 +6,7 @@ import type { ChatMessage, LlmEndpoint } from '../src/main/ai/llm-client';
 import { MeetingNotes } from '../src/main/meetings/meeting-notes';
 import { MeetingStore } from '../src/main/meetings/meeting-store';
 import type { Turn } from '../src/shared/meetings';
+import type { Language } from '../src/shared/settings';
 import { completion, json, startFakeLlmServer, type FakeLlmServer } from './fake-llm-server';
 import { RecordingLogger } from './recording-logger';
 
@@ -37,8 +38,8 @@ async function readyMeeting(turns: Turn[] = TURNS): Promise<{ store: MeetingStor
   return { store, id };
 }
 
-function notesFor(store: MeetingStore, endpoint: LlmEndpoint | null, timeoutMs?: number): MeetingNotes {
-  return new MeetingNotes({ store, endpoint: () => Promise.resolve(endpoint), logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+function notesFor(store: MeetingStore, endpoint: LlmEndpoint | null, timeoutMs?: number, language: Language = 'sk'): MeetingNotes {
+  return new MeetingNotes({ store, endpoint: () => Promise.resolve(endpoint), language: () => language, logger: new RecordingLogger(), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
 }
 
 function endpoint(fake: FakeLlmServer): LlmEndpoint {
@@ -65,8 +66,18 @@ it('stores the notes from one completion over the meeting header and one line pe
   expect(lines).toContain(`Title: ${store.get(id)?.title ?? ''}`);
   expect(lines).toContain('Duration: 12:34');
   expect(lines).toContain('Speakers: Ja, Hovoriaci 1');
+  expect(lines).toContain('Language: Slovak');
   expect(lines.slice(-2)).toEqual(['[00:00] Ja: Dobrý deň, poďme na termín.', '[01:05] Hovoriaci 1: Piatok nám vyhovuje.']);
   await expect(store.meeting(id)).resolves.toMatchObject({ notes: NOTES, notesPending: false, notesError: null });
+});
+
+it('leaves the language to the model when the transcription language is automatic', async () => {
+  server = await startFakeLlmServer((_request, response) => json(response, 200, completion(NOTES)));
+  const { store, id } = await readyMeeting();
+
+  await notesFor(store, endpoint(server), undefined, 'auto').generate(id);
+
+  expect(sentMessages(server)[1]?.content).not.toContain('Language:');
 });
 
 it('marks the meeting while notes are generated and runs one generation per meeting at a time', async () => {

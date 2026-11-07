@@ -1,4 +1,5 @@
 import { formatClock, MEETING_DATE, turnLine, type Meeting, type NotesFailure } from '../../shared/meetings';
+import type { Language } from '../../shared/settings';
 import { chat, LlmError, type LlmEndpoint } from '../ai/llm-client';
 import { notesMessages } from '../ai/prompts';
 import type { Logger } from '../logging/logger';
@@ -7,6 +8,7 @@ import type { MeetingStore } from './meeting-store';
 export type MeetingNotesDeps = {
   store: Pick<MeetingStore, 'get' | 'meeting' | 'update' | 'writeNotes'>;
   endpoint: () => Promise<LlmEndpoint | null>;
+  language: () => Language;
   logger: Logger;
   timeoutMs?: number;
 };
@@ -14,10 +16,12 @@ export type MeetingNotesDeps = {
 const NOTES_TIMEOUT_MS = 300_000;
 const MAX_TRANSCRIPT_CHARS = 200_000;
 const NOT_READY = 'Poznámky sa dajú vytvoriť len z hotového prepisu.';
+const LANGUAGE_NAMES: Record<Exclude<Language, 'auto'>, string> = { sk: 'Slovak', cs: 'Czech', en: 'English' };
 
-function transcript({ title, startedAt, durationMs, turns }: Meeting): string {
+function transcript({ title, startedAt, durationMs, turns }: Meeting, language: Language): string {
   const speakers = [...new Set(turns.map((turn) => turn.speaker))];
-  return [`Title: ${title}`, `Date: ${MEETING_DATE.format(startedAt)}`, `Duration: ${formatClock(durationMs)}`, `Speakers: ${speakers.join(', ')}`, '', 'Transcript:', ...turns.map(turnLine)].join('\n');
+  const header = [`Title: ${title}`, `Date: ${MEETING_DATE.format(startedAt)}`, `Duration: ${formatClock(durationMs)}`, `Speakers: ${speakers.join(', ')}`, ...(language === 'auto' ? [] : [`Language: ${LANGUAGE_NAMES[language]}`])];
+  return [...header, '', 'Transcript:', ...turns.map(turnLine)].join('\n');
 }
 
 export class MeetingNotes {
@@ -66,7 +70,7 @@ export class MeetingNotes {
     if (meeting === null || meeting.turns.length === 0) return 'empty';
     const endpoint = await this.deps.endpoint();
     if (endpoint === null) return 'not-configured';
-    const text = transcript(meeting);
+    const text = transcript(meeting, this.deps.language());
     if (text.length > MAX_TRANSCRIPT_CHARS) return 'too-long';
     const notes = await chat({ endpoint, messages: notesMessages(text), timeoutMs: this.deps.timeoutMs ?? NOTES_TIMEOUT_MS, signal: this.controller.signal });
     if (notes === '') return 'bad-response';
