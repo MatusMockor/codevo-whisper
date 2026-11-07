@@ -7,24 +7,21 @@ type RecordCardProps = { recording: MeetingSummary | null; modelReady: boolean |
 
 const HEADPHONES_TIP = 'Tip: použite slúchadlá. Bez nich mikrofón zachytí aj hlas ostatných z reproduktorov a v prepise sa zopakuje.';
 
-function failure(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
-}
 
 export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCardProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(recording !== null);
 
-  function run(command: () => Promise<unknown>): void {
+  function run(command: () => Promise<unknown>, failure: string): void {
     setPending(true);
     setError(null);
     command().then(
       () => setPending(false),
       (caught: unknown) => {
+        console.error('The meeting command failed', caught);
         setPending(false);
-        setError(failure(caught));
+        setError(failure);
       },
     );
   }
@@ -66,11 +63,11 @@ export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCard
       )}
       <div className="row-btns">
         {recording === null ? (
-          <button type="button" className="btn primary" disabled={pending || modelReady === null} onClick={() => run(() => window.codevo.startMeeting())}>
+          <button type="button" className="btn primary" disabled={pending || modelReady === null} onClick={() => run(() => window.codevo.startMeeting(), 'Nahrávanie sa nepodarilo spustiť. Skontrolujte mikrofón a lokálny model v Nastaveniach.')}>
             Začať nahrávanie
           </button>
         ) : (
-          <button type="button" className="btn danger" disabled={pending} onClick={() => run(() => window.codevo.stopMeeting())}>
+          <button type="button" className="btn danger" disabled={pending} onClick={() => run(() => window.codevo.stopMeeting(), 'Nahrávanie sa nepodarilo zastaviť. Skúste to znova.')}>
             Zastaviť a prepísať
           </button>
         )}
