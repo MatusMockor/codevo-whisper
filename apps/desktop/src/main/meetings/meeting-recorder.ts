@@ -39,10 +39,6 @@ const SYSTEM_SILENCE_MS = 3000;
 const CAPTURE_FAILED_NOTE = 'Zvuk systému sa nepodarilo zachytiť. Povoľte Codevo Whisper v Nastaveniach systému, časť Súkromie a bezpečnosť, Nahrávanie zvuku systému. Nahráva sa iba mikrofón.';
 const SILENT_SOURCE_NOTE = 'Zvuk systému neprichádza. Nahráva sa iba mikrofón.';
 
-function openTrack(path: string): TrackFile {
-  return { stream: createWriteStream(path, { flags: 'a', mode: 0o600 }), firstAt: null };
-}
-
 export class MeetingRecorder {
   private recording: Recording | null = null;
   private transition: Promise<unknown> = Promise.resolve();
@@ -79,9 +75,9 @@ export class MeetingRecorder {
     const startedAt = this.clock();
     const unsupported = plan.kind === 'unsupported';
     const record = await store.create({ startedAt, systemAudio: unsupported ? 'unsupported' : 'recording', systemAudioNote: unsupported ? plan.note : null });
-    const files: Recording['files'] = { mic: openTrack(store.trackPath(record.id, 'mic')) };
+    const files: Recording['files'] = { mic: this.openTrack(store.trackPath(record.id, 'mic')) };
     if (!unsupported) {
-      files.system = openTrack(store.trackPath(record.id, 'system'));
+      files.system = this.openTrack(store.trackPath(record.id, 'system'));
     }
     const recording: Recording = { id: record.id, startedAt, files, plan, silence: null, unsubscribe: this.deps.capture.onMeetingFrame((frame) => this.receive(recording, frame)) };
     this.recording = recording;
@@ -162,11 +158,17 @@ export class MeetingRecorder {
     await Promise.all(Object.values(recording.files).map((file) => this.close(file)));
   }
 
-  private async close(file: TrackFile): Promise<void> {
-    file.stream.end();
-    await finished(file.stream).catch((error: unknown) => {
+  private openTrack(path: string): TrackFile {
+    const stream = createWriteStream(path, { flags: 'a', mode: 0o600 });
+    stream.on('error', (error) => {
       this.deps.logger.error('A meeting track file could not be written', error);
     });
+    return { stream, firstAt: null };
+  }
+
+  private async close(file: TrackFile): Promise<void> {
+    file.stream.end();
+    await finished(file.stream).catch(() => undefined);
   }
 
   private tracks(recording: Recording): Record<MeetingTrack, TrackInfo | null> {
