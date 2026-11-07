@@ -88,6 +88,7 @@ export class MeetingRecorder {
       }
     } catch (error) {
       this.recording = null;
+      await this.stopCapture();
       await this.release(recording);
       await store.delete(record.id);
       throw error;
@@ -142,13 +143,17 @@ export class MeetingRecorder {
     const recording = this.recording;
     if (recording === null) return null;
     this.recording = null;
-    await this.deps.capture.request({ type: 'meeting-stop' }).catch((error: unknown) => {
-      this.deps.logger.error('The meeting capture could not be stopped', error);
-    });
+    await this.stopCapture();
     const stoppedAt = this.clock();
     await this.release(recording);
     await this.deps.store.update(recording.id, { phase: { kind: 'stopped' }, durationMs: stoppedAt - recording.startedAt, tracks: this.tracks(recording) });
     return recording.id;
+  }
+
+  private async stopCapture(): Promise<void> {
+    await this.deps.capture.request({ type: 'meeting-stop' }).catch((error: unknown) => {
+      this.deps.logger.error('The meeting capture could not be stopped', error);
+    });
   }
 
   private async release(recording: Recording): Promise<void> {

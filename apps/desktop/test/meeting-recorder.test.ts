@@ -160,7 +160,7 @@ it('records the mic only where system audio is unsupported', async () => {
   await expect(stat(store.trackPath(meeting.id, 'system'))).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
-it('removes the meeting when the microphone cannot be opened', async () => {
+it('removes the meeting and stops the capture when the microphone cannot be opened', async () => {
   capture.startError = new Error('NotAllowedError: Permission denied');
   const meetings = recorder();
 
@@ -169,6 +169,7 @@ it('removes the meeting when the microphone cannot be opened', async () => {
   expect(store.list()).toEqual([]);
   expect(meetings.isBusy()).toBe(false);
   expect(source.stops).toBe(1);
+  expect(capture.requests.at(-1)).toEqual({ type: 'meeting-stop' });
 });
 
 it('stops as a no-op when nothing records', async () => {
