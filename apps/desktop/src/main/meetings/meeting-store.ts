@@ -3,17 +3,16 @@ import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isMeetingId, MEETING_DATE, type Meeting, type MeetingPhase, type MeetingSummary, type MeetingTrack, type NotesFailure, type SystemAudio, type Turn } from '../../shared/meetings';
 import { PCM_BYTES_PER_SECOND } from '../../shared/pcm';
-import type { Language } from '../../shared/settings';
 import { writeFileAtomic } from '../fs/atomic-write';
 import { readOptionalFile } from '../fs/read-optional-file';
 import { Listeners } from '../helper/listeners';
 import { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
-import { isPlainRecord, isValidField } from '../settings/settings-fields';
+import { isPlainRecord } from '../settings/settings-fields';
 
 export type TrackInfo = { startOffsetMs: number };
 
-export type MeetingRecord = MeetingSummary & { tracks: Record<MeetingTrack, TrackInfo | null>; language: Language | null };
+export type MeetingRecord = MeetingSummary & { tracks: Record<MeetingTrack, TrackInfo | null> };
 
 export type MeetingPatch = Partial<Pick<MeetingRecord, 'phase' | 'durationMs' | 'systemAudio' | 'systemAudioNote' | 'tracks' | 'notesPending' | 'notesError'>>;
 
@@ -85,7 +84,6 @@ function parseRecord(text: string, id: string): MeetingRecord | null {
     tracks: { mic: tracks['mic'], system: tracks['system'] },
     notesPending: false,
     notesError: isNotesFailure(value['notesError']) ? value['notesError'] : null,
-    language: isValidField('language', value['language']) ? value['language'] : null,
   };
 }
 
@@ -140,7 +138,7 @@ export class MeetingStore {
     return this.queue.run(async () => {
       const id = meetingId(meeting.startedAt);
       await mkdir(join(this.dir, id), { recursive: true, mode: 0o700 });
-      const record: MeetingRecord = { id, title: `Stretnutie ${MEETING_DATE.format(meeting.startedAt)}`, durationMs: 0, phase: { kind: 'recording' }, tracks: { mic: null, system: null }, notesPending: false, notesError: null, language: null, ...meeting };
+      const record: MeetingRecord = { id, title: `Stretnutie ${MEETING_DATE.format(meeting.startedAt)}`, durationMs: 0, phase: { kind: 'recording' }, tracks: { mic: null, system: null }, notesPending: false, notesError: null, ...meeting };
       await this.commit(record);
       return record;
     });
@@ -156,13 +154,13 @@ export class MeetingStore {
     });
   }
 
-  finishTranscript(id: string, turns: Turn[], language: Language): Promise<void> {
+  finishTranscript(id: string, turns: Turn[]): Promise<void> {
     return this.queue.run(async () => {
       const current = this.records.get(id);
       if (current === undefined) throw new Error(`Unknown meeting ${id}`);
       await rm(join(this.dir, id, NOTES_FILE), { force: true });
       await writeFileAtomic(join(this.dir, id, TURNS_FILE), JSON.stringify(turns));
-      await this.commit({ ...current, phase: { kind: 'ready' }, language, notesError: null });
+      await this.commit({ ...current, phase: { kind: 'ready' }, notesError: null });
     });
   }
 
