@@ -1,5 +1,5 @@
 import type { AppStatus } from '../../shared/app-status';
-import { engineRemedy, orderProblem, type EngineCapabilities, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
+import { engineRemedy, orderProblem, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
 import type { PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
 import type { NavTarget } from '../navigation';
@@ -14,17 +14,16 @@ export const ISSUE_TARGETS: Readonly<Record<EngineProblem, NavTarget>> = Object.
   'server-offline': SERVER_PAGE,
 });
 
-export type EngineIssueInput = { status: AppStatus; engineOrder: readonly EngineId[]; capabilities: EngineCapabilities | null; server: PairedServerView | null };
+export type EngineIssueInput = { status: AppStatus; engineOrder: readonly EngineId[]; conditions: EngineConditions | null; server: PairedServerView | null };
 
 function issue(problem: EngineProblem, remedy: EngineRemedy | null, server: PairedServerView | null): EngineIssue {
   return { problem, remedy, serverHost: server?.host ?? null };
 }
 
-function knownIssue({ engineOrder, capabilities, server }: EngineIssueInput): EngineIssue | null {
-  if (capabilities === null) {
+function knownIssue({ engineOrder, conditions, server }: EngineIssueInput): EngineIssue | null {
+  if (conditions === null) {
     return null;
   }
-  const conditions: EngineConditions = { ...capabilities, serverOffline: server?.status.kind === 'offline' };
   const problem = orderProblem(engineOrder, conditions);
   if (problem === null) {
     return null;

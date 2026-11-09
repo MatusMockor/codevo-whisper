@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { readinessError } from '../src/main/session/overlay-messages';
+import { MESSAGES, readinessError, switchFailedState } from '../src/main/session/overlay-messages';
 import { bannerContent } from '../src/renderer/home/banner-content';
 import { engineIssue } from '../src/renderer/home/engine-issue';
 import { pathHeader, railBadges, readinessSummary } from '../src/renderer/home/readiness';
-import { readinessActions, type ReadinessAction } from '../src/renderer/home/readiness-actions';
+import { readinessActions, remedyActions, type ReadinessAction } from '../src/renderer/home/readiness-actions';
 import { signalPathNodes, type PathNode } from '../src/renderer/home/signal-path';
 import { transcriptionRoute } from '../src/renderer/home/transcription-route';
-import { engineCapabilities } from '../src/renderer/settings/engine-capabilities';
+import { engineConditions } from '../src/renderer/settings/engine-conditions';
+import { ENGINE_NOTICE_MESSAGES, engineNotice } from '../src/renderer/settings/engine-notice';
 import type { AppStatus } from '../src/shared/app-status';
 import { isModelReady, type ModelState } from '../src/shared/models';
 import type { EngineUnavailableReason } from '../src/main/engines/transcription-engine';
@@ -40,8 +41,8 @@ function home(scenario: Scenario): HomeView {
   const status: AppStatus = { ...READY, ...scenario.status };
   const states = modelStates(scenario.localReady);
   const view = serverView(scenario.server);
-  const capabilities = engineCapabilities(MODEL_ID, { states, statesLoaded: scenario.statesLoaded ?? true }, view);
-  const issue = engineIssue({ status, engineOrder: scenario.engineOrder, capabilities, server: view.server });
+  const conditions = engineConditions(MODEL_ID, { states, statesLoaded: scenario.statesLoaded ?? true }, view);
+  const issue = engineIssue({ status, engineOrder: scenario.engineOrder, conditions, server: view.server });
   const content = bannerContent(status, issue);
   const route = transcriptionRoute({ status, engineOrder: scenario.engineOrder, server: view.server, localReady: isModelReady(states, MODEL_ID), modelName: 'Parakeet TDT', issue });
   const nodes = signalPathNodes({ status, settings: { ...DEFAULT_SETTINGS, engineOrder: scenario.engineOrder, localModelId: MODEL_ID }, permissions: null, route });
@@ -59,11 +60,25 @@ function buttons(view: HomeView): Array<[string, boolean]> {
   return view.actions.map((action) => [action.label, action.primary]);
 }
 
+function scenarioConditions(scenario: Scenario) {
+  const conditions = engineConditions(MODEL_ID, { states: modelStates(scenario.localReady), statesLoaded: true }, serverView(scenario.server));
+  expect(conditions).not.toBeNull();
+  return conditions ?? { localReady: false, serverReady: false, serverOffline: false };
+}
+
 function overlayButtons(reason: EngineUnavailableReason, scenario: Scenario): OverlayAction[] {
-  const capabilities = engineCapabilities(MODEL_ID, { states: modelStates(scenario.localReady), statesLoaded: true }, serverView(scenario.server));
-  expect(capabilities).not.toBeNull();
-  const error = readinessError(reason, { ...(capabilities ?? { localReady: false, serverReady: false }), serverOffline: scenario.server?.kind === 'offline' });
+  const error = readinessError(reason, scenarioConditions(scenario));
   return [error.alternative, error.action].filter((action): action is OverlayAction => action !== undefined);
+}
+
+type SettingsNoticeView = { message: string; actions: ReadinessAction[] } | null;
+
+function settingsNotice(scenario: Scenario): SettingsNoticeView {
+  const notice = engineNotice(scenario.engineOrder, scenarioConditions(scenario));
+  if (notice === null) {
+    return null;
+  }
+  return { message: notice.message, actions: remedyActions(notice.remedy, scenario.server === null ? null : HOST) };
 }
 
 const LOCAL_WITHOUT_MODEL_WITH_SERVER: Scenario = { engineOrder: ['local'], localReady: false, server: ONLINE, status: { modelReady: false } };
@@ -189,5 +204,69 @@ describe('Home readiness fixes', () => {
     for (const [reason, scenario] of cases) {
       expect(home(scenario).actions.map((action) => action.id)).toEqual(overlayButtons(reason, scenario));
     }
+  });
+});
+
+describe('Settings engine notice', () => {
+  it('offers the model download and the Server page instead of an offline paired server and never calls it unpaired', () => {
+    const notice = settingsNotice(LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER);
+
+    expect(notice?.message).toBe(ENGINE_NOTICE_MESSAGES.serverOffline);
+    expect(notice?.message).not.toContain('nie je spárovaný');
+    expect(notice?.actions.map((action) => [action.label, action.primary])).toEqual([
+      ['Otvoriť Server', false],
+      ['Stiahnuť model', true],
+    ]);
+    expect(notice?.actions.some((action) => action.command.kind === 'prefer-engine')).toBe(false);
+  });
+
+  it('offers the paired server only while it is online', () => {
+    const notice = settingsNotice(LOCAL_WITHOUT_MODEL_WITH_SERVER);
+
+    expect(notice?.message).toBe(ENGINE_NOTICE_MESSAGES.serverReady);
+    expect(notice?.actions.at(-1)?.command).toEqual({ kind: 'prefer-engine', engine: 'server' });
+  });
+
+  it('keeps an explicitly chosen server order without a fix when no engine could take over', () => {
+    expect(settingsNotice(SERVER_OFFLINE_WITHOUT_MODEL)).toBeNull();
+    expect(settingsNotice({ engineOrder: ['server'], localReady: false, server: ONLINE, status: {} })).toBeNull();
+    expect(settingsNotice({ engineOrder: ['local', 'server'], localReady: false, server: ONLINE, status: {} })).toBeNull();
+  });
+
+  it('offers the same fixes in the same order as Home and the dictation overlay', () => {
+    const cases: Array<[EngineUnavailableReason, Scenario]> = [
+      ['no-model', LOCAL_WITHOUT_MODEL_WITH_SERVER],
+      ['no-model', LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER],
+      ['no-model', LOCAL_WITHOUT_MODEL_OR_SERVER],
+      ['server-not-paired', SERVER_UNPAIRED_WITH_MODEL],
+      ['server-not-paired', SERVER_UNPAIRED_WITHOUT_MODEL],
+      ['server-offline', SERVER_OFFLINE_WITH_MODEL],
+    ];
+
+    for (const [reason, scenario] of cases) {
+      const ids = settingsNotice(scenario)?.actions.map((action) => action.id);
+      expect(ids).toEqual(overlayButtons(reason, scenario));
+      expect(ids).toEqual(home(scenario).actions.map((action) => action.id));
+    }
+  });
+
+  it('keeps every notice message free of long dashes', () => {
+    for (const message of Object.values(ENGINE_NOTICE_MESSAGES)) {
+      expect(message).not.toMatch(/[–—]/);
+    }
+  });
+});
+
+describe('overlay engine switch failure', () => {
+  it('keeps the recovery actions the shared rules offer for the current conditions', () => {
+    expect(switchFailedState('no-model', scenarioConditions(LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER))).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'download-model', alternative: 'open-server' });
+    expect(switchFailedState('server-not-paired', scenarioConditions(SERVER_UNPAIRED_WITHOUT_MODEL))).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'pair-server', alternative: 'download-model' });
+    expect(switchFailedState('server-offline', scenarioConditions(SERVER_OFFLINE_WITH_MODEL))).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'use-local' });
+  });
+
+  it('points to Settings when the conditions are unknown or no engine can take over', () => {
+    expect(switchFailedState('no-model', null)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'open-settings' });
+    expect(switchFailedState(null, scenarioConditions(SERVER_OFFLINE_WITH_MODEL))).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'open-settings' });
+    expect(switchFailedState('server-offline', scenarioConditions(SERVER_OFFLINE_WITHOUT_MODEL))).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'open-settings' });
   });
 });

@@ -598,8 +598,31 @@ describe('SessionCoordinator', () => {
     harness.coordinator.act('use-server');
 
     expect(harness.settingsOpened).toEqual(['local-model', 'server']);
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'pair-server', alternative: 'download-model' });
     expect(harness.settings.get().engineOrder).toEqual(['local']);
+  });
+
+  it('offers the ready local engine and pairing after a refused switch to an unpaired server', async () => {
+    const harness = await prepared({ settings: { engineOrder: ['server'] } });
+
+    harness.coordinator.act('use-server');
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'use-local', alternative: 'pair-server' });
+    expect(harness.settings.get().engineOrder).toEqual(['server']);
+    harness.coordinator.act('use-local');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'local' });
+    expect(harness.settings.get().engineOrder).toEqual(['local']);
+  });
+
+  it('keeps the recovery actions for the current order when saving the switch fails', async () => {
+    const harness = await prepared({ settings: { engineOrder: ['server'] } });
+    await mkdir(join(scratch, 'settings.json.tmp'));
+
+    harness.coordinator.act('use-local');
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'use-local', alternative: 'pair-server' });
+    expect(harness.settings.get().engineOrder).toEqual(['server']);
+    expect(harness.logger.errors.map((entry) => entry.message)).toContain('The transcription engine could not be switched');
   });
 
   it('stops the microphone as soon as the model turns out to be broken', async () => {

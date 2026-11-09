@@ -34,8 +34,8 @@ afterEach(async () => {
 });
 
 describe('engineHandlers', () => {
-  it('never routes dictation to a server that is not paired', async () => {
-    await handlers.preferEngine('server');
+  it('refuses to route dictation to a server that is not paired and keeps the order', async () => {
+    await expect(handlers.preferEngine('server')).resolves.toEqual({ kind: 'refused', reason: 'server-not-paired' });
 
     expect(settings.get().engineOrder).toEqual(['local']);
   });
@@ -43,9 +43,21 @@ describe('engineHandlers', () => {
   it('puts a ready local engine first without a server fallback when none is paired', async () => {
     await settings.update({ engineOrder: ['server'] });
 
-    await handlers.preferEngine('local');
+    await expect(handlers.preferEngine('local')).resolves.toEqual({ kind: 'switched', order: ['local'] });
 
     expect(settings.get().engineOrder).toEqual(['local']);
+  });
+
+  it('reports an engine that is already preferred as switched, not refused', async () => {
+    await expect(handlers.preferEngine('local')).resolves.toEqual({ kind: 'switched', order: ['local'] });
+  });
+
+  it('refuses the local engine without a ready model and keeps the order', async () => {
+    await settings.update({ localModelId: null, engineOrder: ['server'] });
+
+    await expect(handlers.preferEngine('local')).resolves.toEqual({ kind: 'refused', reason: 'no-model' });
+
+    expect(settings.get().engineOrder).toEqual(['server']);
   });
 
   it('rejects unknown engines and extra arguments', async () => {

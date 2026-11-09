@@ -1,4 +1,4 @@
-import type { EngineRemedyAction } from '../../shared/engine-routing';
+import type { EngineRemedy, EngineRemedyAction } from '../../shared/engine-routing';
 import type { EngineId } from '../../shared/settings';
 import type { NavTarget } from '../navigation';
 import type { ActionContent } from './banner-content';
@@ -6,6 +6,8 @@ import type { ActionContent } from './banner-content';
 export type ReadinessCommand = { kind: 'navigate'; target: NavTarget } | { kind: 'prefer-engine'; engine: EngineId };
 
 export type ReadinessAction = { id: string; label: string; command: ReadinessCommand; primary: boolean };
+
+export type CommandHandlers = { navigate: (target: NavTarget) => void; prefer: (engine: EngineId) => void };
 
 type RemedyButton = { label: (serverHost: string | null) => string; command: ReadinessCommand };
 
@@ -37,15 +39,26 @@ function openAction(target: NavTarget): ReadinessAction {
   return { id: 'open-settings', label: 'Otvoriť nastavenia', command, primary: true };
 }
 
-export function readinessActions(content: ActionContent): ReadinessAction[] {
-  const remedy = content.issue?.remedy ?? null;
-  if (remedy === null) {
-    return [openAction(content.target)];
-  }
-  const serverHost = content.issue?.serverHost ?? null;
+export function remedyActions(remedy: EngineRemedy, serverHost: string | null): ReadinessAction[] {
   const primary = remedyAction(remedy.action, serverHost, true);
   if (remedy.alternative === undefined) {
     return [primary];
   }
   return [remedyAction(remedy.alternative, serverHost, false), primary];
+}
+
+export function readinessActions(content: ActionContent): ReadinessAction[] {
+  const remedy = content.issue?.remedy ?? null;
+  if (remedy === null) {
+    return [openAction(content.target)];
+  }
+  return remedyActions(remedy, content.issue?.serverHost ?? null);
+}
+
+export function runCommand(command: ReadinessCommand, handlers: CommandHandlers): void {
+  if (command.kind === 'prefer-engine') {
+    handlers.prefer(command.engine);
+    return;
+  }
+  handlers.navigate(command.target);
 }

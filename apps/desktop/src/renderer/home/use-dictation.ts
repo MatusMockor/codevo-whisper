@@ -2,7 +2,7 @@ import type { AppStatus } from '../../shared/app-status';
 import { isModelReady } from '../../shared/models';
 import type { PairedServerView, ServerView } from '../../shared/server';
 import type { Settings } from '../../shared/settings';
-import { engineCapabilities } from '../settings/engine-capabilities';
+import { engineConditions } from '../settings/engine-conditions';
 import { useModels, type Models } from '../settings/use-models';
 import { useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
@@ -26,7 +26,7 @@ function serverView(server: Live<ServerView>): ServerView | null {
 }
 
 function dictationIssue(status: AppStatus, settings: Settings, view: ServerView | null, models: Models): EngineIssue | null {
-  return engineIssue({ status, engineOrder: settings.engineOrder, capabilities: engineCapabilities(settings.localModelId, models, view), server: view?.server ?? null });
+  return engineIssue({ status, engineOrder: settings.engineOrder, conditions: engineConditions(settings.localModelId, models, view), server: view?.server ?? null });
 }
 
 function route(status: AppStatus, settings: Settings, server: PairedServerView | null, models: Models, issue: EngineIssue | null): TranscriptionRoute {

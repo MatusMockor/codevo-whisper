@@ -12,12 +12,41 @@ export type EngineRemedyAction = EngineFix | 'pair-server' | 'open-server';
 
 export type EngineRemedy = { action: EngineRemedyAction; alternative?: EngineRemedyAction };
 
+export type EngineRefusal = Extract<EngineProblem, 'no-model' | 'server-not-paired'>;
+
+export type EngineSwitch = { kind: 'switched'; order: EngineId[] } | { kind: 'refused'; reason: EngineRefusal };
+
 export type PairingEngineChange = { kind: 'unchanged' } | { kind: 'available' } | { kind: 'switched'; previous: EngineId[]; current: EngineId[] };
 
 export const ENGINE_IDS: readonly EngineId[] = Object.freeze(['local', 'server']);
 
 export function isEngineId(value: unknown): value is EngineId {
   return ENGINE_IDS.some((engine) => engine === value);
+}
+
+const ENGINE_REFUSALS: readonly EngineRefusal[] = Object.freeze(['no-model', 'server-not-paired']);
+
+function isEngineRefusal(value: unknown): value is EngineRefusal {
+  return ENGINE_REFUSALS.some((refusal) => refusal === value);
+}
+
+function isEngineOrder(value: unknown): value is EngineId[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isEngineId);
+}
+
+export function isEngineSwitch(value: unknown): value is EngineSwitch {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate: { kind?: unknown; order?: unknown; reason?: unknown } = value;
+  if (candidate.kind === 'switched') {
+    return isEngineOrder(candidate.order);
+  }
+  return candidate.kind === 'refused' && isEngineRefusal(candidate.reason);
+}
+
+export function refusalReason(engine: EngineId): EngineRefusal {
+  return engine === 'local' ? 'no-model' : 'server-not-paired';
 }
 
 export function preferredOrder(engine: EngineId, capabilities: EngineCapabilities): EngineId[] {
@@ -29,19 +58,6 @@ export function preferredOrder(engine: EngineId, capabilities: EngineCapabilitie
 
 export function isEngineUsable(engine: EngineId, capabilities: EngineCapabilities): boolean {
   return engine === 'local' ? capabilities.localReady : capabilities.serverReady;
-}
-
-export function orderFix(order: readonly EngineId[], capabilities: EngineCapabilities): EngineFix | null {
-  if (order.some((engine) => isEngineUsable(engine, capabilities))) {
-    return null;
-  }
-  if (capabilities.serverReady) {
-    return 'use-server';
-  }
-  if (capabilities.localReady) {
-    return 'use-local';
-  }
-  return 'download-model';
 }
 
 function isServerUsableNow(conditions: EngineConditions): boolean {

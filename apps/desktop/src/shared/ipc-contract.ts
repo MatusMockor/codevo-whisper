@@ -4,6 +4,7 @@ import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
 import type { HotkeyRecordResult } from './hotkey-record';
 import type { Meeting, MeetingSummary } from './meetings';
+import type { EngineSwitch } from './engine-routing';
 import type { AudioDevice } from './microphones';
 import type { DiarizerView, ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
@@ -48,7 +49,7 @@ export type IpcInvokeApi = {
   cancelServerPairing(): Promise<void>;
   checkServer(): Promise<void>;
   disconnectServer(): Promise<DisconnectResult>;
-  preferEngine(engine: EngineId): Promise<void>;
+  preferEngine(engine: EngineId): Promise<EngineSwitch>;
   takeSettingsFocus(): Promise<SettingsSection | null>;
   getUpdateStatus(): Promise<UpdateStatus>;
   checkForUpdates(): Promise<UpdateStatus>;

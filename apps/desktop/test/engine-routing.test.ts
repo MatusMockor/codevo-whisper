@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeAfterPairing, engineRemedy, isEngineId, orderFix, orderProblem, preferredOrder } from '../src/shared/engine-routing';
+import { changeAfterPairing, engineRemedy, isEngineId, isEngineSwitch, orderProblem, preferredOrder, refusalReason } from '../src/shared/engine-routing';
 
 const NOTHING = { localReady: false, serverReady: false } as const;
 const LOCAL = { localReady: true, serverReady: false } as const;
@@ -19,15 +19,6 @@ describe('engine routing policy', () => {
   it('never adds a server fallback when local transcription is chosen', () => {
     expect(preferredOrder('local', LOCAL)).toEqual(['local']);
     expect(preferredOrder('local', BOTH)).toEqual(['local']);
-  });
-
-  it('suggests the one-click fix only when no engine in the order can transcribe', () => {
-    expect(orderFix(['local'], SERVER)).toBe('use-server');
-    expect(orderFix(['local', 'server'], SERVER)).toBeNull();
-    expect(orderFix(['server'], LOCAL)).toBe('use-local');
-    expect(orderFix(['server', 'local'], LOCAL)).toBeNull();
-    expect(orderFix(['local'], NOTHING)).toBe('download-model');
-    expect(orderFix(['local'], LOCAL)).toBeNull();
   });
 
   it('names the problem of the first engine only when no engine in the order can transcribe', () => {
@@ -66,5 +57,23 @@ describe('engine routing policy', () => {
     expect(isEngineId('server')).toBe(true);
     expect(isEngineId('cloud')).toBe(false);
     expect(isEngineId(['server'])).toBe(false);
+  });
+
+  it('refuses a switch with the problem of the engine that cannot transcribe', () => {
+    expect(refusalReason('local')).toBe('no-model');
+    expect(refusalReason('server')).toBe('server-not-paired');
+  });
+
+  it('accepts only a well formed switch outcome from the engine switch channel', () => {
+    expect(isEngineSwitch({ kind: 'switched', order: ['server', 'local'] })).toBe(true);
+    expect(isEngineSwitch({ kind: 'refused', reason: 'server-not-paired' })).toBe(true);
+    expect(isEngineSwitch({ kind: 'refused', reason: 'no-model' })).toBe(true);
+    expect(isEngineSwitch(undefined)).toBe(false);
+    expect(isEngineSwitch(null)).toBe(false);
+    expect(isEngineSwitch(['server'])).toBe(false);
+    expect(isEngineSwitch({ kind: 'switched', order: [] })).toBe(false);
+    expect(isEngineSwitch({ kind: 'switched', order: ['cloud'] })).toBe(false);
+    expect(isEngineSwitch({ kind: 'refused', reason: 'server-offline' })).toBe(false);
+    expect(isEngineSwitch({ kind: 'unchanged' })).toBe(false);
   });
 });

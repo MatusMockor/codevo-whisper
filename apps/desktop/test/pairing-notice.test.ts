@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AVAILABLE_MESSAGE, pairingNotice, switchedMessage } from '../src/renderer/server/pairing-notice';
-import { engineCapabilities, ENGINE_FIX_COPY } from '../src/renderer/settings/engine-capabilities';
+import { engineConditions } from '../src/renderer/settings/engine-conditions';
 import type { PairedServerView, PairingView, ServerView } from '../src/shared/server';
 
 const SERVER: PairedServerView = {
@@ -44,22 +44,21 @@ describe('pairingNotice', () => {
   });
 });
 
-describe('engineCapabilities', () => {
+describe('engineConditions', () => {
   const READY_MODEL = { states: [{ id: 'tiny', status: 'ready', receivedBytes: 4, totalBytes: 4 }], statesLoaded: true } as const;
 
   it('waits until the model states and the server are loaded', () => {
-    expect(engineCapabilities('tiny', { states: [], statesLoaded: false }, AVAILABLE)).toBeNull();
-    expect(engineCapabilities('tiny', READY_MODEL, null)).toBeNull();
+    expect(engineConditions('tiny', { states: [], statesLoaded: false }, AVAILABLE)).toBeNull();
+    expect(engineConditions('tiny', READY_MODEL, null)).toBeNull();
   });
 
   it('treats a server that needs re-pairing as unusable', () => {
-    expect(engineCapabilities('tiny', READY_MODEL, AVAILABLE)).toEqual({ localReady: true, serverReady: true });
-    expect(engineCapabilities(null, READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'repair-needed', reason: 'device-unknown' } }))).toEqual({ localReady: false, serverReady: false });
+    expect(engineConditions('tiny', READY_MODEL, AVAILABLE)).toEqual({ localReady: true, serverReady: true, serverOffline: false });
+    expect(engineConditions(null, READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'repair-needed', reason: 'device-unknown' } }))).toEqual({ localReady: false, serverReady: false, serverOffline: false });
   });
 
-  it('keeps every fix message free of long dashes', () => {
-    for (const copy of Object.values(ENGINE_FIX_COPY)) {
-      expect(`${copy.message} ${copy.button}`).not.toMatch(/[–—]/);
-    }
+  it('reports a paired server that is offline right now', () => {
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'offline' } }))).toEqual({ localReady: true, serverReady: true, serverOffline: true });
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, null))).toEqual({ localReady: true, serverReady: false, serverOffline: false });
   });
 });

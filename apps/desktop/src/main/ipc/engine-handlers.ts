@@ -6,8 +6,6 @@ export type EngineHandlerDeps = { routing: Pick<EngineRouting, 'prefer'> };
 
 export function engineHandlers({ routing }: EngineHandlerDeps): HandlerGroup<'preferEngine'> {
   return {
-    preferEngine: async (...args) => {
-      await routing.prefer(validateEngineId(args));
-    },
+    preferEngine: async (...args) => await routing.prefer(validateEngineId(args)),
   };
 }

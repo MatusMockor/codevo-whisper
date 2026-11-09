@@ -334,3 +334,8 @@
 .ai-field .seg {
   justify-self: start;
 }
+
+.save-error.switch-error {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+}

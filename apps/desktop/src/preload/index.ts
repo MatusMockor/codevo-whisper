@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
 import type { AiCheck, AiKeyState, CodexCheck } from '../shared/ai';
+import type { EngineSwitch } from '../shared/engine-routing';
 import type { HistoryView } from '../shared/history';
 import type { AppStatus } from '../shared/app-status';
 import type { OutputAudioView } from '../shared/recording-audio';
@@ -66,7 +67,7 @@ const api: IpcApi = {
   cancelServerPairing: () => ipcRenderer.invoke(INVOKE_CHANNELS.cancelServerPairing) as Promise<void>,
   checkServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkServer) as Promise<void>,
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
-  preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<void>,
+  preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<EngineSwitch>,
   takeSettingsFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSettingsFocus) as Promise<SettingsSection | null>,
   getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,
   checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,

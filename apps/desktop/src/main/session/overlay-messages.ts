@@ -1,7 +1,7 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
 import type { AiFailure } from '../../shared/ai';
-import { engineRemedy, type EngineConditions, type EngineProblem } from '../../shared/engine-routing';
+import { engineRemedy, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
 import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
@@ -63,6 +63,21 @@ function remedyError(message: string, problem: EngineProblem): (conditions: Engi
     }
     return fixError(message, remedy.action, remedy.alternative);
   };
+}
+
+function switchRemedy(problem: EngineProblem | null, conditions: EngineConditions | null): EngineRemedy | null {
+  if (problem === null || conditions === null) {
+    return null;
+  }
+  return engineRemedy(problem, conditions);
+}
+
+export function switchFailedState(problem: EngineProblem | null, conditions: EngineConditions | null): ErrorState {
+  const remedy = switchRemedy(problem, conditions);
+  if (remedy === null) {
+    return settingsError(MESSAGES.engineSwitchFailed);
+  }
+  return fixError(MESSAGES.engineSwitchFailed, remedy.action, remedy.alternative);
 }
 
 const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: EngineConditions) => ErrorState>> = Object.freeze({

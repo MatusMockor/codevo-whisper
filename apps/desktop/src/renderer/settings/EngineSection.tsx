@@ -1,14 +1,18 @@
-import { orderFix, type EngineCapabilities, type EngineFix } from '../../shared/engine-routing';
+import type { EngineConditions } from '../../shared/engine-routing';
 import type { EngineId } from '../../shared/settings';
-import { ENGINE_FIX_COPY } from './engine-capabilities';
-import { preferEngine } from './prefer-engine';
+import { remedyActions, runCommand } from '../home/readiness-actions';
+import type { NavTarget } from '../navigation';
+import { engineNotice, type EngineNotice } from './engine-notice';
+import { EngineSwitchError } from './EngineSwitchError';
 import { SettingsGroup } from './SettingsGroup';
-import { revealSettingsSection } from './use-reveal-section';
+import { useEngineSwitch } from './use-engine-switch';
 import { saveSettings } from './use-settings';
 
 type EngineOption = { order: EngineId[]; title: string; description: string; usesServer: boolean };
 
-type EngineSectionProps = { engineOrder: readonly EngineId[]; paired: boolean; capabilities: EngineCapabilities | null };
+type Navigate = (target: NavTarget) => void;
+
+type EngineSectionProps = { engineOrder: readonly EngineId[]; paired: boolean; conditions: EngineConditions | null; serverHost: string | null; onNavigate: Navigate };
 
 const OPTIONS: readonly EngineOption[] = [
   { order: ['local'], title: 'Lokálne', description: 'Prepisuje sa na tomto Macu stiahnutým modelom. Zvuk neopustí počítač.', usesServer: false },
@@ -17,36 +21,32 @@ const OPTIONS: readonly EngineOption[] = [
   { order: ['local', 'server'], title: 'Lokálne, potom server', description: 'Keď lokálny model nie je pripravený, zvuk sa pošle zašifrovaný na váš server.', usesServer: true },
 ];
 
-const FIX_ENGINES: Readonly<Record<Exclude<EngineFix, 'download-model'>, EngineId>> = Object.freeze({ 'use-server': 'server', 'use-local': 'local' });
-
 function sameOrder(left: readonly EngineId[], right: readonly EngineId[]): boolean {
   return left.length === right.length && left.every((engine, index) => engine === right[index]);
 }
 
-function applyFix(fix: EngineFix): void {
-  if (fix === 'download-model') {
-    revealSettingsSection('local-model');
-    return;
-  }
-  preferEngine(FIX_ENGINES[fix]);
-}
+type EngineNoticeProps = { notice: EngineNotice | null; serverHost: string | null; onNavigate: Navigate; onPrefer: (engine: EngineId) => void };
 
-function EngineFixNotice({ fix }: { fix: EngineFix | null }) {
-  if (fix === null) {
+function EngineFixNotice({ notice, serverHost, onNavigate, onPrefer }: EngineNoticeProps) {
+  if (notice === null) {
     return null;
   }
-  const copy = ENGINE_FIX_COPY[fix];
   return (
     <div className="use-server engine-fix" role="status">
-      <p className="field-note warn">{copy.message}</p>
-      <button type="button" className="btn primary" onClick={() => applyFix(fix)}>
-        {copy.button}
-      </button>
+      <p className="field-note warn">{notice.message}</p>
+      <div className="row-btns">
+        {remedyActions(notice.remedy, serverHost).map((action) => (
+          <button key={action.id} type="button" className={action.primary ? 'btn primary' : 'btn'} onClick={() => runCommand(action.command, { navigate: onNavigate, prefer: onPrefer })}>
+            {action.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-export function EngineSection({ engineOrder, paired, capabilities }: EngineSectionProps) {
+export function EngineSection({ engineOrder, paired, conditions, serverHost, onNavigate }: EngineSectionProps) {
+  const engineSwitch = useEngineSwitch();
   return (
     <SettingsGroup title="Kde beží prepis" section="engine">
       <div className="radio" role="radiogroup" aria-label="Kde beží prepis">
@@ -68,7 +68,8 @@ export function EngineSection({ engineOrder, paired, capabilities }: EngineSecti
           </label>
         ))}
       </div>
-      <EngineFixNotice fix={capabilities === null ? null : orderFix(engineOrder, capabilities)} />
+      <EngineFixNotice notice={engineNotice(engineOrder, conditions)} serverHost={serverHost} onNavigate={onNavigate} onPrefer={engineSwitch.prefer} />
+      <EngineSwitchError message={engineSwitch.failure} />
       <p className="sbox-foot">
         {paired ? 'Výber platí od ďalšieho diktovania, nikdy sa nemení počas neho.' : 'Najprv spárujte server na stránke Server.'}
       </p>

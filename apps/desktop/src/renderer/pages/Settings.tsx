@@ -1,7 +1,7 @@
 import { MicrophonePicker } from '../components/MicrophonePicker';
 import { AiSection } from '../settings/AiSection';
 import { DictationSection } from '../settings/DictationSection';
-import { engineCapabilities } from '../settings/engine-capabilities';
+import { engineConditions } from '../settings/engine-conditions';
 import { EngineSection } from '../settings/EngineSection';
 import { HistorySection } from '../settings/HistorySection';
 import { InsertionSection } from '../settings/InsertionSection';
@@ -18,7 +18,7 @@ import { usePermissions } from '../settings/use-permissions';
 import { useRevealSection } from '../settings/use-reveal-section';
 import type { NavTarget } from '../navigation';
 
-export function Settings({ target }: { target: NavTarget }) {
+export function Settings({ target, onNavigate }: { target: NavTarget; onNavigate: (target: NavTarget) => void }) {
   const settings = useSettings();
   const models = useModels();
   const server = useServer();
@@ -35,12 +35,13 @@ export function Settings({ target }: { target: NavTarget }) {
     );
   }
   const value = settings.value;
+  const serverView = server.kind === 'ready' ? server.value : null;
   const activeModel = models.catalog.kind === 'ready' ? (models.catalog.value.models.find((model) => model.id === value.localModelId) ?? null) : null;
   return (
     <div className="groups">
       <SaveErrorNotice />
       <DictationSection settings={value} activeModel={activeModel} />
-      <EngineSection engineOrder={value.engineOrder} paired={server.kind === 'ready' && server.value.server !== null} capabilities={engineCapabilities(value.localModelId, models, server.kind === 'ready' ? server.value : null)} />
+      <EngineSection engineOrder={value.engineOrder} paired={(serverView?.server ?? null) !== null} conditions={engineConditions(value.localModelId, models, serverView)} serverHost={serverView?.server?.host ?? null} onNavigate={onNavigate} />
       <SettingsGroup title="Lokálny model" section="local-model">
         <LocalModelSection settings={value} models={models} />
       </SettingsGroup>

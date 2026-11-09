@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { LockIcon, ServerIcon } from '../components/Icons';
 import { revokeCommand, type PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
-import { preferEngine } from '../settings/prefer-engine';
+import { EngineSwitchError } from '../settings/EngineSwitchError';
+import { useEngineSwitch } from '../settings/use-engine-switch';
 import { CommandBox } from './CommandBox';
 import { connectTime, pairedOn, REPAIR_MESSAGES, statusPill } from './server-copy';
 
@@ -43,16 +44,20 @@ function DisconnectConfirm({ server, onCancel, onDisconnected }: { server: Paire
 }
 
 function UseServer({ engineOrder, offered }: { engineOrder: readonly EngineId[]; offered: boolean }) {
+  const engineSwitch = useEngineSwitch();
   if (!offered || engineOrder.includes('server')) {
     return null;
   }
   return (
-    <div className="use-server">
-      <p>Prepis zatiaľ beží lokálne na tomto počítači.</p>
-      <button type="button" className="btn primary" onClick={() => preferEngine('server')}>
-        Prepisovať na serveri
-      </button>
-    </div>
+    <>
+      <div className="use-server">
+        <p>Prepis zatiaľ beží lokálne na tomto počítači.</p>
+        <button type="button" className="btn primary" onClick={() => engineSwitch.prefer('server')}>
+          Prepisovať na serveri
+        </button>
+      </div>
+      <EngineSwitchError message={engineSwitch.failure} />
+    </>
   );
 }
 

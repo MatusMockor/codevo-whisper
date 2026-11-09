@@ -26,7 +26,7 @@ function PageContent({ target, dictation, onNavigate }: PageContentProps) {
     return <Meetings onOpenSettings={openSettings} />;
   }
   if (target.page === 'settings') {
-    return <Settings target={target} />;
+    return <Settings target={target} onNavigate={onNavigate} />;
   }
   if (target.page === 'server') {
     return <Server />;

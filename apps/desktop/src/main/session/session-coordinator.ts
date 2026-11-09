@@ -13,11 +13,12 @@ import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import { countWords } from '../stats/count-words';
 import type { StatsRecorder } from '../stats/stats-store';
+import { orderProblem, type EngineConditions, type EngineProblem, type EngineSwitch } from '../../shared/engine-routing';
 import { pcmDurationMs } from '../../shared/pcm';
 import type { OverlayAction, OverlayState } from '../../shared/overlay-contract';
 import type { EngineId } from '../../shared/settings';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
-import { copyLastState, errorState, MESSAGES, pasteLastState } from './overlay-messages';
+import { copyLastState, errorState, MESSAGES, pasteLastState, switchFailedState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
 import type { PauseState } from './pause-state';
 
@@ -154,17 +155,31 @@ export class SessionCoordinator {
   private reroute(engine: EngineId): void {
     this.deps.routing
       .prefer(engine)
-      .then((order) => {
-        if (order[0] !== engine) {
-          this.showUtility(errorState(MESSAGES.engineSwitchFailed));
-          return;
-        }
-        this.showUtility({ kind: 'rerouted', engine });
-      })
+      .then((outcome) => this.showSwitch(engine, outcome))
       .catch((error: unknown) => {
         this.logger.error('The transcription engine could not be switched', error);
-        this.showUtility(errorState(MESSAGES.engineSwitchFailed));
+        return this.showSwitchFailure(null);
       });
+  }
+
+  private async showSwitch(engine: EngineId, outcome: EngineSwitch): Promise<void> {
+    if (outcome.kind === 'refused') {
+      await this.showSwitchFailure(outcome.reason);
+      return;
+    }
+    this.showUtility({ kind: 'rerouted', engine });
+  }
+
+  private async showSwitchFailure(reason: EngineProblem | null): Promise<void> {
+    const conditions = await this.deps.routing.capabilities().catch(() => null);
+    this.showUtility(switchFailedState(reason ?? this.orderProblem(conditions), conditions));
+  }
+
+  private orderProblem(conditions: EngineConditions | null): EngineProblem | null {
+    if (conditions === null) {
+      return null;
+    }
+    return orderProblem(this.deps.settings.get().engineOrder, conditions);
   }
 
   private handleStart(): void {
