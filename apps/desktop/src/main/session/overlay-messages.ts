@@ -1,14 +1,15 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
 import type { AiFailure } from '../../shared/ai';
-import type { OverlayState } from '../../shared/overlay-contract';
+import type { EngineCapabilities } from '../../shared/engine-routing';
+import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
-type ErrorState = Extract<OverlayState, { kind: 'error' }>;
+type ErrorState = OverlayError;
 type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
 
 export const MESSAGES = Object.freeze({
-  noModel: 'Nemáte stiahnutý model',
+  noModel: 'Lokálny model chýba',
   brokenModel: 'Model chýba alebo je poškodený',
   binaryMissing: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
@@ -46,17 +47,45 @@ function serverError(message: string): ErrorState {
   return { kind: 'error', message, action: 'open-server' };
 }
 
-const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, ErrorState>> = Object.freeze({
-  'no-model': settingsError(MESSAGES.noModel),
-  'model-missing': settingsError(MESSAGES.brokenModel),
-  'model-broken': settingsError(MESSAGES.brokenModel),
-  'language-required': settingsError(MESSAGES.languageRequired),
-  'binary-missing': errorState(MESSAGES.binaryMissing),
-  'server-not-paired': serverError(MESSAGES.serverNotPaired),
-  'server-offline': errorState(MESSAGES.serverOffline),
-  'server-repair-needed': serverError(MESSAGES.serverRepair),
-  'server-busy': errorState(MESSAGES.serverBusy),
-  'server-storage': errorState(MESSAGES.serverStorage),
+function fixError(message: string, action: OverlayAction, alternative?: OverlayAction): ErrorState {
+  if (alternative === undefined) {
+    return { kind: 'error', message, action };
+  }
+  return { kind: 'error', message, action, alternative };
+}
+
+function missingModel(capabilities: EngineCapabilities): ErrorState {
+  if (capabilities.serverReady) {
+    return fixError(MESSAGES.noModel, 'use-server', 'download-model');
+  }
+  return fixError(MESSAGES.noModel, 'download-model', 'pair-server');
+}
+
+function unpairedServer(capabilities: EngineCapabilities): ErrorState {
+  if (capabilities.localReady) {
+    return fixError(MESSAGES.serverNotPaired, 'use-local', 'pair-server');
+  }
+  return fixError(MESSAGES.serverNotPaired, 'pair-server', 'download-model');
+}
+
+function offlineServer(capabilities: EngineCapabilities): ErrorState {
+  if (capabilities.localReady) {
+    return fixError(MESSAGES.serverOffline, 'use-local');
+  }
+  return errorState(MESSAGES.serverOffline);
+}
+
+const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (capabilities: EngineCapabilities) => ErrorState>> = Object.freeze({
+  'no-model': missingModel,
+  'model-missing': missingModel,
+  'model-broken': () => settingsError(MESSAGES.brokenModel),
+  'language-required': () => settingsError(MESSAGES.languageRequired),
+  'binary-missing': () => errorState(MESSAGES.binaryMissing),
+  'server-not-paired': unpairedServer,
+  'server-offline': offlineServer,
+  'server-repair-needed': () => serverError(MESSAGES.serverRepair),
+  'server-busy': () => errorState(MESSAGES.serverBusy),
+  'server-storage': () => errorState(MESSAGES.serverStorage),
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
@@ -79,11 +108,11 @@ export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean)
   return errorState(FAILURE_MESSAGES[reason]);
 }
 
-export function readinessError(reason: EngineUnavailableReason | undefined): ErrorState {
+export function readinessError(reason: EngineUnavailableReason | undefined, capabilities: EngineCapabilities): ErrorState {
   if (reason === undefined) {
     return errorState(MESSAGES.engineUnavailable);
   }
-  return READINESS_ERRORS[reason];
+  return READINESS_ERRORS[reason](capabilities);
 }
 
 const COPIED: TerminalState = { kind: 'copied' };

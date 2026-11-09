@@ -4,7 +4,7 @@ import type { ModelCatalogView, ModelState } from '../../shared/models';
 
 const loadStates = () => window.codevo.getModelStates();
 
-export type Models = { catalog: Live<ModelCatalogView>; states: ModelState[] };
+export type Models = { catalog: Live<ModelCatalogView>; states: ModelState[]; statesLoaded: boolean };
 
 function useCatalog(): Live<ModelCatalogView> {
   const [catalog, setCatalog] = useState<Live<ModelCatalogView>>({ kind: 'loading' });
@@ -35,5 +35,5 @@ function useCatalog(): Live<ModelCatalogView> {
 export function useModels(): Models {
   const catalog = useCatalog();
   const states = useLiveValue('model-states-changed', loadStates);
-  return { catalog, states: liveValueOr(states, []) };
+  return { catalog, states: liveValueOr(states, []), statesLoaded: states.kind === 'ready' };
 }

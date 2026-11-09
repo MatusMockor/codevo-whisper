@@ -2,7 +2,7 @@ import { canPolish } from '../../shared/ai';
 import type { Polished } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
-import type { DictationOptions, EngineDictation, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
+import type { DictationOptions, EngineDictation, EngineUnavailableReason, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
 import { EngineUnavailableError, TranscriptionFailedError } from '../engines/transcription-engine';
 import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
@@ -12,6 +12,7 @@ import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
+import type { EngineCapabilities } from '../../shared/engine-routing';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { Language, MicrophoneSetting } from '../../shared/settings';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
@@ -30,6 +31,7 @@ export type SessionOverlay = {
 export type DictationSessionDeps = {
   capture: AudioCapture;
   engines: Pick<EngineSelector, 'prepare'>;
+  capabilities(): Promise<EngineCapabilities>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
   helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio'>;
@@ -64,6 +66,8 @@ type ProcessingNotice = Extract<OverlayState, { kind: 'processing' }>['notice'];
 const TRANSCRIBED_REASONS: ReadonlySet<StopReason> = new Set(['released', 'toggled', 'max-duration']);
 
 const NOT_READY: Preparation = { ready: false };
+
+const NO_CAPABILITIES: EngineCapabilities = Object.freeze({ localReady: false, serverReady: false });
 
 export class DictationSession {
   private phase: Phase = 'recording';
@@ -152,7 +156,7 @@ export class DictationSession {
       return;
     }
     if (!readiness.ready) {
-      await this.chooseTerminal({ kind: 'result', state: readinessError(readiness.reason) });
+      await this.chooseTerminal({ kind: 'result', state: await this.readinessError(readiness.reason) });
       return;
     }
     const dictation = this.startDictation(readiness.engine);
@@ -212,14 +216,18 @@ export class DictationSession {
         this.adopt(readiness.engine);
       } catch (error) {
         this.deps.logger.error('The prepared engine could not start', error);
-        await this.chooseTerminal({ kind: 'abandoned', state: this.failure(error) });
+        await this.chooseTerminal({ kind: 'abandoned', state: await this.failure(error) });
       }
       return;
     }
     if (this.phase !== 'recording') {
       return;
     }
-    await this.chooseTerminal({ kind: 'abandoned', state: readinessError(readiness.reason) });
+    const state = await this.readinessError(readiness.reason);
+    if (this.phase !== 'recording') {
+      return;
+    }
+    await this.chooseTerminal({ kind: 'abandoned', state });
   }
 
   private adopt(engine: PreparedEngine): void {
@@ -343,14 +351,22 @@ export class DictationSession {
         return null;
       }
       this.deps.logger.error('The transcription failed', error);
-      await this.chooseTerminal({ kind: 'result', state: this.failure(error) });
+      await this.chooseTerminal({ kind: 'result', state: await this.failure(error) });
       return null;
     }
   }
 
-  private failure(error: unknown): ErrorState {
+  private async readinessError(reason: EngineUnavailableReason | undefined): Promise<ErrorState> {
+    const capabilities = await this.deps.capabilities().catch((error: unknown) => {
+      this.deps.logger.error('The transcription engine capabilities could not be read', error);
+      return NO_CAPABILITIES;
+    });
+    return readinessError(reason, capabilities);
+  }
+
+  private async failure(error: unknown): Promise<ErrorState> {
     if (error instanceof EngineUnavailableError) {
-      return readinessError(error.reason);
+      return this.readinessError(error.reason);
     }
     if (!(error instanceof TranscriptionFailedError)) {
       return errorState(MESSAGES.transcriptionFailed);

@@ -245,6 +245,12 @@ body {
   font-size: 14.5px;
 }
 
+.ov-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ov-ink-2);
+}
+
 .ov-actions {
   display: flex;
   gap: 8px;

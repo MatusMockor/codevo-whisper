@@ -5,6 +5,8 @@ import type { RendererSource } from '../windows/renderer-source';
 import { aiHandlers, type AiHandlerDeps } from './ai-handlers';
 import { broadcast } from './broadcast';
 import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
+import { engineHandlers, type EngineHandlerDeps } from './engine-handlers';
+import { focusHandlers, type FocusHandlerDeps } from './focus-handlers';
 import { historyHandlers, type HistoryHandlerDeps } from './history-handlers';
 import type { InvokeHandlers } from './invoke-handlers';
 import { meetingHandlers, type MeetingHandlerDeps } from './meeting-handlers';
@@ -22,6 +24,8 @@ export type IpcDependencies = CoreHandlerDeps &
   ModelHandlerDeps &
   MicrophoneHandlerDeps &
   ServerHandlerDeps &
+  EngineHandlerDeps &
+  FocusHandlerDeps &
   UpdateHandlerDeps &
   AiHandlerDeps &
   MeetingHandlerDeps & {
@@ -37,6 +41,8 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...modelHandlers(dependencies),
     ...microphoneHandlers(dependencies),
     ...serverHandlers(dependencies),
+    ...engineHandlers(dependencies),
+    ...focusHandlers(dependencies),
     ...updateHandlers(dependencies),
     ...aiHandlers(dependencies),
     ...meetingHandlers(dependencies),

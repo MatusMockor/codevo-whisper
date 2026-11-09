@@ -1,8 +1,9 @@
 import { isAiBaseUrl, isAiKey, type CodexEffort } from '../../shared/ai';
+import { isEngineId } from '../../shared/engine-routing';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
-import type { MicrophoneSetting, Settings } from '../../shared/settings';
+import type { EngineId, MicrophoneSetting, Settings } from '../../shared/settings';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import { isPlainRecord, isSettingsKey, isValidField, SETTINGS_FIELDS } from '../settings/settings-fields';
 
@@ -47,6 +48,14 @@ export function validateModelId(input: unknown): string {
     throw new IpcValidationError('Invalid model id');
   }
   return input;
+}
+
+export function validateEngineId(args: readonly unknown[]): EngineId {
+  const [engine] = args;
+  if (args.length !== 1 || !isEngineId(engine)) {
+    throw new IpcValidationError('Invalid engine');
+  }
+  return engine;
 }
 
 export function validatePermissionKind(input: unknown): PermissionKind {

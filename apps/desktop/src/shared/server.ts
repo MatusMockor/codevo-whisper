@@ -1,3 +1,5 @@
+import type { PairingEngineChange } from './engine-routing';
+
 export type VaultAvailability = 'available' | 'insecure' | 'unavailable';
 
 export type ServerStatus =
@@ -24,7 +26,7 @@ export type PairingStep =
 
 export type PairingFailure = 'invalid-token' | 'unreachable' | 'pairing-closed' | 'rejected' | 'storage-insecure' | 'cancelled' | 'failed';
 
-export type PairingView = { kind: 'idle' } | PairingStep | { kind: 'paired'; deviceId: string } | { kind: 'failed'; failure: PairingFailure };
+export type PairingView = { kind: 'idle' } | PairingStep | { kind: 'paired'; deviceId: string; engine: PairingEngineChange } | { kind: 'failed'; failure: PairingFailure };
 
 export type ServerView = { storage: VaultAvailability; server: PairedServerView | null; pairing: PairingView };
 

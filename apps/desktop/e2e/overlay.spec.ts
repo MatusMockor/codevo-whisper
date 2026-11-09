@@ -153,11 +153,21 @@ test('overlay shows the fallback notice, the processing and the result states', 
 });
 
 test('overlay error and blocked states offer their actions', async () => {
-  await inject({ kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
+  await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'use-server', alternative: 'download-model' });
   const overlay = await overlayPage();
   const alert = overlay.getByRole('alert');
-  await expect(alert).toContainText('Nemáte stiahnutý model');
-  await expect(alert.getByRole('button', { name: 'Otvoriť nastavenia' })).toBeVisible();
+  await expect(alert).toContainText('Lokálny model chýba');
+  await expect(alert.getByRole('button')).toHaveText(['Stiahnuť model', 'Prepisovať na serveri']);
+  await expect(alert.getByRole('button', { name: 'Prepisovať na serveri' })).toHaveClass(/primary/);
+  await expect(alert.getByRole('button', { name: 'Stiahnuť model' })).not.toHaveClass(/primary/);
+  const card = await alert.boundingBox();
+  for (const button of await alert.getByRole('button').all()) {
+    const box = await button.boundingBox();
+    expect((box?.x ?? -1) >= (card?.x ?? 0) && (box?.x ?? 0) + (box?.width ?? 0) <= (card?.x ?? 0) + (card?.width ?? 0)).toBe(true);
+  }
+
+  await inject({ kind: 'error', message: 'Server nie je dostupný', action: 'use-local' });
+  await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Prepisovať lokálne']);
 
   await inject({ kind: 'blocked', reason: 'focus' });
   await expect(overlay.getByRole('alert')).toContainText('Okno sa zmenilo, text nebol vložený');
@@ -168,8 +178,19 @@ test('overlay error and blocked states offer their actions', async () => {
   await expect(overlay.getByRole('button')).toHaveCount(0);
 });
 
+test('after switching the engine the overlay asks for the hotkey again', async () => {
+  await inject({ kind: 'rerouted', engine: 'server' });
+  const overlay = await overlayPage();
+  await expect(overlay.getByRole('status')).toContainText('Prepis teraz beží na serveri');
+  await expect(overlay.getByRole('status')).toContainText('Stlačte skratku a diktujte znova.');
+  await expect(overlay.getByRole('button')).toHaveCount(0);
+
+  await inject({ kind: 'rerouted', engine: 'local' });
+  await expect(overlay.getByRole('status')).toContainText('Prepis teraz beží lokálne');
+});
+
 test('the overlay settings action opens the settings page', async () => {
-  await inject({ kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
+  await inject({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'open-settings' });
   const overlay = await overlayPage();
   const button = overlay.getByRole('button', { name: 'Otvoriť nastavenia' });
   const style = (property: 'cursor' | 'backgroundColor') => button.evaluate((element, name) => getComputedStyle(element)[name], property);
@@ -184,4 +205,40 @@ test('the overlay settings action opens the settings page', async () => {
 
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
   await expect(main.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('Stiahnuť model opens Settings at the Lokálny model section', async () => {
+  await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
+  const overlay = await overlayPage();
+  await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Spárovať server', 'Stiahnuť model']);
+
+  await overlay.getByRole('button', { name: 'Stiahnuť model' }).click();
+
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+  const section = main.getByRole('region', { name: 'Lokálny model' });
+  await expect(section).toBeFocused();
+  await expect(section).toBeInViewport();
+});
+
+test('Spárovať server opens the Server page', async () => {
+  await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
+  const overlay = await overlayPage();
+
+  await overlay.getByRole('button', { name: 'Spárovať server' }).click();
+
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Server');
+});
+
+test('the overlay ignores an action the shown state does not offer', async () => {
+  await inject({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'open-settings' });
+  const overlay = await overlayPage();
+  await expect(overlay.getByRole('button', { name: 'Otvoriť nastavenia' })).toBeVisible();
+  const before = await main.getByRole('heading', { level: 1 }).textContent();
+
+  await overlay.evaluate(() => (window as unknown as { codevoOverlay: { act(action: string): void } }).codevoOverlay.act('open-server'));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText(before ?? '');
+  await overlay.getByRole('button', { name: 'Otvoriť nastavenia' }).click();
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
 });

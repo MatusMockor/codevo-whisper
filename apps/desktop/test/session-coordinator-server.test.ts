@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EngineRouting } from '../src/main/engines/engine-routing';
 import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper } from '../src/main/helper/fake-input-helper';
@@ -9,10 +10,12 @@ import { HistoryStore } from '../src/main/history/history-store';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
+import { ActiveModelReadiness } from '../src/main/models/local-model-readiness';
 import { ModelManager } from '../src/main/models/model-manager';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
+import type { ServerService } from '../src/main/remote/server-service';
 import { PauseState } from '../src/main/session/pause-state';
 import { MESSAGES } from '../src/main/session/overlay-messages';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
@@ -31,12 +34,14 @@ import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
+import { createServerService } from './support/server-service';
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const silentObserver = { connected: () => undefined, failed: () => undefined };
 
 const locals: LocalEngine[] = [];
+const servers: ServerService[] = [];
 let scratch: string;
 let gateway: TestGateway;
 let coordinator: SessionCoordinator | null = null;
@@ -51,12 +56,13 @@ afterEach(async () => {
   coordinator?.dispose();
   coordinator = null;
   await Promise.all(locals.splice(0).map((local) => local.dispose()));
+  servers.splice(0).forEach((server) => server.dispose());
   vi.unstubAllEnvs();
   await gateway.close();
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}, gate: Promise<void> = Promise.resolve()) {
+async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}, gate: Promise<void> = Promise.resolve(), paired = true) {
   gateway = await startTestGateway({ stt });
   const pairing: ServerPairing = await gateway.addDevice();
   const logger = new RecordingLogger();
@@ -69,7 +75,12 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
   const local = new LocalEngine({ binary: FAKE_WORKER, models, settings, arch: 'arm64' });
   locals.push(local);
-  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+  const server = createServerService({ dir: scratch, settings, models, logger });
+  servers.push(server.service);
+  if (paired) {
+    await server.pairings.save(pairing);
+  }
+  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
   const remote = new RemoteEngine({ connector, observer: silentObserver });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
@@ -85,6 +96,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     hotkey,
     capture,
     engines: new EngineSelector([local, remote]),
+    routing: new EngineRouting({ settings, local: new ActiveModelReadiness(models, settings), server: server.service }),
     insertion: new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger),
     lastTranscript,
     helper,
@@ -94,6 +106,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     pause: new PauseState(logger),
     overlay: (state) => states.push(state),
     openServer: () => opened.push('server'),
+    openModelSettings: () => opened.push('model'),
     logger,
   });
   coordinator.start();
@@ -195,6 +208,54 @@ describe('SessionCoordinator with the server engine', () => {
     await dictate(harness, stampedPcm(2));
 
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.noModel });
+    expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('offers the paired server for a missing local model and transcribes there after the switch', async () => {
+    const harness = await prepared({ engineOrder: ['local'], localModelId: null }, { respond: () => ({ status: 200, body: { text: 'na serveri' } }) });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'use-server', alternative: 'download-model' });
+    coordinator?.act('download-model');
+    expect(harness.opened).toEqual(['model']);
+    coordinator?.act('use-server');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'server' });
+    expect(harness.settings.get().engineOrder).toEqual(['server']);
+    expect(gateway.stt.requests).toEqual([]);
+
+    await dictate(harness, stampedPcm(3));
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['na serveri']);
+  });
+
+  it('offers local transcription when the server is offline and keeps the server as the fallback', async () => {
+    const harness = await prepared({ engineOrder: ['server'] });
+    await gateway.stop();
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverOffline, action: 'use-local' });
+    coordinator?.act('use-local');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'local' });
+    expect(harness.settings.get().engineOrder).toEqual(['local', 'server']);
+
+    await dictate(harness, stampedPcm(3));
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['3:32000']);
+  });
+
+  it('offers local transcription when no server is paired and a local model is ready', async () => {
+    const harness = await prepared({ engineOrder: ['server'] }, {}, Promise.resolve(), false);
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverNotPaired, action: 'use-local', alternative: 'pair-server' });
+    coordinator?.act('pair-server');
+    expect(harness.opened).toEqual(['server']);
+    coordinator?.act('use-local');
+    await expect.poll(() => harness.settings.get().engineOrder).toEqual(['local']);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'local' });
     expect(gateway.stt.requests).toEqual([]);
   });
 

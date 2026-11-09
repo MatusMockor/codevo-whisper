@@ -1,10 +1,12 @@
 import { fingerprint } from '@codevo-whisper/protocol';
+import type { PairingEngineChange } from '../../shared/engine-routing';
 import { revokeCommand, type DisconnectResult, type PairedServerView, type PairingView, type ServerView, type VaultAvailability } from '../../shared/server';
 import type { Settings } from '../../shared/settings';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { DevicePairing } from './device-pairing';
+import type { PairingEngineSwitch } from './pairing-engine-switch';
 import type { PairingRepository, ServerPairing } from './pairing-repository';
 import type { SecretVault } from './secret-vault';
 import type { ServerConnector } from './server-connector';
@@ -16,6 +18,7 @@ export type ServerServiceDeps = {
   connector: Pick<ServerConnector, 'connect'>;
   status: ServerStatusBoard;
   pairing: Pick<DevicePairing, 'pair'>;
+  engineSwitch: Pick<PairingEngineSwitch, 'afterPairing'>;
   settings: Pick<SettingsStore, 'get' | 'update'>;
   logger: Logger;
   clock?: () => number;
@@ -25,6 +28,7 @@ export type ServerServiceDeps = {
 export const FOCUS_CHECK_INTERVAL_MS = 15_000;
 
 const IDLE: PairingView = { kind: 'idle' };
+const UNCHANGED: PairingEngineChange = { kind: 'unchanged' };
 const LOCAL_ONLY: Settings['engineOrder'] = ['local'];
 
 function describe(pairing: ServerPairing, status: PairedServerView['status']): PairedServerView {
@@ -135,7 +139,7 @@ export class ServerService {
 
   private async runPairing(token: string, run: AbortController): Promise<void> {
     const outcome = await this.deps.pairing.pair(token, (step) => this.setProgress(run, step), run.signal);
-    this.setProgress(run, outcome.kind === 'failed' ? outcome : { kind: 'paired', deviceId: outcome.deviceId });
+    this.setProgress(run, outcome.kind === 'failed' ? outcome : { kind: 'paired', deviceId: outcome.deviceId, engine: await this.engineAfterPairing(run) });
     if (this.pairingRun !== run) {
       return;
     }
@@ -143,6 +147,16 @@ export class ServerService {
     if (outcome.kind === 'paired') {
       await this.check();
     }
+  }
+
+  private engineAfterPairing(run: AbortController): Promise<PairingEngineChange> {
+    if (this.pairingRun !== run) {
+      return Promise.resolve(UNCHANGED);
+    }
+    return this.deps.engineSwitch.afterPairing().catch((error: unknown) => {
+      this.deps.logger.error('The transcription engine could not be switched after pairing', error);
+      return UNCHANGED;
+    });
   }
 
   private setProgress(run: AbortController, progress: PairingView): void {

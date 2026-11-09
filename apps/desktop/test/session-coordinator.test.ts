@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
+import { EngineRouting } from '../src/main/engines/engine-routing';
 import { EngineSelector } from '../src/main/engines/engine-selector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
@@ -13,7 +14,9 @@ import { HistoryStore } from '../src/main/history/history-store';
 import { HotkeyService } from '../src/main/hotkey/hotkey-service';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
+import { ActiveModelReadiness } from '../src/main/models/local-model-readiness';
 import { ModelManager } from '../src/main/models/model-manager';
+import type { ServerService } from '../src/main/remote/server-service';
 import { PauseState } from '../src/main/session/pause-state';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -28,6 +31,7 @@ import { FakePowerEvents } from './fake-power-events';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
+import { createServerService } from './support/server-service';
 import { QuitGate } from '../src/main/app/quit-gate';
 import type { Polished } from '../src/main/ai/polish';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
@@ -43,6 +47,7 @@ type Setup = { polish?: (text: string, signal: AbortSignal) => Promise<Polished>
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
 const locals: LocalEngine[] = [];
+const servers: ServerService[] = [];
 const stores: Array<{ stats: StatsStore; history: HistoryStore }> = [];
 let scratch: string;
 let argsFile: string;
@@ -59,6 +64,7 @@ afterEach(async () => {
   await coordinator?.shutdown();
   coordinator = null;
   await Promise.all(locals.splice(0).map((local) => local.dispose()));
+  servers.splice(0).forEach((server) => server.dispose());
   await Promise.all(stores.splice(0).map(({ stats, history }) => Promise.all([stats.days(), history.view()])));
   vi.unstubAllEnvs();
   await rm(scratch, { recursive: true, force: true });
@@ -96,10 +102,13 @@ async function prepared(setup: Setup = {}) {
   stores.push({ stats, history });
   await history.configure({ enabled: true, limit: 100 });
   const pause = new PauseState(logger);
+  const server = createServerService({ dir: scratch, settings, models, logger });
+  servers.push(server.service);
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
     engines: new EngineSelector([engine]),
+    routing: new EngineRouting({ settings, local: new ActiveModelReadiness(models, settings), server: server.service }),
     insertion,
     lastTranscript,
     helper,
@@ -109,6 +118,8 @@ async function prepared(setup: Setup = {}) {
     pause,
     overlay: (state) => states.push(state),
     openSettings: () => settingsOpened.push('settings'),
+    openServer: () => settingsOpened.push('server'),
+    openModelSettings: () => settingsOpened.push('local-model'),
     ...(setup.polish === undefined ? {} : { polish: setup.polish }),
     logger,
   });
@@ -185,7 +196,7 @@ describe('SessionCoordinator', () => {
     };
     harness.helper.emitHotkey('down');
     await acquiring.promise;
-    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Lokálny model chýba' });
     release.resolve();
     await harness.coordinator.settled();
     expect(harness.capture.starts).toEqual([]);
@@ -204,7 +215,7 @@ describe('SessionCoordinator', () => {
     };
     harness.helper.emitHotkey('down');
     await acquiring.promise;
-    await expect.poll(() => harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    await expect.poll(() => harness.states.at(-1)).toMatchObject({ kind: 'error', message: 'Lokálny model chýba' });
     expect(harness.capture.recording).toBe(false);
     expect(harness.coordinator.isBusy()).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 4100));
@@ -570,20 +581,25 @@ describe('SessionCoordinator', () => {
     expect(harness.capture.starts).toEqual([{ deviceId: 'airpods-id', label: 'AirPods Pro' }]);
   });
 
-  it('shows no-model error and opens settings action', async () => {
+  it('shows the missing local model error with download and pairing actions and never switches to an unpaired server', async () => {
     const harness = await prepared({ settings: { localModelId: null } });
 
     await dictate(harness, 5);
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
     expect(harness.capture.recording).toBe(false);
     expect(harness.helper.pasted).toEqual([]);
     expect(harness.lastTranscript.get()).toBeNull();
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
 
-    harness.coordinator.act('open-settings');
+    harness.coordinator.act('download-model');
+    harness.coordinator.act('pair-server');
+    harness.coordinator.act('use-server');
 
-    expect(harness.settingsOpened).toEqual(['settings']);
+    expect(harness.settingsOpened).toEqual(['local-model', 'server']);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.settings.get().engineOrder).toEqual(['local']);
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'error' });
   });
 
   it('stops the microphone as soon as the model turns out to be broken', async () => {
@@ -1153,7 +1169,7 @@ describe('SessionCoordinator', () => {
     const harness = await prepared({ settings: { mode: 'toggle', localModelId: null } });
 
     harness.helper.emitHotkey('down');
-    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Nemáte stiahnutý model' });
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Lokálny model chýba' });
     harness.helper.emitHotkey('up');
     await harness.settings.update({ localModelId: 'tiny' });
     await pressAndSpeak(harness, 4);

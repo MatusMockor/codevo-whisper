@@ -9,7 +9,8 @@ import type { DiarizerView, ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
 import type { PermissionGuide, PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
-import type { MicrophoneSetting, Settings } from './settings';
+import type { EngineId, MicrophoneSetting, Settings } from './settings';
+import type { SettingsSection } from './settings-focus';
 import type { DayStats } from './stats';
 import type { InstallOutcome, UpdateStatus } from './updates';
 
@@ -47,6 +48,8 @@ export type IpcInvokeApi = {
   cancelServerPairing(): Promise<void>;
   checkServer(): Promise<void>;
   disconnectServer(): Promise<DisconnectResult>;
+  preferEngine(engine: EngineId): Promise<void>;
+  takeSettingsFocus(): Promise<SettingsSection | null>;
   getUpdateStatus(): Promise<UpdateStatus>;
   checkForUpdates(): Promise<UpdateStatus>;
   installUpdate(): Promise<InstallOutcome>;
@@ -73,6 +76,7 @@ export type IpcEvents = {
   'history-changed': HistoryView;
   'settings-changed': Settings;
   'open-page': PageId;
+  'settings-focus-requested': SettingsSection;
   'stats-changed': DayStats[];
   'status-changed': AppStatus;
   'last-transcript-changed': string | null;
@@ -127,6 +131,8 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   cancelServerPairing: 'server:cancel-pairing',
   checkServer: 'server:check',
   disconnectServer: 'server:disconnect',
+  preferEngine: 'engines:prefer',
+  takeSettingsFocus: 'settings:take-focus',
   getUpdateStatus: 'updates:status',
   checkForUpdates: 'updates:check',
   installUpdate: 'updates:install',
@@ -153,6 +159,7 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'history-changed': 'history:changed',
   'settings-changed': 'settings:changed',
   'open-page': 'window:open-page',
+  'settings-focus-requested': 'window:settings-focus-requested',
   'stats-changed': 'stats:changed',
   'status-changed': 'status:changed',
   'last-transcript-changed': 'last-transcript:changed',

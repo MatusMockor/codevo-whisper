@@ -19,6 +19,22 @@ async function start(): Promise<void> {
   page = await app.firstWindow();
 }
 
+async function engineOrder(): Promise<Settings['engineOrder']> {
+  return (JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as Settings).engineOrder;
+}
+
+async function pair(): Promise<PairedEvent> {
+  const window = await gateway.openPairingWindow();
+  await page.getByRole('textbox', { name: 'Párovací token' }).fill(window.token);
+  await page.getByRole('button', { name: 'Spárovať', exact: true }).click();
+  await window.admin.next();
+  window.admin.send({ decision: 'approve' });
+  const paired = (await window.admin.next()) as PairedEvent;
+  window.admin.close();
+  await expect(page.locator('.server-card .pill')).toHaveText('Online');
+  return paired;
+}
+
 async function openTab(name: 'Server' | 'Nastavenia' | 'Domov'): Promise<void> {
   await page.getByRole('tab', { name }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
@@ -60,6 +76,16 @@ test('pairs by pasting the token, shows the same fingerprint as the server and s
   await expect(card).toContainText(request.deviceName);
   await expect(card.locator('[data-fingerprint="device"]')).toHaveText(request.deviceFingerprint);
   await expect(page.getByText(`Server pozná tento počítač ako ${paired.deviceId}.`)).toBeVisible();
+  const notice = page.getByRole('status').filter({ hasText: 'Prepis sa prepol na server' });
+  await expect(notice).toHaveText(`Spárované. Prepis sa prepol na server 127.0.0.1:${gateway.port}. Lokálny model nemáte stiahnutý, takže bez tohto kroku by diktovanie nefungovalo.Vrátiť späť`);
+  await expect.poll(engineOrder).toEqual(['server']);
+  await expect(card.getByRole('button', { name: 'Prepisovať na serveri' })).toHaveCount(0);
+
+  await notice.getByRole('button', { name: 'Vrátiť späť' }).click();
+
+  await expect.poll(engineOrder).toEqual(['local']);
+  await expect(notice).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Prepisovať na serveri' })).toBeVisible();
 
   await app.close();
   await start();
@@ -128,8 +154,8 @@ test('shows a server that needs re-pairing after a revoke', async () => {
   window.admin.close();
   await expect(page.locator('.server-card .pill')).toHaveText('Online');
 
-  await page.getByRole('button', { name: 'Prepisovať na serveri' }).click();
   await expect(page.getByRole('button', { name: 'Prepisovať na serveri' })).toHaveCount(0);
+  await expect.poll(engineOrder).toEqual(['server']);
 
   await gateway.admin({ cmd: 'revoke', deviceId: paired.deviceId });
   await page.getByRole('button', { name: 'Otestovať spojenie' }).click();
@@ -140,4 +166,27 @@ test('shows a server that needs re-pairing after a revoke', async () => {
   await expect(page.locator('.banner')).toContainText('Server treba znova spárovať.');
   await page.locator('.banner').getByRole('button', { name: 'Otvoriť Server' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Server');
+});
+
+test('Kde beží prepis warns about an order that cannot work and fixes it in one click', async () => {
+  await openTab('Nastavenia');
+  const engines = page.getByRole('radiogroup', { name: 'Kde beží prepis' });
+  const warning = page.locator('.engine-fix');
+  await expect(warning).toContainText('Lokálny model nemáte stiahnutý a server nie je spárovaný');
+  await warning.getByRole('button', { name: 'Stiahnuť model' }).click();
+  await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeFocused();
+
+  await openTab('Server');
+  await pair();
+  await openTab('Nastavenia');
+  await expect(engines.getByRole('radio', { name: /^Server/ }).first()).toBeChecked();
+  await expect(warning).toHaveCount(0);
+
+  await engines.getByRole('radio', { name: /^Lokálne/ }).first().click();
+  await expect(warning).toContainText('Lokálny model nemáte stiahnutý, takže s touto voľbou diktovanie nebude fungovať.');
+  await warning.getByRole('button', { name: 'Prepisovať na serveri' }).click();
+
+  await expect.poll(engineOrder).toEqual(['server']);
+  await expect(engines.getByRole('radio', { name: /^Server/ }).first()).toBeChecked();
+  await expect(warning).toHaveCount(0);
 });
