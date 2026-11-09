@@ -19,6 +19,28 @@ function checkResult({ phase }: UpdateStatus): string | null {
   return null;
 }
 
+export type UpdateRailView = { version: string; result: string | null };
+
+function shortResult({ phase }: UpdateStatus): string | null {
+  if (phase.kind === 'checking') {
+    return 'hľadám…';
+  }
+  if (phase.kind === 'idle' && phase.checked) {
+    return 'najnovšia';
+  }
+  if (phase.kind === 'error' && phase.failed === 'check') {
+    return 'zlyhala';
+  }
+  return null;
+}
+
+export function updateRailView(status: UpdateStatus): UpdateRailView {
+  if (status.mode === 'unsupported') {
+    return { version: `v${status.currentVersion}`, result: null };
+  }
+  return { version: `v${status.currentVersion}`, result: shortResult(status) };
+}
+
 export function updateFooterView(status: UpdateStatus): UpdateFooterView {
   const version = `Verzia ${status.currentVersion}`;
   if (status.mode === 'unsupported') {

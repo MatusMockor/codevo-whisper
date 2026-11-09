@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { panelId, Sidebar, tabId } from './components/Sidebar';
-import { pageFromHash, PAGES, type PageId } from './navigation';
+import { panelId, Rail, tabId } from './components/Rail';
+import { StatusBar } from './components/StatusBar';
+import { railBadges } from './home/readiness';
+import { useDictation, type Dictation } from './home/use-dictation';
+import { pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
 import { Home } from './pages/Home';
 import { Meetings } from './pages/Meetings';
 import { Onboarding } from './pages/Onboarding';
@@ -9,42 +12,64 @@ import { Server } from './pages/Server';
 import { Settings } from './pages/Settings';
 import { useSettings } from './settings/use-settings';
 
-function pageLabel(page: PageId): string {
-  return PAGES.find((definition) => definition.id === page)?.label ?? '';
-}
+const INSET_TITLE_BAR = navigator.userAgent.includes('Mac');
 
-function PageContent({ page, onSelect }: { page: PageId; onSelect: (page: PageId) => void }) {
-  if (page === 'home') {
-    return <Home onOpenSettings={() => onSelect('settings')} onOpenServer={() => onSelect('server')} />;
+type PageContentProps = { target: NavTarget; dictation: Dictation; onNavigate: (target: NavTarget) => void };
+
+function PageContent({ target, dictation, onNavigate }: PageContentProps) {
+  const openSettings = () => onNavigate({ page: 'settings' });
+  if (target.page === 'home') {
+    return <Home dictation={dictation} onNavigate={onNavigate} />;
   }
-  if (page === 'meetings') {
-    return <Meetings onOpenSettings={() => onSelect('settings')} />;
+  if (target.page === 'meetings') {
+    return <Meetings onOpenSettings={openSettings} />;
   }
-  if (page === 'settings') {
-    return <Settings />;
+  if (target.page === 'settings') {
+    return <Settings section={target.section ?? null} />;
   }
-  if (page === 'server') {
+  if (target.page === 'server') {
     return <Server />;
   }
-  return <Privacy onOpenSettings={() => onSelect('settings')} />;
+  return <Privacy onOpenSettings={openSettings} />;
+}
+
+function PageHead({ page }: { page: PageId }) {
+  const { label, title } = pageDefinition(page);
+  return (
+    <div className="phead">
+      <div>
+        {title !== label && <p className="kick">{label}</p>}
+        <h1>{title}</h1>
+      </div>
+      {page === 'home' && <span className="label-mono">Kliknite na uzol a upravte ho</span>}
+    </div>
+  );
 }
 
 function Shell() {
-  const [selected, setSelected] = useState<PageId>(() => pageFromHash(window.location.hash));
+  const [target, setTarget] = useState<NavTarget>(() => ({ page: pageFromHash(window.location.hash) }));
+  const dictation = useDictation();
+  const badges = dictation.status.kind === 'ready' ? railBadges(dictation.status.value) : {};
 
-  useEffect(() => window.codevo.on('open-page', setSelected), []);
+  useEffect(() => window.codevo.on('open-page', (page) => setTarget({ page })), []);
 
   return (
     <div className="shell">
-      <Sidebar selected={selected} onSelect={setSelected} />
-      <main className="main">
-        <header className="bar">
-          <h1>{pageLabel(selected)}</h1>
+      {INSET_TITLE_BAR && (
+        <header className="tbar">
+          <span className="ttl">Codevo Whisper</span>
         </header>
-        <section className="panel" role="tabpanel" id={panelId(selected)} aria-labelledby={tabId(selected)}>
-          <PageContent page={selected} onSelect={setSelected} />
-        </section>
-      </main>
+      )}
+      <div className="body">
+        <Rail selected={target.page} badges={badges} onSelect={(page) => setTarget({ page })} />
+        <main className="main">
+          <section key={target.page} className="panel" role="tabpanel" id={panelId(target.page)} aria-labelledby={tabId(target.page)}>
+            <PageHead page={target.page} />
+            <PageContent target={target} dictation={dictation} onNavigate={setTarget} />
+          </section>
+        </main>
+      </div>
+      <StatusBar dictation={dictation} />
     </div>
   );
 }

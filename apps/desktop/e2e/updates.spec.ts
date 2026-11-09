@@ -24,8 +24,8 @@ function updatesRow(): Locator {
   return page.locator('.srow', { has: page.locator('b', { hasText: 'Aktualizácie' }) });
 }
 
-function sidebarFooter(): Locator {
-  return page.locator('.side-foot');
+function statusBarVersion(): Locator {
+  return page.locator('.sbar-version');
 }
 
 function control(values: FakeControl): Promise<void> {
@@ -98,9 +98,9 @@ test('reports the newest version and a failed check', async () => {
   expect(await fake('checks')).toBe(2);
 });
 
-test('the sidebar footer checks for updates from any page and reports the result', async () => {
+test('the status bar checks for updates from any page and reports the result', async () => {
   await start();
-  const footer = sidebarFooter();
+  const footer = statusBarVersion();
   const button = footer.getByRole('button', { name: 'Skontrolovať aktualizácie' });
   await expect(footer).toContainText(`Verzia ${currentVersion}`);
 
@@ -112,7 +112,7 @@ test('the sidebar footer checks for updates from any page and reports the result
 
   await control({ checkFails: false, latest: '9.9.9', holdDownloads: true });
   await button.click();
-  await expect(page.locator('.side-update')).toContainText('Sťahujem aktualizáciu… 0 %');
+  await expect(page.locator('.sbar-update')).toContainText('Sťahujem aktualizáciu… 0 %');
   await expect(button).toBeDisabled();
   expect(await fake('checks')).toBe(3);
 });

@@ -9,8 +9,8 @@ label:has(> input:disabled) {
 }
 
 .btn:not(:disabled):hover {
-  background: var(--group);
-  border-color: var(--line);
+  background: var(--panel-3);
+  border-color: var(--line-3);
 }
 
 .btn:not(:disabled):active {
@@ -27,7 +27,13 @@ label:has(> input:disabled) {
 }
 
 .btn.ghost:not(:disabled):hover {
-  background: var(--hover);
+  background: var(--panel-3);
+  color: var(--ink);
+}
+
+.btn.danger:not(:disabled):hover {
+  border-color: var(--err-line);
+  background: var(--err-wash);
 }
 
 .btn.ghost:not(:disabled):active {
@@ -35,7 +41,8 @@ label:has(> input:disabled) {
 }
 
 .nav button:hover {
-  background: var(--hover);
+  background: var(--panel);
+  color: var(--ink);
 }
 
 .nav button:active {
@@ -43,7 +50,7 @@ label:has(> input:disabled) {
 }
 
 .nav button[aria-selected="true"]:hover {
-  background: var(--sel);
+  background: var(--panel-2);
 }
 
 .seg button:not(:disabled):not([aria-pressed="true"]):hover {

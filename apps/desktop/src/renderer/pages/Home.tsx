@@ -1,54 +1,24 @@
-import { useMemo, useState } from 'react';
-import type { StatsPeriod } from '../../shared/stats';
-import { summarize } from '../../shared/stats-summary';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { LastTranscriptCard } from '../components/LastTranscriptCard';
-import { LockIcon } from '../components/Icons';
-import { PeriodSwitch } from '../components/PeriodSwitch';
-import { StatTiles } from '../components/StatTiles';
-import { StatusBanner } from '../components/StatusBanner';
-import { WordsChart } from '../components/WordsChart';
-import { liveValueOr, useLiveValue } from '../home/live-value';
+import { SignalPathCard } from '../home/SignalPathCard';
+import { StatsCard } from '../home/StatsCard';
+import type { Dictation } from '../home/use-dictation';
 import { useLastTranscript } from '../home/use-last-transcript';
-import { useToday } from '../home/use-today';
+import type { NavTarget } from '../navigation';
 
-type HomeProps = { onOpenSettings: () => void; onOpenServer: () => void };
+type HomeProps = { dictation: Dictation; onNavigate: (target: NavTarget) => void };
 
-const loadStatus = () => window.codevo.getStatus();
-
-const loadStats = () => window.codevo.getStats();
-
-export function Home({ onOpenSettings, onOpenServer }: HomeProps) {
-  const [period, setPeriod] = useState<StatsPeriod>('today');
-  const status = useLiveValue('status-changed', loadStatus);
-  const stats = useLiveValue('stats-changed', loadStats);
+export function Home({ dictation, onNavigate }: HomeProps) {
   const lastTranscript = useLastTranscript();
-  const today = useToday();
-  const days = liveValueOr(stats, []);
-  const summary = useMemo(() => summarize(days, period, today), [days, period, today]);
 
   return (
     <div className="home">
-      <StatusBanner status={status} onOpenSettings={onOpenSettings} onOpenServer={onOpenServer} />
-      <div className="stats-head">
-        <h2 id="h-stats">Štatistiky</h2>
-        <PeriodSwitch value={period} onChange={setPeriod} />
+      <SignalPathCard dictation={dictation} onNavigate={onNavigate} />
+      <StatsCard />
+      <div className="home-duo">
+        <LastTranscriptCard transcript={lastTranscript} />
+        <HistoryPanel />
       </div>
-      {stats.kind === 'failed' && (
-        <p className="load-error" role="alert">
-          Štatistiky sa nepodarilo načítať.
-        </p>
-      )}
-      <div className="stats" role="group" aria-labelledby="h-stats">
-        <StatTiles summary={summary} />
-        <WordsChart days={summary.last7} today={today} />
-      </div>
-      <p className="privline">
-        <LockIcon />
-        <span>Štatistiky sú len súčty čísel na tomto Macu, bez textu.</span>
-      </p>
-      <LastTranscriptCard transcript={lastTranscript} />
-      <HistoryPanel />
     </div>
   );
 }

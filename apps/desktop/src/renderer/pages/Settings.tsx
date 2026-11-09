@@ -14,12 +14,15 @@ import { saveSettings, useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { usePermissions } from '../settings/use-permissions';
+import { useRevealSection } from '../settings/use-reveal-section';
+import type { SettingsSection } from '../navigation';
 
-export function Settings() {
+export function Settings({ section = null }: { section?: SettingsSection | null }) {
   const settings = useSettings();
   const models = useModels();
   const server = useServer();
   const permissions = usePermissions();
+  useRevealSection(section, settings.kind === 'ready');
   if (settings.kind === 'loading') {
     return null;
   }

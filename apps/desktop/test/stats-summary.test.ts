@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayStats } from '../src/shared/stats';
-import { summarize } from '../src/shared/stats-summary';
+import { dailyWords, summarize } from '../src/shared/stats-summary';
 
 const SUNDAY = '2026-10-25';
 
@@ -45,6 +45,23 @@ describe('summarize', () => {
     expect(summarize([day('2026-10-23', 5)], 'today', SUNDAY)).toMatchObject({ streakDays: 0, streakSince: null });
     expect(summarize([day('2026-10-24', 0, 0, 0), day(SUNDAY, 0, 0, 0)], 'today', SUNDAY)).toMatchObject({ streakDays: 0, streakSince: null });
     expect(summarize([day('2026-10-31', 5), day('2026-11-01', 5)], 'today', '2026-11-01')).toMatchObject({ streakDays: 2, streakSince: '2026-10-31' });
+  });
+
+  it('averages words and seconds per dictation for the period', () => {
+    expect(summarize(DAYS, 'today', SUNDAY)).toMatchObject({ wordsPerDictation: 20, secondsPerDictation: 12 });
+    expect(summarize(DAYS, 'week', SUNDAY)).toMatchObject({ wordsPerDictation: 33, secondsPerDictation: 20 });
+    expect(summarize([], 'total', SUNDAY)).toMatchObject({ wordsPerDictation: 0, secondsPerDictation: 0 });
+  });
+
+  it('dailyWords returns a gap-free series ending today', () => {
+    const month = dailyWords(DAYS, SUNDAY, 30);
+
+    expect(month).toHaveLength(30);
+    expect(month[0]).toEqual({ date: '2026-09-26', words: 0 });
+    expect(month.find((entry) => entry.date === '2026-10-10')).toEqual({ date: '2026-10-10', words: 1000 });
+    expect(month.at(-1)).toEqual({ date: SUNDAY, words: 80 });
+    expect(month.reduce((sum, entry) => sum + entry.words, 0)).toBe(1430);
+    expect(dailyWords([], SUNDAY, 0)).toEqual([]);
   });
 
   it('last7 fills missing days with 0', () => {
