@@ -1,3 +1,5 @@
+import type { Settings } from '../../shared/settings';
+import type { EngineOrderQueue } from '../engines/engine-order-queue';
 import type { LastTranscript } from '../insertion/last-transcript';
 import type { InputHelper } from '../helper/input-helper';
 import type { SettingsStore } from '../settings/settings-store';
@@ -9,16 +11,30 @@ import { validateSettingsPatch } from './validate';
 export type CoreHandlerDeps = {
   helper: Pick<InputHelper, 'getOutputAudio'>;
   settings: Pick<SettingsStore, 'get' | 'update'>;
+  order: Pick<EngineOrderQueue, 'change'>;
   stats: Pick<StatsStore, 'days' | 'reset'>;
   status: Pick<AppStatusService, 'status'>;
   lastTranscript: Pick<LastTranscript, 'get'>;
 };
 
-export function coreHandlers({ settings, stats, status, lastTranscript, helper }: CoreHandlerDeps): HandlerGroup<'getSettings' | 'updateSettings' | 'getStats' | 'resetStats' | 'getStatus' | 'getLastTranscript' | 'getOutputAudio'> {
+export type SettingsWriter = Pick<CoreHandlerDeps, 'settings' | 'order'>;
+
+export async function writeSettings({ settings, order }: SettingsWriter, patch: Partial<Settings>): Promise<Settings> {
+  const { engineOrder, ...rest } = patch;
+  if (engineOrder !== undefined) {
+    await order.change(() => ({ order: engineOrder, result: undefined }));
+  }
+  if (Object.keys(rest).length === 0) {
+    return settings.get();
+  }
+  return settings.update(rest);
+}
+
+export function coreHandlers({ settings, order, stats, status, lastTranscript, helper }: CoreHandlerDeps): HandlerGroup<'getSettings' | 'updateSettings' | 'getStats' | 'resetStats' | 'getStatus' | 'getLastTranscript' | 'getOutputAudio'> {
   return {
     getOutputAudio: () => helper.getOutputAudio(),
     getSettings: () => Promise.resolve(settings.get()),
-    updateSettings: (patch) => settings.update(validateSettingsPatch(patch)),
+    updateSettings: (patch) => writeSettings({ settings, order }, validateSettingsPatch(patch)),
     getStats: () => stats.days(),
     resetStats: () => stats.reset(),
     getStatus: () => status.status(),

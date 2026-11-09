@@ -180,6 +180,7 @@ export function composeApplication(logger: Logger): Application {
       actions: settingsServices.actions,
       microphones: settingsServices.microphones,
       server: server.service,
+      order,
       routing,
       settingsFocus,
       source: rendererSource(),
