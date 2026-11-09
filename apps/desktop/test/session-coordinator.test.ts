@@ -108,7 +108,7 @@ async function prepared(setup: Setup = {}) {
     hotkey,
     capture,
     engines: new EngineSelector([engine]),
-    routing: new EngineRouting({ settings, local: new ActiveModelReadiness(models, settings), server: server.service }),
+    routing: new EngineRouting({ order: server.order, local: new ActiveModelReadiness(models, settings), server: server.service }),
     insertion,
     lastTranscript,
     helper,

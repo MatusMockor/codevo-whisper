@@ -2,11 +2,13 @@ import type { EngineId } from './settings';
 
 export type EngineCapabilities = { localReady: boolean; serverReady: boolean };
 
+export type EngineConditions = EngineCapabilities & { serverOffline: boolean };
+
 export type EngineFix = 'use-server' | 'use-local' | 'download-model';
 
 export type EngineProblem = 'no-model' | 'server-not-paired' | 'server-offline';
 
-export type EngineRemedyAction = EngineFix | 'pair-server';
+export type EngineRemedyAction = EngineFix | 'pair-server' | 'open-server';
 
 export type EngineRemedy = { action: EngineRemedyAction; alternative?: EngineRemedyAction };
 
@@ -19,10 +21,10 @@ export function isEngineId(value: unknown): value is EngineId {
 }
 
 export function preferredOrder(engine: EngineId, capabilities: EngineCapabilities): EngineId[] {
-  if (engine === 'server') {
-    return capabilities.localReady ? ['server', 'local'] : ['server'];
+  if (engine === 'local') {
+    return ['local'];
   }
-  return capabilities.serverReady ? ['local', 'server'] : ['local'];
+  return capabilities.localReady ? ['server', 'local'] : ['server'];
 }
 
 export function isEngineUsable(engine: EngineId, capabilities: EngineCapabilities): boolean {
@@ -42,35 +44,49 @@ export function orderFix(order: readonly EngineId[], capabilities: EngineCapabil
   return 'download-model';
 }
 
-const REMEDIES: Readonly<Record<EngineProblem, (capabilities: EngineCapabilities) => EngineRemedy | null>> = Object.freeze({
-  'no-model': (capabilities) => (capabilities.serverReady ? { action: 'use-server', alternative: 'download-model' } : { action: 'download-model', alternative: 'pair-server' }),
-  'server-not-paired': (capabilities) => (capabilities.localReady ? { action: 'use-local', alternative: 'pair-server' } : { action: 'pair-server', alternative: 'download-model' }),
-  'server-offline': (capabilities) => (capabilities.localReady ? { action: 'use-local' } : null),
+function isServerUsableNow(conditions: EngineConditions): boolean {
+  return conditions.serverReady && !conditions.serverOffline;
+}
+
+function missingModelRemedy(conditions: EngineConditions): EngineRemedy {
+  if (isServerUsableNow(conditions)) {
+    return { action: 'use-server', alternative: 'download-model' };
+  }
+  if (conditions.serverReady) {
+    return { action: 'download-model', alternative: 'open-server' };
+  }
+  return { action: 'download-model', alternative: 'pair-server' };
+}
+
+const REMEDIES: Readonly<Record<EngineProblem, (conditions: EngineConditions) => EngineRemedy | null>> = Object.freeze({
+  'no-model': missingModelRemedy,
+  'server-not-paired': (conditions) => (conditions.localReady ? { action: 'use-local', alternative: 'pair-server' } : { action: 'pair-server', alternative: 'download-model' }),
+  'server-offline': (conditions) => (conditions.localReady ? { action: 'use-local' } : null),
 });
 
-export function engineRemedy(problem: EngineProblem, capabilities: EngineCapabilities): EngineRemedy | null {
-  return REMEDIES[problem](capabilities);
+export function engineRemedy(problem: EngineProblem, conditions: EngineConditions): EngineRemedy | null {
+  return REMEDIES[problem](conditions);
 }
 
-function isEngineWorking(engine: EngineId, capabilities: EngineCapabilities, serverOffline: boolean): boolean {
-  if (engine === 'server' && serverOffline) {
-    return false;
+function isEngineWorking(engine: EngineId, conditions: EngineConditions): boolean {
+  if (engine === 'server') {
+    return isServerUsableNow(conditions);
   }
-  return isEngineUsable(engine, capabilities);
+  return conditions.localReady;
 }
 
-function engineProblem(engine: EngineId, capabilities: EngineCapabilities): EngineProblem {
+function engineProblem(engine: EngineId, conditions: EngineConditions): EngineProblem {
   if (engine === 'local') {
     return 'no-model';
   }
-  return capabilities.serverReady ? 'server-offline' : 'server-not-paired';
+  return conditions.serverReady ? 'server-offline' : 'server-not-paired';
 }
 
-export function orderProblem(order: readonly EngineId[], capabilities: EngineCapabilities, serverOffline: boolean): EngineProblem | null {
-  if (order.some((engine) => isEngineWorking(engine, capabilities, serverOffline))) {
+export function orderProblem(order: readonly EngineId[], conditions: EngineConditions): EngineProblem | null {
+  if (order.some((engine) => isEngineWorking(engine, conditions))) {
     return null;
   }
-  return engineProblem(order[0] ?? 'local', capabilities);
+  return engineProblem(order[0] ?? 'local', conditions);
 }
 
 export function changeAfterPairing(order: readonly EngineId[], localReady: boolean): PairingEngineChange {

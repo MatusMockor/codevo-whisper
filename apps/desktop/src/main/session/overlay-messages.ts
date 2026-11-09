@@ -1,7 +1,7 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
 import type { AiFailure } from '../../shared/ai';
-import { engineRemedy, type EngineCapabilities, type EngineProblem } from '../../shared/engine-routing';
+import { engineRemedy, type EngineConditions, type EngineProblem } from '../../shared/engine-routing';
 import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
@@ -54,9 +54,9 @@ function fixError(message: string, action: OverlayAction, alternative?: OverlayA
   return { kind: 'error', message, action, alternative };
 }
 
-function remedyError(message: string, problem: EngineProblem): (capabilities: EngineCapabilities) => ErrorState {
-  return (capabilities) => {
-    const remedy = engineRemedy(problem, capabilities);
+function remedyError(message: string, problem: EngineProblem): (conditions: EngineConditions) => ErrorState {
+  return (conditions) => {
+    const remedy = engineRemedy(problem, conditions);
     if (remedy === null) {
       return errorState(message);
     }
@@ -64,7 +64,7 @@ function remedyError(message: string, problem: EngineProblem): (capabilities: En
   };
 }
 
-const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (capabilities: EngineCapabilities) => ErrorState>> = Object.freeze({
+const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: EngineConditions) => ErrorState>> = Object.freeze({
   'no-model': remedyError(MESSAGES.noModel, 'no-model'),
   'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
   'model-broken': () => settingsError(MESSAGES.brokenModel),
@@ -97,11 +97,11 @@ export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean)
   return errorState(FAILURE_MESSAGES[reason]);
 }
 
-export function readinessError(reason: EngineUnavailableReason | undefined, capabilities: EngineCapabilities): ErrorState {
+export function readinessError(reason: EngineUnavailableReason | undefined, conditions: EngineConditions): ErrorState {
   if (reason === undefined) {
     return errorState(MESSAGES.engineUnavailable);
   }
-  return READINESS_ERRORS[reason](capabilities);
+  return READINESS_ERRORS[reason](conditions);
 }
 
 const COPIED: TerminalState = { kind: 'copied' };

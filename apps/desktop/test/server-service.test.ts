@@ -2,6 +2,9 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { EngineRouting } from '../src/main/engines/engine-routing';
+import { ActiveModelReadiness } from '../src/main/models/local-model-readiness';
+import type { PairingRepository } from '../src/main/remote/pairing-repository';
 import type { VaultAvailability } from '../src/main/remote/secret-vault';
 import type { ServerService } from '../src/main/remote/server-service';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -31,18 +34,52 @@ afterEach(async () => {
 
 let now = Date.parse('2026-10-26T10:00:00.000Z');
 
-type Setup = { availability?: VaultAvailability; modelDownloaded?: boolean };
+type Setup = { availability?: VaultAvailability; modelDownloaded?: boolean; wrapPairings?: (pairings: PairingRepository) => PairingRepository };
 
-async function create(setup: Setup = {}): Promise<{ service: ServerService; views: ServerView[]; file: string; statuses: string[] }> {
+type Created = { service: ServerService; views: ServerView[]; file: string; statuses: string[]; routing: EngineRouting };
+
+async function create(setup: Setup = {}): Promise<Created> {
   const logger = new RecordingLogger();
   const models = await tinyModels(dir, settings, logger, setup.modelDownloaded ?? false);
-  const harness = createServerService({ dir, settings, models, logger, availability: setup.availability ?? 'available', clock: () => now });
+  const wrap = setup.wrapPairings === undefined ? {} : { wrapPairings: setup.wrapPairings };
+  const harness = createServerService({ dir, settings, models, logger, availability: setup.availability ?? 'available', clock: () => now, ...wrap });
   service = harness.service;
   const views: ServerView[] = [];
   const statuses: string[] = [];
   harness.status.onChange((next) => statuses.push(next.kind));
   service.onChange((view) => views.push(view));
-  return { service, views, file: harness.file, statuses };
+  const routing = new EngineRouting({ order: harness.order, local: new ActiveModelReadiness(models, settings), server: service });
+  return { service, views, file: harness.file, statuses, routing };
+}
+
+function fileState(file: string): Promise<'present' | 'absent'> {
+  return stat(file).then(
+    () => 'present',
+    () => 'absent',
+  );
+}
+
+type SaveGate = { saving: Promise<void>; saved: Promise<void>; release: () => void; wrap: (pairings: PairingRepository) => PairingRepository };
+
+function saveGate(): SaveGate {
+  const saving = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
+  const saved = Promise.withResolvers<void>();
+  return {
+    saving: saving.promise,
+    saved: saved.promise,
+    release: () => released.resolve(),
+    wrap: (pairings) => ({
+      load: () => pairings.load(),
+      clear: () => pairings.clear(),
+      save: async (pairing) => {
+        saving.resolve();
+        await released.promise;
+        await pairings.save(pairing);
+        saved.resolve();
+      },
+    }),
+  };
 }
 
 async function pairThroughService(target: ServerService): Promise<string> {
@@ -153,6 +190,38 @@ describe('ServerService', () => {
 
     await expect.poll(async () => (await target.view()).pairing).toEqual({ kind: 'failed', failure: 'cancelled' });
     window.admin.close();
+  });
+
+  it('a cancel while the approved pairing is being saved reports the cancel, keeps the engine and leaves nothing paired', async () => {
+    const gate = saveGate();
+    const { service: target, file } = await create({ wrapPairings: gate.wrap });
+    const window = await gateway.openPairingWindow();
+    target.pair(window.token);
+    await window.admin.next();
+    window.admin.send({ decision: 'approve' });
+    await gate.saving;
+
+    target.cancelPairing();
+    gate.release();
+    await gate.saved;
+
+    await expect.poll(() => fileState(file)).toBe('absent');
+    expect(settings.get().engineOrder).toEqual(['local']);
+    expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'failed', failure: 'cancelled' } });
+    window.admin.close();
+  });
+
+  it('a disconnect never leaves the server as the only engine while a switch to it is still being saved', async () => {
+    const { service: target, routing } = await create();
+    await pairThroughService(target);
+    await settings.update({ engineOrder: ['local'] });
+
+    const switching = routing.prefer('server');
+    await target.disconnect();
+    await switching;
+
+    expect(settings.get().engineOrder).toEqual(['local']);
+    expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'idle' } });
   });
 
   it('a disconnect during a pending pairing leaves nothing paired', async () => {

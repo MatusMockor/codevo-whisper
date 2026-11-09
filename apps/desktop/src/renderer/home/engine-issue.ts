@@ -1,5 +1,5 @@
 import type { AppStatus } from '../../shared/app-status';
-import { engineRemedy, orderProblem, type EngineCapabilities, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
+import { engineRemedy, orderProblem, type EngineCapabilities, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
 import type { PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
 import type { NavTarget } from '../navigation';
@@ -24,11 +24,12 @@ function knownIssue({ engineOrder, capabilities, server }: EngineIssueInput): En
   if (capabilities === null) {
     return null;
   }
-  const problem = orderProblem(engineOrder, capabilities, server?.status.kind === 'offline');
+  const conditions: EngineConditions = { ...capabilities, serverOffline: server?.status.kind === 'offline' };
+  const problem = orderProblem(engineOrder, conditions);
   if (problem === null) {
     return null;
   }
-  return issue(problem, engineRemedy(problem, capabilities), server);
+  return issue(problem, engineRemedy(problem, conditions), server);
 }
 
 function reportedIssue({ status, server }: EngineIssueInput): EngineIssue | null {

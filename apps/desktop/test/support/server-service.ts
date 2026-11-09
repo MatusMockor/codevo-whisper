@@ -1,12 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { EngineOrderQueue } from '../../src/main/engines/engine-order-queue';
 import type { Logger } from '../../src/main/logging/logger';
 import { ActiveModelReadiness } from '../../src/main/models/local-model-readiness';
 import { ModelManager } from '../../src/main/models/model-manager';
 import { DevicePairing } from '../../src/main/remote/device-pairing';
 import { InsecureTestVault } from '../../src/main/remote/insecure-test-vault';
 import { PairingEngineSwitch } from '../../src/main/remote/pairing-engine-switch';
-import { EncryptedPairingFile } from '../../src/main/remote/pairing-repository';
+import { EncryptedPairingFile, type PairingRepository } from '../../src/main/remote/pairing-repository';
 import type { VaultAvailability } from '../../src/main/remote/secret-vault';
 import { ServerConnector } from '../../src/main/remote/server-connector';
 import { ServerService } from '../../src/main/remote/server-service';
@@ -22,9 +23,10 @@ export type ServerServiceSetup = {
   availability?: VaultAvailability;
   clock?: () => number;
   timeoutMs?: number;
+  wrapPairings?: (pairings: PairingRepository) => PairingRepository;
 };
 
-export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; file: string };
+export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; file: string };
 
 const MODEL_BODY = 'GGUF';
 
@@ -43,11 +45,13 @@ export function createServerService(setup: ServerServiceSetup): ServerServiceHar
   const vault = new InsecureTestVault(setup.availability ?? 'available');
   const file = join(dir, 'server-pairing.json');
   const pairings = new EncryptedPairingFile(file, vault, logger);
+  const stored = setup.wrapPairings?.(pairings) ?? pairings;
   const status = new ServerStatusBoard(logger);
-  const connector = new ServerConnector({ pairings, observer: status, clock: Date.now, timeoutMs });
-  const pairing = new DevicePairing({ pairings, vault, deviceName: () => Promise.resolve('Test Mac'), clock: Date.now, timeoutMs });
-  const engineSwitch = new PairingEngineSwitch({ settings, local: new ActiveModelReadiness(models, settings) });
+  const order = new EngineOrderQueue(settings);
+  const connector = new ServerConnector({ pairings: stored, observer: status, clock: Date.now, timeoutMs });
+  const pairing = new DevicePairing({ pairings: stored, vault, deviceName: () => Promise.resolve('Test Mac'), clock: Date.now, timeoutMs });
+  const engineSwitch = new PairingEngineSwitch({ order, local: new ActiveModelReadiness(models, settings) });
   const clock = setup.clock === undefined ? {} : { clock: setup.clock };
-  const service = new ServerService({ pairings, vault, connector, status, pairing, engineSwitch, settings, logger, ...clock });
-  return { service, pairings, status, file };
+  const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, order, logger, ...clock });
+  return { service, pairings, status, order, file };
 }

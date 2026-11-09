@@ -12,7 +12,7 @@ import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
-import type { EngineCapabilities } from '../../shared/engine-routing';
+import type { EngineConditions } from '../../shared/engine-routing';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { Language, MicrophoneSetting } from '../../shared/settings';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
@@ -31,7 +31,7 @@ export type SessionOverlay = {
 export type DictationSessionDeps = {
   capture: AudioCapture;
   engines: Pick<EngineSelector, 'prepare'>;
-  capabilities(): Promise<EngineCapabilities>;
+  capabilities(): Promise<EngineConditions>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
   helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio'>;
@@ -67,7 +67,7 @@ const TRANSCRIBED_REASONS: ReadonlySet<StopReason> = new Set(['released', 'toggl
 
 const NOT_READY: Preparation = { ready: false };
 
-const NO_CAPABILITIES: EngineCapabilities = Object.freeze({ localReady: false, serverReady: false });
+const NO_CAPABILITIES: EngineConditions = Object.freeze({ localReady: false, serverReady: false, serverOffline: false });
 
 export class DictationSession {
   private phase: Phase = 'recording';

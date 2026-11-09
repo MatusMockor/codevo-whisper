@@ -1,27 +1,29 @@
-import { isEngineUsable, preferredOrder, type EngineCapabilities } from '../../shared/engine-routing';
+import { isEngineUsable, preferredOrder, type EngineConditions, type EngineCapabilities } from '../../shared/engine-routing';
 import type { EngineId } from '../../shared/settings';
 import type { LocalModelReadiness } from '../models/local-model-readiness';
-import type { SettingsStore } from '../settings/settings-store';
+import type { EngineOrderQueue, OrderDecision } from './engine-order-queue';
 
-export type ServerReadiness = { isPaired(): Promise<boolean>; needsRepair(): boolean };
+export type ServerReadiness = { isPaired(): Promise<boolean>; needsRepair(): boolean; isOffline(): boolean };
 
-export type EngineRoutingDeps = { settings: Pick<SettingsStore, 'get' | 'update'>; local: LocalModelReadiness; server: ServerReadiness };
+export type EngineRoutingDeps = { order: Pick<EngineOrderQueue, 'change'>; local: LocalModelReadiness; server: ServerReadiness };
 
 export class EngineRouting {
   constructor(private readonly deps: EngineRoutingDeps) {}
 
-  async capabilities(): Promise<EngineCapabilities> {
+  async capabilities(): Promise<EngineConditions> {
     const paired = await this.deps.server.isPaired();
-    return { localReady: this.deps.local.isReady(), serverReady: paired && !this.deps.server.needsRepair() };
+    return { localReady: this.deps.local.isReady(), serverReady: paired && !this.deps.server.needsRepair(), serverOffline: paired && this.deps.server.isOffline() };
   }
 
-  async prefer(engine: EngineId): Promise<EngineId[]> {
-    const capabilities = await this.capabilities();
+  prefer(engine: EngineId): Promise<EngineId[]> {
+    return this.deps.order.change(async (current) => this.decide(engine, current, await this.capabilities()));
+  }
+
+  private decide(engine: EngineId, current: readonly EngineId[], capabilities: EngineCapabilities): OrderDecision<EngineId[]> {
     if (!isEngineUsable(engine, capabilities)) {
-      return [...this.deps.settings.get().engineOrder];
+      return { order: null, result: [...current] };
     }
     const order = preferredOrder(engine, capabilities);
-    await this.deps.settings.update({ engineOrder: order });
-    return order;
+    return { order, result: order };
   }
 }

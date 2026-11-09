@@ -62,11 +62,12 @@ function buttons(view: HomeView): Array<[string, boolean]> {
 function overlayButtons(reason: EngineUnavailableReason, scenario: Scenario): OverlayAction[] {
   const capabilities = engineCapabilities(MODEL_ID, { states: modelStates(scenario.localReady), statesLoaded: true }, serverView(scenario.server));
   expect(capabilities).not.toBeNull();
-  const error = readinessError(reason, capabilities ?? { localReady: false, serverReady: false });
+  const error = readinessError(reason, { ...(capabilities ?? { localReady: false, serverReady: false }), serverOffline: scenario.server?.kind === 'offline' });
   return [error.alternative, error.action].filter((action): action is OverlayAction => action !== undefined);
 }
 
 const LOCAL_WITHOUT_MODEL_WITH_SERVER: Scenario = { engineOrder: ['local'], localReady: false, server: ONLINE, status: { modelReady: false } };
+const LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER: Scenario = { engineOrder: ['local'], localReady: false, server: OFFLINE, status: { modelReady: false } };
 const LOCAL_WITHOUT_MODEL_OR_SERVER: Scenario = { engineOrder: ['local'], localReady: false, server: null, status: { modelReady: false } };
 const SERVER_UNPAIRED_WITH_MODEL: Scenario = { engineOrder: ['server'], localReady: true, server: null, status: { modelReady: false, pairingNeeded: true } };
 const SERVER_UNPAIRED_WITHOUT_MODEL: Scenario = { engineOrder: ['server'], localReady: false, server: null, status: { modelReady: false, pairingNeeded: true } };
@@ -85,6 +86,20 @@ describe('Home readiness fixes', () => {
     expect(view.actions.map((action) => action.command)).toEqual([
       { kind: 'navigate', target: { page: 'settings', section: 'local-model' } },
       { kind: 'prefer-engine', engine: 'server' },
+    ]);
+  });
+
+  it('never offers a paired server that is offline and points to the Server page instead', () => {
+    const view = home(LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER);
+
+    expect(view.message).toBe('Lokálny model nie je stiahnutý.');
+    expect(buttons(view)).toEqual([
+      ['Otvoriť Server', false],
+      ['Stiahnuť model', true],
+    ]);
+    expect(view.actions.map((action) => action.command)).toEqual([
+      { kind: 'navigate', target: { page: 'server' } },
+      { kind: 'navigate', target: { page: 'settings', section: 'local-model' } },
     ]);
   });
 
@@ -164,6 +179,7 @@ describe('Home readiness fixes', () => {
   it('offers the same fixes in the same order as the dictation overlay', () => {
     const cases: Array<[EngineUnavailableReason, Scenario]> = [
       ['no-model', LOCAL_WITHOUT_MODEL_WITH_SERVER],
+      ['no-model', LOCAL_WITHOUT_MODEL_WITH_OFFLINE_SERVER],
       ['no-model', LOCAL_WITHOUT_MODEL_OR_SERVER],
       ['server-not-paired', SERVER_UNPAIRED_WITH_MODEL],
       ['server-not-paired', SERVER_UNPAIRED_WITHOUT_MODEL],

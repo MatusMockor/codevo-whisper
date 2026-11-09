@@ -21,6 +21,7 @@ const REMEDY_BUTTONS: Readonly<Record<EngineRemedyAction, RemedyButton>> = Objec
   'use-local': { label: () => 'Prepisovať lokálne', command: { kind: 'prefer-engine', engine: 'local' } },
   'download-model': { label: () => 'Stiahnuť model', command: { kind: 'navigate', target: { page: 'settings', section: 'local-model' } } },
   'pair-server': { label: () => 'Spárovať server', command: { kind: 'navigate', target: { page: 'server' } } },
+  'open-server': { label: () => 'Otvoriť Server', command: { kind: 'navigate', target: { page: 'server' } } },
 });
 
 function remedyAction(action: EngineRemedyAction, serverHost: string | null, primary: boolean): ReadinessAction {

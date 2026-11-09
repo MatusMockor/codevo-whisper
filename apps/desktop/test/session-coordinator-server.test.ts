@@ -96,7 +96,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     hotkey,
     capture,
     engines: new EngineSelector([local, remote]),
-    routing: new EngineRouting({ settings, local: new ActiveModelReadiness(models, settings), server: server.service }),
+    routing: new EngineRouting({ order: server.order, local: new ActiveModelReadiness(models, settings), server: server.service }),
     insertion: new InsertionService(helper, settings, lastTranscript, () => Promise.resolve(), logger),
     lastTranscript,
     helper,
@@ -110,7 +110,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     logger,
   });
   coordinator.start();
-  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings, stats, history };
+  return { helper, capture, lastTranscript, states, opened, pairing, logger, settings, stats, history, server: server.service };
 }
 
 async function dictate(harness: Awaited<ReturnType<typeof prepared>>, pcm: Uint8Array): Promise<void> {
@@ -229,7 +229,21 @@ describe('SessionCoordinator with the server engine', () => {
     await expect.poll(() => harness.helper.pasted).toEqual(['na serveri']);
   });
 
-  it('offers local transcription when the server is offline and keeps the server as the fallback', async () => {
+  it('offers the model download and the Server page instead of a paired server that is offline', async () => {
+    const harness = await prepared({ engineOrder: ['local'], localModelId: null });
+    await gateway.stop();
+    await harness.server.check();
+    expect(harness.server.isOffline()).toBe(true);
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'download-model', alternative: 'open-server' });
+    coordinator?.act('open-server');
+    expect(harness.opened).toEqual(['server']);
+    expect(harness.settings.get().engineOrder).toEqual(['local']);
+  });
+
+  it('switches to local transcription only, without a server fallback, when the server is offline', async () => {
     const harness = await prepared({ engineOrder: ['server'] });
     await gateway.stop();
 
@@ -238,7 +252,7 @@ describe('SessionCoordinator with the server engine', () => {
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverOffline, action: 'use-local' });
     coordinator?.act('use-local');
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'local' });
-    expect(harness.settings.get().engineOrder).toEqual(['local', 'server']);
+    expect(harness.settings.get().engineOrder).toEqual(['local']);
 
     await dictate(harness, stampedPcm(3));
 

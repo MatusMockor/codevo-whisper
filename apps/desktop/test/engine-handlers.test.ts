@@ -23,8 +23,9 @@ beforeEach(async () => {
   await settings.load();
   await settings.update({ localModelId: 'tiny', engineOrder: ['local'] });
   const models = await tinyModels(dir, settings, logger, true);
-  server = createServerService({ dir, settings, models, logger }).service;
-  handlers = engineHandlers({ routing: new EngineRouting({ settings, local: new ActiveModelReadiness(models, settings), server }) });
+  const harness = createServerService({ dir, settings, models, logger });
+  server = harness.service;
+  handlers = engineHandlers({ routing: new EngineRouting({ order: harness.order, local: new ActiveModelReadiness(models, settings), server }) });
 });
 
 afterEach(async () => {

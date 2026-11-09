@@ -4,6 +4,7 @@ import { prewarmWhenShown } from '../audio/capture-prewarm';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
 import type { InputHelper } from '../helper/input-helper';
+import { EngineOrderQueue } from '../engines/engine-order-queue';
 import { EngineRouting } from '../engines/engine-routing';
 import { EngineSelector } from '../engines/engine-selector';
 import { Listeners } from '../helper/listeners';
@@ -148,8 +149,9 @@ export function composeApplication(logger: Logger): Application {
       inputReady: input.promise,
     });
     const localModel = new ActiveModelReadiness(models.manager, settings);
-    const server = createServerServices({ settings, local: localModel, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
-    const routing = new EngineRouting({ settings, local: localModel, server: server.service });
+    const order = new EngineOrderQueue(settings);
+    const server = createServerServices({ order, local: localModel, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const routing = new EngineRouting({ order, local: localModel, server: server.service });
     const settingsFocus = new SettingsFocus(mainWindow);
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
