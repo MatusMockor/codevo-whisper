@@ -170,13 +170,36 @@ test('shows a server that needs re-pairing after a revoke', async () => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Server');
 });
 
+test('Home offers the paired server when the local model is missing and switches in one click', async () => {
+  await openTab('Server');
+  await pair();
+  await expect.poll(engineOrder).toEqual(['server']);
+  await page.evaluate(() => window.codevo.updateSettings({ hotkey: { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' }, engineOrder: ['local'] }));
+  await expect.poll(engineOrder).toEqual(['local']);
+
+  await openTab('Domov');
+  const footer = page.locator('.banner');
+  const useServer = `Prepisovať na serveri 127.0.0.1:${gateway.port}`;
+  await expect(footer).toContainText('Lokálny model nie je stiahnutý.');
+  await expect(footer.getByRole('button')).toHaveText(['Stiahnuť model', useServer]);
+  await expect(footer.getByRole('button', { name: useServer })).toHaveClass(/primary/);
+  await expect(page.getByRole('region', { name: 'Od klávesu po vložený text' }).locator('.node', { hasText: 'Prepis' })).toHaveClass(/\berr\b/);
+
+  await footer.getByRole('button', { name: useServer }).click();
+
+  await expect.poll(engineOrder).toEqual(['server']);
+  await expect(footer).not.toContainText('Lokálny model nie je stiahnutý.');
+  await expect(page.getByRole('region', { name: 'Od klávesu po vložený text' }).locator('.node', { hasText: 'Prepis' })).not.toHaveClass(/\berr\b/);
+});
+
 test('Kde beží prepis warns about an order that cannot work and fixes it in one click', async () => {
   await openTab('Nastavenia');
   const engines = page.getByRole('radiogroup', { name: 'Kde beží prepis' });
   const warning = page.locator('.engine-fix');
   await expect(warning).toContainText('Lokálny model nemáte stiahnutý a server nie je spárovaný');
   await warning.getByRole('button', { name: 'Stiahnuť model' }).click();
-  await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
 
   await openTab('Server');
   await pair();

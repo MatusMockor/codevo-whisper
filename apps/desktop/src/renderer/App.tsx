@@ -10,6 +10,7 @@ import { Onboarding } from './pages/Onboarding';
 import { Privacy } from './pages/Privacy';
 import { Server } from './pages/Server';
 import { Settings } from './pages/Settings';
+import { useSettingsFocusRequests } from './settings/use-settings-focus';
 import { useSettings } from './settings/use-settings';
 
 const INSET_TITLE_BAR = navigator.userAgent.includes('Mac');
@@ -25,7 +26,7 @@ function PageContent({ target, dictation, onNavigate }: PageContentProps) {
     return <Meetings onOpenSettings={openSettings} />;
   }
   if (target.page === 'settings') {
-    return <Settings section={target.section ?? null} />;
+    return <Settings target={target} />;
   }
   if (target.page === 'server') {
     return <Server />;
@@ -49,9 +50,10 @@ function PageHead({ page }: { page: PageId }) {
 function Shell() {
   const [target, setTarget] = useState<NavTarget>(() => ({ page: pageFromHash(window.location.hash) }));
   const dictation = useDictation();
-  const badges = dictation.status.kind === 'ready' ? railBadges(dictation.status.value) : {};
+  const badges = dictation.status.kind === 'ready' ? railBadges(dictation.status.value, dictation.issue) : {};
 
   useEffect(() => window.codevo.on('open-page', (page) => setTarget({ page })), []);
+  useSettingsFocusRequests(setTarget);
 
   return (
     <div className="shell">

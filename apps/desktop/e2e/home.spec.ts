@@ -56,7 +56,15 @@ test('banner shows the call to action or the hotkey label', async () => {
   await page.getByRole('tab', { name: 'Domov' }).click();
 
   await page.evaluate((hotkey) => window.codevo.updateSettings({ hotkey }), RIGHT_CONTROL);
-  await expect(banner()).toContainText('Stiahnite si model na prepis reči.');
+  await expect(banner()).toContainText('Lokálny model nie je stiahnutý.');
+  await expect(banner().getByRole('button')).toHaveText(['Spárovať server', 'Stiahnuť model']);
+  await expect(banner().getByRole('button', { name: 'Stiahnuť model' })).toHaveClass(/primary/);
+  await expect(page.getByRole('region', { name: 'Od klávesu po vložený text' }).locator('.node', { hasText: 'Prepis' })).toHaveClass(/\berr\b/);
+  await banner().getByRole('button', { name: 'Stiahnuť model' }).click();
+  await expect(page.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
+  await page.getByRole('tab', { name: 'Domov' }).click();
 
   await expect(async () => {
     await pushStatus(READY);

@@ -1,4 +1,5 @@
 import type { AppStatus } from '../../shared/app-status';
+import type { EngineIssue } from '../home/engine-issue';
 import type { Live } from '../home/live-value';
 import { readinessSummary } from '../home/readiness';
 import { DEFAULT_MICROPHONE } from '../home/signal-path';
@@ -9,7 +10,7 @@ import { Led } from './Led';
 import { StatusBarVersion } from './UpdateFooter';
 import { UpdateIndicator } from './UpdateIndicator';
 
-function ReadinessItem({ status }: { status: Live<AppStatus> }) {
+function ReadinessItem({ status, issue }: { status: Live<AppStatus>; issue: EngineIssue | null }) {
   if (status.kind === 'loading') {
     return <div className="sbar-ready" />;
   }
@@ -21,7 +22,7 @@ function ReadinessItem({ status }: { status: Live<AppStatus> }) {
       </div>
     );
   }
-  const readiness = readinessSummary(status.value);
+  const readiness = readinessSummary(status.value, issue);
   return (
     <div className="sbar-ready">
       <Led state={readiness.state} />
@@ -60,7 +61,7 @@ function MicrophoneItem({ dictation }: { dictation: Dictation }) {
 export function StatusBar({ dictation }: { dictation: Dictation }) {
   return (
     <footer className="sbar">
-      <ReadinessItem status={dictation.status} />
+      <ReadinessItem status={dictation.status} issue={dictation.issue} />
       <RouteItem route={dictation.route} />
       <MicrophoneItem dictation={dictation} />
       <UpdateIndicator />

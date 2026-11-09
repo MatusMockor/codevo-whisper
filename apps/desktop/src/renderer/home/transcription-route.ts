@@ -1,21 +1,27 @@
 import type { AppStatus } from '../../shared/app-status';
 import type { PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
+import type { EngineProblem } from '../../shared/engine-routing';
 import type { NavTarget } from '../navigation';
+import { ISSUE_TARGETS, type EngineIssue } from './engine-issue';
 
 export type SignalState = 'ok' | 'warn' | 'err' | 'off';
 
 export type TranscriptionRoute = { state: Exclude<SignalState, 'off'>; label: string; detail: string; latencyMs: number | null; target: NavTarget };
 
-export type RouteInput = { status: AppStatus; engineOrder: readonly EngineId[]; server: PairedServerView | null; localReady: boolean; modelName: string | null };
+export type RouteInput = { status: AppStatus; engineOrder: readonly EngineId[]; server: PairedServerView | null; localReady: boolean; modelName: string | null; issue: EngineIssue | null };
 
 const SERVER_PAGE: NavTarget = { page: 'server' };
 
-const ENGINE_SECTION: NavTarget = { page: 'settings', section: 'Kde beží prepis' };
-
-const MODEL_SECTION: NavTarget = { page: 'settings', section: 'Lokálny model' };
+const ENGINE_SECTION: NavTarget = { page: 'settings', section: 'engine' };
 
 const FIX = 'kliknite a opravte';
+
+const ISSUE_LABELS: Readonly<Record<EngineProblem, string>> = Object.freeze({
+  'no-model': 'Lokálne · model chýba',
+  'server-not-paired': 'Server nie je spárovaný',
+  'server-offline': 'Server je offline',
+});
 
 function problem(label: string, target: NavTarget): TranscriptionRoute {
   return { state: 'err', label, detail: FIX, latencyMs: null, target };
@@ -56,21 +62,18 @@ function serverFirst({ server, localReady, modelName }: RouteInput): Transcripti
 
 function localFirst({ engineOrder, server, localReady, modelName }: RouteInput): TranscriptionRoute {
   if (!localReady && server !== null) {
-    return { state: 'warn', label: serverLabel(server), detail: 'lokálny model chýba · záloha', latencyMs: latency(server), target: MODEL_SECTION };
+    return { state: 'warn', label: serverLabel(server), detail: 'lokálny model chýba · záloha', latencyMs: latency(server), target: ISSUE_TARGETS['no-model'] };
   }
   return { state: 'ok', label: localLabel(modelName), detail: engineOrder.includes('server') ? 'záloha: server' : 'na tomto zariadení', latencyMs: null, target: ENGINE_SECTION };
 }
 
 export function transcriptionRoute(input: RouteInput): TranscriptionRoute {
-  const { status, engineOrder } = input;
+  const { status, engineOrder, issue } = input;
   if (status.serverRepairNeeded) {
     return problem('Server treba znova spárovať', SERVER_PAGE);
   }
-  if (status.pairingNeeded) {
-    return problem('Server nie je spárovaný', SERVER_PAGE);
-  }
-  if (!status.modelReady) {
-    return problem('Lokálne · model chýba', MODEL_SECTION);
+  if (issue !== null) {
+    return problem(ISSUE_LABELS[issue.problem], ISSUE_TARGETS[issue.problem]);
   }
   if (engineOrder[0] === 'server') {
     return serverFirst(input);

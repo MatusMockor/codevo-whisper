@@ -30,7 +30,7 @@ export function InsertionSection({ settings }: { settings: Pick<Settings, 'inser
   const linux = navigator.userAgent.includes('Linux');
   const copying = insertion === 'clipboard';
   return (
-    <SettingsGroup title="Vkladanie textu">
+    <SettingsGroup title="Vkladanie textu" section="insertion">
       <div className="radio" role="radiogroup" aria-label="Spôsob vkladania">
         {OPTIONS.map((option) => (
           <label key={option.id}>

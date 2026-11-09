@@ -1,7 +1,6 @@
 import { MicrophonePicker } from '../components/MicrophonePicker';
 import { AiSection } from '../settings/AiSection';
 import { DictationSection } from '../settings/DictationSection';
-import { settingsSectionAnchor } from '../../shared/settings-focus';
 import { engineCapabilities } from '../settings/engine-capabilities';
 import { EngineSection } from '../settings/EngineSection';
 import { HistorySection } from '../settings/HistorySection';
@@ -16,17 +15,15 @@ import { saveSettings, useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { usePermissions } from '../settings/use-permissions';
-import { useSettingsFocus } from '../settings/use-settings-focus';
 import { useRevealSection } from '../settings/use-reveal-section';
-import type { SettingsSection } from '../navigation';
+import type { NavTarget } from '../navigation';
 
-export function Settings({ section = null }: { section?: SettingsSection | null }) {
+export function Settings({ target }: { target: NavTarget }) {
   const settings = useSettings();
   const models = useModels();
   const server = useServer();
   const permissions = usePermissions();
-  useSettingsFocus(settings.kind === 'ready');
-  useRevealSection(section, settings.kind === 'ready');
+  useRevealSection(target, settings.kind === 'ready');
   if (settings.kind === 'loading') {
     return null;
   }
@@ -44,10 +41,10 @@ export function Settings({ section = null }: { section?: SettingsSection | null 
       <SaveErrorNotice />
       <DictationSection settings={value} activeModel={activeModel} />
       <EngineSection engineOrder={value.engineOrder} paired={server.kind === 'ready' && server.value.server !== null} capabilities={engineCapabilities(value.localModelId, models, server.kind === 'ready' ? server.value : null)} />
-      <SettingsGroup title="Lokálny model" anchor={settingsSectionAnchor('local-model')}>
+      <SettingsGroup title="Lokálny model" section="local-model">
         <LocalModelSection settings={value} models={models} />
       </SettingsGroup>
-      <SettingsGroup title="Mikrofón">
+      <SettingsGroup title="Mikrofón" section="microphone">
         <MicrophonePicker microphone={value.microphone} onChange={(microphone) => saveSettings({ microphone })} />
       </SettingsGroup>
       <InsertionSection settings={value} />

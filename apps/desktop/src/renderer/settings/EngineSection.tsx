@@ -3,7 +3,7 @@ import type { EngineId } from '../../shared/settings';
 import { ENGINE_FIX_COPY } from './engine-capabilities';
 import { preferEngine } from './prefer-engine';
 import { SettingsGroup } from './SettingsGroup';
-import { revealSettingsSection } from './use-settings-focus';
+import { revealSettingsSection } from './use-reveal-section';
 import { saveSettings } from './use-settings';
 
 type EngineOption = { order: EngineId[]; title: string; description: string; usesServer: boolean };
@@ -48,7 +48,7 @@ function EngineFixNotice({ fix }: { fix: EngineFix | null }) {
 
 export function EngineSection({ engineOrder, paired, capabilities }: EngineSectionProps) {
   return (
-    <SettingsGroup title="Kde beží prepis">
+    <SettingsGroup title="Kde beží prepis" section="engine">
       <div className="radio" role="radiogroup" aria-label="Kde beží prepis">
         {OPTIONS.map((option) => (
           <label key={option.order.join('-')}>

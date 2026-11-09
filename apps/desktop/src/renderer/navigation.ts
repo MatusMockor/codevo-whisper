@@ -1,6 +1,7 @@
 import { isPageId, type PageId } from '../shared/pages';
+import type { SettingsSection } from '../shared/settings-focus';
 
-export type { PageId };
+export type { PageId, SettingsSection };
 
 export type PageDefinition = { id: PageId; label: string; title: string };
 
@@ -11,8 +12,6 @@ export const PAGES: readonly PageDefinition[] = [
   { id: 'settings', label: 'Nastavenia', title: 'Nastavenia' },
   { id: 'privacy', label: 'Súkromie', title: 'Súkromie' },
 ];
-
-export type SettingsSection = 'Diktovanie' | 'Kde beží prepis' | 'Lokálny model' | 'Mikrofón' | 'Vkladanie textu' | 'AI úprava textu';
 
 export type NavTarget = { page: PageId; section?: SettingsSection };
 

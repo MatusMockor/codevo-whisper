@@ -215,9 +215,8 @@ test('Stiahnuť model opens Settings at the Lokálny model section', async () =>
   await overlay.getByRole('button', { name: 'Stiahnuť model' }).click();
 
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
-  const section = main.getByRole('region', { name: 'Lokálny model' });
-  await expect(section).toBeFocused();
-  await expect(section).toBeInViewport();
+  await expect(main.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
+  await expect(main.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
 });
 
 test('Spárovať server opens the Server page', async () => {

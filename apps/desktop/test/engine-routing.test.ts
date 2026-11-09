@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeAfterPairing, isEngineId, orderFix, preferredOrder } from '../src/shared/engine-routing';
+import { changeAfterPairing, engineRemedy, isEngineId, orderFix, orderProblem, preferredOrder } from '../src/shared/engine-routing';
 
 const NOTHING = { localReady: false, serverReady: false } as const;
 const LOCAL = { localReady: true, serverReady: false } as const;
@@ -21,6 +21,25 @@ describe('engine routing policy', () => {
     expect(orderFix(['server', 'local'], LOCAL)).toBeNull();
     expect(orderFix(['local'], NOTHING)).toBe('download-model');
     expect(orderFix(['local'], LOCAL)).toBeNull();
+  });
+
+  it('names the problem of the first engine only when no engine in the order can transcribe', () => {
+    expect(orderProblem(['local'], SERVER, false)).toBe('no-model');
+    expect(orderProblem(['local', 'server'], SERVER, false)).toBeNull();
+    expect(orderProblem(['local', 'server'], SERVER, true)).toBe('no-model');
+    expect(orderProblem(['server'], LOCAL, false)).toBe('server-not-paired');
+    expect(orderProblem(['server'], BOTH, true)).toBe('server-offline');
+    expect(orderProblem(['server', 'local'], BOTH, true)).toBeNull();
+    expect(orderProblem([], NOTHING, false)).toBe('no-model');
+  });
+
+  it('remedies each problem with the engine that can take over, then the setup step', () => {
+    expect(engineRemedy('no-model', SERVER)).toEqual({ action: 'use-server', alternative: 'download-model' });
+    expect(engineRemedy('no-model', NOTHING)).toEqual({ action: 'download-model', alternative: 'pair-server' });
+    expect(engineRemedy('server-not-paired', LOCAL)).toEqual({ action: 'use-local', alternative: 'pair-server' });
+    expect(engineRemedy('server-not-paired', NOTHING)).toEqual({ action: 'pair-server', alternative: 'download-model' });
+    expect(engineRemedy('server-offline', BOTH)).toEqual({ action: 'use-local' });
+    expect(engineRemedy('server-offline', SERVER)).toBeNull();
   });
 
   it('switches to the server after pairing only when the local engine cannot transcribe', () => {

@@ -111,11 +111,11 @@ function insertion({ settings, permissions }: PathInput): NodeBody {
 type NodeSpec = { id: PathNodeId; name: string; read: (input: PathInput) => NodeBody; target: (input: PathInput) => NavTarget };
 
 const NODES: readonly NodeSpec[] = [
-  { id: 'microphone', name: 'Mikrofón', read: microphone, target: () => ({ page: 'settings', section: 'Mikrofón' }) },
-  { id: 'hotkey', name: 'Skratka', read: hotkey, target: () => ({ page: 'settings', section: 'Diktovanie' }) },
+  { id: 'microphone', name: 'Mikrofón', read: microphone, target: () => ({ page: 'settings', section: 'microphone' }) },
+  { id: 'hotkey', name: 'Skratka', read: hotkey, target: () => ({ page: 'settings', section: 'dictation' }) },
   { id: 'transcription', name: 'Prepis', read: transcription, target: ({ route }) => route.target },
-  { id: 'ai', name: 'AI úprava', read: ai, target: () => ({ page: 'settings', section: 'AI úprava textu' }) },
-  { id: 'insertion', name: 'Vloženie', read: insertion, target: () => ({ page: 'settings', section: 'Vkladanie textu' }) },
+  { id: 'ai', name: 'AI úprava', read: ai, target: () => ({ page: 'settings', section: 'ai' }) },
+  { id: 'insertion', name: 'Vloženie', read: insertion, target: () => ({ page: 'settings', section: 'insertion' }) },
 ];
 
 export function signalPathNodes(input: PathInput): PathNode[] {

@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 
 const STATUS: AppStatus = { hotkeyLabel: '⌥Space', mode: 'smart', modelReady: true, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false };
 const GRANTED: PermissionsStatus = { microphone: 'granted', inputMonitoring: true, accessibility: true };
-const ROUTE: TranscriptionRoute = { state: 'ok', label: 'Server domáci-pc', detail: '38 ms · E2E', latencyMs: 38, target: { page: 'settings', section: 'Kde beží prepis' } };
+const ROUTE: TranscriptionRoute = { state: 'ok', label: 'Server domáci-pc', detail: '38 ms · E2E', latencyMs: 38, target: { page: 'settings', section: 'engine' } };
 
 function input(patch: { status?: Partial<AppStatus>; settings?: Partial<Settings>; permissions?: PermissionsStatus | null; route?: TranscriptionRoute } = {}): PathInput {
   return {
@@ -34,11 +34,11 @@ describe('signalPathNodes', () => {
       ['05', 'Vloženie', 'ok'],
     ]);
     expect(nodes.map((entry) => entry.target)).toEqual([
-      { page: 'settings', section: 'Mikrofón' },
-      { page: 'settings', section: 'Diktovanie' },
-      { page: 'settings', section: 'Kde beží prepis' },
-      { page: 'settings', section: 'AI úprava textu' },
-      { page: 'settings', section: 'Vkladanie textu' },
+      { page: 'settings', section: 'microphone' },
+      { page: 'settings', section: 'dictation' },
+      { page: 'settings', section: 'engine' },
+      { page: 'settings', section: 'ai' },
+      { page: 'settings', section: 'insertion' },
     ]);
   });
 
@@ -61,9 +61,9 @@ describe('signalPathNodes', () => {
   });
 
   it('mirrors the transcription route', () => {
-    const route: TranscriptionRoute = { state: 'err', label: 'Lokálne · model chýba', detail: 'kliknite a opravte', latencyMs: null, target: { page: 'settings', section: 'Lokálny model' } };
+    const route: TranscriptionRoute = { state: 'err', label: 'Lokálne · model chýba', detail: 'kliknite a opravte', latencyMs: null, target: { page: 'settings', section: 'local-model' } };
 
-    expect(node(signalPathNodes(input({ route })), 'transcription')).toMatchObject({ state: 'err', value: 'Lokálne · model chýba', target: { page: 'settings', section: 'Lokálny model' } });
+    expect(node(signalPathNodes(input({ route })), 'transcription')).toMatchObject({ state: 'err', value: 'Lokálne · model chýba', target: { page: 'settings', section: 'local-model' } });
   });
 
   it('describes the AI polish provider', () => {

@@ -1,13 +1,16 @@
 import type { AppStatus } from '../../shared/app-status';
-import type { ServerView } from '../../shared/server';
+import { isModelReady } from '../../shared/models';
+import type { PairedServerView, ServerView } from '../../shared/server';
 import type { Settings } from '../../shared/settings';
+import { engineCapabilities } from '../settings/engine-capabilities';
 import { useModels, type Models } from '../settings/use-models';
 import { useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
+import { engineIssue, type EngineIssue } from './engine-issue';
 import { useLiveValue, type Live } from './live-value';
 import { transcriptionRoute, type TranscriptionRoute } from './transcription-route';
 
-export type Dictation = { status: Live<AppStatus>; settings: Live<Settings>; route: TranscriptionRoute | null };
+export type Dictation = { status: Live<AppStatus>; settings: Live<Settings>; route: TranscriptionRoute | null; issue: EngineIssue | null };
 
 const loadStatus = () => window.codevo.getStatus();
 
@@ -18,17 +21,22 @@ function modelName(models: Models, id: string | null): string | null {
   return models.catalog.value.models.find((model) => model.id === id)?.name ?? null;
 }
 
-function localReady(models: Models, id: string | null): boolean {
-  return id !== null && models.states.some((state) => state.id === id && state.status === 'ready');
+function serverView(server: Live<ServerView>): ServerView | null {
+  return server.kind === 'ready' ? server.value : null;
 }
 
-function route(status: AppStatus, settings: Settings, server: Live<ServerView>, models: Models): TranscriptionRoute {
+function dictationIssue(status: AppStatus, settings: Settings, view: ServerView | null, models: Models): EngineIssue | null {
+  return engineIssue({ status, engineOrder: settings.engineOrder, capabilities: engineCapabilities(settings.localModelId, models, view), server: view?.server ?? null });
+}
+
+function route(status: AppStatus, settings: Settings, server: PairedServerView | null, models: Models, issue: EngineIssue | null): TranscriptionRoute {
   return transcriptionRoute({
     status,
     engineOrder: settings.engineOrder,
-    server: server.kind === 'ready' ? server.value.server : null,
-    localReady: localReady(models, settings.localModelId),
+    server,
+    localReady: isModelReady(models.states, settings.localModelId),
     modelName: modelName(models, settings.localModelId),
+    issue,
   });
 }
 
@@ -38,7 +46,9 @@ export function useDictation(): Dictation {
   const server = useServer();
   const models = useModels();
   if (status.kind !== 'ready' || settings.kind !== 'ready') {
-    return { status, settings, route: null };
+    return { status, settings, route: null, issue: null };
   }
-  return { status, settings, route: route(status.value, settings.value, server, models) };
+  const view = serverView(server);
+  const issue = dictationIssue(status.value, settings.value, view, models);
+  return { status, settings, route: route(status.value, settings.value, view?.server ?? null, models, issue), issue };
 }

@@ -5,6 +5,7 @@ import { Glyph, type GlyphName } from '../components/Glyph';
 import { Led } from '../components/Led';
 import type { NavTarget } from '../navigation';
 import { usePermissions } from '../settings/use-permissions';
+import type { EngineIssue } from './engine-issue';
 import type { Live } from './live-value';
 import { ReadinessFooter } from './ReadinessFooter';
 import { pathHeader, type PathHeader } from './readiness';
@@ -88,19 +89,19 @@ function PathRow({ status, settings, route, onNavigate }: PathRowProps) {
   );
 }
 
-function header(status: Live<AppStatus>): PathHeader | null {
+function header(status: Live<AppStatus>, issue: EngineIssue | null): PathHeader | null {
   if (status.kind === 'loading') {
     return null;
   }
   if (status.kind === 'failed') {
     return UNKNOWN_HEADER;
   }
-  return pathHeader(status.value);
+  return pathHeader(status.value, issue);
 }
 
 export function SignalPathCard({ dictation, onNavigate }: { dictation: Dictation; onNavigate: Navigate }) {
-  const { status, settings, route } = dictation;
-  const head = header(status);
+  const { status, settings, route, issue } = dictation;
+  const head = header(status, issue);
   return (
     <section className="sp" aria-labelledby="h-path">
       <div className="sp-head">
@@ -111,7 +112,7 @@ export function SignalPathCard({ dictation, onNavigate }: { dictation: Dictation
         {head !== null && <span className="label-mono">{head.label}</span>}
       </div>
       {status.kind === 'ready' && settings.kind === 'ready' && route !== null && <PathRow status={status.value} settings={settings.value} route={route} onNavigate={onNavigate} />}
-      <ReadinessFooter status={status} onNavigate={onNavigate} />
+      <ReadinessFooter status={status} issue={issue} onNavigate={onNavigate} />
     </section>
   );
 }

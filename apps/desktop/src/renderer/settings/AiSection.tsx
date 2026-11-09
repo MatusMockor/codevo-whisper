@@ -224,7 +224,7 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' 
   }
 
   return (
-    <SettingsGroup title="AI úprava textu">
+    <SettingsGroup title="AI úprava textu" section="ai">
       <p className="sbox-lead">
         {codex
           ? 'Po prepise môže diktát a poznámky zo stretnutí upraviť model OpenAI cez Codex CLI, v ktorom ste prihlásený.'

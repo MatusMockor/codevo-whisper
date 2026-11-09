@@ -1,7 +1,7 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
 import type { AiFailure } from '../../shared/ai';
-import type { EngineCapabilities } from '../../shared/engine-routing';
+import { engineRemedy, type EngineCapabilities, type EngineProblem } from '../../shared/engine-routing';
 import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
@@ -54,35 +54,24 @@ function fixError(message: string, action: OverlayAction, alternative?: OverlayA
   return { kind: 'error', message, action, alternative };
 }
 
-function missingModel(capabilities: EngineCapabilities): ErrorState {
-  if (capabilities.serverReady) {
-    return fixError(MESSAGES.noModel, 'use-server', 'download-model');
-  }
-  return fixError(MESSAGES.noModel, 'download-model', 'pair-server');
-}
-
-function unpairedServer(capabilities: EngineCapabilities): ErrorState {
-  if (capabilities.localReady) {
-    return fixError(MESSAGES.serverNotPaired, 'use-local', 'pair-server');
-  }
-  return fixError(MESSAGES.serverNotPaired, 'pair-server', 'download-model');
-}
-
-function offlineServer(capabilities: EngineCapabilities): ErrorState {
-  if (capabilities.localReady) {
-    return fixError(MESSAGES.serverOffline, 'use-local');
-  }
-  return errorState(MESSAGES.serverOffline);
+function remedyError(message: string, problem: EngineProblem): (capabilities: EngineCapabilities) => ErrorState {
+  return (capabilities) => {
+    const remedy = engineRemedy(problem, capabilities);
+    if (remedy === null) {
+      return errorState(message);
+    }
+    return fixError(message, remedy.action, remedy.alternative);
+  };
 }
 
 const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (capabilities: EngineCapabilities) => ErrorState>> = Object.freeze({
-  'no-model': missingModel,
-  'model-missing': missingModel,
+  'no-model': remedyError(MESSAGES.noModel, 'no-model'),
+  'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
   'model-broken': () => settingsError(MESSAGES.brokenModel),
   'language-required': () => settingsError(MESSAGES.languageRequired),
   'binary-missing': () => errorState(MESSAGES.binaryMissing),
-  'server-not-paired': unpairedServer,
-  'server-offline': offlineServer,
+  'server-not-paired': remedyError(MESSAGES.serverNotPaired, 'server-not-paired'),
+  'server-offline': remedyError(MESSAGES.serverOffline, 'server-offline'),
   'server-repair-needed': () => serverError(MESSAGES.serverRepair),
   'server-busy': () => errorState(MESSAGES.serverBusy),
   'server-storage': () => errorState(MESSAGES.serverStorage),
