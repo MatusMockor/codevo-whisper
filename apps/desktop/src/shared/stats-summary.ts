@@ -53,10 +53,17 @@ function streak(active: ReadonlySet<string>, today: string): Streak {
   return { streakDays: count, streakSince: addDays(day, 1) };
 }
 
-function lastWeek(days: readonly DayStats[], today: string): DayWords[] {
+function perDictation(value: number, dictations: number): number {
+  if (dictations <= 0) {
+    return 0;
+  }
+  return Math.round(value / dictations);
+}
+
+export function dailyWords(days: readonly DayStats[], today: string, count: number): DayWords[] {
   const words = new Map(days.map((day) => [day.date, day.words]));
-  return Array.from({ length: CHART_DAYS }, (_unused, index) => {
-    const date = addDays(today, index - CHART_DAYS + 1);
+  return Array.from({ length: count }, (_unused, index) => {
+    const date = addDays(today, index - count + 1);
     return { date, words: words.get(date) ?? 0 };
   });
 }
@@ -67,8 +74,10 @@ export function summarize(days: readonly DayStats[], period: StatsPeriod, today:
   return {
     ...sum,
     wordsPerMinute: wordsPerMinute(sum),
+    wordsPerDictation: perDictation(sum.words, sum.dictations),
+    secondsPerDictation: perDictation(sum.seconds, sum.dictations),
     savedSeconds: savedSeconds(sum),
     ...streak(active, today),
-    last7: lastWeek(days, today),
+    last7: dailyWords(days, today, CHART_DAYS),
   };
 }

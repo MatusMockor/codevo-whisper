@@ -9,8 +9,16 @@ export type StatsSummary = {
   dictations: number;
   seconds: number;
   wordsPerMinute: number;
+  wordsPerDictation: number;
+  secondsPerDictation: number;
   savedSeconds: number;
   streakDays: number;
   streakSince: string | null;
   last7: DayWords[];
 };
+
+export type ChartScale = { top: number; ticks: number[]; total: number; average: number };
+
+export type HeatLevel = 0 | 1 | 2 | 3 | 4;
+
+export type HeatCell = { date: string; words: number; level: HeatLevel; today: boolean; future: boolean };

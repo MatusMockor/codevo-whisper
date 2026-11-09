@@ -3,8 +3,10 @@ import { useId, type ReactNode } from 'react';
 export function SettingsGroup({ title, anchor, children }: { title: string; anchor?: string; children: ReactNode }) {
   const id = useId();
   return (
-    <section className="sgroup" aria-labelledby={id} id={anchor} tabIndex={anchor === undefined ? undefined : -1}>
-      <h2 id={id}>{title}</h2>
+    <section className="sgroup" aria-labelledby={id} id={anchor} tabIndex={anchor === undefined ? undefined : -1} data-section={title}>
+      <h2 id={id} tabIndex={-1}>
+        {title}
+      </h2>
       <div className="sbox">{children}</div>
     </section>
   );

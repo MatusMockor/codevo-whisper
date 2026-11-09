@@ -12,7 +12,7 @@
   flex: none;
   height: 54px;
   padding: 0 26px 0 92px;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
 }
 
@@ -122,7 +122,7 @@
 }
 
 .ob-body .models {
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--group);
 }
@@ -135,7 +135,7 @@
 
 .ob-try kbd {
   padding: 2px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
@@ -143,7 +143,7 @@
 .ob-pad {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-lg);
   background: var(--surface-2);
   color: var(--ink);

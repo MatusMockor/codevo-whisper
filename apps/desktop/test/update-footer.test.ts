@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { updateFooterView } from '../src/renderer/components/update-footer';
+import { updateFooterView, updateRailView } from '../src/renderer/components/update-footer';
 import type { UpdateMode, UpdatePhase, UpdateStatus } from '../src/shared/updates';
 
 function status(phase: UpdatePhase, mode: UpdateMode = 'in-app'): UpdateStatus {
@@ -52,5 +52,15 @@ describe('updateFooterView', () => {
   it('explains that a development build does not update', () => {
     expect(view({ kind: 'idle', checked: false }, 'unsupported')).toEqual({ ...QUIET, disabled: true, title: 'Aktualizácie fungujú iba v nainštalovanej aplikácii' });
     expect(view({ kind: 'checking' }, 'unsupported')).toEqual({ ...QUIET, disabled: true, title: 'Aktualizácie fungujú iba v nainštalovanej aplikácii' });
+  });
+});
+
+describe('updateRailView', () => {
+  it('shortens the version and the check result for the rail', () => {
+    expect(updateRailView(status({ kind: 'idle', checked: false }))).toEqual({ version: 'v1.1.0', result: null });
+    expect(updateRailView(status({ kind: 'checking' }))).toEqual({ version: 'v1.1.0', result: 'hľadám…' });
+    expect(updateRailView(status({ kind: 'idle', checked: true }))).toEqual({ version: 'v1.1.0', result: 'najnovšia' });
+    expect(updateRailView(status({ kind: 'error', failed: 'check' }))).toEqual({ version: 'v1.1.0', result: 'zlyhala' });
+    expect(updateRailView(status({ kind: 'idle', checked: true }, 'unsupported'))).toEqual({ version: 'v1.1.0', result: null });
   });
 });

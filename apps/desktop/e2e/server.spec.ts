@@ -35,9 +35,11 @@ async function pair(): Promise<PairedEvent> {
   return paired;
 }
 
-async function openTab(name: 'Server' | 'Nastavenia' | 'Domov'): Promise<void> {
+const PAGE_HEADINGS = { Server: 'Server', Nastavenia: 'Nastavenia', Domov: 'Signálna cesta diktovania' } as const;
+
+async function openTab(name: keyof typeof PAGE_HEADINGS): Promise<void> {
   await page.getByRole('tab', { name }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(PAGE_HEADINGS[name]);
 }
 
 test.beforeEach(async () => {

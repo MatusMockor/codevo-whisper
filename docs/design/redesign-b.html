@@ -1,0 +1,2124 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codevo Whisper - Signálna cesta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+})();
+</script>
+<style>
+:root{
+  --f-ui:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r-sm:6px;--r:9px;--r-lg:12px;
+  --term-bg:#0D0E10;--term-ink:#E7E3DA;--term-dim:#8A867E;--term-line:#26282C;
+  --ov-bg:#141517;--ov-line:#2C2E33;--ov-ink:#EFECE6;--ov-ink-2:#A7A39B;
+  --amber-base:#F0A23A;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --backdrop:#08090A;--backdrop-grid:rgba(255,255,255,.035);
+  --win:#121315;--rail:#0D0E10;--panel:#17181B;--panel-2:#1E1F23;--panel-3:#25272B;--inset:#0B0C0E;
+  --line:#26282C;--line-2:#35383D;--line-3:#45484E;
+  --ink:#EEEBE5;--ink-2:#ADA9A1;--ink-3:#807C75;
+  --amber:#F0A23A;--amber-hi:#FFBD5E;--amber-text:#F6B252;--amber-ink:#1C1204;
+  --amber-wash:rgba(240,162,58,.11);--amber-line:rgba(240,162,58,.42);
+  --glow:0 0 0 1px rgba(240,162,58,.55),0 0 22px -2px rgba(240,162,58,.38);
+  --ok:#52D18D;--ok-text:#6BDCA0;--ok-wash:rgba(82,209,141,.1);--ok-line:rgba(82,209,141,.35);
+  --err:#FF6363;--err-text:#FF8080;--err-wash:rgba(255,99,99,.09);--err-line:rgba(255,99,99,.42);
+  --off:#4A4D53;
+  --shadow-win:0 50px 120px -30px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.06);
+  --shadow-pop:0 24px 60px -18px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.06);
+  --spk-1:#F0A23A;--spk-2:#5FB7F5;--spk-3:#C99BFF;--spk-4:#52D18D;--spk-5:#FF8C7A;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --backdrop:#D6D2CA;--backdrop-grid:rgba(0,0,0,.045);
+  --win:#F4F2ED;--rail:#EAE7E0;--panel:#FFFFFF;--panel-2:#F8F6F2;--panel-3:#EFECE6;--inset:#ECE9E2;
+  --line:#DFDBD3;--line-2:#CFCAC0;--line-3:#B9B3A8;
+  --ink:#1A1916;--ink-2:#55514A;--ink-3:#6F6A61;
+  --amber:#EE9A2E;--amber-hi:#F7AE4A;--amber-text:#94560A;--amber-ink:#1C1204;
+  --amber-wash:rgba(238,154,46,.13);--amber-line:rgba(200,120,20,.45);
+  --glow:0 0 0 1px rgba(200,120,20,.5),0 0 16px -2px rgba(238,154,46,.45);
+  --ok:#21A361;--ok-text:#17794A;--ok-wash:rgba(33,163,97,.1);--ok-line:rgba(33,163,97,.4);
+  --err:#D93A3A;--err-text:#B42727;--err-wash:rgba(217,58,58,.08);--err-line:rgba(217,58,58,.4);
+  --off:#B3AEA5;
+  --shadow-win:0 40px 90px -30px rgba(40,30,15,.45),0 0 0 1px rgba(0,0,0,.08);
+  --shadow-pop:0 24px 50px -18px rgba(40,30,15,.35),0 0 0 1px rgba(0,0,0,.08);
+  --spk-1:#D9861A;--spk-2:#2F8BD0;--spk-3:#8A5BD6;--spk-4:#21A361;--spk-5:#D9584A;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--backdrop);color:var(--ink);font-family:var(--f-ui);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:linear-gradient(var(--backdrop-grid) 1px,transparent 1px),linear-gradient(90deg,var(--backdrop-grid) 1px,transparent 1px);background-size:28px 28px;transition:background-color .25s}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:13px;height:13px}
+.ic.lg{width:20px;height:20px}
+.mono{font-family:var(--f-mono);font-feature-settings:"zero" 1}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+kbd{font-family:var(--f-mono);font-size:11.5px;padding:1px 6px;border-radius:5px;background:var(--panel-3);border:1px solid var(--line-2);border-bottom-width:2px;color:var(--ink)}
+
+/* ===== stage (outside window) ===== */
+.stage{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:56px 16px 40px;gap:16px}
+.deck{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:center;max-width:1100px;width:100%;font-size:12px;color:var(--ink-2)}
+.deck .grp{display:flex;align-items:center;gap:8px}
+.deck .lbl{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.seg{display:inline-flex;padding:2px;border-radius:8px;background:var(--inset);border:1px solid var(--line);gap:2px}
+.seg button{border:0;background:transparent;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:550;color:var(--ink-2);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--panel-3);color:var(--ink);box-shadow:0 1px 0 rgba(0,0,0,.25),inset 0 0 0 1px var(--line-2)}
+.seg.amber button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);box-shadow:none}
+.dirtag{position:fixed;left:14px;top:12px;z-index:90;display:flex;align-items:center;gap:8px;padding:7px 12px 7px 10px;border-radius:8px;background:var(--term-bg);color:var(--term-ink);font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;border:1px solid #2a2c30;box-shadow:0 8px 24px -8px rgba(0,0,0,.6)}
+.dirtag b{color:var(--amber-base);font-weight:600}
+
+/* ===== window ===== */
+.win{width:1100px;height:720px;flex:none;border-radius:12px;background:var(--win);box-shadow:var(--shadow-win);overflow:hidden;display:grid;grid-template-rows:40px 1fr 28px;position:relative}
+.tbar{display:flex;align-items:center;gap:14px;padding:0 12px 0 16px;border-bottom:1px solid var(--line);background:var(--rail);-webkit-user-select:none;user-select:none}
+.lights{display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
+.lights i:nth-child(1){background:#FF5F57}.lights i:nth-child(2){background:#FEBC2E}.lights i:nth-child(3){background:#28C840}
+.tbar .ttl{flex:1;text-align:center;font-size:12.5px;font-weight:600;color:var(--ink-2);letter-spacing:.01em}
+.cmdk{display:flex;align-items:center;gap:8px;height:26px;padding:0 6px 0 9px;border-radius:7px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-3);font-size:12px;min-width:210px}
+.cmdk:hover{color:var(--ink-2);border-color:var(--line-3)}
+.cmdk span{flex:1;text-align:left}
+.cmdk kbd{font-size:10.5px;padding:0 5px}
+.body{display:grid;grid-template-columns:84px 1fr;min-height:0}
+
+/* rail */
+.rail{background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;padding:12px 8px 10px;gap:4px;min-height:0}
+.rail .logo{width:34px;height:34px;margin:2px auto 12px;display:block}
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav button{position:relative;border:1px solid transparent;background:transparent;border-radius:9px;padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--ink-3);font-size:10.5px;font-weight:600;letter-spacing:.01em}
+.nav button .ic{width:19px;height:19px}
+.nav button:hover{color:var(--ink);background:var(--panel)}
+.nav button[aria-selected="true"]{color:var(--ink);background:var(--panel-2);border-color:var(--line-2)}
+.nav button[aria-selected="true"]::before{content:"";position:absolute;left:-9px;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.nav .badge{position:absolute;top:6px;right:13px}
+.rail .foot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.rail .ver{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);text-align:center;line-height:1.3}
+.iconbtn{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:7px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2)}
+.iconbtn:hover{color:var(--ink);border-color:var(--line-3)}
+.iconbtn.spin .ic{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* status bar */
+.sbar{display:flex;align-items:center;gap:0;border-top:1px solid var(--line);background:var(--rail);font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);padding:0 10px;white-space:nowrap;overflow:hidden}
+.sbar > *{display:flex;align-items:center;gap:7px;padding:0 12px;height:100%;border-right:1px solid var(--line)}
+.sbar > *:last-child{border-right:0;margin-left:auto}
+.sbar b{color:var(--ink-2);font-weight:500}
+.sbar button{border:0;background:transparent;color:var(--ink-3);display:inline-flex;align-items:center;gap:5px;font:inherit;padding:2px 4px;border-radius:4px}
+.sbar button:hover{color:var(--ink)}
+
+/* LEDs */
+.led{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;background:var(--off);box-shadow:inset 0 -1px 1px rgba(0,0,0,.35)}
+.led.ok{background:var(--ok);box-shadow:0 0 6px 0 var(--ok),inset 0 -1px 1px rgba(0,0,0,.2)}
+.led.err{background:var(--err);box-shadow:0 0 7px 0 var(--err),inset 0 -1px 1px rgba(0,0,0,.2);animation:blink 1.4s steps(1) infinite}
+.led.amber,.led.warn{background:var(--amber);box-shadow:0 0 8px 0 var(--amber),inset 0 -1px 1px rgba(0,0,0,.2)}
+.led.live{animation:pulse 1.2s ease-in-out infinite}
+.led.lg{width:10px;height:10px}
+@keyframes blink{50%{opacity:.35}}
+@keyframes pulse{50%{box-shadow:0 0 14px 2px var(--amber);transform:scale(1.12)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* main */
+.main{min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;scroll-behavior:smooth}
+.main::-webkit-scrollbar{width:10px}.main::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:10px;border:3px solid var(--win)}
+.page{padding:20px 28px 36px;display:flex;flex-direction:column;gap:16px}
+.phead{display:flex;align-items:flex-end;gap:16px;justify-content:space-between}
+.phead .kick{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 4px}
+.phead h1{margin:0;font-size:24px;font-weight:680;font-stretch:118%;letter-spacing:-.01em;line-height:1.1}
+.phead p.sub{margin:5px 0 0;color:var(--ink-2);max-width:620px}
+
+/* generic card */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px}
+.card.flush{padding:0}
+.chead{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:12px}
+.chead h2,.chead h3{margin:0;font-size:12px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:8px;font-stretch:108%}
+.chead .tools{display:flex;gap:8px;align-items:center}
+.label-mono{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.note{font-size:12px;color:var(--ink-3);margin:0;display:flex;gap:7px;align-items:flex-start}
+.note .ic{margin-top:1px}
+.muted{color:var(--ink-3)}
+.ink2{color:var(--ink-2)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:30px;padding:0 12px;border-radius:7px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--ink);font-size:12.5px;font-weight:600;white-space:nowrap;box-shadow:0 1px 0 rgba(0,0,0,.12)}
+.btn:hover{border-color:var(--line-3);background:var(--panel-3)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--amber);border-color:transparent;color:var(--amber-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 1px 0 rgba(0,0,0,.2)}
+.btn.primary:hover{background:var(--amber-hi)}
+.btn.danger{color:var(--err-text);border-color:var(--err-line);background:transparent}
+.btn.danger:hover{background:var(--err-wash)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--ink-2)}
+.btn.ghost:hover{background:var(--panel-3);color:var(--ink)}
+.btn.ok{color:var(--ok-text);border-color:var(--ok-line)}
+.btn.sm{height:26px;padding:0 9px;font-size:12px}
+.btn.lg{height:36px;padding:0 16px;font-size:13.5px}
+.btn.mock{border-style:dashed;background:transparent;color:var(--ink-3);font-family:var(--f-mono);font-size:11px;font-weight:500}
+.linkbtn{border:0;background:none;padding:0;color:var(--amber-text);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* pills */
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font-size:11px;font-weight:650;letter-spacing:.02em;border:1px solid var(--line-2);color:var(--ink-2);white-space:nowrap}
+.pill.ok{color:var(--ok-text);border-color:var(--ok-line);background:var(--ok-wash)}
+.pill.err{color:var(--err-text);border-color:var(--err-line);background:var(--err-wash)}
+.pill.amber{color:var(--amber-text);border-color:var(--amber-line);background:var(--amber-wash)}
+.tag{font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line-2);color:var(--ink-3);white-space:nowrap}
+.tag.amber{color:var(--amber-text);border-color:var(--amber-line)}
+.tag.err{color:var(--err-text);border-color:var(--err-line)}
+.tag.ok{color:var(--ok-text);border-color:var(--ok-line)}
+
+/* ===== signal path ===== */
+.sp{position:relative;padding:16px 18px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.sp::before{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:14px 14px;opacity:.55;pointer-events:none;mask-image:linear-gradient(180deg,#000 0,transparent 80%)}
+.sp-head{position:relative;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sp-head h2{margin:0;font-size:12px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);font-stretch:108%;display:flex;gap:9px;align-items:center}
+.sp-row{position:relative;display:flex;align-items:stretch}
+.node{position:relative;flex:1 1 0;min-width:0;text-align:left;border:1px solid var(--line-2);background:var(--panel-2);border-radius:10px;padding:10px 11px 10px;display:flex;flex-direction:column;gap:6px;transition:border-color .15s,transform .15s,box-shadow .15s}
+.node:hover{border-color:var(--line-3);transform:translateY(-1px)}
+.node .top{display:flex;align-items:center;gap:7px}
+.node .idx{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);letter-spacing:.06em}
+.node .top .led{margin-left:auto}
+.node .nm{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;font-stretch:108%}
+.node .nm .ic{color:var(--ink-2)}
+.node .val{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node .meta{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.node .fixhint{font-size:11px;font-weight:650;color:var(--err-text);display:flex;align-items:center;gap:4px}
+.node.ok{border-color:var(--line-2)}
+.node.err{border-color:var(--err-line);background:linear-gradient(180deg,var(--err-wash),transparent 70%),var(--panel-2);box-shadow:0 0 0 3px var(--err-wash)}
+.node.warn{border-color:var(--amber-line);background:linear-gradient(180deg,var(--amber-wash),transparent 70%),var(--panel-2)}
+.node.off{border-style:dashed;background:transparent}
+.node.off .nm,.node.off .val{color:var(--ink-3)}
+.node.live{box-shadow:var(--glow);border-color:transparent}
+.meter{display:flex;gap:2px;align-items:flex-end;height:12px}
+.meter i{width:3px;border-radius:1px;background:var(--ok);opacity:.85;animation:lvl 900ms ease-in-out infinite alternate}
+.meter i:nth-child(1){height:30%;animation-delay:-.2s}.meter i:nth-child(2){height:60%;animation-delay:-.5s}.meter i:nth-child(3){height:90%;animation-delay:-.1s}.meter i:nth-child(4){height:50%;animation-delay:-.7s}.meter i:nth-child(5){height:75%;animation-delay:-.35s}.meter i:nth-child(6){height:40%;animation-delay:-.6s}
+.meter.amber i{background:var(--amber)}
+.meter.off i{background:var(--off);animation:none}
+@keyframes lvl{0%{transform:scaleY(.35)}100%{transform:scaleY(1)}}
+.meter i{transform-origin:bottom}
+.wire{position:relative;flex:0 0 34px;align-self:center;height:14px}
+.wire::before{content:"";position:absolute;left:0;right:0;top:6px;height:2px;border-radius:2px;background:var(--line-3)}
+.wire.on::before{background:repeating-linear-gradient(90deg,var(--amber) 0 6px,transparent 6px 10px);background-size:20px 2px;animation:flow .7s linear infinite;box-shadow:0 0 6px rgba(240,162,58,.4)}
+.wire.dead::before{background:repeating-linear-gradient(90deg,var(--line-3) 0 3px,transparent 3px 7px)}
+.wire::after{content:"";position:absolute;right:-1px;top:3px;border:4px solid transparent;border-left:6px solid var(--line-3);border-right:0}
+.wire.on::after{border-left-color:var(--amber)}
+.wire .brk{position:absolute;left:50%;top:-4px;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:var(--panel);border:1px solid var(--err-line);display:grid;place-items:center;color:var(--err-text);z-index:1}
+.wire .brk .ic{width:11px;height:11px;stroke-width:2.4}
+@keyframes flow{to{background-position:20px 0}}
+.sp-foot{position:relative;margin-top:14px;display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--inset)}
+.sp-foot.err{border-color:var(--err-line);background:var(--err-wash)}
+.sp-foot.mute{background:var(--panel-2)}
+.sp-foot .msg{flex:1;min-width:0}
+.sp-foot .msg b{display:block;font-size:13.5px;font-weight:650}
+.sp-foot .msg span{display:block;color:var(--ink-2);font-size:12.5px}
+.sp-foot .row-btns{flex:none}
+
+/* readiness checklist */
+.check{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;position:relative;margin-top:10px}
+.check .it{display:flex;gap:9px;align-items:flex-start;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);text-align:left;width:100%}
+.check .it.err{border-color:var(--err-line)}
+.check .it b{display:block;font-size:12.5px}
+.check .it span{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.35}
+.check .it .led{margin-top:5px}
+.check .it em{display:block;font-style:normal;font-size:11.5px;font-weight:650;color:var(--amber-text);margin-top:4px}
+
+/* home grid */
+.home-duo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+:root[data-theme="dark"]{--bar:#3A3D43;--bar-hi:#5A5E66;--col-hover:rgba(255,255,255,.03)}
+:root[data-theme="light"]{--bar:#D9D3C8;--bar-hi:#B5AEA2;--col-hover:rgba(0,0,0,.03)}
+
+/* stats: shared */
+.st-card{padding:0;overflow:visible}
+.st-head{display:flex;align-items:center;gap:12px;padding:14px 18px 0}
+.st-head h2{margin:0;font-size:12px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);font-stretch:108%;display:flex;align-items:center;gap:8px}
+.st-head .sp-fill{flex:1}
+.unit{font-size:.5em;font-weight:560;font-stretch:100%;color:var(--ink-3);margin:0 .32em 0 .14em;letter-spacing:0}
+.unit:last-child{margin-right:0}
+.st-foot{display:flex;align-items:center;gap:7px;padding:11px 18px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+.st-foot .sp-fill{flex:1}
+.st-label{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.legend{display:flex;align-items:center;gap:14px;font-size:11.5px;color:var(--ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bar);margin-right:6px;vertical-align:-1px}
+.legend i.amber{background:var(--amber)}
+.legend i.avg{width:14px;height:0;border-radius:0;border-top:1.5px dashed var(--ink-3);background:none;vertical-align:3px}
+
+/* words chart */
+.wc{display:flex;gap:10px;--gap:14px}
+.wc.dense{--gap:4px}
+.wc-main{flex:1;min-width:0}
+.wc-plot{position:relative;height:var(--h);border-bottom:1px solid var(--line-3)}
+.wc-grid{position:absolute;left:0;right:0;bottom:calc(var(--p) * 100%);border-top:1px dashed var(--line);pointer-events:none}
+.wc-avg{position:absolute;left:0;right:0;bottom:calc(var(--p) * 100%);border-top:1.5px dashed var(--ink-3);opacity:.7;pointer-events:none}
+.wc-y{position:relative;width:34px;flex:none;height:var(--h)}
+.wc-y span{position:absolute;right:0;bottom:calc(var(--p) * 100%);transform:translateY(50%);font-family:var(--f-mono);font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.wc-cols{position:absolute;inset:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:var(--gap);align-items:end}
+.wc-col{position:relative;height:100%;border:0;margin:0;padding:0;background:transparent;display:flex;align-items:flex-end;justify-content:center;border-radius:6px 6px 0 0;cursor:default}
+.wc-col:hover{background:var(--col-hover)}
+.wc-col:focus-visible{outline-offset:1px;border-radius:6px}
+.wc-bar{display:block;width:100%;max-width:46px;height:max(3px,calc(var(--v) * 100%));border-radius:5px 5px 1px 1px;background:var(--bar);transition:background-color .12s}
+.wc.dense .wc-bar{max-width:16px;border-radius:3px 3px 1px 1px}
+.wc-col.zero .wc-bar{height:2px;background:var(--line-2)}
+.wc-col:hover .wc-bar,.wc-col:focus-visible .wc-bar{background:var(--bar-hi)}
+.wc-col.today .wc-bar{background:var(--amber);box-shadow:0 0 16px -3px rgba(240,162,58,.55)}
+.wc-col.today:hover .wc-bar,.wc-col.today:focus-visible .wc-bar{background:var(--amber-hi)}
+.wc-val{position:absolute;left:50%;bottom:calc(var(--v) * 100% + 6px);transform:translateX(-50%);font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--amber-text);white-space:nowrap;font-variant-numeric:tabular-nums}
+.wc-col:hover .wc-val,.wc-col:focus-visible .wc-val{opacity:0}
+.wc-tip{position:absolute;left:50%;bottom:calc(var(--v) * 100% + 10px);transform:translate(-50%,4px);opacity:0;pointer-events:none;z-index:5;background:var(--ink);color:var(--win);border-radius:7px;padding:6px 9px 6px;white-space:nowrap;text-align:left;box-shadow:var(--shadow-pop);transition:opacity .12s,transform .12s;display:flex;flex-direction:column;gap:1px}
+.wc-tip b{font-size:12.5px;font-weight:650;font-variant-numeric:tabular-nums}
+.wc-tip span{font-family:var(--f-mono);font-size:10px;letter-spacing:.04em;opacity:.7}
+.wc-col:first-child .wc-tip{left:0;transform:translate(0,4px)}
+.wc-col:last-child .wc-tip{left:auto;right:0;transform:translate(0,4px)}
+.wc-col:hover .wc-tip,.wc-col:focus-visible .wc-tip{opacity:1;transform:translate(-50%,0)}
+.wc-col:first-child:hover .wc-tip,.wc-col:first-child:focus-visible .wc-tip,.wc-col:last-child:hover .wc-tip,.wc-col:last-child:focus-visible .wc-tip{transform:none}
+.wc-x{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:var(--gap);margin-top:7px}
+.wc-x span{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);text-align:center;white-space:nowrap;overflow:visible;display:flex;justify-content:center}
+.wc-x span.today{color:var(--amber-text);font-weight:600}
+
+/* sparkline */
+.kspark{display:block;overflow:visible}
+.kspark .ln{fill:none;stroke:var(--ink-3);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.kspark .ar{fill:var(--bar);opacity:.45}
+.kspark .dot{fill:var(--amber);stroke:var(--panel);stroke-width:2}
+
+/* stats v1: hlavné číslo */
+.v1-body{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:28px;padding:18px 18px 18px}
+.v1-hero{display:flex;flex-direction:column;justify-content:center;min-width:0;padding-right:4px}
+.v1-hero .num{font-size:66px;line-height:.95;font-weight:720;font-stretch:118%;letter-spacing:-.025em;font-variant-numeric:tabular-nums;color:var(--ink);margin:10px 0 12px;white-space:nowrap}
+.v1-hero .num .unit{font-size:.38em;font-weight:600;color:var(--ink-2);margin:0 .55em 0 .12em}
+.v1-hero .num .unit:last-child{margin-right:0}
+.v1-hero .say{margin:0;font-size:16px;line-height:1.4;color:var(--ink);font-weight:500;max-width:340px}
+.v1-hero .say b{color:var(--amber-text);font-weight:650}
+.v1-hero .est{margin:8px 0 0;font-size:12px;color:var(--ink-3)}
+.v1-chart{display:flex;flex-direction:column;min-width:0;padding:4px 0 0 24px;border-left:1px solid var(--line)}
+.v1-chart .chart-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:34px}
+.v1-chart .chart-top strong{font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--ink-2)}
+.v1-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid var(--line);margin:0}
+.v1-row > div{padding:13px 18px 14px;min-width:0;border-left:1px solid var(--line)}
+.v1-row > div:first-child{border-left:0}
+.v1-row dt{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.v1-row dd{margin:3px 0 0;font-size:21px;font-weight:650;font-stretch:110%;letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.v1-row dd .unit{font-size:12.5px}
+.v1-row dd small{display:block;font-size:11.5px;font-weight:500;font-stretch:100%;color:var(--ink-3);letter-spacing:0;margin-top:1px}
+
+/* stats v2: kompaktný pás */
+.kstrip{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg)}
+.ks-top{display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line)}
+.ks-top h2{margin:0;font-size:11.5px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);font-stretch:108%}
+.ks-top .seg button{padding:3px 9px;font-size:11.5px}
+.ks-top .priv{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.ks-more{gap:5px}
+.ks-more .ic{transform:rotate(90deg);transition:transform .15s}
+.ks-more[aria-expanded="true"] .ic{transform:rotate(-90deg)}
+.ks-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0}
+.ks-row > div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:2px 10px;padding:11px 16px 12px;border-left:1px solid var(--line);min-width:0}
+.ks-row > div:first-child{border-left:0}
+.ks-row dt{grid-column:1/-1;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.ks-row dd{margin:0;font-size:22px;line-height:1.1;font-weight:650;font-stretch:110%;letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ks-row dd.hot{color:var(--amber-text)}
+.ks-row .kspark{margin-bottom:3px}
+.ks-panel{border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:24px;padding:14px 16px 16px;background:linear-gradient(180deg,var(--panel-2),var(--panel))}
+.ks-panel dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin:0;align-content:start}
+.ks-panel dt{font-size:12px;color:var(--ink-3)}
+.ks-panel dd{margin:2px 0 0;font-size:17px;font-weight:650;font-stretch:108%;font-variant-numeric:tabular-nums}
+.ks-panel .wc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:26px}
+.ks-panel .privline{grid-column:1/-1;margin:0 0 6px}
+
+/* stats v3: graf v hlavnej úlohe */
+.v3-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:14px 18px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
+.v3-kpis > div{padding:10px 14px 11px;border-left:1px solid var(--line);min-width:0}
+.v3-kpis > div:first-child{border-left:0}
+.v3-kpis dt{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.v3-kpis dt i{width:8px;height:8px;border-radius:2px;background:var(--amber);display:inline-block}
+.v3-kpis dd{margin:2px 0 0;font-size:20px;font-weight:650;font-stretch:110%;font-variant-numeric:tabular-nums;white-space:nowrap}
+.v3-kpis dd small{font-size:11.5px;font-weight:500;color:var(--ink-3);font-stretch:100%;margin-left:6px}
+.v3-body{display:grid;grid-template-columns:minmax(0,1fr) 252px;gap:0;margin-top:16px;border-top:1px solid var(--line)}
+.v3-chart{padding:14px 20px 16px 18px;min-width:0}
+.v3-chart .chart-top{display:flex;align-items:center;gap:14px;margin-bottom:30px}
+.v3-chart .chart-top .ttl{font-size:13.5px;font-weight:650}
+.v3-chart .chart-top .ttl span{font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--ink-3);margin-left:8px}
+.v3-chart .chart-top .seg{margin-left:auto}
+.v3-streak{padding:14px 18px 16px;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.v3-streak .big{font-size:38px;line-height:1;font-weight:720;font-stretch:118%;letter-spacing:-.02em;margin:8px 0 2px;font-variant-numeric:tabular-nums}
+.v3-streak .big .unit{font-size:.4em;color:var(--ink-2)}
+.v3-streak .sub{font-size:12px;color:var(--ink-3);margin:0 0 14px}
+.hm{display:grid;grid-template-columns:22px repeat(6,20px);grid-auto-rows:20px;gap:5px;align-self:flex-start}
+.hm .rl{font-family:var(--f-mono);font-size:9.5px;color:var(--ink-3);display:flex;align-items:center}
+.hm .c{position:relative;border-radius:4px;background:var(--inset);box-shadow:inset 0 0 0 1px var(--line)}
+.hm .c.l1{background:color-mix(in oklab,var(--amber) 24%,var(--panel));box-shadow:none}
+.hm .c.l2{background:color-mix(in oklab,var(--amber) 46%,var(--panel));box-shadow:none}
+.hm .c.l3{background:color-mix(in oklab,var(--amber) 72%,var(--panel));box-shadow:none}
+.hm .c.l4{background:var(--amber);box-shadow:none}
+.hm .c.fut{background:transparent;box-shadow:inset 0 0 0 1px var(--line);opacity:.45}
+.hm .c.today{outline:2px solid var(--ink);outline-offset:1px}
+.hm .c[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--win);font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5;box-shadow:var(--shadow-pop);pointer-events:none}
+.hm-legend{display:flex;align-items:center;gap:4px;margin-top:12px;font-size:11px;color:var(--ink-3)}
+.hm-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.hm-legend span{margin:0 4px}
+.privline{display:flex;gap:7px;align-items:center;font-size:12px;color:var(--ink-3);margin:12px 0 0;padding-top:11px;border-top:1px dashed var(--line-2)}
+.transcript{font-size:14px;line-height:1.55;margin:0;color:var(--ink);padding:12px 14px;border-radius:9px;background:var(--inset);border:1px solid var(--line);border-left:3px solid var(--amber)}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist li{padding:9px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+.hist li:first-child{border-top:0;padding-top:2px}
+.hist time{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3)}
+.hist p{margin:0;grid-column:1/-1;font-size:12.5px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.confirm{margin-top:10px;padding:11px 12px;border-radius:9px;border:1px solid var(--err-line);background:var(--err-wash);display:flex;flex-direction:column;gap:9px}
+.confirm p{margin:0;font-size:12.5px}
+.empty{color:var(--ink-3);font-size:12.5px;margin:0}
+
+/* ===== drawer ===== */
+.scrim{position:absolute;inset:40px 0 28px 84px;background:rgba(0,0,0,.35);z-index:20;animation:fade .15s}
+:root[data-theme="light"] .scrim{background:rgba(40,30,15,.18)}
+.drawer{position:absolute;top:40px;bottom:28px;right:0;width:400px;z-index:21;background:var(--win);border-left:1px solid var(--line-2);box-shadow:var(--shadow-pop);display:flex;flex-direction:column;animation:slide .2s cubic-bezier(.2,.8,.2,1)}
+@keyframes slide{from{transform:translateX(30px);opacity:0}}
+@keyframes fade{from{opacity:0}}
+.drawer header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.drawer header .idx{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3)}
+.drawer header h2{margin:0;font-size:16px;font-weight:700;font-stretch:112%;flex:1}
+.drawer .dbody{padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.drawer .dfoot{margin-top:auto;padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.fix{border:1px solid var(--line-2);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--panel)}
+.fix.rec{border-color:var(--amber-line);box-shadow:var(--glow)}
+.fix b{font-size:13.5px}
+.fix p{margin:0;font-size:12.5px;color:var(--ink-2)}
+.state-line{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--inset)}
+.state-line.err{border-color:var(--err-line);background:var(--err-wash)}
+.state-line.ok{border-color:var(--ok-line);background:var(--ok-wash)}
+.state-line .led{margin-top:5px}
+.state-line b{display:block}
+.state-line span{display:block;font-size:12px;color:var(--ink-2)}
+
+/* forms */
+.select,.input,.textarea{height:30px;border-radius:7px;border:1px solid var(--line-2);background:var(--panel);padding:0 10px;font-size:12.5px;min-width:0}
+.select{padding-right:28px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;min-width:190px}
+.input.mono,.textarea.mono{font-family:var(--f-mono);font-size:12px}
+.textarea{height:auto;padding:8px 10px;resize:vertical;line-height:1.5;width:100%}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-wash)}
+.input[aria-invalid="true"]{border-color:var(--err-line)}
+.switch{position:relative;width:36px;height:21px;border-radius:999px;border:1px solid var(--line-2);background:var(--inset);padding:0;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--ink-3);transition:transform .15s,background .15s}
+.switch[aria-checked="true"]{background:var(--amber-wash);border-color:var(--amber-line)}
+.switch[aria-checked="true"]::after{transform:translateX(15px);background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.switch:disabled{opacity:.4;cursor:not-allowed}
+.range{display:flex;align-items:center;gap:10px}
+.range input{accent-color:var(--amber);width:150px}
+.range output{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2);width:40px;text-align:right}
+.radios{display:flex;flex-direction:column;gap:6px}
+.radio{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;text-align:left;width:100%}
+.radio:hover{border-color:var(--line-3)}
+.radio[aria-checked="true"]{border-color:var(--amber-line);background:var(--amber-wash)}
+.radio .dot{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line-3);margin-top:2px;flex:none;display:grid;place-items:center}
+.radio[aria-checked="true"] .dot{border-color:var(--amber)}
+.radio[aria-checked="true"] .dot::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.radio b{display:block;font-size:13px}
+.radio span{display:block;font-size:12px;color:var(--ink-2)}
+.radio:disabled{opacity:.45;cursor:not-allowed}
+.hotkey{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 6px 0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--inset);font-family:var(--f-mono);font-size:13px;min-width:180px;justify-content:space-between}
+.hotkey.rec{border-color:var(--amber);box-shadow:var(--glow);color:var(--amber-text)}
+.hotkey .keys{display:flex;gap:4px}
+.lvl{display:flex;gap:2px;height:10px;margin-top:6px}
+.lvl i{flex:1;max-width:7px;border-radius:1px;background:var(--line-2)}
+.lvl i.on{background:var(--ok)}
+.lvl i.on.hi{background:var(--amber)}
+
+/* ===== Prepis page ===== */
+.now{display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel);position:relative;overflow:hidden}
+.now.ok{border-color:var(--ok-line)}
+.now.err{border-color:var(--err-line);background:linear-gradient(90deg,var(--err-wash),transparent 60%),var(--panel)}
+.now .lamp{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--inset);border:1px solid var(--line-2);flex:none}
+.now .lamp .led{width:12px;height:12px}
+.now .t{flex:1;min-width:0}
+.now .t small{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.now .t b{display:block;font-size:19px;font-weight:700;font-stretch:112%;letter-spacing:-.005em;line-height:1.25}
+.now .t span{display:block;color:var(--ink-2);font-size:12.5px}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin:6px 0 -4px}
+.sec-h .n{font-family:var(--f-mono);font-size:11px;color:var(--amber-text)}
+.sec-h h2{margin:0;font-size:15px;font-weight:700;font-stretch:112%}
+.sec-h p{margin:0;color:var(--ink-3);font-size:12px}
+.route{display:grid;grid-template-columns:1fr 46px 1fr;align-items:stretch;gap:0}
+.slot{border:1px dashed var(--line-2);border-radius:11px;padding:10px;min-height:120px;display:flex;flex-direction:column;gap:8px;background:var(--inset);transition:border-color .15s,background .15s}
+.slot.over{border-color:var(--amber);background:var(--amber-wash)}
+.slot .sl{display:flex;justify-content:space-between;align-items:center}
+.eng{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);cursor:grab;position:relative}
+.eng:active{cursor:grabbing}
+.eng.dragging{opacity:.4}
+.eng .grip{color:var(--ink-3);display:grid;place-items:center}
+.eng .ei{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:var(--panel-3);border:1px solid var(--line);flex:none}
+.eng .t{flex:1;min-width:0}
+.eng .t b{display:block;font-size:13.5px}
+.eng .t span{display:block;font-size:11.5px;color:var(--ink-3);font-family:var(--f-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eng.primary{border-color:var(--amber-line);box-shadow:var(--glow)}
+.eng.dis{opacity:.55;cursor:not-allowed}
+.slot .emptyslot{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;color:var(--ink-3);font-size:12px;padding:6px}
+.route-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.route-mid .wire{flex:none;width:30px}
+.route-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.route-foot .exp{font-size:12.5px;color:var(--ink-2)}
+.route-foot .exp b{color:var(--ink)}
+.e2e{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:9px;background:var(--inset);border:1px solid var(--line)}
+.e2e .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--ok-text);white-space:nowrap;padding:3px 8px;border-radius:6px;border:1px solid var(--ok-line);background:var(--ok-wash)}
+.e2e p{margin:0;font-size:12.5px;color:var(--ink-2)}
+.srv-top{display:flex;gap:12px;align-items:center}
+.srv-ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--inset);border:1px solid var(--line-2);flex:none;position:relative}
+.srv-ic .led{position:absolute;right:-3px;top:-3px;border:2px solid var(--panel);width:11px;height:11px}
+.srv-top h3{margin:0;font-size:17px;font-weight:700;font-stretch:112%}
+.srv-top p{margin:0;color:var(--ink-3);font-size:12px}
+.srv-top .pill{margin-left:auto}
+.srv-grid{display:grid;grid-template-columns:230px 1fr;gap:14px;margin-top:14px}
+.spark{padding:11px 12px;border-radius:9px;background:var(--inset);border:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.spark .big{font-family:var(--f-mono);font-size:24px;font-weight:600;color:var(--ink);letter-spacing:-.02em;line-height:1}
+.spark .big small{font-size:12px;color:var(--ink-3);margin-left:3px}
+.spark svg{width:100%;height:44px;display:block}
+.spark .ln{fill:none;stroke:var(--amber);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(240,162,58,.5))}
+.spark .ar{fill:var(--amber-wash);stroke:none}
+.spark .dot{fill:var(--amber)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:12.5px;align-content:start}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0;font-family:var(--f-mono);font-size:11.5px;color:var(--ink);word-break:break-all}
+.fps{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.fpbox{padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--inset)}
+.fpbox small{display:block;font-size:11px;color:var(--ink-3);margin-bottom:3px}
+.fpbox code{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.06em;word-spacing:.3em;color:var(--ink)}
+.fpbox.hot{border-color:var(--amber-line);background:var(--amber-wash)}
+.fpbox.hot code{font-size:15px;color:var(--amber-text);font-weight:600}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:9px;border:1px solid var(--err-line);background:var(--err-wash);font-size:12.5px}
+.alert .ic{color:var(--err-text);margin-top:1px}
+.alert p{margin:0}
+.alert.amber{border-color:var(--amber-line);background:var(--amber-wash)}
+.alert.amber .ic{color:var(--amber-text)}
+.alert.ok{border-color:var(--ok-line);background:var(--ok-wash)}
+.alert.ok .ic{color:var(--ok-text)}
+.banner-ready{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r-lg);border:1px solid var(--amber-line);background:linear-gradient(90deg,var(--amber-wash),transparent 70%),var(--panel);box-shadow:var(--glow)}
+.banner-ready .t{flex:1}
+.banner-ready b{display:block;font-size:14.5px;font-weight:700;font-stretch:108%}
+.banner-ready span{display:block;color:var(--ink-2);font-size:12.5px}
+
+/* terminal pairing */
+.term{border-radius:11px;background:var(--term-bg);color:var(--term-ink);border:1px solid var(--term-line);overflow:hidden;font-size:12.5px}
+.term-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--term-line);font-family:var(--f-mono);font-size:10.5px;color:var(--term-dim);letter-spacing:.06em;text-transform:uppercase}
+.term-bar .led{margin-left:auto}
+.tstep{display:grid;grid-template-columns:38px 1fr;gap:0 4px;padding:13px 14px 13px 10px;border-bottom:1px solid var(--term-line);position:relative}
+.tstep:last-child{border-bottom:0}
+.tstep > div{min-width:0}
+.tstep .no{font-family:var(--f-mono);font-size:11px;color:var(--term-dim);display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:1px}
+.tstep .no .led{box-shadow:none}
+.tstep.cur .no{color:var(--amber-base)}
+.tstep.done .no{color:#52D18D}
+.tstep h4{margin:0 0 7px;font-size:13px;font-weight:650;color:var(--term-ink)}
+.tstep p{margin:6px 0 0;font-size:12px;color:var(--term-dim)}
+.cmd{display:flex;align-items:center;gap:10px;padding:9px 6px 9px 12px;border-radius:8px;background:#060708;border:1px solid var(--term-line);font-family:var(--f-mono);font-size:12px}
+.cmd code{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;color:#E7E3DA}
+.cmd code::before{content:"$ ";color:var(--amber-base)}
+.cmd code::-webkit-scrollbar{height:0}
+.term .tbtn{height:26px;padding:0 10px;border-radius:6px;border:1px solid #33363b;background:#1a1b1e;color:#E7E3DA;font-size:11.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.term .tbtn:hover{border-color:#4a4d53}
+.term .tbtn.primary{background:var(--amber-base);color:#1C1204;border-color:transparent}
+.term .tbtn.primary:disabled{opacity:.4;cursor:not-allowed}
+.term .tbtn.ok{color:#6BDCA0;border-color:rgba(82,209,141,.4)}
+.term .tbtn.mock{border-style:dashed;background:transparent;color:#8A867E;font-family:var(--f-mono);font-weight:500;font-size:11px}
+.tok{display:flex;gap:8px;align-items:stretch}
+.tok textarea{flex:1;min-height:52px;resize:none;border-radius:8px;border:1px solid var(--term-line);background:#060708;color:#E7E3DA;font-family:var(--f-mono);font-size:12px;padding:8px 10px}
+.tok textarea:focus{outline:none;border-color:var(--amber-base)}
+.tok .stack{display:flex;flex-direction:column;gap:6px}
+.term .fpbox{background:#060708;border-color:var(--term-line)}
+.term .fpbox small{color:var(--term-dim)}
+.term .fpbox code{color:#E7E3DA}
+.term .fpbox.hot{border-color:rgba(240,162,58,.5);background:rgba(240,162,58,.08)}
+.term .fpbox.hot code{color:#FFBD5E}
+.term .err{color:#FF8080;font-size:12px;margin-top:7px;display:flex;gap:6px}
+.term .wait{display:flex;gap:8px;align-items:center;color:#FFBD5E;font-family:var(--f-mono);font-size:11.5px;margin-top:10px}
+.term .wait i{width:6px;height:6px;border-radius:50%;background:#F0A23A;animation:blink 1s steps(1) infinite}
+.term .wait i:nth-child(2){animation-delay:.33s}.term .wait i:nth-child(3){animation-delay:.66s}
+
+/* models */
+.models{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mrow{display:grid;grid-template-columns:1fr auto;gap:4px 14px;align-items:center;padding:11px 14px;border-top:1px solid var(--line);background:var(--panel)}
+.mrow:first-child{border-top:0}
+.mrow.active{background:linear-gradient(90deg,var(--amber-wash),transparent 70%),var(--panel)}
+.mrow .nm{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mrow .nm b{font-size:13.5px}
+.mrow .mm{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);display:flex;gap:10px;align-items:center}
+.mrow .acts{grid-row:1/3;grid-column:2;display:flex;gap:6px;align-items:center}
+.prog{grid-column:1/-1;height:4px;border-radius:2px;background:var(--inset);overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;background:var(--amber);box-shadow:0 0 8px var(--amber);transition:width .25s}
+.rows{display:flex;flex-direction:column}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 24px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.srow:first-child{border-top:0}
+.srow .t b{display:block;font-size:13px;font-weight:650}
+.srow .t span{display:block;font-size:12px;color:var(--ink-3);max-width:470px}
+.srow.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%,30%{background:var(--amber-wash);box-shadow:-12px 0 0 var(--amber-wash),12px 0 0 var(--amber-wash)}100%{background:transparent}}
+.srow.stack{grid-template-columns:1fr}
+
+/* settings */
+.set-wrap{display:grid;grid-template-columns:176px 1fr;gap:24px;padding:0 28px 36px;align-items:start}
+.set-top{position:sticky;top:0;z-index:5;padding:18px 28px 12px;background:var(--win);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.set-top .search{flex:1;display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--panel)}
+.set-top .search:focus-within{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-wash)}
+.set-top .search input{flex:1;border:0;background:transparent;outline:none;font-size:13px}
+.set-top h1{margin:0;font-size:22px;font-weight:680;font-stretch:118%}
+.set-idx{position:sticky;top:84px;display:flex;flex-direction:column;gap:1px;font-size:12.5px}
+.set-idx button,.set-idx a{display:flex;align-items:center;gap:9px;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:6px;color:var(--ink-2);text-decoration:none}
+.set-idx button:hover,.set-idx a:hover{background:var(--panel);color:var(--ink)}
+.set-idx .n{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);width:16px}
+.set-idx button[aria-current="true"]{color:var(--ink);background:var(--panel)}
+.set-idx button[aria-current="true"] .n{color:var(--amber-text)}
+.set-idx .moved{margin-top:10px;padding:9px 10px;border:1px dashed var(--line-2);border-radius:8px;font-size:11.5px;color:var(--ink-3);display:block}
+.set-idx .moved b{color:var(--ink-2);display:block;font-size:12px;margin-bottom:2px}
+.groups{display:flex;flex-direction:column;gap:14px;min-width:0}
+.group{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:4px 18px 6px;scroll-margin-top:84px}
+.group > header{display:flex;align-items:center;gap:10px;padding:12px 0 8px;border-bottom:1px solid var(--line)}
+.group > header .n{font-family:var(--f-mono);font-size:10.5px;color:var(--amber-text)}
+.group > header h2{margin:0;font-size:14px;font-weight:700;font-stretch:110%}
+.group > header .tag{margin-left:auto}
+.group .lead{font-size:12.5px;color:var(--ink-2);margin:10px 0 2px}
+.ai-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label,.field .lab{font-size:12px;font-weight:600;color:var(--ink-2)}
+.field .hint{font-size:11.5px;color:var(--ink-3)}
+.field .hint.warn{color:var(--err-text)}
+.field.full{grid-column:1/-1}
+.inline{display:flex;gap:8px;align-items:center}
+.inline .input{flex:1}
+.warnnote{font-size:12px;padding:9px 11px;border-radius:8px;border:1px solid var(--amber-line);background:var(--amber-wash);color:var(--ink);grid-column:1/-1;margin:0}
+.nohits{padding:30px;text-align:center;color:var(--ink-3);border:1px dashed var(--line-2);border-radius:12px}
+mark{background:var(--amber-wash);color:var(--amber-text);border-radius:3px;padding:0 1px}
+
+/* palette */
+.pal-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:40;display:flex;justify-content:center;align-items:flex-start;padding-top:86px;animation:fade .12s}
+:root[data-theme="light"] .pal-scrim{background:rgba(40,30,15,.22)}
+.pal{width:560px;background:var(--win);border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow-pop);overflow:hidden}
+.pal .pin{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.pal .pin input{flex:1;border:0;background:transparent;outline:none;font-size:15px}
+.pal ul{list-style:none;margin:0;padding:6px;max-height:340px;overflow-y:auto}
+.pal li button{width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;background:transparent;border-radius:7px;text-align:left}
+.pal li button[aria-selected="true"]{background:var(--amber-wash);box-shadow:inset 2px 0 0 var(--amber)}
+.pal li .g{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.pal li .ic{color:var(--ink-3)}
+.pal .pfoot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-3)}
+.pal .sect{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:8px 10px 4px}
+
+/* toast */
+.toast{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;border-radius:10px;background:var(--term-bg);color:var(--term-ink);border:1px solid #2b2d31;box-shadow:0 14px 30px -10px rgba(0,0,0,.6);font-size:12.5px;animation:rise .2s}
+.toast .btn{height:26px}
+@keyframes rise{from{transform:translate(-50%,8px);opacity:0}}
+
+/* meetings */
+.meet-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+.rec-card{position:relative}
+.rec-card.live{border-color:var(--amber-line);box-shadow:var(--glow)}
+.rec-clock{font-family:var(--f-mono);font-size:30px;font-weight:500;letter-spacing:-.02em;margin:4px 0 8px;color:var(--ink)}
+.rec-card.live .rec-clock{color:var(--amber-text)}
+.tracks{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px}
+.tracks li{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}
+.tracks .meter{margin-left:auto}
+.mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.mpick{width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.mpick:hover{background:var(--panel-2)}
+.mpick[aria-current="true"]{background:var(--panel-2);border-color:var(--line-2);box-shadow:inset 3px 0 0 var(--amber)}
+.mpick b{font-size:12.5px}
+.mpick span{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);display:flex;gap:6px;align-items:center}
+.det-head{display:flex;flex-direction:column;gap:10px}
+.det-head h2{margin:0;font-size:17px;font-weight:700;font-stretch:110%}
+.det-head .meta{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);margin-top:4px}
+.lanes{margin-top:14px;border:1px solid var(--line);border-radius:10px;background:var(--inset);padding:10px 12px 8px}
+.lane{display:grid;grid-template-columns:92px 1fr;align-items:center;gap:10px;height:20px}
+.lane .who{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+.lane .who i{width:8px;height:8px;border-radius:2px;display:block}
+.lane .trk{position:relative;height:8px;border-radius:2px;background:var(--line)}
+.lane .trk span{position:absolute;top:0;bottom:0;border-radius:2px}
+.ruler{display:grid;grid-template-columns:92px 1fr;gap:10px;margin-top:4px}
+.ruler div{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:9.5px;color:var(--ink-3)}
+.ruler .ph{position:relative}
+.turns{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.turn{display:grid;grid-template-columns:52px 4px 1fr;gap:0 12px;padding:7px 0}
+.turn time{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);padding-top:2px;text-align:right}
+.turn .bar4{border-radius:2px}
+.turn b{font-size:11.5px;font-weight:700;letter-spacing:.02em;display:block}
+.turn p{margin:1px 0 0;font-size:13px;color:var(--ink)}
+.notes{padding:12px 14px;border-radius:9px;background:var(--inset);border:1px solid var(--line);font-size:12.5px}
+.notes h4{margin:10px 0 4px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--amber-text);font-weight:700}
+.notes h4:first-child{margin-top:0}
+.notes ul{margin:0;padding-left:18px}
+.notes p{margin:0}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0 10px}
+.tabs button{border:0;background:transparent;padding:7px 10px;font-size:12.5px;font-weight:600;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber)}
+
+/* privacy */
+.zones{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px}
+.zone{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel);display:flex;flex-direction:column;gap:10px;position:relative}
+.zone.local{border-color:var(--ok-line)}
+.zone h3{margin:0;font-size:14px;font-weight:700;font-stretch:110%;display:flex;gap:8px;align-items:center}
+.zone .when{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.zone ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.zone li{display:flex;gap:8px;align-items:flex-start}
+.zone li .ic{margin-top:2px;color:var(--ink-3)}
+.minipath{display:flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);flex-wrap:wrap}
+.minipath span{padding:3px 7px;border:1px solid var(--line-2);border-radius:5px;background:var(--inset)}
+.minipath i{width:14px;height:2px;background:var(--line-3);display:block}
+.priv-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:8px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:12.5px;color:var(--ink-2)}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--f-mono);font-size:10.5px;color:var(--amber-text);padding-top:2px}
+.files{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.files li{display:flex;justify-content:space-between;gap:10px;padding:7px 11px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+.files li:first-child{border-top:0}
+.files code{font-family:var(--f-mono);font-size:11px;color:var(--ink);white-space:nowrap}
+.never{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.never li{display:flex;gap:9px;align-items:center;font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--inset);border:1px solid var(--line)}
+.never .ic{color:var(--err-text)}
+
+/* onboarding */
+.ob{position:absolute;inset:40px 0 0 0;background:var(--win);z-index:30;display:grid;grid-template-rows:auto 1fr auto}
+.ob-top{display:flex;align-items:center;gap:14px;padding:16px 28px;border-bottom:1px solid var(--line)}
+.ob-top .brand{display:flex;gap:9px;align-items:center;font-weight:700;font-stretch:110%}
+.ob-top .brand svg{width:24px;height:24px}
+.ob-steps{display:flex;align-items:center;gap:0;margin-left:auto}
+.ob-step{display:flex;align-items:center;gap:7px;border:0;background:transparent;padding:4px 6px;border-radius:6px;font-size:11.5px;color:var(--ink-3);font-weight:600}
+.ob-step .no{font-family:var(--f-mono);font-size:10px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-2)}
+.ob-step.done{color:var(--ink-2)}
+.ob-step.done .no{background:var(--ok-wash);border-color:var(--ok-line);color:var(--ok-text)}
+.ob-step[aria-current="step"]{color:var(--ink)}
+.ob-step[aria-current="step"] .no{background:var(--amber);border-color:transparent;color:var(--amber-ink);box-shadow:0 0 10px var(--amber)}
+.ob-wire{width:22px;height:2px;background:var(--line-2)}
+.ob-wire.on{background:var(--amber)}
+.ob-main{overflow-y:auto;padding:28px 0}
+.ob-inner{width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.ob-inner .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber-text)}
+.ob-inner h1{margin:0;font-size:28px;font-weight:700;font-stretch:118%;letter-spacing:-.01em;line-height:1.15}
+.ob-inner .lead{margin:0;color:var(--ink-2);font-size:14px;max-width:580px}
+.ob-nav{display:flex;justify-content:space-between;align-items:center;padding:14px 28px;border-top:1px solid var(--line);background:var(--rail)}
+.choice{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.choice .radio{flex-direction:column;gap:8px;padding:14px;min-height:150px}
+.choice .radio .head{display:flex;justify-content:space-between;width:100%;align-items:center}
+.choice .radio .ei{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--panel-3);border:1px solid var(--line)}
+.trybox{min-height:110px;padding:14px;border-radius:12px;border:1px dashed var(--line-3);background:var(--panel);font-size:15px}
+.trybox:empty::before{content:"Kliknite sem a nadiktujte prvú vetu…";color:var(--ink-3)}
+.trybox:focus{outline:none;border-style:solid;border-color:var(--amber);box-shadow:var(--glow)}
+
+/* overlay showcase */
+#layer{display:contents}
+.ovs{position:absolute;inset:40px 0 28px 0;z-index:30;background:radial-gradient(1200px 500px at 70% 110%,rgba(240,162,58,.16),transparent 60%),radial-gradient(800px 400px at 0% 0%,rgba(95,183,245,.08),transparent 60%),#0B0C0E;color:#EFECE6;overflow-y:auto}
+.ovs-wall{display:none}
+.ovs-in{position:relative;padding:22px 28px 30px}
+.ovs-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px}
+.ovs-head h1{margin:0;font-size:22px;font-weight:700;font-stretch:118%;color:#EFECE6}
+.ovs-head p{margin:4px 0 0;color:#A7A39B;font-size:12.5px;max-width:620px}
+.ovs-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ovcell{border:1px solid #222428;border-radius:12px;padding:12px 14px 18px;background:rgba(255,255,255,.015);display:flex;flex-direction:column;gap:12px}
+.ovcell.wide{grid-column:1/-1;border-color:rgba(240,162,58,.35)}
+.ovcell.wide .ovcard{width:540px}
+.ovcell .cap{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;color:#8A867E;text-transform:uppercase}
+.ovcell .cap b{color:#F0A23A;font-weight:600}
+.ovcell .spot{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:64px;justify-content:flex-end}
+.ov{background:var(--ov-bg);border:1px solid var(--ov-line);color:var(--ov-ink);border-radius:999px;box-shadow:0 18px 40px -14px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.05);display:flex;align-items:center;gap:10px;padding:7px 14px 7px 7px;font-size:13px;min-width:0}
+.ov.rec{box-shadow:0 0 0 1px rgba(240,162,58,.4),0 0 26px -4px rgba(240,162,58,.45),0 18px 40px -14px rgba(0,0,0,.8)}
+.ov .orb{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;background:#24262A;color:#EFECE6}
+.ov .orb.rec{background:#F0A23A;color:#1C1204;box-shadow:0 0 14px rgba(240,162,58,.7);animation:orb 1.1s ease-in-out infinite}
+@keyframes orb{50%{box-shadow:0 0 22px 3px rgba(240,162,58,.75)}}
+.ov .orb.done{background:rgba(82,209,141,.16);color:#6BDCA0}
+.ov .orb.err{background:rgba(255,99,99,.15);color:#FF8080}
+.ov .orb.proc{background:#24262A}
+.ov .orb.proc svg{animation:spin 1.2s linear infinite}
+.ov .wave{display:flex;gap:2px;align-items:center;height:22px}
+.ov .wave i{width:3px;border-radius:2px;background:#F0A23A;height:100%;transform-origin:center;animation:lvl 700ms ease-in-out infinite alternate}
+.ov .time{font-family:var(--f-mono);font-size:12px;color:#A7A39B}
+.ov .chip{font-family:var(--f-mono);font-size:10.5px;padding:2px 6px;border-radius:5px;border:1px solid #33363B;color:#A7A39B;text-transform:uppercase}
+.ov .st{font-weight:600;display:flex;flex-direction:column;line-height:1.2}
+.ov .st small{font-weight:500;font-size:11px;color:#A7A39B}
+.ov .lock{color:#6BDCA0;display:flex;align-items:center;gap:4px;font-family:var(--f-mono);font-size:10.5px}
+.ovcard{width:430px;background:var(--ov-bg);border:1px solid var(--ov-line);border-radius:16px;padding:12px;color:var(--ov-ink);box-shadow:0 18px 40px -14px rgba(0,0,0,.8)}
+.ovcard.err{border-color:rgba(255,99,99,.35)}
+.ovcard .row{display:flex;gap:10px;align-items:flex-start}
+.ovcard .orb{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;background:rgba(255,99,99,.15);color:#FF8080}
+.ovcard .orb.amber{background:rgba(240,162,58,.15);color:#FFBD5E}
+.ovcard .orb.ok{background:rgba(82,209,141,.16);color:#6BDCA0}
+.ovcard b{display:block;font-size:13.5px;margin-top:5px}
+.ovcard p{margin:2px 0 0;font-size:12px;color:#A7A39B}
+.ovcard .acts{display:flex;gap:6px;margin-top:11px;padding-left:40px;flex-wrap:wrap}
+.ovbtn{height:28px;padding:0 11px;border-radius:7px;border:1px solid #393C42;background:#202226;color:#EFECE6;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.ovbtn:hover{border-color:#555}
+.ovbtn.primary{background:#F0A23A;color:#1C1204;border-color:transparent}
+.ovbtn.primary:hover{background:#FFBD5E}
+.ovbtn kbd{background:rgba(0,0,0,.15);border-color:rgba(0,0,0,.2);color:inherit;font-size:10px;padding:0 4px}
+.ovcard .route{display:flex;gap:6px;align-items:center;font-family:var(--f-mono);font-size:10.5px;color:#8A867E;margin-top:8px;padding-left:40px}
+.ovcard .route span{padding:2px 6px;border:1px solid #2C2E33;border-radius:4px}
+.ovcard .route span.bad{color:#FF8080;border-color:rgba(255,99,99,.4);text-decoration:line-through}
+.ovcard .route span.good{color:#FFBD5E;border-color:rgba(240,162,58,.45)}
+.ovlive{width:430px;background:var(--ov-bg);border:1px solid var(--ov-line);border-radius:16px;padding:12px 14px 8px;box-shadow:0 0 0 1px rgba(240,162,58,.3),0 0 26px -6px rgba(240,162,58,.4)}
+.ovlive p{margin:0 0 10px;font-size:14px;line-height:1.5}
+.ovlive .t{color:#8A867E}
+.ovlive .ov{border:0;box-shadow:none;padding:0;background:transparent}
+.ovnotice{font-size:11.5px;color:#FFBD5E;background:rgba(240,162,58,.1);border:1px solid rgba(240,162,58,.3);padding:4px 10px;border-radius:999px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h1.5M7 8.5v7M10.5 5v14M14 8v8M17.5 10.5v3M21 12h-.5"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M18.5 16v4M16.5 18h4"/></symbol>
+<symbol id="i-insert" viewBox="0 0 24 24"><path d="M3.5 7h9M3.5 12h6M3.5 17h9M17.5 6.5v11M15.5 6.5h4M15.5 17.5h4"/></symbol>
+<symbol id="i-meet" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3.2 3.2 0 0 1 0 6M17.5 14.3c2 .8 3.5 2.8 3.5 5.7"/></symbol>
+<symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M7.2 6h7.3a3 3 0 0 1 0 6h-5a3 3 0 0 0 0 6h7.3"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.8c0 4.4-3.2 8.2-7.5 9.2-4.3-1-7.5-4.8-7.5-9.2V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.6"/><rect x="3" y="13" width="18" height="7" rx="1.6"/><path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6"/></symbol>
+<symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.2M12 17h.01"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5.5a1 1 0 0 0-1-1h-9a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 11.5a7.5 7.5 0 1 0-2.2 5.3M19.5 5v6.5H13"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></g></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.9 12.2a1 1 0 0 0 1 .8h7.2a1 1 0 0 0 1-.8L17.5 7M9.5 7V4.5h5V7"/></symbol>
+<symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10z"/></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h14M14.5 4.5 18 8l-3.5 3.5M20 16H6M9.5 12.5 6 16l3.5 3.5"/></symbol>
+<symbol id="i-export" viewBox="0 0 24 24"><path d="M12 14.5V3.5M7.5 8 12 3.5 16.5 8M5 13.5v6.5h14v-6.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5v4M15 3.5v4M6.5 7.5h11V11a5.5 5.5 0 0 1-11 0zM12 16.5v4"/></symbol>
+<symbol id="i-headph" viewBox="0 0 24 24"><path d="M4.5 15.5v-3a7.5 7.5 0 0 1 15 0v3"/><rect x="3.5" y="14.5" width="4" height="6" rx="1.5"/><rect x="16.5" y="14.5" width="4" height="6" rx="1.5"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12.5h6M9 16h6"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+<symbol id="i-cmd" viewBox="0 0 24 24"><path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9zm0 0h6m-6 0v6m6-6V6.5A2.5 2.5 0 1 1 17.5 9H15zm0 0v6m0 0h2.5a2.5 2.5 0 1 1-2.5 2.5V15zm0 0H9m0 0v2.5A2.5 2.5 0 1 1 6.5 15H9z"/></symbol>
+<symbol id="i-spin" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5" /></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+</defs>
+</svg>
+
+<div class="stage">
+  <div class="deck" id="deck"></div>
+  <div class="win" id="win">
+    <div class="tbar">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="ttl">Codevo Whisper</div>
+      <button type="button" class="cmdk" data-act="palette" aria-label="Otvoriť príkazovú paletu (⌘K)">
+        <svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><span>Hľadať nastavenie alebo akciu</span><kbd>⌘K</kbd>
+      </button>
+    </div>
+    <div class="body">
+      <nav class="rail" id="rail" aria-label="Sekcie aplikácie"></nav>
+      <main class="main" id="main" tabindex="-1"></main>
+    </div>
+    <footer class="sbar" id="sbar"></footer>
+    <div id="layer"></div>
+  </div>
+</div>
+<div class="dirtag" aria-hidden="true"><b>B</b> Signálna cesta · návrh rozhrania</div>
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ic = (n, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const led = (st, extra = "") => `<span class="led ${st} ${extra}" aria-hidden="true"></span>`;
+const LOGO = `<svg class="logo" viewBox="12 12 64 64" aria-hidden="true"><rect x="12" y="12" width="64" height="64" rx="15" fill="#0B1120"/><path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#22D3EE"/><path d="M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z" fill="#E2E8F0" transform="rotate(180 44 44)"/><circle cx="44" cy="44" r="3.2" fill="#22D3EE"/></svg>`;
+
+const HOST = "domáci-pc";
+const PAIR_CMD = "docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper pair";
+const REVOKE_CMD = "docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper revoke mbp-7f3a21";
+
+const MODELS = [
+  { id: "pu8", name: "Parakeet Ultra", size: "740 MB", roles: ["Odporúčaný", "Najrýchlejší"], license: "CC-BY-4.0" },
+  { id: "can", name: "Canary 1B v2", size: "1,1 GB", roles: ["Najpresnejší pre slovenčinu a češtinu"], license: "CC-BY-4.0" },
+  { id: "pu4", name: "Parakeet Ultra (malý)", size: "486 MB", roles: ["Pre slabší počítač"], license: "CC-BY-4.0" },
+  { id: "wt", name: "Whisper Large v3 Turbo", size: "886 MB", roles: ["Pre ďalšie jazyky (99)"], license: "MIT" },
+];
+const MIC_OPTIONS = [
+  { id: "default", label: "Systémový predvolený (MacBook Pro mikrofón)" },
+  { id: "mbp", label: "MacBook Pro mikrofón" },
+  { id: "airpods", label: "AirPods Pro Matúša" },
+  { id: "mv7", label: "Shure MV7" },
+];
+const MODES = { smart: "Inteligentný", hold: "Podrž klávesu", toggle: "Prepínanie" };
+const MODE_DESC = {
+  smart: "Krátke stlačenie zapne diktovanie, ďalšie ho ukončí. Pri podržaní aspoň 300 ms sa diktovanie ukončí uvoľnením klávesu.",
+  hold: "Nahráva sa, kým kláves držíte.",
+  toggle: "Prvé stlačenie začne nahrávať, druhé ukončí.",
+};
+const INSERTIONS = [
+  { id: "paste", title: "Vložiť do aktívnej aplikácie", desc: "Text sa vloží cez schránku. Jej obsah sa podľa zvolenej možnosti obnoví alebo zostane prepis.", short: "Vložiť do aplikácie" },
+  { id: "type", title: "Priame písanie", desc: "Text sa napíše priamo na mieste kurzora bez použitia skratky na vloženie.", short: "Priame písanie" },
+  { id: "clipboard", title: "Iba skopírovať do schránky", desc: "Vložíte si ho sami cez ⌘V, keď budete chcieť.", short: "Iba do schránky" },
+];
+const ROUTE_TEXT = {
+  "local": ["Lokálne", "Prepisuje sa na tomto Macu stiahnutým modelom. Zvuk neopustí počítač."],
+  "server": ["Server", "Prepisuje váš spárovaný server. Zvuk putuje zašifrovaný od začiatku do konca."],
+  "server,local": ["Server, potom lokálne", "Keď server pri začatí diktovania nie je dostupný, prepíše sa lokálne."],
+  "local,server": ["Lokálne, potom server", "Keď lokálny model nie je pripravený, zvuk sa pošle zašifrovaný na váš server."],
+};
+const STATS = {
+  today: { words: 1284, dict: 37, sec: 512, wpm: 150, saved: 1414, streak: 12, avg: 35, per: 14, since: "29. okt." },
+  week: { words: 6930, dict: 214, sec: 2830, wpm: 147, saved: 7565, streak: 12, avg: 32, per: 13, since: "29. okt." },
+  total: { words: 48215, dict: 1592, sec: 20140, wpm: 144, saved: 52182, streak: 12, avg: 30, per: 13, since: "29. okt." },
+};
+const PERIODS = [["today", "Dnes"], ["week", "Tento týždeň"], ["total", "Celkom"]];
+const DOW = ["po", "ut", "st", "št", "pi", "so", "ne"];
+const DOW_LONG = ["pondelok", "utorok", "streda", "štvrtok", "piatok", "sobota", "nedeľa"];
+const DAY_WORDS = [1120, 940, 1380, 760, 1250, 0, 0, 1540, 1010, 880, 1290, 640, 180, 0, 1360, 1180, 720, 1610, 990, 0, 310, 1470, 1090, 0, 830, 1150, 420, 150, 1320, 820, 1430, 960, 1710, 240, 486, 1284];
+const WEEK_DICT = [26, 41, 30, 47, 9, 24, 37];
+const WEEK_SEC = [339, 580, 411, 675, 111, 202, 512];
+const DAYS = DAY_WORDS.map((w, i) => {
+  const d = new Date(2026, 9, 5 + i);
+  const k = i - (DAY_WORDS.length - 7);
+  const dict = k >= 0 ? WEEK_DICT[k] : Math.round(w / 32);
+  const sec = k >= 0 ? WEEK_SEC[k] : Math.round((w / 146) * 60);
+  return { w, dict, sec, saved: Math.max(0, Math.round(w * 1.5 - sec)), dow: i % 7, date: `${d.getDate()}. ${d.getMonth() + 1}.`, today: i === DAY_WORDS.length - 1 };
+});
+const WEEK = DAYS.slice(-7);
+
+const MEETINGS = [
+  {
+    id: "m1", title: "Stretnutie 6. 11. 2026, 10:02", when: "6. 11. 2026 10:02", dur: "00:42:18", phase: "ready", sys: "nahraný",
+    speakers: ["Ja", "Hovoriaci 1", "Hovoriaci 2", "Hovoriaci 3"],
+    lanes: { "Ja": [[0, 4], [9, 13], [21, 27], [44, 49], [63, 66], [80, 86], [95, 100]], "Hovoriaci 1": [[4, 9], [29, 37], [57, 62], [86, 90]], "Hovoriaci 2": [[13, 21], [37, 44], [66, 74]], "Hovoriaci 3": [[49, 57], [74, 80], [90, 95]] },
+    turns: [
+      ["00:00:04", "Ja", "Dobre, poďme na to. Dnes musíme uzavrieť termín vydania verzie 3.2 a rozdeliť si úlohy."],
+      ["00:00:21", "Hovoriaci 1", "Platobná brána je hotová, čakáme už len na schválenie od banky. Podľa nich do stredy."],
+      ["00:00:44", "Hovoriaci 2", "Testy na Androide prešli, na iOS máme ešte dva pády pri obnovení košíka."],
+      ["00:01:06", "Ja", "Tie pády sú blokujúce?"],
+      ["00:01:10", "Hovoriaci 2", "Jeden áno, pri pomalom pripojení sa košík vyprázdni. Opravu viem mať do piatku."],
+      ["00:01:31", "Hovoriaci 3", "Marketing potrebuje termín aspoň týždeň dopredu, kvôli kampani v newsletteri."],
+      ["00:01:49", "Ja", "Tak navrhujem vydanie v utorok 17. novembra. Ak banka neschváli do stredy, posúvame."],
+      ["00:02:07", "Hovoriaci 1", "Súhlasím. Pošlem im ešte dnes pripomienku."],
+      ["00:02:15", "Hovoriaci 3", "Dobre, kampaň pripravím na sedemnásteho a nechám ju zatiaľ ako koncept."],
+    ],
+    notes: true,
+  },
+  {
+    id: "m2", title: "Stretnutie 4. 11. 2026, 14:30", when: "4. 11. 2026 14:30", dur: "00:18:05", phase: "ready", sys: "nahraný",
+    speakers: ["Ja", "Ostatní"],
+    lanes: { "Ja": [[0, 12], [30, 41], [60, 72], [88, 100]], "Ostatní": [[12, 30], [41, 60], [72, 88]] },
+    turns: [
+      ["00:00:02", "Ja", "Ahoj, počuješ ma? Chcel by som prejsť ponuku na údržbu e-shopu."],
+      ["00:00:09", "Ostatní", "Počujem. Pozrel som si ju, len by sme potrebovali upresniť reakčný čas pri výpadku."],
+      ["00:00:31", "Ja", "Štandardne do štyroch hodín v pracovný deň, cez víkend do dvanástich."],
+      ["00:00:47", "Ostatní", "To nám stačí. Pošlite mi prosím zmluvu na podpis do piatku."],
+    ],
+    notes: false,
+  },
+  {
+    id: "m3", title: "Stretnutie 2. 11. 2026, 9:00", when: "2. 11. 2026 9:00", dur: "01:05:40", phase: "stopped", sys: "nedostupný",
+    speakers: [], lanes: {}, turns: [], notes: false,
+  },
+];
+
+const S = {
+  screen: "app", page: "home", scenario: "nomodel",
+  server: "paired", disconnected: false, showRepairPair: false,
+  route: ["local"], lat: [41, 38, 44, 39, 37, 52, 40, 38, 36, 41, 39, 64, 42, 38, 37, 40, 39, 41, 38, 36, 40, 38, 37, 39, 42, 38, 40, 37, 38, 38],
+  ms: {}, activeModel: null, unload: "5", accel: "auto",
+  hotkey: "⌥Space", mode: "smart", overlay: "indicator", language: "sk", mute: false, feedback: true, feedbackOut: "", volume: 60,
+  mic: "default", perms: { mic: true, input: true, acc: true }, paused: false,
+  insertion: "paste", clip: "restore", submit: "off", linuxPaste: "ctrl-v",
+  words: "Codevo\nKubernetes\nMočkor\nPrešov\nWireGuard", filler: true, trailing: true, wordsSaved: false,
+  aiProvider: "server", aiUrl: "http://127.0.0.1:11434/v1", aiModel: "qwen2.5:7b", aiKey: "none", aiPolish: false, codexModel: "gpt-6-luna", effort: "low", aiCheck: "idle",
+  histOn: true, histLimit: "100", histConfirm: false, histClearConfirm: false,
+  history: [
+    { t: "9. 11. 2026 9:41", x: "Ahoj Peter, posielam opravenú verziu ponuky. Zmenil som reakčný čas na štyri hodiny a doplnil víkendovú pohotovosť." },
+    { t: "9. 11. 2026 9:12", x: "Pridaj do zoznamu úloh: skontrolovať certifikát na stagingu a predĺžiť doménu do konca mesiaca." },
+    { t: "8. 11. 2026 17:55", x: "Zajtra začínam o deviatej, standup presuňme na pol desiatu." },
+    { t: "8. 11. 2026 16:20", x: "Refaktorovanie platobného modulu je hotové, testy prechádzajú, môžeš to zmergovať." },
+  ],
+  launch: true, statsReset: "idle", update: "idle",
+  period: "today", copied: false, statsV: "1", statsMore: false, chartRange: "7",
+  drawer: null, palette: false, pq: "", psel: 0,
+  pairToken: "", pairErr: null, pairBanner: null, copiedCmd: null, testing: false,
+  meetings: MEETINGS.map((m) => ({ ...m })), selMeeting: "m1", mtab: "transcript", recording: null, mAction: null, notesPending: false,
+  diarizer: "ready",
+  ob: { step: 3, choice: null },
+  ovFix: "err",
+  toast: null,
+  hkRec: false,
+};
+MODELS.forEach((m) => (S.ms[m.id] = { st: "none", p: 0 }));
+
+/* ---------- derived ---------- */
+const model = (id) => MODELS.find((m) => m.id === id);
+const modelReady = () => !!S.activeModel && S.ms[S.activeModel].st === "ready";
+const downloading = () => MODELS.find((m) => S.ms[m.id].st === "downloading");
+const lat = () => S.lat[S.lat.length - 1];
+const paired = () => S.server === "paired" || S.server === "repair";
+const hkVerb = () => (S.mode === "hold" ? "Podržte" : "Stlačte");
+
+function engine(e) {
+  if (e === "server") {
+    if (S.server === "paired") return { ok: true, title: `Server ${HOST}`, meta: `${lat()} ms · E2E šifrované`, icon: "server" };
+    if (S.server === "repair") return { ok: false, title: `Server ${HOST}`, meta: "treba znova spárovať", icon: "server" };
+    return { ok: false, title: "Server", meta: "nie je spárovaný", icon: "server" };
+  }
+  const dl = downloading();
+  if (modelReady()) return { ok: true, title: "Lokálne", meta: `${model(S.activeModel).name} · ${S.accel === "cpu" ? "CPU" : "GPU"}`, icon: "laptop" };
+  if (dl) return { ok: false, title: "Lokálne", meta: `model sa sťahuje · ${Math.floor(S.ms[dl.id].p)} %`, icon: "laptop" };
+  return { ok: false, title: "Lokálne", meta: "model chýba", icon: "laptop" };
+}
+
+function tx() {
+  const [p, f] = S.route;
+  const pe = engine(p), fe = f ? engine(f) : null;
+  if (pe.ok) return { state: "ok", via: p, title: pe.title, detail: fe && !fe.ok ? `Záloha ${fe.title.toLowerCase()} nie je pripravená (${fe.meta}).` : fe ? `Záloha: ${fe.title.toLowerCase()}, ${fe.meta}.` : "Bez zálohy.", fbWarn: !!(fe && !fe.ok) };
+  if (fe && fe.ok) return { state: "warn", via: f, title: `${fe.title}`, detail: `${pe.title} nie je pripravený (${pe.meta}), každé diktovanie preto ide na zálohu.` };
+  if (p === "local") return { state: "err", via: null, title: "Lokálny model chýba", detail: downloading() ? "Model sa sťahuje. Diktovanie začne fungovať, keď bude pripravený." : paired() && S.server === "paired" ? `Prepis je nastavený na Lokálne, ale nemáte stiahnutý model. Server ${HOST} je spárovaný a online.` : "Prepis je nastavený na Lokálne, ale nemáte stiahnutý model." };
+  if (S.server === "repair") return { state: "err", via: null, title: "Server treba znova spárovať", detail: "Kým to neurobíte, Codevo Whisper naň neposiela zvuk." };
+  return { state: "err", via: null, title: "Server nie je spárovaný", detail: "Prepis je nastavený na server, ale žiadny nie je spárovaný." };
+}
+
+function txFixes() {
+  const t = tx();
+  const out = [];
+  if (t.state === "ok") return out;
+  const localBad = !modelReady();
+  if (localBad && S.server === "paired" && S.route[0] !== "server") out.push({ act: "use-server", label: `Prepisovať na serveri ${HOST}`, primary: true });
+  if (localBad && !downloading()) out.push({ act: "dl-model", arg: "pu8", label: "Stiahnuť model · 740 MB", primary: out.length === 0 });
+  if (S.server === "repair") out.push({ act: "goto-pair", label: "Znova spárovať server", primary: true });
+  if (S.server === "unpaired" && (S.route[0] === "server" || localBad)) out.push({ act: "goto-pair", label: "Spárovať server", primary: false });
+  if (!localBad && S.route[0] === "server" && S.server !== "paired") out.push({ act: "use-local", label: "Prepisovať lokálne", primary: true });
+  return out;
+}
+
+function readiness() {
+  const t = tx();
+  return [
+    { id: "mic", label: "Mikrofón", ok: S.perms.mic, detail: S.perms.mic ? `${micLabel()} · prístup povolený` : "Prístup k mikrofónu nie je povolený", fix: { act: "grant", arg: "mic", label: "Povoliť" } },
+    { id: "perm", label: "Povolenia", ok: S.perms.input && S.perms.acc, detail: S.perms.input && S.perms.acc ? "Monitorovanie vstupu a Prístupnosť" : !S.perms.acc ? "Chýba Prístupnosť, text sa nevloží" : "Chýba Monitorovanie vstupu", fix: { act: "grant", arg: "acc", label: "Otvoriť Nastavenia systému" } },
+    { id: "hotkey", label: "Klávesová skratka", ok: !!S.hotkey, detail: S.hotkey ? `${S.hotkey} · ${MODES[S.mode]}` : "Skratka nie je nastavená", fix: { act: "drawer", arg: "hotkey", label: "Nahrať skratku" } },
+    { id: "tx", label: "Prepis", ok: t.state !== "err", detail: t.state === "err" ? t.title : `${t.title}`, fix: { act: "drawer", arg: "tx", label: "Opraviť" } },
+  ];
+}
+const micLabel = () => (S.mic === "default" ? "MacBook Pro mikrofón" : MIC_OPTIONS.find((m) => m.id === S.mic).label);
+const aiReady = () => S.aiProvider === "codex" || (S.aiUrl.trim() !== "" && S.aiModel.trim() !== "");
+
+/* ---------- shell ---------- */
+const PAGES = [
+  { id: "home", label: "Domov", icon: "home" },
+  { id: "meetings", label: "Stretnutia", icon: "meet" },
+  { id: "tx", label: "Prepis", icon: "route" },
+  { id: "settings", label: "Nastavenia", icon: "sliders" },
+  { id: "privacy", label: "Súkromie", icon: "shield" },
+];
+
+function renderDeck() {
+  const seg = (name, items, cur, cls = "") => `<div class="seg ${cls}" role="group" aria-label="${name}">${items.map(([v, l, t]) => `<button type="button" data-act="deck" data-k="${name}" data-v="${v}" aria-pressed="${cur === v}"${t ? ` title="${t}" aria-label="${l}: ${t}"` : ""}>${l}</button>`).join("")}</div>`;
+  $("#deck").innerHTML = `
+    <div class="grp"><span class="lbl">Obrazovka</span>${seg("screen", [["app", "Aplikácia"], ["onboarding", "Onboarding"], ["overlay", "Overlay"]], S.screen, "amber")}</div>
+    <div class="grp"><span class="lbl">Scenár</span>${seg("scenario", [["nomodel", "Po spárovaní, bez modelu"], ["ready", "Pripravené"], ["fresh", "Nový používateľ"], ["paused", "Pozastavené"]], S.scenario)}</div>
+    <div class="grp"><span class="lbl">Štatistiky</span>${seg("stats", [["1", "1", "Hlavné číslo"], ["2", "2", "Kompaktný pás"], ["3", "3", "Graf v hlavnej úlohe"]], S.statsV)}</div>
+    <div class="grp"><span class="lbl">Téma</span>${seg("theme", [["light", `${ic("sun", "sm")}Svetlá`], ["dark", `${ic("moon", "sm")}Tmavá`]], document.documentElement.dataset.theme)}</div>`;
+}
+
+function renderRail() {
+  const t = tx();
+  const badge = { tx: t.state === "err" ? "err" : t.state === "warn" ? "warn" : "", home: readiness().some((r) => !r.ok) ? "err" : "" };
+  $("#rail").innerHTML = `${LOGO}
+    <div class="nav" role="tablist" aria-orientation="vertical" aria-label="Sekcie aplikácie">
+      ${PAGES.map((p) => `<button type="button" role="tab" data-act="page" data-v="${p.id}" aria-selected="${S.page === p.id && S.screen === "app"}" tabindex="${S.page === p.id ? 0 : -1}">${ic(p.icon)}${p.label}${badge[p.id] ? `<span class="badge">${led(badge[p.id])}</span>` : ""}</button>`).join("")}
+    </div>
+    <div class="foot">
+      <div class="ver">v0.2.3<br>${S.update === "checking" ? "hľadám…" : "najnovšia"}</div>
+      <button type="button" class="iconbtn ${S.update === "checking" ? "spin" : ""}" data-act="check-update" title="Skontrolovať aktualizácie" aria-label="Skontrolovať aktualizácie">${ic("refresh", "sm")}</button>
+    </div>`;
+}
+
+function renderSbar() {
+  const t = tx();
+  const r = readiness();
+  const ready = r.every((x) => x.ok) && !S.paused;
+  const st = S.paused ? ["", "Pozastavené"] : ready ? ["ok", "Pripravené"] : ["err", "Diktovanie nefunguje"];
+  $("#sbar").innerHTML = `
+    <div>${led(st[0])}<b>${st[1]}</b>${S.hotkey ? `<span>${hkVerb().toLowerCase()} ${S.hotkey}</span>` : ""}</div>
+    <div>${ic("route", "sm")}<span>prepis →</span><b>${t.state === "err" ? "nedostupný" : esc(t.title)}</b>${t.via === "server" ? `<span>${lat()} ms</span>` : ""}</div>
+    <div>${ic("mic", "sm")}<span>${esc(micLabel())}</span></div>
+    <div><span>Verzia 0.2.3 · ${S.update === "checking" ? "Hľadám aktualizácie…" : "Máte najnovšiu verziu"}</span><button type="button" data-act="check-update" aria-label="Skontrolovať aktualizácie">${ic("refresh", "sm")}</button></div>`;
+}
+
+/* ---------- Domov ---------- */
+function pathNodes() {
+  const t = tx();
+  const insertion = INSERTIONS.find((i) => i.id === S.insertion);
+  const ai = S.aiPolish ? (S.aiProvider === "codex" ? ["Codex CLI", `${S.codexModel} · limit 8 s`] : ["Vlastný server", `${S.aiModel} · limit 8 s`]) : ["Vypnutá", "obídené"];
+  return [
+    { id: "mic", n: "01", name: "Mikrofón", icon: "mic", st: S.perms.mic ? "ok" : "err", val: micLabel(), meta: S.perms.mic ? `<span class="meter ${S.paused ? "off" : ""}"><i></i><i></i><i></i><i></i><i></i><i></i></span><span>−18 dB</span>` : "prístup nepovolený" },
+    { id: "hotkey", n: "02", name: "Skratka", icon: "key", st: !S.hotkey || !S.perms.input ? "err" : S.paused ? "warn" : "ok", val: S.hotkey ? `<kbd>${S.hotkey}</kbd> ${hkVerb().toLowerCase()}` : "nenastavená", meta: S.paused ? "pozastavené z lišty" : `${MODES[S.mode].toLowerCase()} režim` },
+    { id: "tx", n: "03", name: "Prepis", icon: "wave", st: t.state === "ok" ? "ok" : t.state, val: t.state === "err" ? (S.route[0] === "local" ? "Lokálne · model chýba" : t.title) : t.title, meta: t.state === "err" ? "kliknite a opravte" : t.via === "server" ? `${lat()} ms · E2E` : `${model(S.activeModel).name}${S.route[1] ? " · záloha server" : ""}` },
+    { id: "ai", n: "04", name: "AI úprava", icon: "spark", st: S.aiPolish ? "ok" : "off", val: ai[0], meta: ai[1] },
+    { id: "insert", n: "05", name: "Vloženie", icon: "insert", st: S.perms.acc || S.insertion === "clipboard" ? "ok" : "err", val: insertion.short, meta: S.insertion === "clipboard" ? "⌘V ručne" : S.clip === "restore" ? "schránka sa obnoví" : "prepis ostane v schránke" },
+  ];
+}
+
+function signalPath() {
+  const nodes = pathNodes();
+  let alive = !S.paused;
+  let html = "";
+  nodes.forEach((n, i) => {
+    if (i > 0) {
+      const broken = alive && n.st === "err";
+      html += `<div class="wire ${alive ? "on" : "dead"}" aria-hidden="true">${broken ? `<span class="brk">${ic("x")}</span>` : ""}</div>`;
+    }
+    if (n.st === "err") alive = false;
+    const ledSt = n.st === "off" ? "" : n.st;
+    html += `<button type="button" class="node ${n.st}" data-act="drawer" data-v="${n.id}" aria-label="${n.name}: ${n.st === "err" ? "problém, " : n.st === "off" ? "vypnuté, " : ""}${n.val.replace(/<[^>]+>/g, "")}. Otvoriť detail.">
+      <span class="top"><span class="idx">${n.n}</span>${led(ledSt)}</span>
+      <span class="nm">${ic(n.icon)}${n.name}</span>
+      <span class="val">${n.val}</span>
+      ${n.st === "err" ? `<span class="fixhint">${ic("warn", "sm")}Opraviť</span>` : `<span class="meta">${n.meta}</span>`}
+    </button>`;
+  });
+  return html;
+}
+
+function homeFoot() {
+  const r = readiness();
+  const bad = r.filter((x) => !x.ok);
+  if (S.paused) return `<div class="sp-foot mute" role="status">${led("")}<div class="msg"><b>Diktovanie je pozastavené.</b><span>Obnovíte ho položkou Pokračovať v menu na lište.</span></div><div class="row-btns"><button type="button" class="btn" data-act="resume">Pokračovať</button></div></div>`;
+  if (bad.length === 0) return `<div class="sp-foot" role="status">${led("ok", "lg")}<div class="msg"><b>Všetko je pripravené.</b><span>${hkVerb()} <kbd>${S.hotkey}</kbd> v ľubovoľnej aplikácii a hovorte.</span></div><div class="row-btns"><span class="label-mono">4/4 pripravené</span></div></div>`;
+  const t = tx();
+  const fixes = bad.length === 1 && bad[0].id === "tx" ? txFixes() : [];
+  return `<div class="sp-foot err" role="status">${led("err", "lg")}<div class="msg"><b>Diktovanie by teraz zlyhalo${bad.length > 1 ? ` · ${bad.length} veci chýbajú` : ""}.</b><span>${bad.length === 1 && bad[0].id === "tx" ? esc(t.detail) : "Doriešte položky nižšie, potom stačí stlačiť skratku."}</span></div>
+    ${fixes.length ? `<div class="row-btns">${fixes.map((f) => `<button type="button" class="btn ${f.primary ? "primary" : ""}" data-act="${f.act}" ${f.arg ? `data-v="${f.arg}"` : ""}>${f.label}</button>`).join("")}</div>` : ""}</div>
+    ${bad.length > 1 || bad[0].id !== "tx" ? `<div class="check" role="list" aria-label="Pripravenosť na diktovanie">${r.map((x) => `<div class="it ${x.ok ? "" : "err"}" role="listitem">${led(x.ok ? "ok" : "err")}<div><b>${x.label}</b><span>${esc(x.detail)}</span>${x.ok ? "" : `<button type="button" class="linkbtn" data-act="${x.fix.act}" data-v="${x.fix.arg}" style="font-size:11.5px;margin-top:4px">${x.fix.label}</button>`}</div></div>`).join("")}</div>` : ""}`;
+}
+
+const fmt = (n) => n.toLocaleString("sk-SK");
+const plural = (n, one, few, many) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
+function durParts(sec) {
+  const m = Math.round(sec / 60);
+  if (m < 60) return [[m, "min"]];
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? [[h, "h"], [r, "min"]] : [[h, "h"]];
+}
+const durHtml = (sec) => durParts(sec).map(([n, u]) => `${n}<span class="unit">${u}</span>`).join("");
+const durText = (sec) => durParts(sec).map(([n, u]) => `${n} ${u}`).join(" ");
+function durWords(sec) {
+  const m = Math.round(sec / 60);
+  const mins = (x) => `${x} ${plural(x, "minútu", "minúty", "minút")}`;
+  if (m < 60) return mins(m);
+  const h = Math.floor(m / 60), r = m % 60;
+  const hrs = `${h} ${plural(h, "hodinu", "hodiny", "hodín")}`;
+  return r ? `${hrs} a ${mins(r)}` : hrs;
+}
+const unit = (u) => `<span class="unit">${u}</span>`;
+const periodSeg = () => `<div class="seg" role="group" aria-label="Obdobie štatistík">${PERIODS.map(([v, l]) => `<button type="button" data-act="period" data-v="${v}" aria-pressed="${S.period === v}">${l}</button>`).join("")}</div>`;
+const PRIV = `${ic("lock", "sm")}Štatistiky sú len súčty čísel na tomto Macu, bez textu.`;
+const dayName = (d) => (d.today ? "dnes" : `${DOW_LONG[d.dow]} ${d.date}`);
+
+function wordsChart(days, o) {
+  const max = Math.max(...days.map((d) => d.w));
+  const top = o.axis ? Math.ceil(max / 500) * 500 : max;
+  const avg = Math.round(days.reduce((a, d) => a + d.w, 0) / days.length);
+  const ticks = o.axis ? [0, 1, 2, 3, 4].map((k) => (top / 4) * k) : [];
+  const cols = days.map((d) => `<button type="button" class="wc-col${d.today ? " today" : ""}${d.w === 0 ? " zero" : ""}" style="--v:${(d.w / top).toFixed(3)}" tabindex="${d.today ? 0 : -1}" aria-label="${d.today ? `Dnes, ${d.date}` : `${DOW_LONG[d.dow]} ${d.date}`}: ${fmt(d.w)} slov"><span class="wc-bar"></span>${d.today && o.labelToday ? `<span class="wc-val" aria-hidden="true">${fmt(d.w)}</span>` : ""}<span class="wc-tip" aria-hidden="true"><b>${d.w ? `${fmt(d.w)} slov` : "Bez diktovania"}</b><span>${dayName(d)}</span></span></button>`).join("");
+  const label = (d) => (d.today ? "dnes" : o.dense ? (d.dow === 0 ? d.date : "") : DOW[d.dow]);
+  return `<div class="wc${o.dense ? " dense" : ""}" style="--h:${o.h}px;--n:${days.length}">
+    ${o.axis ? `<div class="wc-y" aria-hidden="true">${ticks.map((t) => `<span style="--p:${t / top}">${t >= 1000 ? `${t / 1000}k` : t}</span>`).join("")}</div>` : ""}
+    <div class="wc-main">
+      <div class="wc-plot" role="group" aria-label="${o.label}. Šípkami vľavo a vpravo prejdete po dňoch.">
+        ${ticks.slice(1).map((t) => `<span class="wc-grid" style="--p:${t / top}"></span>`).join("")}
+        ${o.avg ? `<span class="wc-avg" style="--p:${avg / top}" aria-hidden="true"></span>` : ""}
+        <div class="wc-cols">${cols}</div>
+      </div>
+      <div class="wc-x" aria-hidden="true">${days.map((d) => `<span class="${d.today ? "today" : ""}">${label(d)}</span>`).join("")}</div>
+    </div></div>`;
+}
+
+function spark(vals) {
+  const w = 84, h = 28, p = 3;
+  const max = Math.max(...vals) || 1;
+  const pts = vals.map((v, i) => [p + (i * (w - 2 * p)) / (vals.length - 1), h - p - (v / max) * (h - 2 * p)]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const [lx, ly] = pts[pts.length - 1];
+  return `<svg class="kspark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path class="ar" d="${line} L${lx.toFixed(1)} ${h} L${p} ${h} Z"/><path class="ln" d="${line}"/><circle class="dot" cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.2"/></svg>`;
+}
+
+function savedSentence(s) {
+  const lead = { today: "Dnes ste ušetrili", week: "Tento týždeň ste ušetrili", total: "Spolu ste ušetrili" }[S.period];
+  return `${lead} <b>${durWords(s.saved)}</b> písania.`;
+}
+
+function statsHero() {
+  const s = STATS[S.period];
+  const sum = WEEK.reduce((a, d) => a + d.w, 0);
+  return `<section class="card st-card" aria-labelledby="h-stats">
+    <div class="st-head"><h2 id="h-stats">Štatistiky</h2><span class="sp-fill"></span>${periodSeg()}</div>
+    <div class="v1-body" aria-live="polite">
+      <div class="v1-hero">
+        <span class="st-label">Ušetrený čas</span>
+        <div class="num">${durHtml(s.saved)}</div>
+        <p class="say">${savedSentence(s)}</p>
+        <p class="est">Odhad oproti písaniu na klávesnici rýchlosťou 40 slov za minútu.</p>
+      </div>
+      <div class="v1-chart">
+        <div class="chart-top"><span class="st-label">Slová · posledných 7 dní</span><strong>${fmt(sum)} spolu</strong></div>
+        ${wordsChart(WEEK, { h: 150, labelToday: true, label: `Slová za posledných 7 dní, spolu ${fmt(sum)}` })}
+      </div>
+    </div>
+    <dl class="v1-row">
+      <div><dt>Nadiktované slová</dt><dd>${fmt(s.words)}<small>Ø ${s.avg} slov na diktovanie</small></dd></div>
+      <div><dt>Počet diktovaní</dt><dd>${fmt(s.dict)}<small>jedno trvá Ø ${s.per} s</small></dd></div>
+      <div><dt>Čas diktovania</dt><dd>${durText(s.sec)}</dd></div>
+      <div><dt>Priemerná rýchlosť</dt><dd>${s.wpm}${unit("slov/min")}</dd></div>
+      <div><dt>Séria</dt><dd>${s.streak}${unit(plural(s.streak, "deň", "dni", "dní"))}<small>každý deň od ${s.since}</small></dd></div>
+    </dl>
+    <div class="st-foot">${PRIV}</div>
+  </section>`;
+}
+
+function statsStrip() {
+  const s = STATS[S.period];
+  const sum = WEEK.reduce((a, d) => a + d.w, 0);
+  const kpi = (label, val, series, hot = "") => `<div><dt>${label}</dt><dd class="${hot}">${val}</dd>${spark(series)}</div>`;
+  return `<section class="kstrip" aria-labelledby="h-stats">
+    <div class="ks-top"><h2 id="h-stats">Štatistiky</h2>${periodSeg()}
+      <span class="priv">${PRIV}</span>
+      <button type="button" class="btn ghost sm ks-more" data-act="stats-more" aria-expanded="${S.statsMore}" aria-controls="stats-more">${S.statsMore ? "Menej" : "Viac"}${ic("chev", "sm")}</button></div>
+    <dl class="ks-row" aria-live="polite" aria-describedby="ks-spark-note">
+      ${kpi("Nadiktované slová", fmt(s.words), WEEK.map((d) => d.w), "hot")}
+      ${kpi("Ušetrený čas", durText(s.saved), WEEK.map((d) => d.saved))}
+      ${kpi("Počet diktovaní", fmt(s.dict), WEEK.map((d) => d.dict))}
+      ${kpi("Čas diktovania", durText(s.sec), WEEK.map((d) => d.sec))}
+    </dl>
+    <p class="vh" id="ks-spark-note">Krivky ukazujú posledných 7 dní, bodka je dnešok.</p>
+    ${S.statsMore ? `<div class="ks-panel" id="stats-more">
+      <dl>
+        <div><dt>Priemerná rýchlosť</dt><dd>${s.wpm} slov/min</dd></div>
+        <div><dt>Séria</dt><dd>${s.streak} ${plural(s.streak, "deň", "dni", "dní")} <span class="muted" style="font-size:12px;font-weight:500">od ${s.since}</span></dd></div>
+        <div><dt>Slov na diktovanie</dt><dd>Ø ${s.avg}</dd></div>
+        <div><dt>Dĺžka diktovania</dt><dd>Ø ${s.per} s</dd></div>
+        <p class="note" style="grid-column:1/-1">Ušetrený čas je odhad oproti písaniu 40 slov za minútu.</p>
+      </dl>
+      <div><div class="wc-head"><span class="st-label">Slová · posledných 7 dní</span><span class="st-label">${fmt(sum)} spolu</span></div>
+        ${wordsChart(WEEK, { h: 84, labelToday: true, label: `Slová za posledných 7 dní, spolu ${fmt(sum)}` })}</div>
+    </div>` : ""}
+  </section>`;
+}
+
+function heatmap() {
+  const lvl = (w) => (w === 0 ? "" : w < 600 ? "l1" : w < 1000 ? "l2" : w < 1400 ? "l3" : "l4");
+  const weeks = Math.ceil(DAYS.length / 7);
+  let cells = "";
+  for (let r = 0; r < 7; r++) {
+    cells += `<span class="rl">${r % 2 === 0 ? DOW[r] : ""}</span>`;
+    for (let c = 0; c < weeks; c++) {
+      const d = DAYS[c * 7 + r];
+      cells += d ? `<span class="c ${lvl(d.w)}${d.today ? " today" : ""}" data-tip="${d.today ? "Dnes" : `${DOW_LONG[d.dow]} ${d.date}`}: ${d.w ? `${fmt(d.w)} slov` : "bez diktovania"}"></span>` : `<span class="c fut"></span>`;
+    }
+  }
+  const active = DAYS.filter((d) => d.w > 0).length;
+  return `<div class="hm" role="img" aria-label="Aktivita za posledných ${weeks - 1} týždňov: diktovali ste ${active} z ${DAYS.length} dní.">${cells}</div>
+    <div class="hm-legend" aria-hidden="true"><span style="margin-left:0">menej</span><i style="background:var(--inset);box-shadow:inset 0 0 0 1px var(--line)"></i><i style="background:color-mix(in oklab,var(--amber) 24%,var(--panel))"></i><i style="background:color-mix(in oklab,var(--amber) 46%,var(--panel))"></i><i style="background:color-mix(in oklab,var(--amber) 72%,var(--panel))"></i><i style="background:var(--amber)"></i><span>viac</span></div>`;
+}
+
+function statsChart() {
+  const s = STATS[S.period];
+  const days = S.chartRange === "30" ? DAYS.slice(-30) : WEEK;
+  const sum = days.reduce((a, d) => a + d.w, 0);
+  const avg = Math.round(sum / days.length);
+  return `<section class="card st-card" aria-labelledby="h-stats">
+    <div class="st-head"><h2 id="h-stats">Štatistiky</h2><span class="sp-fill"></span>${periodSeg()}</div>
+    <dl class="v3-kpis" aria-live="polite">
+      <div><dt>Nadiktované slová</dt><dd>${fmt(s.words)}</dd></div>
+      <div><dt>Počet diktovaní</dt><dd>${fmt(s.dict)}<small>Ø ${s.avg} slov</small></dd></div>
+      <div><dt>Čas diktovania</dt><dd>${durText(s.sec)}<small>Ø ${s.per} s</small></dd></div>
+      <div><dt>Priemerná rýchlosť</dt><dd>${s.wpm}<small>slov/min</small></dd></div>
+      <div><dt>Ušetrený čas</dt><dd style="color:var(--amber-text)">${durText(s.saved)}</dd></div>
+    </dl>
+    <div class="v3-body">
+      <div class="v3-chart">
+        <div class="chart-top"><span class="ttl">Slová za deň<span>${fmt(sum)} spolu</span></span>
+          <span class="legend" aria-hidden="true"><span><i class="amber"></i>dnes</span><span><i></i>ostatné dni</span><span><i class="avg"></i>priemer ${fmt(avg)}</span></span>
+          <div class="seg" role="group" aria-label="Rozsah grafu">${[["7", "7 dní"], ["30", "30 dní"]].map(([v, l]) => `<button type="button" data-act="chart-range" data-v="${v}" aria-pressed="${S.chartRange === v}">${l}</button>`).join("")}</div></div>
+        ${wordsChart(days, { h: 190, axis: true, avg: true, dense: days.length > 7, labelToday: days.length === 7, label: `Slová za posledných ${days.length} dní, spolu ${fmt(sum)}, priemer ${fmt(avg)} za deň` })}
+      </div>
+      <div class="v3-streak">
+        <span class="st-label">Séria</span>
+        <div class="big">${s.streak}${unit(plural(s.streak, "deň po sebe", "dni po sebe", "dní po sebe"))}</div>
+        <p class="sub">Diktujete každý deň od ${s.since}</p>
+        ${heatmap()}
+      </div>
+    </div>
+    <div class="st-foot">${PRIV}<span class="sp-fill"></span><span>Ušetrený čas je odhad oproti písaniu 40 slov za minútu.</span></div>
+  </section>`;
+}
+
+const STATS_VIEWS = { 1: statsHero, 2: statsStrip, 3: statsChart };
+
+function lastCard() {
+  return `<section class="card" aria-labelledby="h-last">
+    <div class="chead"><h2 id="h-last">Posledné diktovanie</h2>
+      <button type="button" class="btn sm ${S.copied ? "ok" : ""}" data-act="copy-last" aria-live="polite">${S.copied ? `${ic("check", "sm")}Skopírované` : `${ic("copy", "sm")}Kopírovať`}</button></div>
+    <p class="transcript">Ahoj Peter, posielam opravenú verziu ponuky. Zmenil som reakčný čas na štyri hodiny a doplnil víkendovú pohotovosť.</p>
+    <p class="note" style="margin-top:10px">${ic("lock", "sm")}Táto karta ostáva v pamäti do zatvorenia aplikácie. Voliteľnú históriu na disku spravujete v Nastaveniach.</p>
+  </section>`;
+}
+
+function histCard() {
+  return `<section class="card" aria-labelledby="h-hist">
+    <div class="chead"><h2 id="h-hist">História prepisov</h2>
+      ${S.histOn && S.history.length ? `<button type="button" class="btn sm danger" data-act="hist-clear">Vymazať históriu</button>` : ""}</div>
+    ${!S.histOn ? `<p class="empty">História je vypnutá. Zapnete ju v Nastaveniach. Ukladať sa budú iba budúce dokončené prepisy, nikdy zvuk.</p>` : S.history.length === 0 ? `<p class="empty">Zatiaľ nemáte žiadne uložené prepisy. Po dokončení ďalšieho diktovania sa tu zobrazí jeho text.</p>` : `<ol class="hist" aria-label="Uložené prepisy">${S.history.map((h, i) => `<li><time>${h.t}</time><button type="button" class="btn ghost sm" data-act="hist-del" data-v="${i}" aria-label="Vymazať prepis ${i + 1}">${ic("trash", "sm")}</button><p>${esc(h.x)}</p></li>`).join("")}</ol>`}
+    ${S.histClearConfirm ? `<div class="confirm"><p>Vymazať všetky uložené prepisy? Posledné diktovanie ostáva v pamäti do zatvorenia aplikácie. Vymazanie histórie nemení štatistiky ani schránku. História ostane zapnutá a môže ukladať ďalšie dokončené diktovania.</p><div class="row-btns"><button type="button" class="btn ghost sm" data-act="hist-clear-no">Zrušiť</button><button type="button" class="btn danger sm" data-act="hist-clear-yes">Áno, vymazať históriu</button></div></div>` : ""}
+  </section>`;
+}
+
+function pageHome() {
+  return `<div class="page">
+    <div class="phead"><div><p class="kick">Domov</p><h1>Signálna cesta diktovania</h1></div>
+      <div class="row-btns"><span class="label-mono">kliknite na uzol a upravte ho</span></div></div>
+    <section class="sp" aria-labelledby="h-path">
+      <div class="sp-head"><h2 id="h-path">${led(S.paused ? "" : readiness().every((r) => r.ok) ? "ok" : "err")}Od klávesu po vložený text</h2><span class="label-mono">${S.paused ? "stand-by" : readiness().every((r) => r.ok) ? "signál prechádza" : "signál sa prerušil"}</span></div>
+      <div class="sp-row">${signalPath()}</div>
+      ${homeFoot()}
+    </section>
+    ${STATS_VIEWS[S.statsV]()}
+    <div class="home-duo">${lastCard()}${histCard()}</div>
+  </div>`;
+}
+
+/* ---------- drawer (fix in place) ---------- */
+function micControl() {
+  const lv = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+  return `<div class="field"><label for="dr-mic">Vstup</label>
+    <select id="dr-mic" class="select" data-set="mic" style="width:100%">${MIC_OPTIONS.map((m) => `<option value="${m.id}" ${S.mic === m.id ? "selected" : ""}>${m.label}</option>`).join("")}</select>
+    <span class="hint">Povedzte niečo a sledujte úroveň.</span>
+    <div class="lvl" aria-hidden="true">${lv.map((v, i) => `<i class="${v ? "on" : ""} ${i > 7 && v ? "hi" : ""}"></i>`).join("")}</div>
+    ${S.mic === "airpods" ? `<p class="note" style="margin-top:6px">${ic("headph", "sm")}Bluetooth slúchadlá sa pri zapnutom mikrofóne prepnú na hovorový profil, takže sa zhorší aj zvuk hudby. Ak počúvate cez AirPods, odporúčame vstavaný mikrofón Macu.</p>` : ""}</div>`;
+}
+function hotkeyControl() {
+  return `<div class="hotkey ${S.hkRec ? "rec" : ""}" role="group" aria-label="Klávesová skratka">
+    <span class="keys">${S.hkRec ? "Stlačte kombináciu…" : S.hotkey ? S.hotkey.split(/(?=Space)|(?<=[⌘⌥⌃⇧])/).map((k) => `<kbd>${k}</kbd>`).join("") : '<span class="muted">nenastavená</span>'}</span>
+    <button type="button" class="btn sm ${S.hkRec ? "" : ""}" data-act="hk-rec">${S.hkRec ? "Zrušiť" : S.hotkey ? "Zmeniť" : "Nahrať"}</button></div>`;
+}
+function permRow(kind, title, desc) {
+  const ok = S.perms[kind];
+  return `<div class="state-line ${ok ? "ok" : "err"}">${led(ok ? "ok" : "err")}<div style="flex:1"><b>${title}</b><span>${desc}</span></div>${ok ? `<span class="pill ok">Povolené</span>` : `<button type="button" class="btn sm primary" data-act="grant" data-v="${kind}">Povoliť</button>`}</div>`;
+}
+function seg(key, opts, cur, label) {
+  return `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, l]) => `<button type="button" data-act="set" data-k="${key}" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`).join("")}</div>`;
+}
+function sw(key, on, label, disabled = false) {
+  return `<button type="button" role="switch" class="switch" aria-checked="${on}" aria-label="${label}" data-act="toggle" data-k="${key}" ${disabled ? "disabled" : ""}></button>`;
+}
+
+function drawerBody(id) {
+  const t = tx();
+  if (id === "mic") return { n: "01", title: "Mikrofón", body: `${permRow("mic", "Prístup k mikrofónu", "Mikrofón sa zapne, až keď stlačíte skratku, a po skončení sa vypne.")}${micControl()}`, more: ["settings", "set-mic", "Všetky nastavenia mikrofónu"] };
+  if (id === "hotkey") return { n: "02", title: "Klávesová skratka", body: `<div class="field"><span class="lab">Skratka</span>${hotkeyControl()}<span class="hint">Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.</span></div>
+      <div class="field"><span class="lab">Režim</span>${seg("mode", Object.entries(MODES), S.mode, "Režim klávesu")}<span class="hint">${MODE_DESC[S.mode]}</span></div>
+      ${permRow("input", "Monitorovanie vstupu", "Aplikácia sleduje iba vybraný kláves, aby vedela, kedy diktujete.")}`, more: ["settings", "set-hotkey", "Nastavenia diktovania"] };
+  if (id === "tx") {
+    const fixes = txFixes();
+    return { n: "03", title: "Prepis", body: `<div class="state-line ${t.state === "err" ? "err" : t.state === "ok" ? "ok" : ""}">${led(t.state === "warn" ? "warn" : t.state)}<div><b>${t.state === "err" ? esc(t.title) : `Prepisuje sa na: ${esc(t.title)}`}</b><span>${esc(t.detail)}</span></div></div>
+      ${fixes.length ? `<p class="label-mono" style="margin:4px 0 -4px">Ako to opraviť</p>${fixes.map((f, i) => `<div class="fix ${f.primary ? "rec" : ""}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${f.label}</b>${f.primary ? '<span class="tag amber">odporúčané</span>' : ""}</div><p>${fixText(f.act)}</p><div><button type="button" class="btn ${f.primary ? "primary" : ""} sm" data-act="${f.act}" ${f.arg ? `data-v="${f.arg}"` : ""}>${f.act === "dl-model" ? "Stiahnuť" : f.act === "goto-pair" ? "Prejsť na párovanie" : "Prepnúť"}</button></div></div>`).join("")}` : ""}
+      ${downloading() ? `<div class="fix"><b>Sťahuje sa ${downloading().name}</b><div class="prog"><i style="width:${S.ms[downloading().id].p}%"></i></div><p class="mono" style="font-size:11px">${Math.floor(S.ms[downloading().id].p)} % z ${downloading().size}</p></div>` : ""}
+      <p class="label-mono" style="margin:4px 0 -4px">Trasa</p>
+      <div class="minipath"><span>${esc(engine(S.route[0]).title)}</span>${S.route[1] ? `<i></i><span>záloha: ${esc(engine(S.route[1]).title)}</span>` : "<i></i><span>bez zálohy</span>"}</div>`, more: ["tx", null, "Otvoriť Prepis"] };
+  }
+  if (id === "ai") return { n: "04", title: "AI úprava", body: `<div class="state-line">${led(S.aiPolish ? "ok" : "")}<div style="flex:1"><b>${S.aiPolish ? "Diktát sa upravuje cez AI" : "AI úprava je vypnutá"}</b><span>${S.aiPolish ? "Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak neodpovie do 8 sekúnd, vloží sa pôvodný prepis." : "Text ide z prepisu priamo do aplikácie. Nikam sa neposiela."}</span></div>${sw("aiPolish", S.aiPolish, "Upraviť diktát cez AI", !aiReady())}</div>
+      <dl class="kv"><dt>Poskytovateľ</dt><dd>${S.aiProvider === "codex" ? "Codex CLI" : "Vlastný server"}</dd>${S.aiProvider === "codex" ? `<dt>Model</dt><dd>${S.codexModel}</dd>` : `<dt>Adresa</dt><dd>${esc(S.aiUrl)}</dd><dt>Model</dt><dd>${esc(S.aiModel)}</dd>`}</dl>`, more: ["settings", "set-ai", "Nastaviť poskytovateľa"] };
+  if (id === "insert") return { n: "05", title: "Vloženie textu", body: `<div class="radios" role="radiogroup" aria-label="Spôsob vkladania">${INSERTIONS.map((o) => `<button type="button" role="radio" class="radio" aria-checked="${S.insertion === o.id}" data-act="set" data-k="insertion" data-v="${o.id}"><span class="dot"></span><span><b>${o.title}</b><span>${o.desc}</span></span></button>`).join("")}</div>
+      ${permRow("acc", "Prístupnosť", "Umožní vložiť prepísaný text do aplikácie, v ktorej práve píšete.")}`, more: ["settings", "set-insert", "Schránka a automatické odoslanie"] };
+  return null;
+}
+function fixText(act) {
+  if (act === "use-server") return `Spárovaný server ${HOST} odpovedá za ${lat()} ms. Zvuk putuje zašifrovaný od začiatku do konca. Lokálny model si môžete stiahnuť neskôr ako zálohu.`;
+  if (act === "dl-model") return "Parakeet Ultra sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač.";
+  if (act === "goto-pair") return "Párovanie trvá asi minútu: spustíte príkaz na serveri a vložíte token.";
+  if (act === "use-local") return "Stiahnutý model je pripravený, prepis pobeží na tomto Macu.";
+  return "";
+}
+
+function renderDrawer() {
+  if (!S.drawer) return "";
+  const d = drawerBody(S.drawer);
+  return `<div class="scrim" data-act="drawer-close"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title">
+    <header><span class="idx">${d.n}</span><h2 id="dr-title">${d.title}</h2><button type="button" class="iconbtn" data-act="drawer-close" aria-label="Zavrieť">${ic("x", "sm")}</button></header>
+    <div class="dbody">${d.body}</div>
+    <div class="dfoot"><span class="label-mono">zmeny sa ukladajú hneď</span><button type="button" class="btn sm ghost" data-act="jump" data-v="${d.more[0]}" data-id="${d.more[1] || ""}">${d.more[2]}${ic("arrow", "sm")}</button></div>
+  </aside>`;
+}
+</script>
+<script>
+"use strict";
+/* ---------- Prepis ---------- */
+function sparkSvg() {
+  const w = 200, h = 44, pts = S.lat, mx = 70, mn = 25;
+  const xy = pts.map((v, i) => [(i / (pts.length - 1)) * w, h - 4 - ((v - mn) / (mx - mn)) * (h - 8)]);
+  const line = xy.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("");
+  const last = xy[xy.length - 1];
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${line}L${w} ${h}L0 ${h}Z"/><path class="ln" d="${line}"/><circle class="dot" cx="${last[0] - 2}" cy="${last[1]}" r="2.6"/></svg>`;
+}
+function engChip(e, slot) {
+  const en = engine(e);
+  const dis = e === "server" && !paired();
+  return `<div class="eng ${slot === 0 ? "primary" : ""} ${dis ? "dis" : ""}" draggable="${!dis}" data-eng="${e}" role="group" aria-label="${en.title}, ${slot === 0 ? "hlavný" : "záloha"}">
+    <span class="grip" title="Potiahnite na zmenu poradia">${ic("grip")}</span>
+    <span class="ei">${ic(en.icon)}</span>
+    <span class="t"><b>${esc(en.title)}</b><span>${esc(en.meta)}</span></span>
+    ${led(en.ok ? "ok" : "err")}
+    ${slot === 1 ? `<button type="button" class="iconbtn" data-act="route-drop" aria-label="Odobrať zálohu">${ic("x", "sm")}</button>` : ""}
+  </div>`;
+}
+function routeSelector() {
+  const [p, f] = S.route;
+  const other = p === "server" ? "local" : "server";
+  const key = S.route.join(",");
+  const canAddOther = other === "local" || paired();
+  return `<div class="card">
+    <div class="route" id="route">
+      <div class="slot" data-slot="0"><div class="sl"><span class="label-mono">1 · Hlavný prepis</span><span class="tag amber">používa sa</span></div>${engChip(p, 0)}</div>
+      <div class="route-mid"><div class="wire ${tx().state !== "err" ? "on" : "dead"}" aria-hidden="true"></div>
+        <button type="button" class="iconbtn" data-act="route-swap" aria-label="Vymeniť hlavný prepis a zálohu" ${!f ? "disabled" : ""}>${ic("swap", "sm")}</button></div>
+      <div class="slot" data-slot="1"><div class="sl"><span class="label-mono">2 · Záloha</span><span class="tag">${f ? "ak hlavný nie je dostupný" : "voliteľné"}</span></div>
+        ${f ? engChip(f, 1) : `<div class="emptyslot">${canAddOther ? `<span>Bez zálohy. Keď ${p === "server" ? "server nie je dostupný" : "model nie je pripravený"}, diktovanie zlyhá.</span><button type="button" class="btn sm" data-act="route-add">${ic("plus", "sm")}Pridať ${other === "local" ? "lokálny prepis" : `server ${HOST}`} ako zálohu</button>` : `<span>Server ako záloha bude dostupný po spárovaní.</span><button type="button" class="linkbtn" data-act="goto-pair">Spárovať server</button>`}</div>`}
+      </div>
+    </div>
+    <div class="route-foot"><div class="exp">Trasa: <b>${ROUTE_TEXT[key][0]}</b> · ${ROUTE_TEXT[key][1]}</div><span class="label-mono" style="white-space:nowrap">platí od ďalšieho diktovania</span></div>
+  </div>`;
+}
+
+function pairTerm(replacing) {
+  const waiting = S.server === "waiting";
+  const s1 = waiting || S.pairToken ? "done" : "cur";
+  const s2 = waiting ? "done" : "cur";
+  return `<section class="term" aria-labelledby="h-pair">
+    <div class="term-bar">${ic("term", "sm")}<span id="h-pair">${replacing ? "Spárovať nový server" : "Spárovať server"} · 3 kroky</span>${led(waiting ? "amber live" : "")}</div>
+    ${replacing ? `<div class="tstep" style="grid-template-columns:1fr;padding:9px 14px"><p style="margin:0">Nové párovanie nahradí doterajšie.</p></div>` : ""}
+    <div class="tstep ${s1}"><div class="no">01${s1 === "done" ? led("ok") : ""}</div><div><h4>Na serveri spustite príkaz</h4>
+      <div class="cmd"><code>${PAIR_CMD}</code><button type="button" class="tbtn ${S.copiedCmd === "pair" ? "ok" : ""}" data-act="copy-cmd" data-v="pair">${S.copiedCmd === "pair" ? `${ic("check", "sm")}Skopírované` : `${ic("copy", "sm")}Kopírovať`}</button></div>
+      <p>Príkaz otvorí párovacie okno na 10 minút a vypíše párovací token, ktorý začína cw1:.</p></div></div>
+    <div class="tstep ${waiting ? "done" : S.pairToken || s1 === "done" ? "cur" : ""}"><div class="no">02${waiting ? led("ok") : ""}</div><div><h4><label for="pair-token">Vložte párovací token z terminálu</label></h4>
+      <div class="tok"><textarea id="pair-token" data-input="pairToken" rows="2" spellcheck="false" autocomplete="off" placeholder="cw1:…" ${waiting ? "disabled" : ""} aria-describedby="pair-err">${esc(S.pairToken)}</textarea>
+        <div class="stack"><button type="button" class="tbtn primary" data-act="pair" ${waiting || !S.pairToken.trim() ? "disabled" : ""}>Spárovať</button><button type="button" class="tbtn" data-act="paste-token" ${waiting ? "disabled" : ""}>Vložiť zo schránky</button></div></div>
+      ${S.pairErr ? `<p class="err" id="pair-err" role="alert">${ic("warn", "sm")}${S.pairErr}</p>` : `<span id="pair-err"></span>`}</div></div>
+    <div class="tstep ${waiting ? "cur" : ""}"><div class="no">03${waiting ? led("amber live") : ""}</div><div><h4>Porovnajte odtlačok spojenia s tým, čo ukazuje terminál, a potvrďte párovanie na serveri</h4>
+      ${waiting ? `<div class="fps"><div class="fpbox hot"><small>Odtlačok spojenia</small><code>K7QF 2M9X PL4R 8WZD</code></div><div class="fpbox"><small>Odtlačok zariadenia</small><code>V3NA 7TQ2 HX8C 1RMB</code></div></div>
+        <p>Ak terminál ukazuje rovnaký odtlačok spojenia aj zariadenia, odpovedzte na otázku <b style="color:#E7E3DA">Spárovať toto zariadenie?</b> písmenom y. Zariadenie sa na serveri volá MacBook Pro Matúša.</p>
+        <div class="wait" role="status"><i></i><i></i><i></i>Čaká sa na potvrdenie na serveri</div>
+        <div class="row-btns" style="margin-top:10px"><button type="button" class="tbtn" data-act="pair-cancel">Zrušiť párovanie</button><button type="button" class="tbtn mock" data-act="pair-confirm">Ukážka: na serveri potvrdené (y)</button></div>`
+      : `<p>Odtlačok sa zobrazí po pripojení k serveru.</p>`}</div></div>
+  </section>`;
+}
+
+function serverSection() {
+  if (S.server === "unpaired" || S.server === "waiting") {
+    return `${S.disconnected ? `<div class="alert amber" role="status">${ic("plug")}<div style="flex:1;min-width:0"><p>Server je odpojený. Aby ho server úplne zabudol, spustite na serveri:</p><div class="term" style="margin-top:8px"><div class="cmd" style="border:0;border-radius:0"><code>${REVOKE_CMD}</code><button type="button" class="tbtn" data-act="copy-cmd" data-v="revoke">${S.copiedCmd === "revoke" ? "Skopírované" : "Kopírovať"}</button></div></div></div></div>` : ""}
+    <div class="card" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="srv-top"><span class="srv-ic">${ic("server", "lg")}</span><div><h3>Vlastný server</h3><p>Zatiaľ nie je spárovaný žiadny server.</p></div></div>
+        <p style="margin:0;color:var(--ink-2);font-size:12.5px">Codevo Whisper vie prepisovať aj na serveri, ktorý vlastníte, napríklad na domácom počítači s grafickou kartou. Zvuk sa zašifruje už na tomto počítači, prepis sa vracia šifrovane a server zvuk ani text zámerne neukladá.</p>
+        <div class="e2e" style="flex-direction:column;gap:8px"><span class="badge">${ic("lock", "sm")}End-to-end šifrované</span><p>Cesta k serveru cez domácu sieť, WireGuard alebo Cloudflare tunel uvidí iba šifrované dáta.</p></div>
+        ${!modelReady() ? `<p class="note">${ic("route", "sm")}Po spárovaní sa prepis prepne na server automaticky, lebo lokálny model nemáte stiahnutý.</p>` : `<p class="note">${ic("route", "sm")}Po spárovaní vám ponúkneme nastaviť server ako hlavný prepis.</p>`}
+      </div>
+      ${pairTerm(false)}
+    </div>`;
+  }
+  const repair = S.server === "repair";
+  return `<div class="card">
+    <div class="srv-top"><span class="srv-ic">${ic("server", "lg")}${led(repair ? "err" : "ok")}</span><div><h3>${HOST}</h3><p>Spárované 6. novembra 2026</p></div>
+      ${S.testing ? `<span class="pill">Overujem…</span>` : repair ? `<span class="pill err">${led("err")}Treba znova spárovať</span>` : `<span class="pill ok">${led("ok")}Online</span>`}</div>
+    ${repair ? `<div class="alert" role="alert" style="margin-top:12px">${ic("warn")}<p>Kľúč servera sa zmenil. Codevo Whisper sa k nemu z bezpečnostných dôvodov nepripojí, kým server znova nespárujete. Ak ste kľúč na serveri nemenili, niekto sa môže vydávať za váš server.</p></div>` : ""}
+    <div class="srv-grid">
+      <div class="spark"><span class="label-mono">Pripojenie · živé</span><span class="big" id="lat-big">${repair ? "–" : lat()}<small>ms</small></span><div id="spark">${repair ? "" : sparkSvg()}</div><span class="label-mono" style="text-transform:none;letter-spacing:0">min ${Math.min(...S.lat)} · max ${Math.max(...S.lat)} ms · posledných 30 meraní</span></div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <dl class="kv"><dt>Adresa</dt><dd>https://domaci-pc.tail3f2a.ts.net:8443</dd><dt>Toto zariadenie</dt><dd>MacBook Pro Matúša (mbp-7f3a21)</dd><dt>Verzia servera</dt><dd>${repair ? "–" : "0.4.1"}</dd></dl>
+        <div class="e2e">${ic("lock", "sm")}<p>Zvuk sa šifruje už na tomto počítači a prepis sa vracia šifrovane. Domáca sieť, VPN aj tunel prenášajú iba šifrované dáta a nevedia ich prečítať.</p></div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:8px">Pripojenie je čas, za ktorý sa nadviaže šifrované spojenie so serverom.</p>
+    <div class="fps"><div class="fpbox"><small>Odtlačok kľúča servera</small><code>Q4TZ 9KMB 3XRW 7HCP</code></div><div class="fpbox"><small>Odtlačok tohto zariadenia (ukazuje ho aj codevo-whisper devices)</small><code>V3NA 7TQ2 HX8C 1RMB</code></div></div>
+    <div class="row-btns" style="margin-top:14px;justify-content:space-between">
+      <div class="row-btns"><button type="button" class="btn" data-act="test-conn" ${S.testing ? "disabled" : ""}>${ic("refresh", "sm")}Otestovať spojenie</button>${!repair ? `<button type="button" class="btn ghost" data-act="repair-toggle">Spárovať iný server</button>` : ""}</div>
+      <button type="button" class="btn danger" data-act="disconnect" ${S.disconnectConfirm ? "disabled" : ""}>${ic("plug", "sm")}Odpojiť server</button>
+    </div>
+    ${S.disconnectConfirm ? `<div class="confirm"><p>Zmaže sa iba párovanie na tomto počítači a prepis sa prepne na Lokálne. Server bude toto zariadenie poznať, kým ho na ňom neodvoláte:</p><div class="term"><div class="cmd" style="border:0;border-radius:0"><code>${REVOKE_CMD}</code><button type="button" class="tbtn" data-act="copy-cmd" data-v="revoke">${S.copiedCmd === "revoke" ? "Skopírované" : "Kopírovať"}</button></div></div><div class="row-btns"><button type="button" class="btn ghost sm" data-act="disconnect-no">Zrušiť</button><button type="button" class="btn danger sm" data-act="disconnect-yes">Áno, odpojiť</button></div></div>` : ""}
+  </div>
+  ${repair || S.showRepairPair ? pairTerm(true) : ""}`;
+}
+
+function modelRows() {
+  return `<div class="models" role="list" aria-label="Modely na prepis">${MODELS.map((m) => {
+    const st = S.ms[m.id];
+    const active = st.st === "ready" && S.activeModel === m.id;
+    const busy = downloading() && downloading().id !== m.id;
+    let status, acts;
+    if (st.st === "downloading") { status = `Sťahuje sa, ${Math.floor(st.p)} %`; acts = `<button type="button" class="btn sm" data-act="m-pause" data-v="${m.id}">${ic("pause", "sm")}Pozastaviť</button><button type="button" class="btn sm ghost" data-act="m-del" data-v="${m.id}">Odstrániť</button>`; }
+    else if (st.st === "paused") { status = `Pozastavené, ${Math.floor(st.p)} %`; acts = `<button type="button" class="btn sm" data-act="dl-model" data-v="${m.id}" ${busy ? "disabled" : ""}>Pokračovať</button><button type="button" class="btn sm ghost" data-act="m-del" data-v="${m.id}">Odstrániť</button>`; }
+    else if (active) { status = "Používa sa"; acts = `<button type="button" class="btn sm ghost" data-act="m-del" data-v="${m.id}">Odstrániť</button>`; }
+    else if (st.st === "ready") { status = "Stiahnutý"; acts = `<button type="button" class="btn sm" data-act="m-use" data-v="${m.id}">Použiť</button><button type="button" class="btn sm ghost" data-act="m-del" data-v="${m.id}">Odstrániť</button>`; }
+    else { status = "Nestiahnutý"; acts = `<button type="button" class="btn sm ${m.id === "pu8" && !modelReady() ? "primary" : ""}" data-act="dl-model" data-v="${m.id}" ${busy ? "disabled" : ""}>${ic("down", "sm")}Stiahnuť</button>`; }
+    return `<div class="mrow ${active ? "active" : ""}" role="listitem">
+      <div class="nm"><b>${m.name}</b>${m.roles.map((r) => `<span class="tag ${r === "Odporúčaný" ? "amber" : ""}">${r}</span>`).join("")}</div>
+      <div class="acts">${acts}</div>
+      <div class="mm"><span>${m.size}</span><span>${m.license}</span><span style="display:flex;align-items:center;gap:5px">${led(active ? "ok" : st.st === "downloading" ? "amber live" : st.st === "ready" ? "ok" : "")}${status}</span></div>
+      ${st.st === "downloading" || st.st === "paused" ? `<div class="prog"><i style="width:${st.p}%"></i></div>` : ""}
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function pageTx() {
+  const t = tx();
+  const fixes = txFixes();
+  let banner = "";
+  if (S.pairBanner === "offer") banner = `<div class="banner-ready" role="status">${led("amber live", "lg")}<div class="t"><b>Server je pripravený - nastaviť ako hlavný prepis</b><span>${HOST} odpovedá za ${lat()} ms. Lokálny model ${model(S.activeModel) ? model(S.activeModel).name : ""} zostane ako záloha.</span></div><div class="row-btns"><button type="button" class="btn ghost" data-act="banner-dismiss">Ponechať lokálne</button><button type="button" class="btn primary" data-act="use-server" data-v="keep">Nastaviť ako hlavný</button></div></div>`;
+  if (S.pairBanner === "auto") banner = `<div class="alert ok" role="status">${ic("check")}<div style="flex:1"><p><b>Spárované. Prepis sa prepol na server ${HOST}.</b> Lokálny model nemáte stiahnutý, takže bez tohto kroku by diktovanie nefungovalo. Model si môžete stiahnuť nižšie ako zálohu.</p></div><button type="button" class="btn sm ghost" data-act="undo-auto">Vrátiť späť</button></div>`;
+  return `<div class="page">
+    <div class="phead"><div><p class="kick">Prepis</p><h1>Kde beží prepis</h1><p class="sub">Server, lokálny model a ich poradie na jednom mieste. Výber platí od ďalšieho diktovania, nikdy sa nemení počas neho.</p></div></div>
+    ${banner}
+    <div class="now ${t.state === "err" ? "err" : t.state === "ok" ? "ok" : ""}" role="status">
+      <span class="lamp">${led(t.state === "warn" ? "warn" : t.state)}</span>
+      <div class="t"><small>Aktuálny stav</small><b>${t.state === "err" ? esc(t.title) : `Prepisuje sa na: ${esc(t.title)} ${t.state === "ok" ? "✓" : ""}`}</b><span>${esc(t.detail)}</span></div>
+      ${fixes.length ? `<div class="row-btns">${fixes.map((f) => `<button type="button" class="btn ${f.primary ? "primary" : ""}" data-act="${f.act}" ${f.arg ? `data-v="${f.arg}"` : ""}>${f.label}</button>`).join("")}</div>` : ""}
+    </div>
+    <div class="sec-h"><span class="n">01</span><h2>Trasa prepisu</h2><p>Potiahnite motor do slotu alebo použite tlačidlo na výmenu.</p></div>
+    ${routeSelector()}
+    <div class="sec-h" id="sec-server"><span class="n">02</span><h2>Vlastný server</h2><p>Párovanie, stav spojenia a odtlačky.</p></div>
+    ${serverSection()}
+    <div class="sec-h" id="sec-model"><span class="n">03</span><h2>Lokálny model</h2><p>Prepis na tomto Macu, aj bez internetu.</p></div>
+    <div class="card">
+      <p style="margin:0 0 12px;color:var(--ink-2);font-size:12.5px">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa na tento Mac. Potom prepis funguje aj bez internetu.</p>
+      ${modelRows()}
+      <div class="rows" style="margin-top:6px">
+        <div class="srow" id="set-unload"><div class="t"><b id="l-unload">Uvoľniť model</b><span>Čas sa počíta od konca posledného diktovania. Počas diktovania a dokončovania prepisu model zostáva načítaný.</span></div>
+          <select class="select" data-set="unload" aria-labelledby="l-unload">${[["never", "Nikdy"], ["immediately", "Ihneď"], ["2", "Po 2 minútach"], ["5", "Po 5 minútach"], ["10", "Po 10 minútach"], ["15", "Po 15 minútach"], ["60", "Po 1 hodine"]].map(([v, l]) => `<option value="${v}" ${S.unload === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        <div class="srow" id="set-accel"><div class="t"><b>Akcelerácia</b><span>Auto používa GPU na Apple Silicon a CPU na Intel Macu. Zmena sa použije po dokončení aktuálneho diktovania. Na ostatných systémoch sa používa CPU.</span></div>${seg("accel", [["auto", "Auto"], ["gpu", "GPU"], ["cpu", "CPU"]], S.accel, "Akcelerácia")}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- Stretnutia ---------- */
+const SPK_COLOR = { "Ja": "var(--spk-1)", "Hovoriaci 1": "var(--spk-2)", "Hovoriaci 2": "var(--spk-3)", "Hovoriaci 3": "var(--spk-4)", "Hovoriaci 4": "var(--spk-5)", "Ostatní": "var(--spk-2)" };
+const PHASE = { ready: ["ok", "Prepis hotový"], stopped: ["", "Čaká na prepis"], mic: ["amber live", "Prepisuje sa mikrofón"], system: ["amber live", "Prepisuje sa zvuk systému"], speakers: ["amber live", "Rozlišujú sa hovoriaci"], failed: ["err", "Prepis zlyhal"] };
+const clock = (ms) => { const s = Math.floor(ms / 1000); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((v) => String(v).padStart(2, "0")).join(":"); };
+
+function rulerMarks(dur) {
+  const total = dur.split(":").reduce((a, v) => a * 60 + Number(v), 0);
+  const mmss = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = Math.floor(sec % 60); return (h ? `${h}:` : "") + `${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; };
+  return [0, 0.25, 0.5, 0.75, 1].map((f) => mmss(total * f));
+}
+function recordCard() {
+  if (!modelReady() && !S.recording) {
+    return `<section class="card rec-card" aria-labelledby="h-rec"><div class="chead"><h2 id="h-rec">Nové stretnutie</h2>${led("err")}</div>
+      <p style="margin:0 0 12px;font-size:12.5px;color:var(--ink-2)">Stretnutia sa prepisujú iba lokálnym modelom na tomto počítači. Stiahnite si lokálny model, potom tu spustíte nahrávanie.</p>
+      ${downloading() ? `<div class="prog" style="margin-bottom:8px"><i style="width:${S.ms[downloading().id].p}%"></i></div><p class="label-mono" style="text-transform:none">Sťahuje sa ${downloading().name} · ${Math.floor(S.ms[downloading().id].p)} %</p>` : `<div class="row-btns"><button type="button" class="btn primary" data-act="dl-model" data-v="pu8">${ic("down", "sm")}Stiahnuť model · 740 MB</button><button type="button" class="btn ghost" data-act="jump" data-v="tx" data-id="sec-model">Vybrať iný</button></div>`}
+    </section>`;
+  }
+  const rec = S.recording;
+  return `<section class="card rec-card ${rec ? "live" : ""}" aria-labelledby="h-rec" aria-busy="false">
+    <div class="chead"><h2 id="h-rec">${rec ? "Nahráva sa stretnutie" : "Nové stretnutie"}</h2>${led(rec ? "amber live" : "")}</div>
+    <div class="rec-clock mono" role="timer" aria-label="Dĺžka nahrávania" id="rec-clock">${clock(rec ? Date.now() - rec : 0)}</div>
+    ${rec ? `<ul class="tracks" aria-label="Nahrávané stopy"><li>${ic("mic", "sm")}Mikrofón: nahráva sa<span class="meter amber"><i></i><i></i><i></i><i></i><i></i><i></i></span></li><li>${ic("laptop", "sm")}Zvuk systému: nahráva sa<span class="meter amber"><i></i><i></i><i></i><i></i><i></i><i></i></span></li></ul>`
+      : `<p style="margin:0 0 12px;font-size:12.5px;color:var(--ink-2)">Nahrá mikrofón a zvuk systému ako dve stopy, bez časového limitu. Po zastavení sa stretnutie prepíše lokálne a ostane na tomto počítači.</p>`}
+    <div class="row-btns">${rec ? `<button type="button" class="btn danger" data-act="rec-stop">${ic("stop", "sm")}Zastaviť a prepísať</button>` : `<button type="button" class="btn primary" data-act="rec-start">${ic("rec", "sm")}Začať nahrávanie</button>`}</div>
+    <p class="note" style="margin-top:12px">${ic("headph", "sm")}Tip: použite slúchadlá. Bez nich mikrofón zachytí aj hlas ostatných z reproduktorov a v prepise sa zopakuje.</p>
+  </section>`;
+}
+
+function meetingDetail(m) {
+  if (!m) return `<section class="card"><p class="empty">Zatiaľ nemáte žiadne nahrané stretnutia. Po zastavení nahrávania sa tu zobrazí aj s prepisom.</p></section>`;
+  const ready = m.phase === "ready";
+  const busy = !["ready", "stopped", "failed"].includes(m.phase);
+  const lanes = m.speakers.map((sp) => `<div class="lane"><span class="who"><i style="background:${SPK_COLOR[sp]}"></i>${sp}</span><span class="trk">${(m.lanes[sp] || []).map(([a, b]) => `<span style="left:${a}%;width:${b - a}%;background:${SPK_COLOR[sp]}"></span>`).join("")}</span></div>`).join("");
+  const notes = `<div class="row-btns" style="justify-content:space-between;margin-bottom:10px"><p class="note" style="max-width:440px">${aiReady() ? (S.aiProvider === "codex" ? "Poznámky vytvára Codex CLI. Prepis stretnutia sa odošle do OpenAI pod vaším účtom a čerpá limity vášho predplatného ChatGPT." : "Lokálne servery ako Ollama majú predvolene malé kontextové okno. Pri dlhých stretnutiach ho zväčšite, napríklad premennou OLLAMA_CONTEXT_LENGTH. Pre spoľahlivé poznámky použite model so 7B a viac parametrami, menšie modely si vymýšľajú.") : `Poznámky vytvára AI server alebo Codex CLI. <button type="button" class="linkbtn" data-act="jump" data-v="settings" data-id="set-ai">Nastaviť AI úpravu</button>`}</p>
+      <button type="button" class="btn" data-act="notes-gen" ${!ready || S.notesPending || !aiReady() || !m.turns.length ? "disabled" : ""}>${ic("spark", "sm")}${m.notes ? "Vytvoriť znova" : "Vytvoriť poznámky"}</button></div>
+    ${S.notesPending ? `<p class="empty" role="status">${led("amber live")} Vytvárajú sa poznámky… Pri dlhom stretnutí to môže trvať niekoľko minút.</p>` : m.notes ? `<div class="notes" aria-label="Poznámky zo stretnutia"><h4>Zhrnutie</h4><p>Tím sa dohodol na vydaní verzie 3.2 v utorok 17. novembra, podmienene schválením platobnej brány bankou do stredy.</p><h4>Rozhodnutia</h4><ul><li>Vydanie verzie 3.2 v utorok 17. 11.</li><li>Ak banka neschváli bránu do stredy, termín sa posúva.</li></ul><h4>Otvorené otázky</h4><ul><li>Stihne sa oprava vyprázdnenia košíka na iOS do piatku?</li></ul><h4>Úlohy</h4><ul><li>Hovoriaci 1: poslať banke pripomienku, dnes</li><li>Hovoriaci 2: opraviť vyprázdnenie košíka na iOS, do piatku</li><li>Hovoriaci 3: pripraviť kampaň v newsletteri ako koncept na 17. 11.</li></ul></div>` : `<p class="empty">Zatiaľ bez poznámok. Vytvoria sa z prepisu: zhrnutie, rozhodnutia, otvorené otázky a úlohy.</p>`}`;
+  const transcript = !ready ? `<p class="empty" role="status">${m.phase === "stopped" ? "Stretnutie čaká na prepis." : `${PHASE[m.phase][1]}…`}</p>` : `<ol class="turns" aria-label="Prepis stretnutia">${m.turns.map(([tm, sp, txt]) => `<li class="turn"><time>${tm.slice(3)}</time><span class="bar4" style="background:${SPK_COLOR[sp]}"></span><div><b style="color:${SPK_COLOR[sp]}">${sp}</b><p>${esc(txt)}</p></div></li>`).join("")}</ol>`;
+  return `<section class="card" aria-labelledby="h-meeting">
+    <div class="det-head"><div><h2 id="h-meeting">${m.title}</h2><div class="meta">${m.when} · ${m.dur} · Zvuk systému: ${m.sys}</div></div>
+      <div class="row-btns"><button type="button" class="btn sm" data-act="m-export" ${!ready ? "disabled" : ""}>${ic("export", "sm")}Exportovať do Markdownu</button><button type="button" class="btn sm" data-act="m-retx" ${busy ? "disabled" : ""}>Prepísať znova</button><button type="button" class="btn sm danger" data-act="m-delete" ${busy ? "disabled" : ""}>Zmazať</button></div></div>
+    ${S.mAction === "confirm" ? `<div class="confirm"><p>Zmazať stretnutie aj s nahrávkou, prepisom a poznámkami? Túto akciu nemožno vrátiť.</p><div class="row-btns"><button type="button" class="btn ghost sm" data-act="m-delete-no">Zrušiť</button><button type="button" class="btn danger sm" data-act="m-delete-yes">Áno, zmazať</button></div></div>` : ""}
+    ${S.mAction === "exported" ? `<p class="note" role="status" style="margin-top:8px">${ic("check", "sm")}Stretnutie bolo exportované do Markdownu.</p>` : ""}
+    ${ready && m.speakers.length ? `<div class="lanes" aria-label="Časová os hovoriacich">${lanes}<div class="ruler"><span></span><div>${rulerMarks(m.dur).map((x) => `<span>${x}</span>`).join("")}</div></div></div>` : ""}
+    <div class="tabs" role="tablist" aria-label="Detail stretnutia"><button type="button" role="tab" data-act="mtab" data-v="transcript" aria-selected="${S.mtab === "transcript"}">Prepis</button><button type="button" role="tab" data-act="mtab" data-v="notes" aria-selected="${S.mtab === "notes"}">Poznámky${m.notes ? " · hotové" : ""}</button></div>
+    ${S.mtab === "notes" ? notes : transcript}
+  </section>`;
+}
+
+function pageMeetings() {
+  const recorded = S.meetings;
+  const sel = recorded.find((m) => m.id === S.selMeeting) || recorded[0];
+  return `<div class="page">
+    <div class="phead"><div><p class="kick">Stretnutia</p><h1>Nahrávanie a prepis stretnutí</h1><p class="sub">Mikrofón a zvuk systému ako dve stopy, prepis lokálne, hovoriaci farebne na časovej osi.</p></div></div>
+    <div class="meet-grid">
+      <div class="col">
+        ${recordCard()}
+        <section class="card" aria-labelledby="h-list"><div class="chead"><h2 id="h-list">Nahrané stretnutia</h2><span class="label-mono">${recorded.length}</span></div>
+          ${recorded.length ? `<ol class="mlist" aria-label="Nahrané stretnutia">${recorded.map((m) => `<li><button type="button" class="mpick" data-act="msel" data-v="${m.id}" aria-current="${sel && m.id === sel.id}"><b>${m.title}</b><span>${led(PHASE[m.phase][0])}${m.dur} · ${PHASE[m.phase][1]}</span></button></li>`).join("")}</ol>` : `<p class="empty">Zatiaľ nemáte žiadne nahrané stretnutia. Po zastavení nahrávania sa tu zobrazí aj s prepisom.</p>`}
+        </section>
+        <section class="card" aria-labelledby="h-spk"><div class="chead"><h2 id="h-spk">Rozpoznávanie hovoriacich</h2>${led(S.diarizer === "ready" ? "ok" : "")}</div>
+          <p style="margin:0 0 10px;font-size:12px;color:var(--ink-2)">Voliteľný model rozlíši v zvuku systému až štyroch hovoriacich ako Hovoriaci 1 až 4. Bez neho sa celá druhá strana označí ako Ostatní. Stiahne sa z Hugging Face iba po kliknutí na Stiahnuť a použije sa aj pri Prepísať znova.</p>
+          <div class="models"><div class="mrow"><div class="nm"><b>Sortformer 4spk v2.1</b></div><div class="acts">${S.diarizer === "ready" ? `<button type="button" class="btn sm ghost" data-act="dia" data-v="none">Odstrániť</button>` : `<button type="button" class="btn sm" data-act="dia" data-v="ready">${ic("down", "sm")}Stiahnuť</button>`}</div><div class="mm"><span>139 MB</span><span>NVIDIA Open Model License</span><span>${S.diarizer === "ready" ? "Stiahnutý" : "Nestiahnutý"}</span></div></div></div>
+        </section>
+      </div>
+      ${meetingDetail(sel)}
+    </div>
+  </div>`;
+}
+
+/* ---------- Nastavenia ---------- */
+const SET_GROUPS = [
+  ["g-dict", "Diktovanie"], ["g-mic", "Mikrofón"], ["g-insert", "Vkladanie textu"], ["g-edit", "Úprava prepisu"], ["g-ai", "AI úprava textu"], ["g-hist", "História prepisov"], ["g-sys", "Systém"], ["g-linux", "Prístup k systému"],
+];
+function row(id, title, desc, control, q = "") {
+  return `<div class="srow" id="${id}" data-q="${esc((title + " " + desc + " " + q).toLowerCase())}"><div class="t"><b>${title}</b><span>${desc}</span></div>${control}</div>`;
+}
+function selectEl(key, opts, cur, label, disabled = false) {
+  return `<select class="select" data-set="${key}" aria-label="${label}" ${disabled ? "disabled" : ""}>${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+}
+function group(id, n, title, inner, tag = "") {
+  return `<section class="group" id="${id}" aria-labelledby="${id}-h" data-title="${title.toLowerCase()}"><header><span class="n">${n}</span><h2 id="${id}-h">${title}</h2>${tag}</header><div class="rows">${inner}</div></section>`;
+}
+function aiFields() {
+  if (S.aiProvider === "codex") return `<div class="ai-fields"><p class="warnnote">Text diktátu aj prepis stretnutia sa odošle do OpenAI pod vaším účtom v Codex CLI a čerpá limity vášho predplatného ChatGPT, približne 7 000 tokenov na jeden diktát.</p>
+    <div class="field"><label for="cx-model">Model</label><input id="cx-model" class="input mono" data-input="codexModel" value="${esc(S.codexModel)}" placeholder="gpt-6-luna" spellcheck="false"><span class="hint">Odporúčané: gpt-6-luna s nízkou úrovňou uvažovania.</span></div>
+    <div class="field"><span class="lab">Úroveň uvažovania</span>${seg("effort", [["none", "Žiadna"], ["low", "Nízka (odporúčané)"], ["medium", "Stredná"], ["high", "Vysoká"]], S.effort, "Úroveň uvažovania")}</div>
+    <div class="inline field full"><button type="button" class="btn" data-act="ai-check">${S.aiCheck === "checking" ? "Overuje sa…" : "Overiť Codex CLI"}</button><span class="hint" aria-live="polite">${S.aiCheck === "done" ? `${led("ok")} Codex CLI funguje.` : ""}</span></div></div>`;
+  const local = /127\.0\.0\.1|localhost/.test(S.aiUrl);
+  return `<div class="ai-fields">
+    <div class="field"><label for="ai-url">Adresa servera (OpenAI-compatible)</label><input id="ai-url" class="input mono" data-input="aiUrl" value="${esc(S.aiUrl)}" placeholder="http://127.0.0.1:11434/v1" spellcheck="false"><span class="hint ${local ? "" : "warn"}">${local ? "Adresa končí spravidla na /v1." : "Text sa odošle mimo tento počítač."}</span></div>
+    <div class="field"><label for="ai-model">Model</label><input id="ai-model" class="input mono" list="ai-models" data-input="aiModel" value="${esc(S.aiModel)}" placeholder="qwen2.5:1.5b" spellcheck="false"><datalist id="ai-models"><option value="qwen2.5:7b"><option value="llama3.1:8b"><option value="gemma3:12b"></datalist></div>
+    <div class="field"><label for="ai-key">API kľúč (nepovinné)</label><div class="inline"><input id="ai-key" type="password" class="input" ${S.aiKey === "stored" ? 'placeholder="••••••••" disabled' : ""} autocomplete="off"><button type="button" class="btn ${S.aiKey === "stored" ? "ghost" : ""}" data-act="ai-key">${S.aiKey === "stored" ? "Odstrániť kľúč" : "Uložiť kľúč"}</button></div><span class="hint">${S.aiKey === "stored" ? "Kľúč je uložený v systémovom úložisku." : "Lokálne servery ako Ollama kľúč nepotrebujú."}</span></div>
+    <div class="field" style="justify-content:flex-end"><div class="inline"><button type="button" class="btn" data-act="ai-check">${S.aiCheck === "checking" ? "Overuje sa…" : "Overiť pripojenie"}</button><span class="hint" aria-live="polite">${S.aiCheck === "done" ? `${led("ok")} Spojenie funguje. Dostupné modely: 3.` : ""}</span></div></div>
+  </div>`;
+}
+function pageSettings() {
+  const dict = row("set-hotkey", "Klávesová skratka", "Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.", hotkeyControl(), "hotkey skratka")
+    + row("set-mode", "Režim", MODE_DESC[S.mode], seg("mode", Object.entries(MODES), S.mode, "Režim klávesu"), "podrž prepínanie inteligentný")
+    + row("set-overlay", "Zobrazenie panela", "Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.", seg("overlay", [["indicator", "Indikátor"], ["live", "Živý text"]], S.overlay, "Zobrazenie panela"), "overlay")
+    + row("set-lang", "Jazyk", "Automatické rozpoznanie pridá k prvému slovu asi 0,1 s.", selectEl("language", [["sk", "Slovenčina"], ["cs", "Čeština"], ["en", "Angličtina"], ["auto", "Automaticky"]], S.language, "Jazyk"))
+    + row("set-mute", "Stlmiť počas nahrávania", "Dočasne stlmí systémový výstup a potom obnoví jeho pôvodný stav.", sw("mute", S.mute, "Stlmiť počas nahrávania"))
+    + row("set-feedback", "Zvuková odozva", "Krátky zvuk pri začiatku a konci nahrávania.", sw("feedback", S.feedback, "Zvuková odozva"))
+    + row("set-output", "Výstupné zariadenie", "Kam sa prehrá zvuková odozva.", selectEl("feedbackOut", [["", "Systémový predvolený"], ["mbp", "Reproduktory MacBooku Pro"], ["airpods", "AirPods Pro Matúša"]], S.feedbackOut, "Výstupné zariadenie", !S.feedback))
+    + row("set-volume", "Hlasitosť", "Hlasitosť zvukovej odozvy. Nemení hlasitosť systému.", `<div class="range"><input type="range" min="0" max="100" value="${S.volume}" data-input="volume" aria-label="Hlasitosť" ${!S.feedback ? "disabled" : ""}><output id="vol-out">${S.volume} %</output></div>`);
+  const mic = `<div class="srow stack" id="set-mic" data-q="mikrofón vstup úroveň bluetooth airpods">${micControl()}</div>`;
+  const insert = `<div class="srow stack" id="set-insert" data-q="vloženie vložiť priame písanie skopírovať schránka"><div class="radios" role="radiogroup" aria-label="Spôsob vkladania">${INSERTIONS.map((o) => `<button type="button" role="radio" class="radio" aria-checked="${S.insertion === o.id}" data-act="set" data-k="insertion" data-v="${o.id}"><span class="dot"></span><span><b>${o.title}</b><span>${o.desc}</span></span></button>`).join("")}</div></div>`
+    + row("set-clip", "Schránka", S.insertion === "clipboard" ? "Kopírovanie vždy nechá prepis v schránke." : S.insertion === "paste" ? "Pri vkladaní sa schránka dočasne použije. Pri možnosti Nemeniť schránku sa jej pôvodný obsah obnoví." : "Priame písanie pri možnosti Nemeniť schránku schránku vôbec nepoužíva.", selectEl("clip", [["restore", "Nemeniť schránku"], ["leave", "Nechať prepis v schránke"]], S.clip, "Schránka", S.insertion === "clipboard"))
+    + row("set-submit", "Automatické odoslanie", "Po vložení textu stlačí zvolenú skratku. Cmd+Enter na Macu, Ctrl+Enter na Linuxe.", selectEl("submit", [["off", "Vypnuté"], ["enter", "Enter"], ["primary-enter", "Cmd+Enter / Ctrl+Enter"]], S.submit, "Automatické odoslanie", S.insertion === "clipboard"), "enter")
+    + row("set-linuxpaste", "Skratka na vloženie <span class='tag'>Linux</span>", "Zvoľte skratku cieľovej aplikácie. Shift+Insert používa primárny výber. Vo Waylande sa text kopíruje na ručné vloženie.", selectEl("linuxPaste", [["ctrl-v", "Ctrl+V"], ["ctrl-shift-v", "Ctrl+Shift+V"], ["shift-insert", "Shift+Insert"]], S.linuxPaste, "Skratka na vloženie", true), "linux wayland");
+  const edit = `<div class="srow stack" id="set-words" data-q="vlastné slová mená odborné výrazy"><div class="field"><label for="words">Vlastné slová</label><span class="hint" id="words-hint">Jedno slovo na riadok, najviac 100 slov po 64 znakov. Použite požadovaný pravopis mien a odborných výrazov.</span><textarea id="words" class="textarea mono" rows="4" data-input="words" aria-describedby="words-hint">${esc(S.words)}</textarea><div class="inline"><button type="button" class="btn sm" data-act="save-words">${S.wordsSaved ? `${ic("check", "sm")}Uložené` : "Uložiť slová"}</button></div></div></div>`
+    + row("set-filler", "Odstrániť výplňové slová", "Vynechá zaváhania ako ehm, eee, hmm, um a uh z hotového prepisu.", sw("filler", S.filler, "Odstrániť výplňové slová"))
+    + row("set-trailing", "Pridať medzeru na konci", "Za neprázdny prepis pridá jednu medzeru pre plynulé pokračovanie v písaní.", sw("trailing", S.trailing, "Pridať medzeru na konci"));
+  const ai = `<p class="lead">${S.aiProvider === "codex" ? "Po prepise môže diktát a poznámky zo stretnutí upraviť model OpenAI cez Codex CLI, v ktorom ste prihlásený." : "Po prepise môže diktát upraviť jazykový model na serveri, ktorý si nastavíte, napríklad Ollama alebo LM Studio. Bez adresy sa text nikam neposiela."}</p>`
+    + row("set-ai", "Poskytovateľ", "Codex CLI používa váš účet ChatGPT. Vlastný server môže bežať aj na tomto počítači.", seg("aiProvider", [["server", "Vlastný server"], ["codex", "Codex CLI"]], S.aiProvider, "Poskytovateľ AI"), "ai ollama lm studio openai codex")
+    + `<div class="srow stack" data-q="adresa model api kľúč overiť codex">${aiFields()}</div>`
+    + row("set-polish", "Upraviť diktát cez AI", S.aiProvider === "codex" ? "Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak Codex CLI neodpovie do 8 sekúnd, vloží sa pôvodný prepis." : "Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.", sw("aiPolish", S.aiPolish, "Upraviť diktát cez AI", !aiReady()));
+  const hist = row("set-hist", "Ukladať históriu prepisov", "Predvolene vypnuté. Po zapnutí sa ukladajú iba budúce dokončené prepisy ako lokálny text, nikdy zvuk. Vypnutie vymaže uloženú históriu.", sw("histOn", S.histOn, "Ukladať históriu prepisov"))
+    + (S.histConfirm ? `<div class="confirm"><p>Vypnúť históriu a vymazať všetky uložené prepisy? Posledné diktovanie ostáva v pamäti do zatvorenia aplikácie. Vymazanie histórie nemení štatistiky ani schránku.</p><div class="row-btns"><button type="button" class="btn ghost sm" data-act="hist-off-no">Zrušiť</button><button type="button" class="btn danger sm" data-act="hist-off-yes">Áno, vypnúť a vymazať</button></div></div>` : "")
+    + row("set-histlimit", "Počet uchovaných prepisov", "Najstaršie prepisy sa automaticky vymažú. Zníženie limitu ich vymaže ihneď; zvýšenie ich neobnoví.", selectEl("histLimit", [["10", "10"], ["50", "50"], ["100", "100"], ["500", "500"]], S.histLimit, "Počet uchovaných prepisov", !S.histOn));
+  const sys = row("set-launch", "Spustiť po prihlásení", "Codevo Whisper sa potichu usadí v lište.", sw("launch", S.launch, "Spustiť po prihlásení"))
+    + row("set-stats", "Štatistiky", { idle: "Súčty slov, diktovaní a času za každý deň. Bez textu a bez názvov aplikácií.", confirm: "Naozaj chcete vymazať všetky štatistiky? Táto akcia sa nedá vrátiť.", done: "Štatistiky sú vynulované." }[S.statsReset], S.statsReset === "confirm" ? `<div class="row-btns"><button type="button" class="btn ghost sm" data-act="stats-no">Zrušiť</button><button type="button" class="btn danger sm" data-act="stats-yes">Áno, vynulovať</button></div>` : `<button type="button" class="btn danger sm" data-act="stats-reset">Vynulovať štatistiky</button>`, "vynulovať")
+    + row("set-update", "Aktualizácie", S.update === "checking" ? "Verzia 0.2.3. Hľadám aktualizácie…" : "Máte najnovšiu verziu 0.2.3.", `<button type="button" class="btn sm" data-act="check-update" ${S.update === "checking" ? "disabled" : ""}>Skontrolovať aktualizácie</button>`, "verzia");
+  const linux = `<p class="lead">Na macOS sa táto skupina nezobrazuje. V Linuxe nahrádza povolenia macOS.</p>`
+    + row("set-lx-kbd", "Prístup ku klávesnici", "X11 používa systémové skratky. Wayland vyžaduje prístup na čítanie ku klávesniciam aktívneho používateľa. Aplikácia nemení oprávnenia zariadení.", `<button type="button" class="btn sm" disabled>Skontrolovať znova</button>`, "linux x11 wayland")
+    + row("set-lx-acc", "Rozpoznávanie textových polí", "Povolí systémovú prístupnosť, aby aplikácia vedela overiť, kam vkladá text. Čítačka obrazovky sa nezapne.", `<button type="button" class="btn sm" disabled>Povoliť rozpoznávanie polí</button>`, "linux prístupnosť");
+  return `<div class="set-top"><h1>Nastavenia</h1><label class="search">${ic("search")}<span class="vh">Hľadať v nastaveniach</span><input type="search" id="set-search" data-input="setq" placeholder="Hľadať v nastaveniach… napr. schránka, jazyk, AI" autocomplete="off"></label><button type="button" class="btn" data-act="palette" aria-label="Otvoriť príkazovú paletu">Paleta <kbd>⌘K</kbd></button></div>
+  <div class="set-wrap">
+    <nav class="set-idx" aria-label="Sekcie nastavení">${SET_GROUPS.map(([id, t], i) => `<button type="button" data-act="set-scroll" data-v="${id}" aria-current="${i === 0}"><span class="n">${String(i + 1).padStart(2, "0")}</span>${t}</button>`).join("")}
+      <button type="button" class="moved" data-act="jump" data-v="tx" data-id=""><b>Kde beží prepis →</b>Server, poradie prepisu a lokálny model sú teraz v sekcii Prepis.</button></nav>
+    <div class="groups" id="groups">
+      ${group("g-dict", "01", "Diktovanie", dict)}${group("g-mic", "02", "Mikrofón", mic)}${group("g-insert", "03", "Vkladanie textu", insert)}${group("g-edit", "04", "Úprava prepisu", edit)}${group("g-ai", "05", "AI úprava textu", ai)}${group("g-hist", "06", "História prepisov", hist)}${group("g-sys", "07", "Systém", sys)}${group("g-linux", "08", "Prístup k systému", linux, '<span class="tag">iba Linux</span>')}
+      <p class="nohits" id="nohits" hidden>Nič sa nenašlo. Skúste iné slovo alebo otvorte <button type="button" class="linkbtn" data-act="palette">príkazovú paletu</button>.</p>
+    </div>
+  </div>`;
+}
+
+/* ---------- Súkromie ---------- */
+function pagePrivacy() {
+  return `<div class="page">
+    <div class="phead"><div><p class="kick">Súkromie</p><h1>Kam putuje váš hlas</h1><p class="sub">V lokálnom režime sa reč prepisuje priamo na tomto Macu. Zvuk ani text sa nikam neposielajú. Internet sa používa iba na stiahnutie modelu z Hugging Face, keď kliknete na Stiahnuť, a na kontrolu aktualizácií aplikácie.</p></div></div>
+    <div class="zones">
+      <section class="zone local"><h3>${ic("laptop")}Ostáva na tomto Macu</h3><span class="when">vždy</span>
+        <div class="minipath"><span>Mikrofón</span><i></i><span>Lokálny model</span><i></i><span>Vaša aplikácia</span></div>
+        <ul><li>${ic("check", "sm")}Zvuk pri lokálnom prepise. Nahrávka existuje iba počas prepisu.</li><li>${ic("check", "sm")}Štatistiky, nastavenia a voliteľná história prepisov.</li><li>${ic("check", "sm")}Nahrávky a prepisy stretnutí.</li></ul></section>
+      <section class="zone"><h3>${ic("server")}Ide na váš server</h3><span class="when">iba ak je server v trase prepisu</span>
+        <div class="minipath"><span>Zvuk</span><i></i><span>${ic("lock", "sm")} E2E</span><i></i><span>${HOST}</span></div>
+        <ul><li>${ic("lock", "sm")}Zvuk diktátu, zašifrovaný už na tomto počítači.</li><li>${ic("lock", "sm")}Prepis sa vracia šifrovane. Server zvuk ani text zámerne neukladá.</li><li>${ic("check", "sm")}História prepisov ostáva iba na tomto zariadení.</li></ul></section>
+      <section class="zone"><h3>${ic("spark")}Ide k AI poskytovateľovi</h3><span class="when">iba ak zapnete AI úpravu</span>
+        <div class="minipath"><span>Text</span><i></i><span>${S.aiProvider === "codex" ? "OpenAI cez Codex CLI" : "váš AI server"}</span></div>
+        <ul><li>${ic("check", "sm")}Iba hotový text, nikdy zvuk.</li><li>${ic("check", "sm")}Pri vlastnom serveri na adrese 127.0.0.1 text neopustí počítač.</li><li>${ic("warn", "sm")}Codex CLI posiela text do OpenAI pod vaším účtom.</li></ul></section>
+    </div>
+    <div class="priv-cols">
+      <section class="card"><div class="chead"><h2>${ic("mic", "sm")}Čo sa deje s vaším hlasom</h2></div>
+        <ol class="steps"><li>Mikrofón sa zapne, až keď podržíte kláves. Keď ho pustíte, vypne sa.</li><li>Zvuk sa prepíše na text priamo na tomto Macu stiahnutým modelom.</li><li>Nahrávka existuje iba počas prepisu a hneď potom sa zahodí.</li><li>Text sa vloží do aplikácie. Posledné diktovanie ostane iba v pamäti, kým aplikáciu nezatvoríte.</li></ol>
+        <p class="note" style="margin-top:12px">Ukazovateľ úrovne v Nastaveniach používa mikrofón iba vtedy, keď máte Nastavenia otvorené a okno aplikácie je aktívne.</p>
+        <div class="chead" style="margin-top:18px"><h2>${ic("lock", "sm")}Čo Codevo Whisper nerobí</h2></div>
+        <ul class="never"><li>${ic("x", "sm")}V lokálnom režime neposiela zvuk ani text na internet.</li><li>${ic("x", "sm")}Nezbiera analytiku ani telemetriu.</li><li>${ic("x", "sm")}Neuchováva zvuk v histórii prepisov.</li><li>${ic("x", "sm")}Nepotrebuje účet, e-mail ani predplatné.</li></ul>
+      </section>
+      <section class="card"><div class="chead"><h2>${ic("laptop", "sm")}Čo sa ukladá na tomto Macu</h2></div>
+        <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink-2)">Všetko je v priečinku aplikácie v <code class="mono" style="font-size:11.5px">~/Library/Application Support/Codevo Whisper</code>.</p>
+        <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink-2)">História je predvolene vypnutá. Po zapnutí ukladá iba text budúcich úspešne dokončených prepisov, nikdy zvuk. Limit je 10, 50, 100 alebo 500 prepisov, predvolene 100. Najstaršie sa automaticky vymažú; nižší limit ich vymaže ihneď.</p>
+        <p style="margin:0;font-size:12.5px;color:var(--ink-2)">V Domov môžete vymazať jeden prepis alebo celú históriu. Vypnutie v Nastaveniach vymaže históriu a zastaví ďalšie ukladanie. Vymazanie nemení súhrnné štatistiky, posledné diktovanie v pamäti ani schránku. Nejde o bezpečné prepísanie disku.</p>
+        <ul class="files"><li>Nastavenia<code>settings.json</code></li><li>Súhrnné štatistiky po dňoch, bez textu<code>stats.json</code></li><li>Voliteľná história prepisov a jej nastavenie, lokálny nešifrovaný text<code>history.json</code></li><li>Stiahnuté modely na prepis<code>priečinok models</code></li><li>Verzia aplikácie, pre ktorú je model pripravený na rýchly štart<code>warm-up.json</code></li></ul>
+        <button type="button" class="linkbtn" style="margin-top:12px;font-size:12.5px" data-act="jump" data-v="settings" data-id="set-stats">Vynulovať štatistiky v Nastaveniach</button>
+      </section>
+    </div>
+  </div>`;
+}
+</script>
+<script>
+"use strict";
+/* ---------- Onboarding ---------- */
+const OB_STEPS = [
+  ["Mikrofón", "Prístup k mikrofónu", "Codevo Whisper počuje iba to, čo nadiktujete. Mikrofón sa zapne, až keď podržíte kláves, a po pustení sa vypne."],
+  ["Povolenia", "Monitorovanie vstupu a prístupnosť", "Tieto dve povolenia nastavíte v Nastaveniach systému v časti Súkromie a bezpečnosť. Stav sa tu aktualizuje sám."],
+  ["Skratka", "Klávesová skratka", "Zvoľte skratku na diktovanie, napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov."],
+  ["Prepis", "Kde bude bežať prepis", "Prepisovať môžete priamo na tomto Macu, aj bez internetu, alebo na vlastnom serveri, kam zvuk putuje zašifrovaný od začiatku do konca. Rozhodnúť sa môžete aj neskôr."],
+  ["Vyskúšať", "Vyskúšajte to", "Kliknite do poľa nižšie alebo do ľubovoľnej aplikácie a nadiktujte prvú vetu."],
+];
+function obBody() {
+  const st = S.ob.step;
+  if (st === 0) return `${permRow("mic", "Mikrofón", "Prístup k mikrofónu pre Codevo Whisper.")}<div class="card">${micControl()}</div>`;
+  if (st === 1) return `${permRow("input", "Monitorovanie vstupu", "Aplikácia sleduje iba vybraný kláves, aby vedela, kedy diktujete.")}${permRow("acc", "Prístupnosť", "Umožní vložiť prepísaný text do aplikácie, v ktorej práve píšete.")}`;
+  if (st === 2) return `<div class="card" style="display:flex;align-items:center;gap:16px;justify-content:space-between"><div><b>Skratka na diktovanie</b><p class="note" style="margin-top:3px">${MODE_DESC[S.mode]}</p></div>${hotkeyControl()}</div>`;
+  if (st === 3) {
+    const rec = S.server === "paired" && !modelReady() ? "server" : "local";
+    const choices = [
+      ["local", "laptop", "Na tomto zariadení", "Model sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač."],
+      ["server", "server", "Na vlastnom serveri", "Prepisuje váš spárovaný server, napríklad domáci počítač s grafickou kartou. Zvuk putuje zašifrovaný od začiatku do konca."],
+      ["later", "chev", "Nastavím neskôr", "Teraz sa nič nesťahuje ani nepáruje."],
+    ];
+    const c = S.ob.choice;
+    let detail = "";
+    if (c === "local") {
+      const m = S.ms.pu8;
+      detail = `<div class="card" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b>Parakeet Ultra</b> <span class="tag amber">Odporúčaný</span> <span class="tag">Najrýchlejší</span><p class="note" style="margin-top:4px">740 MB · CC-BY-4.0 · prepis funguje aj bez internetu</p></div>
+        ${m.st === "ready" ? `<span class="pill ok">${led("ok")}Pripravený</span>` : m.st === "downloading" ? `<span class="pill amber">${Math.floor(m.p)} %</span>` : `<button type="button" class="btn primary" data-act="dl-model" data-v="pu8">${ic("down", "sm")}Stiahnuť</button>`}</div>
+        ${m.st === "downloading" ? `<div class="prog"><i style="width:${m.p}%"></i></div><p class="note">Kým sa model sťahuje, môžete pokračovať. Diktovanie začne fungovať, keď bude pripravený.</p>` : ""}
+        <button type="button" class="linkbtn" style="align-self:flex-start;font-size:12px" data-act="ob-models">Iný model: Canary 1B v2, Parakeet Ultra (malý), Whisper Large v3 Turbo</button></div>`;
+    }
+    if (c === "server") detail = S.server === "paired" ? `<div class="alert ok" role="status">${ic("check")}<p>Spárované so serverom ${HOST}. Prepisovať bude tento server.</p></div>` : pairTerm(false);
+    if (c === "later") detail = `<p class="note">Kedykoľvek neskôr si model stiahnete alebo spárujete server v sekcii Prepis. Kým to neurobíte, Domov vám ukáže, čo chýba, ešte pred prvým diktovaním.</p>`;
+    return `<div class="choice radios" role="radiogroup" aria-label="Kde bude bežať prepis">${choices.map(([id, icn, t, d]) => `<button type="button" role="radio" class="radio" aria-checked="${c === id}" data-act="ob-choose" data-v="${id}"><span class="head"><span class="ei">${ic(icn)}</span>${id === rec ? '<span class="tag amber">odporúčané</span>' : '<span class="dot"></span>'}</span><span><b>${t}</b><span>${d}</span></span></button>`).join("")}</div>${detail}`;
+  }
+  const t = tx();
+  return `<div class="trybox" contenteditable="true" role="textbox" aria-label="Skúšobné pole" aria-multiline="true" tabindex="0"></div>
+    ${!S.hotkey ? `<p class="note" style="color:var(--err-text)">${ic("warn", "sm")}Najprv nastavte klávesovú skratku v kroku 3.</p>` : t.state === "err" ? `<div class="alert" role="status">${ic("warn")}<p>${S.route[0] === "local" ? (downloading() ? "Model sa ešte sťahuje alebo nie je vybraný. Diktovanie začne fungovať, keď bude pripravený." : "Prepis zatiaľ nie je nastavený. Diktovanie začne fungovať, keď si stiahnete model alebo spárujete server.") : "Server zatiaľ nie je spárovaný. Diktovanie začne fungovať, keď ho spárujete v predchádzajúcom kroku alebo v sekcii Prepis."} <button type="button" class="linkbtn" data-act="ob-step" data-v="3">Späť na krok 4</button></p></div>` : `<p class="note">${ic("check", "sm")}${hkVerb()} <kbd>${S.hotkey}</kbd> a hovorte. Prepisuje sa na: ${esc(t.title)}.</p>`}`;
+}
+function renderOnboarding() {
+  const st = S.ob.step;
+  const steps = OB_STEPS.map(([short], i) => `${i ? `<span class="ob-wire ${i <= st ? "on" : ""}" aria-hidden="true"></span>` : ""}<button type="button" class="ob-step ${i < st ? "done" : ""}" data-act="ob-step" data-v="${i}" ${i === st ? 'aria-current="step"' : ""}><span class="no">${i < st ? "✓" : i + 1}</span>${short}</button>`).join("");
+  return `<div class="ob" role="dialog" aria-modal="true" aria-labelledby="ob-title">
+    <header class="ob-top"><span class="brand">${LOGO.replace('class="logo"', "")}Codevo Whisper</span><nav class="ob-steps" aria-label="Kroky nastavenia">${steps}</nav></header>
+    <main class="ob-main"><div class="ob-inner"><span class="k">Krok ${st + 1} z 5</span><h1 id="ob-title">${OB_STEPS[st][1]}</h1><p class="lead">${OB_STEPS[st][2]}</p>${obBody()}</div></main>
+    <footer class="ob-nav"><div>${st > 0 ? `<button type="button" class="btn" data-act="ob-step" data-v="${st - 1}">Späť</button>` : ""}</div>
+      <div class="row-btns"><span class="label-mono">${st + 1}/5</span>${st < 4 ? `<button type="button" class="btn primary" data-act="ob-step" data-v="${st + 1}">Ďalej${ic("arrow", "sm")}</button>` : `<button type="button" class="btn primary" data-act="ob-done">Dokončiť</button>`}</div></footer>
+  </div>`;
+}
+
+/* ---------- Overlay showcase ---------- */
+function wave(n = 22) { return `<span class="wave" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i style="animation-delay:-${(i * 137) % 700}ms;height:${30 + ((i * 53) % 70)}%"></i>`).join("")}</span>`; }
+function renderOverlay() {
+  const fix = S.ovFix === "err"
+    ? `<div class="ovcard err" role="alert"><div class="row"><span class="orb amber">${ic("warn", "sm")}</span><div><b>Lokálny model chýba</b><p>Toto diktovanie sa neprepísalo. Server ${HOST} je spárovaný a online, stačí naň prepnúť.</p></div></div>
+        <div class="route"><span class="bad">Lokálne</span>${ic("arrow", "sm")}<span class="good">Server ${HOST} · 38 ms</span></div>
+        <div class="acts"><button type="button" class="ovbtn primary" data-act="ov-fix" data-v="server">Prepisovať na serveri <kbd>↵</kbd></button><button type="button" class="ovbtn" data-act="ov-fix" data-v="dl">${ic("down", "sm")}Stiahnuť model · 740 MB</button><button type="button" class="ovbtn" data-act="ov-fix" data-v="reset">Zavrieť <kbd>esc</kbd></button></div></div>`
+    : S.ovFix === "server"
+      ? `<div class="ovcard" role="status"><div class="row"><span class="orb ok">${ic("check", "sm")}</span><div><b>Prepis beží na serveri ${HOST}</b><p>Stlačte <kbd>⌥Space</kbd> a nadiktujte to znova. Zmenu vrátite v sekcii Prepis.</p></div></div><div class="acts"><button type="button" class="ovbtn" data-act="ov-fix" data-v="reset">Ukázať chybu znova</button></div></div>`
+      : `<div class="ovcard" role="status"><div class="row"><span class="orb amber">${ic("down", "sm")}</span><div><b>Sťahuje sa Parakeet Ultra · 34 %</b><p>Diktovanie začne fungovať, keď bude model pripravený. Dovtedy môžete prepisovať na serveri.</p></div></div><div class="acts"><button type="button" class="ovbtn primary" data-act="ov-fix" data-v="server">Zatiaľ prepisovať na serveri</button><button type="button" class="ovbtn" data-act="ov-fix" data-v="reset">Ukázať chybu znova</button></div></div>`;
+  const cell = (cap, body, cls = "", tag = "") => `<div class="ovcell ${cls}"><div class="cap"><span>${cap}</span>${tag}</div><div class="spot">${body}</div></div>`;
+  return `<div class="ovs" role="region" aria-label="Ukážka plávajúceho panela"><div class="ovs-wall"></div><div class="ovs-in">
+    <div class="ovs-head"><div><h1>Plávajúci panel pri diktovaní</h1><p>Panel sa zobrazí nad aplikáciou, do ktorej píšete. Pri chybe ponúkne skutočnú opravu priamo na mieste, nie všeobecné „Otvoriť nastavenia".</p></div><span class="label-mono" style="color:#8A867E">vždy tmavý · nad každou aplikáciou</span></div>
+    <div class="ovs-grid">
+      ${cell("Chyba · lokálny model chýba, server je spárovaný", fix, "wide", "<b>opravené</b>")}
+      ${cell("Chyba · lokálny model chýba, nič nie je spárované", `<div class="ovcard err" role="alert"><div class="row"><span class="orb">${ic("warn", "sm")}</span><div><b>Lokálny model chýba</b><p>Prepis potrebuje stiahnutý model alebo spárovaný server.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">${ic("down", "sm")}Stiahnuť model · 740 MB</button><button type="button" class="ovbtn">Spárovať server</button></div></div>`)}
+      ${cell("Chyba · server nie je dostupný", `<div class="ovcard err" role="alert"><div class="row"><span class="orb">${ic("server", "sm")}</span><div><b>Server nie je dostupný</b><p>${HOST} neodpovedá. Lokálny model Parakeet Ultra je pripravený.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">Prepisovať lokálne</button><button type="button" class="ovbtn">Otestovať spojenie</button></div></div>`)}
+      ${cell("Chyba · model potrebuje jazyk", `<div class="ovcard err" role="alert"><div class="row"><span class="orb">${ic("globe", "sm")}</span><div><b>Zvolený model potrebuje nastavený jazyk</b><p>Canary 1B v2 nevie rozpoznať jazyk automaticky.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">Slovenčina</button><button type="button" class="ovbtn">Čeština</button><button type="button" class="ovbtn">Angličtina</button></div></div>`)}
+      ${cell("Chyba · server treba znova spárovať", `<div class="ovcard err" role="alert"><div class="row"><span class="orb">${ic("lock", "sm")}</span><div><b>Server treba znova spárovať</b><p>Kým to neurobíte, Codevo Whisper naň neposiela zvuk.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">Znova spárovať</button><button type="button" class="ovbtn">Prepisovať lokálne</button></div></div>`)}
+      ${cell("Nahrávanie · Indikátor", `<p class="ovnotice">Mikrofón AirPods Pro Matúša nie je pripojený, používam predvolený</p><div class="ov rec" role="status" aria-label="Nahrávam"><span class="orb rec">${ic("mic", "sm")}</span>${wave()}<span class="time">0:07</span><span class="chip">sk</span><span class="lock" title="Prepis beží na šifrovanom serveri">${ic("lock", "sm")}E2E</span></div>`)}
+      ${cell("Nahrávanie · Živý text", `<div class="ovlive" role="status"><p>Posielam opravenú verziu ponuky, zmenil som reakčný čas <span class="t">na štyri hodiny a</span></p><div class="ov"><span class="orb rec">${ic("mic", "sm")}</span>${wave(26)}<span class="time">0:12</span><span class="chip">sk</span><span class="lock">${ic("lock", "sm")}lokálne</span></div></div>`)}
+      ${cell("Spracúvanie", `<div class="ov" role="status"><span class="orb proc">${ic("spin", "sm")}</span><span class="st">Spracúvam</span></div><div class="ov" role="status"><span class="orb proc">${ic("spin", "sm")}</span><span class="st">Spracúvam<small>dosiahnutý limit 10 minút</small></span></div>`)}
+      ${cell("Hotovo", `<div class="ov" role="status"><span class="orb done">${ic("check", "sm")}</span><span class="st">Vložené<small>Slack</small></span></div><div class="ov" role="status"><span class="orb done">${ic("copy", "sm")}</span><span class="st">Skopírované - vlož cez ⌘V</span></div>`)}
+      ${cell("Text nebol vložený", `<div class="ovcard" role="alert"><div class="row"><span class="orb amber">${ic("warn", "sm")}</span><div><b>Okno sa zmenilo, text nebol vložený</b><p>Prepis je pripravený, vložte ho ručne.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">${ic("copy", "sm")}Kopírovať</button></div></div>`)}
+      ${cell("Chyba počas prepisu · časť textu je hotová", `<div class="ovcard err" role="alert"><div class="row"><span class="orb">${ic("plug", "sm")}</span><div><b>Spojenie so serverom sa prerušilo</b><p>Doterajší prepis sa nestratil.</p></div></div><div class="acts"><button type="button" class="ovbtn primary">${ic("copy", "sm")}Kopírovať doterajší text</button></div></div>`)}
+    </div></div></div>`;
+}
+
+/* ---------- palette ---------- */
+const PAL_ITEMS = [
+  ...PAGES.map((p) => ({ t: p.label, g: "Sekcia", icon: p.icon, run: () => go(p.id) })),
+  { t: "Kde beží prepis · trasa a záloha", g: "Prepis", icon: "route", run: () => go("tx") },
+  { t: "Spárovať server", g: "Prepis", icon: "server", run: () => go("tx", "sec-server") },
+  { t: "Lokálny model · stiahnuť alebo zmeniť", g: "Prepis", icon: "down", run: () => go("tx", "sec-model") },
+  { t: "Akcelerácia (GPU / CPU)", g: "Prepis", icon: "laptop", run: () => go("tx", "set-accel") },
+  { t: "Uvoľniť model z pamäte", g: "Prepis", icon: "laptop", run: () => go("tx", "set-unload") },
+  ...[["set-hotkey", "Klávesová skratka"], ["set-mode", "Režim klávesu"], ["set-overlay", "Zobrazenie panela"], ["set-lang", "Jazyk"], ["set-mute", "Stlmiť počas nahrávania"], ["set-feedback", "Zvuková odozva"], ["set-output", "Výstupné zariadenie"], ["set-volume", "Hlasitosť odozvy"]].map(([id, t]) => ({ t, g: "Diktovanie", icon: "key", run: () => go("settings", id) })),
+  { t: "Mikrofón a úroveň vstupu", g: "Mikrofón", icon: "mic", run: () => go("settings", "set-mic") },
+  ...[["set-insert", "Spôsob vkladania textu"], ["set-clip", "Schránka"], ["set-submit", "Automatické odoslanie (Enter)"], ["set-linuxpaste", "Skratka na vloženie (Linux)"]].map(([id, t]) => ({ t, g: "Vkladanie textu", icon: "insert", run: () => go("settings", id) })),
+  ...[["set-words", "Vlastné slová"], ["set-filler", "Odstrániť výplňové slová"], ["set-trailing", "Pridať medzeru na konci"]].map(([id, t]) => ({ t, g: "Úprava prepisu", icon: "wave", run: () => go("settings", id) })),
+  ...[["set-ai", "Poskytovateľ AI (Ollama, Codex CLI)"], ["set-polish", "Upraviť diktát cez AI"]].map(([id, t]) => ({ t, g: "AI úprava", icon: "spark", run: () => go("settings", id) })),
+  ...[["set-hist", "Ukladať históriu prepisov"], ["set-histlimit", "Počet uchovaných prepisov"]].map(([id, t]) => ({ t, g: "História", icon: "file", run: () => go("settings", id) })),
+  ...[["set-launch", "Spustiť po prihlásení"], ["set-stats", "Vynulovať štatistiky"], ["set-update", "Skontrolovať aktualizácie"]].map(([id, t]) => ({ t, g: "Systém", icon: "sliders", run: () => go("settings", id) })),
+  { t: "Začať nahrávanie stretnutia", g: "Akcia", icon: "rec", run: () => go("meetings") },
+  { t: "Prepnúť tému", g: "Akcia", icon: "moon", run: () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
+  { t: "Spustiť sprievodcu nastavením", g: "Akcia", icon: "chev", run: () => { S.screen = "onboarding"; render(); } },
+];
+const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+function palMatches() { const q = norm(S.pq.trim()); return q ? PAL_ITEMS.filter((i) => norm(i.t + " " + i.g).includes(q)) : PAL_ITEMS; }
+function renderPalette() {
+  if (!S.palette) return "";
+  const list = palMatches();
+  S.psel = Math.min(S.psel, Math.max(0, list.length - 1));
+  return `<div class="pal-scrim" data-act="pal-close"><div class="pal" role="dialog" aria-modal="true" aria-label="Príkazová paleta" data-stop>
+    <div class="pin">${ic("search")}<input id="pal-in" data-input="pq" role="combobox" aria-expanded="true" aria-controls="pal-list" aria-activedescendant="pal-${S.psel}" placeholder="Prejsť na nastavenie, sekciu alebo akciu…" value="${esc(S.pq)}" autocomplete="off"><kbd>esc</kbd></div>
+    <ul id="pal-list" role="listbox">${list.length ? list.map((it, i) => `<li role="none"><button type="button" id="pal-${i}" role="option" aria-selected="${i === S.psel}" data-act="pal-run" data-v="${PAL_ITEMS.indexOf(it)}">${ic(it.icon)}<span>${esc(it.t)}</span><span class="g">${it.g}</span></button></li>`).join("") : `<li class="sect">Nič sa nenašlo</li>`}</ul>
+    <div class="pfoot"><span><kbd>↑</kbd> <kbd>↓</kbd> výber</span><span><kbd>↵</kbd> otvoriť</span><span><kbd>esc</kbd> zavrieť</span></div>
+  </div></div>`;
+}
+
+/* ---------- render ---------- */
+function setTheme(t) { document.documentElement.dataset.theme = t; renderDeck(); }
+function toast(msg, action) { S.toast = { msg, action }; clearTimeout(toast.t); toast.t = setTimeout(() => { S.toast = null; renderLayer(); }, 4200); renderLayer(); }
+function renderLayer() {
+  let h = "";
+  if (S.screen === "onboarding") h += renderOnboarding();
+  if (S.screen === "overlay") h += renderOverlay();
+  if (S.screen === "app") h += renderDrawer();
+  h += renderPalette();
+  if (S.toast) h += `<div class="toast" role="status">${led("ok")}<span>${S.toast.msg}</span>${S.toast.action ? `<button type="button" class="btn sm" data-act="${S.toast.action[0]}">${S.toast.action[1]}</button>` : ""}</div>`;
+  const prevFocus = captureFocus();
+  $("#layer").innerHTML = h;
+  restoreFocus(prevFocus);
+}
+function captureFocus() {
+  const a = document.activeElement;
+  if (!a || a === document.body) return null;
+  const key = a.id ? `#${a.id}` : a.dataset.act ? `[data-act="${a.dataset.act}"]${a.dataset.v ? `[data-v="${a.dataset.v}"]` : ""}${a.dataset.k ? `[data-k="${a.dataset.k}"]` : ""}` : a.dataset.input ? `[data-input="${a.dataset.input}"]` : a.dataset.set ? `[data-set="${a.dataset.set}"]` : null;
+  return key ? { key, s: a.selectionStart, e: a.selectionEnd } : null;
+}
+function restoreFocus(f) {
+  if (!f) return;
+  const el = document.querySelector(f.key);
+  if (!el || el === document.activeElement) return;
+  el.focus({ preventScroll: true });
+  if (f.s != null && el.setSelectionRange) try { el.setSelectionRange(f.s, f.e); } catch (_) { /* noop */ }
+}
+function render() {
+  const f = captureFocus();
+  renderDeck();
+  renderRail();
+  renderSbar();
+  const main = $("#main");
+  const top = main.scrollTop;
+  const pages = { home: pageHome, meetings: pageMeetings, tx: pageTx, settings: pageSettings, privacy: pagePrivacy };
+  const samePage = main.dataset.page === S.page;
+  main.innerHTML = pages[S.page]();
+  main.dataset.page = S.page;
+  if (samePage) { main.style.scrollBehavior = "auto"; main.scrollTop = top; main.style.scrollBehavior = ""; }
+  if (S.page === "settings" && S.setq) { $("#set-search").value = S.setq; filterSettings(); }
+  renderLayer();
+  restoreFocus(f);
+}
+function go(page, targetId) {
+  S.page = page; S.screen = "app"; S.drawer = null; S.palette = false;
+  const main = $("#main");
+  main.dataset.page = "";
+  main.scrollTop = 0;
+  render();
+  if (!targetId) { main.focus({ preventScroll: true }); return; }
+  requestAnimationFrame(() => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (el.classList.contains("srow")) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+    const focusable = el.querySelector("button,select,input,textarea");
+    if (focusable) setTimeout(() => focusable.focus({ preventScroll: true }), 350);
+  });
+}
+function filterSettings() {
+  const q = norm(S.setq || "");
+  let any = false;
+  $$("#groups .group").forEach((g) => {
+    const titleHit = q && norm(g.dataset.title).includes(q);
+    let vis = 0;
+    $$(".srow", g).forEach((r) => { const hit = !q || titleHit || norm(r.dataset.q || "").includes(q); r.hidden = !hit; if (hit) vis++; });
+    $$(".lead,.confirm", g).forEach((x) => (x.hidden = !!q && !titleHit));
+    g.hidden = vis === 0;
+    if (vis) any = true;
+  });
+  $("#nohits").hidden = any;
+}
+
+/* ---------- actions ---------- */
+let dlTimer = null;
+function startDownload(id) {
+  if (S.ms[id].st !== "paused") S.ms[id].p = 0;
+  S.ms[id].st = "downloading";
+  clearInterval(dlTimer);
+  dlTimer = setInterval(() => {
+    const m = S.ms[id];
+    if (m.st !== "downloading") { clearInterval(dlTimer); return; }
+    m.p = Math.min(100, m.p + 4 + Math.random() * 5);
+    if (m.p >= 100) {
+      m.st = "ready"; clearInterval(dlTimer);
+      if (!S.activeModel) S.activeModel = id;
+      if (S.pairBanner === "auto") S.pairBanner = null;
+      toast(`${model(id).name} je stiahnutý a pripravený.`, S.route.length === 1 && S.route[0] === "server" ? ["route-add", "Pridať ako zálohu"] : null);
+    }
+    render();
+  }, 260);
+}
+function pairDone() {
+  S.server = "paired"; S.disconnected = false; S.pairToken = ""; S.pairErr = null; S.showRepairPair = false;
+  if (!modelReady()) { S.prevRoute = S.route.slice(); S.route = ["server"]; S.pairBanner = "auto"; }
+  else if (S.route[0] !== "server") S.pairBanner = "offer";
+  if (S.screen === "app") S.page = "tx";
+  toast("Spárované. Server pozná tento počítač ako mbp-7f3a21.");
+}
+
+const ACT = {
+  deck(el) {
+    const k = el.dataset.k, v = el.dataset.v;
+    if (k === "screen") { S.screen = v; S.drawer = null; if (v === "onboarding") { S.ob.step = 3; S.ob.choice = null; } }
+    if (k === "scenario") applyScenario(v);
+    if (k === "theme") return setTheme(v);
+    if (k === "stats") { S.statsV = v; if (S.screen === "app" && S.page !== "home") { go("home"); return; } }
+    render();
+  },
+  page(el) { go(el.dataset.v); },
+  palette() { S.palette = true; S.pq = ""; S.psel = 0; renderLayer(); setTimeout(() => $("#pal-in") && $("#pal-in").focus(), 0); },
+  "pal-close"(el, e) { if (e.target.closest("[data-stop]")) return; S.palette = false; renderLayer(); },
+  "pal-run"(el) { const it = PAL_ITEMS[+el.dataset.v]; S.palette = false; it.run(); },
+  drawer(el) { S.drawer = el.dataset.v; renderLayer(); setTimeout(() => { const b = $(".drawer .dbody button, .drawer .dbody select"); (b || $(".drawer")).focus(); }, 30); },
+  "drawer-close"() { S.drawer = null; S.hkRec = false; renderLayer(); },
+  jump(el) { go(el.dataset.v, el.dataset.id || null); },
+  period(el) { S.period = el.dataset.v; render(); },
+  "stats-more"() { S.statsMore = !S.statsMore; render(); },
+  "chart-range"(el) { S.chartRange = el.dataset.v; render(); },
+  "copy-last"() { S.copied = true; render(); setTimeout(() => { S.copied = false; render(); }, 1400); },
+  "hist-del"(el) { S.history.splice(+el.dataset.v, 1); render(); toast("Prepis je vymazaný."); },
+  "hist-clear"() { S.histClearConfirm = true; render(); },
+  "hist-clear-no"() { S.histClearConfirm = false; render(); },
+  "hist-clear-yes"() { S.history = []; S.histClearConfirm = false; render(); toast("História je vymazaná."); },
+  resume() { S.paused = false; render(); },
+  grant(el) { S.perms[el.dataset.v] = true; render(); toast(el.dataset.v === "acc" ? "Prístupnosť je povolená." : el.dataset.v === "input" ? "Monitorovanie vstupu je povolené." : "Prístup k mikrofónu je povolený."); },
+  "use-server"(el) {
+    const keepLocal = modelReady();
+    S.prevRoute = S.route.slice();
+    S.route = keepLocal ? ["server", "local"] : ["server"];
+    S.pairBanner = null; S.drawer = null;
+    render(); toast(`Prepis beží na serveri ${HOST}.`, ["undo-route", "Vrátiť"]);
+  },
+  "use-local"() { S.route = ["local"]; S.drawer = null; render(); },
+  "undo-route"() { if (S.prevRoute) S.route = S.prevRoute; S.toast = null; render(); },
+  "undo-auto"() { S.route = S.prevRoute || ["local"]; S.pairBanner = null; render(); },
+  "banner-dismiss"() { S.pairBanner = null; render(); },
+  "dl-model"(el) { const id = el.dataset.v || "pu8"; startDownload(id); render(); },
+  "m-pause"(el) { S.ms[el.dataset.v].st = "paused"; render(); },
+  "m-del"(el) { const id = el.dataset.v; S.ms[id] = { st: "none", p: 0 }; if (S.activeModel === id) S.activeModel = MODELS.map((m) => m.id).find((x) => S.ms[x].st === "ready") || null; render(); },
+  "m-use"(el) { S.activeModel = el.dataset.v; render(); },
+  "goto-pair"() { if (S.server === "repair") S.showRepairPair = true; go("tx", "sec-server"); },
+  "route-swap"() { S.route = S.route.slice().reverse(); render(); },
+  "route-add"() { const other = S.route[0] === "server" ? "local" : "server"; S.route = [S.route[0], other]; S.toast = null; render(); },
+  "route-drop"() { S.route = [S.route[0]]; render(); },
+  "copy-cmd"(el) { S.copiedCmd = el.dataset.v; render(); setTimeout(() => { S.copiedCmd = null; render(); }, 1400); },
+  "paste-token"() { S.pairToken = "cw1:eyJoIjoiZG9tYWNpLXBjLnRhaWwzZjJhLnRzLm5ldDo4NDQzIiwicCI6IlE0VFo5S01CIn0.7Hq2xLm"; S.pairErr = null; render(); },
+  pair() {
+    if (!S.pairToken.trim().startsWith("cw1:")) { S.pairErr = "Toto nie je platný párovací token. Skopírujte celý riadok, ktorý začína cw1:."; render(); return; }
+    S.pairErr = null; S.server = "waiting"; render();
+  },
+  "pair-cancel"() { S.server = "unpaired"; S.pairErr = "Párovanie ste zrušili."; render(); },
+  "pair-confirm"() { pairDone(); render(); },
+  "test-conn"() { S.testing = true; render(); setTimeout(() => { S.testing = false; if (S.server === "repair") { render(); return; } S.lat.push(35); S.lat.shift(); render(); toast(`Spojenie funguje · ${lat()} ms.`); }, 900); },
+  "repair-toggle"() { S.showRepairPair = !S.showRepairPair; render(); },
+  disconnect() { S.disconnectConfirm = true; render(); },
+  "disconnect-no"() { S.disconnectConfirm = false; render(); },
+  "disconnect-yes"() { S.disconnectConfirm = false; S.server = "unpaired"; S.disconnected = true; S.route = ["local"]; S.pairBanner = null; render(); },
+  "check-update"() { S.update = "checking"; render(); setTimeout(() => { S.update = "idle"; render(); }, 1300); },
+  set(el) { S[el.dataset.k] = el.dataset.v; render(); },
+  toggle(el) {
+    const k = el.dataset.k;
+    if (k === "histOn" && S.histOn && S.history.length) { S.histConfirm = true; render(); return; }
+    S[k] = !S[k]; render();
+  },
+  "hist-off-no"() { S.histConfirm = false; render(); },
+  "hist-off-yes"() { S.histOn = false; S.history = []; S.histConfirm = false; render(); },
+  "hk-rec"() { S.hkRec = !S.hkRec; render(); },
+  "save-words"() { S.wordsSaved = true; render(); setTimeout(() => { S.wordsSaved = false; render(); }, 1500); },
+  "ai-key"() { S.aiKey = S.aiKey === "stored" ? "none" : "stored"; render(); },
+  "ai-check"() { S.aiCheck = "checking"; render(); setTimeout(() => { S.aiCheck = "done"; render(); }, 900); },
+  "stats-reset"() { S.statsReset = "confirm"; render(); },
+  "stats-no"() { S.statsReset = "idle"; render(); },
+  "stats-yes"() { S.statsReset = "done"; render(); },
+  "set-scroll"(el) { const g = document.getElementById(el.dataset.v); if (g) g.scrollIntoView({ block: "start", behavior: "smooth" }); },
+  msel(el) { S.selMeeting = el.dataset.v; S.mAction = null; render(); },
+  mtab(el) { S.mtab = el.dataset.v; render(); },
+  "rec-start"() { S.recording = Date.now() - 1000; render(); },
+  "rec-stop"() {
+    const dur = clock(Date.now() - S.recording);
+    S.recording = null;
+    const m = { id: `m${Date.now()}`, title: "Stretnutie 9. 11. 2026, 10:14", when: "9. 11. 2026 10:14", dur, phase: "mic", sys: "nahraný", speakers: [], lanes: {}, turns: [], notes: false };
+    S.meetings.unshift(m); S.selMeeting = m.id; S.mtab = "transcript"; render();
+    const seq = ["system", "speakers", "ready"];
+    seq.forEach((p, i) => setTimeout(() => { m.phase = p; if (p === "ready") { m.speakers = ["Ja", "Hovoriaci 1"]; m.lanes = { "Ja": [[0, 40], [70, 100]], "Hovoriaci 1": [[40, 70]] }; m.turns = [["00:00:01", "Ja", "Skúška nahrávania, počuť ma dobre?"], ["00:00:05", "Hovoriaci 1", "Áno, počujem ťa výborne."]]; } render(); }, 1300 * (i + 1)));
+  },
+  "m-export"() { S.mAction = "exported"; render(); },
+  "m-retx"() { const m = S.meetings.find((x) => x.id === S.selMeeting); if (!m) return; const prev = m.phase; m.phase = "mic"; render(); setTimeout(() => { m.phase = prev === "stopped" ? "ready" : prev; if (prev === "stopped") { m.speakers = ["Ja", "Ostatní"]; m.lanes = { "Ja": [[0, 55]], "Ostatní": [[55, 100]] }; m.turns = [["00:00:03", "Ja", "Dobré ráno, začneme prehľadom minulého týždňa."], ["00:00:11", "Ostatní", "Dobré ráno, všetko podľa plánu."]]; } render(); }, 1800); },
+  "m-delete"() { S.mAction = "confirm"; render(); },
+  "m-delete-no"() { S.mAction = null; render(); },
+  "m-delete-yes"() { S.meetings = S.meetings.filter((m) => m.id !== S.selMeeting); S.selMeeting = S.meetings[0] ? S.meetings[0].id : null; S.mAction = null; render(); },
+  "notes-gen"() { S.notesPending = true; render(); setTimeout(() => { S.notesPending = false; const m = S.meetings.find((x) => x.id === S.selMeeting); if (m) m.notes = true; render(); }, 1600); },
+  dia(el) { S.diarizer = el.dataset.v; render(); },
+  "ob-step"(el) { S.ob.step = +el.dataset.v; renderLayer(); $(".ob-main").scrollTop = 0; },
+  "ob-choose"(el) { S.ob.choice = el.dataset.v; if (el.dataset.v === "local") S.route = ["local"]; if (el.dataset.v === "server" && S.server === "paired") S.route = modelReady() ? ["server", "local"] : ["server"]; render(); },
+  "ob-models"() { toast("Ďalšie modely nájdete v sekcii Prepis."); },
+  "ob-done"() { S.screen = "app"; go("home"); },
+  "ov-fix"(el) { S.ovFix = el.dataset.v === "reset" ? "err" : el.dataset.v; renderLayer(); },
+};
+
+function applyScenario(id) {
+  S.scenario = id; S.drawer = null; S.pairBanner = null; S.disconnected = false; S.pairErr = null; S.pairToken = ""; S.showRepairPair = false; S.disconnectConfirm = false;
+  S.hotkey = "⌥Space"; S.perms = { mic: true, input: true, acc: true }; S.paused = false;
+  clearInterval(dlTimer);
+  MODELS.forEach((m) => (S.ms[m.id] = { st: "none", p: 0 }));
+  S.activeModel = null;
+  if (id === "ready" || id === "paused") { S.server = "paired"; S.route = ["server", "local"]; S.ms.pu8 = { st: "ready", p: 100 }; S.activeModel = "pu8"; S.paused = id === "paused"; }
+  if (id === "nomodel") { S.server = "paired"; S.route = ["local"]; }
+  if (id === "fresh") { S.server = "unpaired"; S.route = ["local"]; S.hotkey = null; S.perms = { mic: true, input: true, acc: false }; }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el || el.disabled) return;
+  const fn = ACT[el.dataset.act];
+  if (fn) fn(el, e);
+});
+document.addEventListener("input", (e) => {
+  const k = e.target.dataset.input;
+  if (!k) return;
+  if (k === "setq") { S.setq = e.target.value; filterSettings(); return; }
+  if (k === "pq") { S.pq = e.target.value; S.psel = 0; renderLayer(); return; }
+  if (k === "volume") { S.volume = +e.target.value; $("#vol-out").textContent = `${S.volume} %`; return; }
+  S[k] = e.target.value;
+  if (k === "pairToken") { const b = $('[data-act="pair"]'); if (b) b.disabled = !S.pairToken.trim(); }
+  if (k === "aiUrl" || k === "aiModel") { S.aiCheck = "idle"; }
+});
+document.addEventListener("change", (e) => {
+  const k = e.target.dataset.set;
+  if (!k) return;
+  S[k] = e.target.value;
+  render();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); S.palette ? (S.palette = false, renderLayer()) : ACT.palette(); return; }
+  if (S.hkRec && S.screen !== "overlay") {
+    if (e.key === "Escape") { S.hkRec = false; render(); return; }
+    const mods = (e.ctrlKey ? "⌃" : "") + (e.altKey ? "⌥" : "") + (e.shiftKey ? "⇧" : "") + (e.metaKey ? "⌘" : "");
+    if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+    e.preventDefault();
+    const key = e.code === "Space" ? "Space" : e.code.startsWith("Key") ? e.code.slice(3) : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    if (!mods) return;
+    S.hotkey = mods + key; S.hkRec = false; render(); return;
+  }
+  if (S.palette) {
+    const n = palMatches().length;
+    if (e.key === "Escape") { S.palette = false; renderLayer(); $(".cmdk").focus(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); S.psel = (S.psel + 1) % Math.max(1, n); renderLayer(); $(`#pal-${S.psel}`) && $(`#pal-${S.psel}`).scrollIntoView({ block: "nearest" }); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); S.psel = (S.psel - 1 + n) % Math.max(1, n); renderLayer(); $(`#pal-${S.psel}`) && $(`#pal-${S.psel}`).scrollIntoView({ block: "nearest" }); return; }
+    if (e.key === "Enter") { e.preventDefault(); const it = palMatches()[S.psel]; if (it) { S.palette = false; it.run(); } return; }
+    return;
+  }
+  if (e.key === "Escape" && S.drawer) { const id = S.drawer; S.drawer = null; renderLayer(); const n = $(`.node[data-v="${id}"]`); if (n) n.focus(); return; }
+  if (e.key === "Escape" && (S.histConfirm || S.histClearConfirm || S.mAction === "confirm" || S.disconnectConfirm || S.statsReset === "confirm")) { S.histConfirm = S.histClearConfirm = S.disconnectConfirm = false; if (S.mAction === "confirm") S.mAction = null; if (S.statsReset === "confirm") S.statsReset = "idle"; render(); return; }
+  const col = e.target.closest && e.target.closest(".wc-col");
+  if (col && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    const sib = e.key === "ArrowLeft" ? col.previousElementSibling : col.nextElementSibling;
+    if (sib) { col.tabIndex = -1; sib.tabIndex = 0; sib.focus(); }
+    return;
+  }
+  const tab = e.target.closest && e.target.closest('.nav [role="tab"]');
+  if (tab && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const i = PAGES.findIndex((p) => p.id === S.page);
+    const next = PAGES[(i + (e.key === "ArrowDown" ? 1 : -1) + PAGES.length) % PAGES.length];
+    go(next.id); $(`.nav [data-v="${next.id}"]`).focus();
+  }
+});
+
+/* drag and drop for the route */
+document.addEventListener("dragstart", (e) => { const c = e.target.closest && e.target.closest(".eng"); if (!c) return; c.classList.add("dragging"); e.dataTransfer.setData("text/plain", c.dataset.eng); e.dataTransfer.effectAllowed = "move"; });
+document.addEventListener("dragend", (e) => { const c = e.target.closest && e.target.closest(".eng"); if (c) c.classList.remove("dragging"); $$(".slot.over").forEach((s) => s.classList.remove("over")); });
+document.addEventListener("dragover", (e) => { const s = e.target.closest && e.target.closest(".slot"); if (!s) return; e.preventDefault(); $$(".slot.over").forEach((x) => x !== s && x.classList.remove("over")); s.classList.add("over"); });
+document.addEventListener("drop", (e) => {
+  const s = e.target.closest && e.target.closest(".slot");
+  if (!s) return;
+  e.preventDefault();
+  const eng = e.dataTransfer.getData("text/plain");
+  const slot = +s.dataset.slot;
+  const other = eng === "server" ? "local" : "server";
+  const from = S.route.indexOf(eng);
+  if (from === slot) { render(); return; }
+  if (slot === 0) S.route = S.route.includes(other) ? [eng, other] : [eng];
+  if (slot === 1) { if (other === "server" && !paired()) { render(); return; } S.route = [other, eng]; }
+  render();
+  toast(`Trasa: ${ROUTE_TEXT[S.route.join(",")][0]}.`);
+});
+
+/* settings index follows scroll */
+$("#main").addEventListener("scroll", () => {
+  if (S.page !== "settings") return;
+  const main = $("#main");
+  let cur = SET_GROUPS[0][0];
+  SET_GROUPS.forEach(([id]) => { const g = document.getElementById(id); if (g && !g.hidden && g.offsetTop - main.scrollTop < 140) cur = id; });
+  $$(".set-idx [data-act='set-scroll']").forEach((b) => b.setAttribute("aria-current", String(b.dataset.v === cur)));
+}, { passive: true });
+
+/* live ticks: latency sparkline + recording clock */
+setInterval(() => {
+  const base = 36 + Math.round(Math.random() * 8);
+  S.lat.push(Math.random() < 0.08 ? base + 18 : base); S.lat.shift();
+  if (S.page === "tx" && S.screen === "app" && S.server === "paired") {
+    const sp = $("#spark"), big = $("#lat-big");
+    if (sp) sp.innerHTML = sparkSvg();
+    if (big) big.innerHTML = `${lat()}<small>ms</small>`;
+  }
+}, 1500);
+setInterval(() => { if (S.recording && $("#rec-clock")) $("#rec-clock").textContent = clock(Date.now() - S.recording); }, 500);
+
+applyScenario("nomodel");
+(function fromHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("theme")) document.documentElement.dataset.theme = h.get("theme");
+  if (h.get("scenario")) applyScenario(h.get("scenario"));
+  if (h.get("server")) S.server = h.get("server");
+  if (h.get("screen")) S.screen = h.get("screen");
+  if (h.get("page")) S.page = h.get("page");
+  if (h.get("drawer")) S.drawer = h.get("drawer");
+  if (h.get("palette")) { S.palette = true; S.pq = h.get("palette") === "1" ? "" : h.get("palette"); }
+  if (h.get("ob")) { S.ob.step = +h.get("ob"); S.ob.choice = h.get("choice"); }
+  if (h.get("banner")) S.pairBanner = h.get("banner");
+  if (["1", "2", "3"].includes(h.get("stats"))) S.statsV = h.get("stats");
+  if (h.get("range") === "30") S.chartRange = "30";
+  if (STATS[h.get("period")]) S.period = h.get("period");
+  if (h.get("more")) S.statsMore = true;
+  if (h.get("scroll")) setTimeout(() => { const el = document.getElementById(h.get("scroll")); if (el) { $("#main").style.scrollBehavior = "auto"; el.scrollIntoView({ block: "start" }); } }, 50);
+})();
+render();
+</script>
+</body>
+</html>

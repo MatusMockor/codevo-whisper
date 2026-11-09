@@ -1,26 +1,37 @@
 import { useUpdateStatus } from '../settings/use-update-status';
-import { RefreshIcon } from './Icons';
-import { updateFooterView } from './update-footer';
+import { CheckUpdatesButton } from './CheckUpdatesButton';
+import { updateFooterView, updateRailView } from './update-footer';
 
-function check(): void {
-  window.codevo.checkForUpdates().catch((error: unknown) => console.error('Checking for updates failed', error));
+export function RailVersion() {
+  const status = useUpdateStatus();
+  if (status.kind !== 'ready') {
+    return null;
+  }
+  const rail = updateRailView(status.value);
+  return (
+    <div className="rail-foot">
+      <p className="rail-ver" aria-hidden="true">
+        {rail.version}
+        {rail.result !== null && <span>{rail.result}</span>}
+      </p>
+      <CheckUpdatesButton view={updateFooterView(status.value)} className="iconbtn" />
+    </div>
+  );
 }
 
-export function UpdateFooter() {
+export function StatusBarVersion() {
   const status = useUpdateStatus();
   if (status.kind !== 'ready') {
     return null;
   }
   const view = updateFooterView(status.value);
   return (
-    <div className="side-foot">
-      <p className="side-foot-text" aria-live="polite">
+    <div className="sbar-version">
+      <span aria-live="polite">
         {view.version}
-        {view.result !== null && <span className="side-foot-result">{view.result}</span>}
-      </p>
-      <button type="button" className="side-foot-btn" aria-label="Skontrolovať aktualizácie" title={view.title} aria-busy={view.checking} disabled={view.disabled} onClick={check}>
-        <RefreshIcon />
-      </button>
+        {view.result !== null && <span className="sbar-result"> · {view.result}</span>}
+      </span>
+      <CheckUpdatesButton view={view} className="sbar-btn" />
     </div>
   );
 }

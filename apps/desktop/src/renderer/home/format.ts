@@ -1,12 +1,20 @@
-import { calendarDateToUtc } from '../../shared/calendar-date';
+import { calendarDateToUtc, isoWeekday } from '../../shared/calendar-date';
 
 const NUMBER = new Intl.NumberFormat('sk-SK');
 const LONG_DAY = new Intl.DateTimeFormat('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const DAY_AND_MONTH = new Intl.DateTimeFormat('sk-SK', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+const WEEKDAY = new Intl.DateTimeFormat('sk-SK', { weekday: 'long', timeZone: 'UTC' });
 const SHORT_DAYS = ['Ne', 'Po', 'Ut', 'St', 'Št', 'Pi', 'So'] as const;
 
 export function formatNumber(value: number): string {
   return NUMBER.format(value);
+}
+
+export function compactNumber(value: number): string {
+  if (value < 1000) {
+    return formatNumber(value);
+  }
+  return `${formatNumber(value / 1000)}k`;
 }
 
 export function formatDuration(seconds: number): string {
@@ -43,4 +51,26 @@ export function longDayName(date: string, today: string): string {
 
 export function dayAndMonth(date: string): string {
   return DAY_AND_MONTH.format(calendarDateToUtc(date));
+}
+
+export function numericDate(date: string): string {
+  const utc = calendarDateToUtc(date);
+  return `${utc.getUTCDate()}. ${utc.getUTCMonth() + 1}.`;
+}
+
+export function weekdayDate(date: string, today: string): string {
+  if (date === today) {
+    return `dnes, ${numericDate(date)}`;
+  }
+  return `${WEEKDAY.format(calendarDateToUtc(date))} ${numericDate(date)}`;
+}
+
+export function chartDayLabel(date: string, today: string, dense: boolean): string {
+  if (date === today) {
+    return 'dnes';
+  }
+  if (!dense) {
+    return shortDayName(date).toLocaleLowerCase('sk-SK');
+  }
+  return isoWeekday(date) === 1 ? numericDate(date) : '';
 }

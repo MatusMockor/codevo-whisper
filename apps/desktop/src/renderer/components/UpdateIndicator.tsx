@@ -17,7 +17,7 @@ function IndicatorBody({ view, onAct }: { view: UpdateIndicatorView; onAct: (id:
         </span>
       )}
       {action !== null && (
-        <button type="button" className="btn primary" disabled={action.disabled} onClick={() => onAct(action.id)}>
+        <button type="button" className="btn primary sm" disabled={action.disabled} onClick={() => onAct(action.id)}>
           {action.label}
         </button>
       )}
@@ -40,10 +40,10 @@ export function UpdateIndicator() {
   }
 
   return (
-    <div className={view === null ? 'side-update' : 'side-update shown'}>
-      <p className="side-update-text" aria-live="polite">
+    <div className={view === null ? 'sbar-update' : 'sbar-update shown'}>
+      <p className="sbar-update-text" aria-live="polite">
         {view?.message}
-        {view !== null && view.note !== null && <span className="side-update-note">{view.note}</span>}
+        {view !== null && view.note !== null && <span className="sbar-update-note"> {view.note}</span>}
       </p>
       {view !== null && <IndicatorBody view={view} onAct={act} />}
     </div>

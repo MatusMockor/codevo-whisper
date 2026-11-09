@@ -17,13 +17,16 @@ import { useServer } from '../server/use-server';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { usePermissions } from '../settings/use-permissions';
 import { useSettingsFocus } from '../settings/use-settings-focus';
+import { useRevealSection } from '../settings/use-reveal-section';
+import type { SettingsSection } from '../navigation';
 
-export function Settings() {
+export function Settings({ section = null }: { section?: SettingsSection | null }) {
   const settings = useSettings();
   const models = useModels();
   const server = useServer();
   const permissions = usePermissions();
   useSettingsFocus(settings.kind === 'ready');
+  useRevealSection(section, settings.kind === 'ready');
   if (settings.kind === 'loading') {
     return null;
   }
