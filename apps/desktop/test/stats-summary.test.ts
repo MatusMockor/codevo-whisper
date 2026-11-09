@@ -64,8 +64,8 @@ describe('summarize', () => {
     expect(dailyWords([], SUNDAY, 0)).toEqual([]);
   });
 
-  it('last7 fills missing days with 0', () => {
-    expect(summarize(DAYS, 'total', SUNDAY).last7).toEqual([
+  it('dailyWords fills missing days of the week with 0', () => {
+    expect(dailyWords(DAYS, SUNDAY, 7)).toEqual([
       { date: '2026-10-19', words: 100 },
       { date: '2026-10-20', words: 0 },
       { date: '2026-10-21', words: 0 },
@@ -74,7 +74,7 @@ describe('summarize', () => {
       { date: '2026-10-24', words: 0 },
       { date: SUNDAY, words: 80 },
     ]);
-    expect(summarize([], 'today', '2026-03-02').last7.map((entry) => entry.date)).toEqual([
+    expect(dailyWords([], '2026-03-02', 7).map((entry) => entry.date)).toEqual([
       '2026-02-24',
       '2026-02-25',
       '2026-02-26',

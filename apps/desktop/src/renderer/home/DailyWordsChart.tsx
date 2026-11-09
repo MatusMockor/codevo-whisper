@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useMemo, useState } from 'react';
 import type { ChartScale, DayStats, DayWords } from '../../shared/stats';
 import { chartScale } from '../../shared/stats-chart';
 import { dailyWords } from '../../shared/stats-summary';
 import { cssVars } from '../components/css-vars';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
+import { useRovingFocus, type RovingItem } from '../components/use-roving-focus';
 import { chartDayLabel, compactNumber, formatNumber, weekdayDate } from './format';
 
 type ChartRange = '7' | '30';
@@ -13,9 +14,9 @@ const RANGES: ReadonlyArray<SegmentOption<ChartRange>> = [
   { id: '30', label: '30 dní' },
 ];
 
-const STEP_BY_KEY: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 };
+const STEP_BY_KEY = Object.freeze({ ArrowLeft: -1, ArrowRight: 1 });
 
-type BarProps = { day: DayWords; top: number; today: string; showValue: boolean; active: boolean; register: (element: HTMLButtonElement | null) => void; onFocus: () => void };
+type BarProps = { day: DayWords; top: number; today: string; showValue: boolean; roving: RovingItem };
 
 function wordsText(words: number): string {
   if (words === 0) {
@@ -24,11 +25,11 @@ function wordsText(words: number): string {
   return `${formatNumber(words)} slov`;
 }
 
-function Bar({ day, top, today, showValue, active, register, onFocus }: BarProps) {
+function Bar({ day, top, today, showValue, roving }: BarProps) {
   const isToday = day.date === today;
   const classes = ['wc-col', isToday ? 'today' : '', day.words === 0 ? 'zero' : ''].filter(Boolean).join(' ');
   return (
-    <button ref={register} type="button" className={classes} style={cssVars({ '--v': (day.words / top).toFixed(3) })} tabIndex={active ? 0 : -1} aria-label={`${weekdayDate(day.date, today)}: ${formatNumber(day.words)} slov`} onFocus={onFocus}>
+    <button {...roving} type="button" className={classes} style={cssVars({ '--v': (day.words / top).toFixed(3) })} aria-label={`${weekdayDate(day.date, today)}: ${formatNumber(day.words)} slov`}>
       <span className="wc-bar" />
       {isToday && showValue && (
         <span className="wc-val" aria-hidden="true">
@@ -45,56 +46,18 @@ function Bar({ day, top, today, showValue, active, register, onFocus }: BarProps
 
 type PlotProps = { series: readonly DayWords[]; scale: ChartScale; today: string; dense: boolean };
 
-function nextIndex(key: string, current: number, last: number): number | null {
-  if (key === 'Home') {
-    return 0;
-  }
-  if (key === 'End') {
-    return last;
-  }
-  const step = STEP_BY_KEY[key];
-  if (step === undefined) {
-    return null;
-  }
-  return Math.min(last, Math.max(0, current + step));
-}
-
 function BarPlot({ series, scale, today, dense }: PlotProps) {
-  const last = series.length - 1;
-  const [focused, setFocused] = useState<number | null>(null);
-  const bars = useRef(new Map<number, HTMLButtonElement>());
-  const active = Math.min(focused ?? last, last);
-
-  function move(event: KeyboardEvent<HTMLDivElement>): void {
-    const next = nextIndex(event.key, active, last);
-    if (next === null) {
-      return;
-    }
-    event.preventDefault();
-    setFocused(next);
-    bars.current.get(next)?.focus();
-  }
-
-  function register(index: number): (element: HTMLButtonElement | null) => void {
-    return (element) => {
-      if (element === null) {
-        bars.current.delete(index);
-        return;
-      }
-      bars.current.set(index, element);
-    };
-  }
-
+  const roving = useRovingFocus(series.length, STEP_BY_KEY);
   const label = `Slová za posledných ${series.length} dní, spolu ${formatNumber(scale.total)}, priemer ${formatNumber(scale.average)} za deň. Šípkami vľavo a vpravo prejdete po dňoch.`;
   return (
-    <div className="wc-plot" role="group" aria-label={label} onKeyDown={move}>
+    <div className="wc-plot" role="group" aria-label={label} onKeyDown={roving.onKeyDown}>
       {scale.ticks.slice(1).map((tick) => (
         <span key={tick} className="wc-grid" style={cssVars({ '--p': tick / scale.top })} />
       ))}
       <span className="wc-avg" style={cssVars({ '--p': scale.average / scale.top })} aria-hidden="true" />
       <div className="wc-cols">
         {series.map((day, index) => (
-          <Bar key={day.date} day={day} top={scale.top} today={today} showValue={!dense} active={index === active} register={register(index)} onFocus={() => setFocused(index)} />
+          <Bar key={day.date} day={day} top={scale.top} today={today} showValue={!dense} roving={roving.item(index)} />
         ))}
       </div>
     </div>

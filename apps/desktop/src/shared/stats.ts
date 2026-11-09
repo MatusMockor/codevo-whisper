@@ -14,7 +14,6 @@ export type StatsSummary = {
   savedSeconds: number;
   streakDays: number;
   streakSince: string | null;
-  last7: DayWords[];
 };
 
 export type ChartScale = { top: number; ticks: number[]; total: number; average: number };

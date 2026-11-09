@@ -3,8 +3,6 @@ import type { DayStats, DayWords, StatsPeriod, StatsSummary } from './stats';
 
 export const TYPING_WORDS_PER_MINUTE = 40;
 
-const CHART_DAYS = 7;
-
 type Totals = Pick<DayStats, 'words' | 'dictations' | 'seconds'>;
 
 type Streak = Pick<StatsSummary, 'streakDays' | 'streakSince'>;
@@ -78,6 +76,5 @@ export function summarize(days: readonly DayStats[], period: StatsPeriod, today:
     secondsPerDictation: perDictation(sum.seconds, sum.dictations),
     savedSeconds: savedSeconds(sum),
     ...streak(active, today),
-    last7: dailyWords(days, today, CHART_DAYS),
   };
 }

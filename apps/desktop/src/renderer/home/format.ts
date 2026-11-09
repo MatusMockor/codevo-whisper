@@ -1,7 +1,6 @@
 import { calendarDateToUtc, isoWeekday } from '../../shared/calendar-date';
 
 const NUMBER = new Intl.NumberFormat('sk-SK');
-const LONG_DAY = new Intl.DateTimeFormat('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const DAY_AND_MONTH = new Intl.DateTimeFormat('sk-SK', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 const WEEKDAY = new Intl.DateTimeFormat('sk-SK', { weekday: 'long', timeZone: 'UTC' });
 const SHORT_DAYS = ['Ne', 'Po', 'Ut', 'St', 'Št', 'Pi', 'So'] as const;
@@ -42,11 +41,6 @@ export function dayWord(count: number): string {
 
 export function shortDayName(date: string): string {
   return SHORT_DAYS[calendarDateToUtc(date).getUTCDay()] ?? '';
-}
-
-export function longDayName(date: string, today: string): string {
-  const name = LONG_DAY.format(calendarDateToUtc(date));
-  return date === today ? `dnes, ${name}` : name;
 }
 
 export function dayAndMonth(date: string): string {

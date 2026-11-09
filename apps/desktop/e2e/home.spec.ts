@@ -220,6 +220,10 @@ test('Dnes moves to the new day at local midnight while the window stays open', 
   await expect(tile('Nadiktované slová')).toHaveText('120');
   await expect(page.locator('.wc-col.today')).toHaveAttribute('aria-label', 'dnes, 25. 10.: 120 slov');
   await expect(page.locator('.wc-x span').nth(5)).toHaveText('so');
+  await expect(page.locator('.hm .c.today')).toHaveAttribute('aria-label', 'Dnes: 120 slov');
+  await page.locator('.hm .c.today').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('.hm .c:focus')).toHaveAttribute('aria-label', 'sobota 24. 10.: bez diktovania');
 
   await page.clock.runFor(20_000);
 
