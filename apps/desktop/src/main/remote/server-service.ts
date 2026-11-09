@@ -160,7 +160,7 @@ export class ServerService {
     }
     const engine = await this.commitPairing(run);
     if (engine === null) {
-      await this.discardPairing();
+      await this.discardPairing(outcome.deviceId);
       return;
     }
     if (this.pairingRun !== run) {
@@ -185,12 +185,9 @@ export class ServerService {
     });
   }
 
-  private async discardPairing(): Promise<void> {
-    if (this.pairingRun !== null) {
-      return;
-    }
+  private async discardPairing(deviceId: string): Promise<void> {
     try {
-      await this.deps.pairings.clear();
+      await this.deps.pairings.clearDevice(deviceId);
     } catch (error) {
       this.deps.logger.error('The pairing of a cancelled run could not be removed', error);
     }

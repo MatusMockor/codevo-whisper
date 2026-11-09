@@ -20,6 +20,7 @@ export interface PairingRepository {
   load(): Promise<ServerPairing | null>;
   save(pairing: ServerPairing): Promise<void>;
   clear(): Promise<void>;
+  clearDevice(deviceId: string): Promise<void>;
 }
 
 type SealedFile = { version: 1; sealed: string };
@@ -67,6 +68,17 @@ export class EncryptedPairingFile implements PairingRepository {
 
   clear(): Promise<void> {
     return this.serialize(async () => {
+      await rm(this.file, { force: true });
+      this.cached = null;
+    });
+  }
+
+  clearDevice(deviceId: string): Promise<void> {
+    return this.serialize(async () => {
+      const current = await this.load();
+      if (current?.deviceId !== deviceId) {
+        return;
+      }
       await rm(this.file, { force: true });
       this.cached = null;
     });

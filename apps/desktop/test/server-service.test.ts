@@ -72,6 +72,7 @@ function saveGate(): SaveGate {
     wrap: (pairings) => ({
       load: () => pairings.load(),
       clear: () => pairings.clear(),
+      clearDevice: (deviceId) => pairings.clearDevice(deviceId),
       save: async (pairing) => {
         saving.resolve();
         await released.promise;
@@ -209,6 +210,31 @@ describe('ServerService', () => {
     expect(settings.get().engineOrder).toEqual(['local']);
     expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'failed', failure: 'cancelled' } });
     window.admin.close();
+  });
+
+  it('a cancelled run removes its saved pairing even when a newer pairing has started and is cancelled too', async () => {
+    const gate = saveGate();
+    const { service: target, file } = await create({ wrapPairings: gate.wrap });
+    const first = await gateway.openPairingWindow();
+    target.pair(first.token);
+    await first.admin.next();
+    first.admin.send({ decision: 'approve' });
+    await gate.saving;
+    target.cancelPairing();
+
+    const second = await gateway.openPairingWindow();
+    target.pair(second.token);
+    await second.admin.next();
+    gate.release();
+    await gate.saved;
+    await expect.poll(() => fileState(file)).toBe('absent');
+    target.cancelPairing();
+
+    await expect.poll(async () => (await target.view()).pairing).toEqual({ kind: 'failed', failure: 'cancelled' });
+    expect(await target.view()).toEqual({ storage: 'available', server: null, pairing: { kind: 'failed', failure: 'cancelled' } });
+    expect(settings.get().engineOrder).toEqual(['local']);
+    first.admin.close();
+    second.admin.close();
   });
 
   it('a disconnect never leaves the server as the only engine while a switch to it is still being saved', async () => {
