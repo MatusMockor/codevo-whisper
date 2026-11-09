@@ -36,6 +36,10 @@ function banner(): Locator {
   return page.locator('.banner');
 }
 
+function period(label: string): Locator {
+  return page.getByRole('group', { name: 'Obdobie štatistík' }).getByRole('button', { name: label, exact: true });
+}
+
 function tile(label: string): Locator {
   return page.locator('.kpis > div', { hasText: label }).locator('.v');
 }
@@ -111,7 +115,7 @@ test('tiles show values from seeded stats and switch periods', async () => {
   await writeFile(join(userDataDir, 'stats.json'), JSON.stringify({ version: 1, days }));
   await start();
 
-  await expect(page.getByRole('button', { name: 'Dnes' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(period('Dnes')).toHaveAttribute('aria-pressed', 'true');
   await expect(tile('Nadiktované slová')).toHaveText('120');
   await expect(tile('Počet diktovaní')).toHaveText('4');
   await expect(tile('Čas diktovania')).toHaveText('1 min');
@@ -120,12 +124,12 @@ test('tiles show values from seeded stats and switch periods', async () => {
   await expect(page.locator('.chart-top .ttl span')).toHaveText(`${120 + mondayWords} spolu`);
   await expect(page.getByText('Štatistiky sú len súčty čísel na tomto Macu, bez textu.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Tento týždeň' }).click();
-  await expect(page.getByRole('button', { name: 'Tento týždeň' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Dnes' })).toHaveAttribute('aria-pressed', 'false');
+  await period('Tento týždeň').click();
+  await expect(period('Tento týždeň')).toHaveAttribute('aria-pressed', 'true');
+  await expect(period('Dnes')).toHaveAttribute('aria-pressed', 'false');
   await expect(tile('Nadiktované slová')).toHaveText(String(120 + mondayWords));
 
-  await page.getByRole('button', { name: 'Celkom' }).click();
+  await period('Celkom').click();
   await expect(tile('Nadiktované slová')).toHaveText(String(420 + mondayWords));
   await expect(tile('Počet diktovaní')).toHaveText(String(14 + (monday === today ? 0 : 2)));
 
