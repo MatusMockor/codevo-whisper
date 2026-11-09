@@ -47,7 +47,8 @@ function Bar({ day, top, today, showValue, roving }: BarProps) {
 type PlotProps = { series: readonly DayWords[]; scale: ChartScale; today: string; dense: boolean };
 
 function BarPlot({ series, scale, today, dense }: PlotProps) {
-  const roving = useRovingFocus(series.length, STEP_BY_KEY);
+  const dates = useMemo(() => series.map((day) => day.date), [series]);
+  const roving = useRovingFocus(dates, STEP_BY_KEY);
   const label = `Slová za posledných ${series.length} dní, spolu ${formatNumber(scale.total)}, priemer ${formatNumber(scale.average)} za deň. Šípkami vľavo a vpravo prejdete po dňoch.`;
   return (
     <div className="wc-plot" role="group" aria-label={label} onKeyDown={roving.onKeyDown}>

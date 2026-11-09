@@ -34,7 +34,7 @@ function Cell({ cell, index, today, roving }: CellProps) {
 function Heatmap({ weeks, today }: { weeks: HeatCell[][]; today: string }) {
   const past = weeks.flat().filter((cell) => !cell.future);
   const active = past.filter((cell) => cell.words > 0).length;
-  const roving = useRovingFocus(past.length, STEP_BY_KEY);
+  const roving = useRovingFocus(past.map((cell) => cell.date), STEP_BY_KEY);
   const label = `Aktivita za posledných ${weeks.length - 1} týždňov a tento týždeň: diktovali ste ${active} z ${past.length} dní. Šípkami hore a dole prejdete po dňoch, vľavo a vpravo po týždňoch.`;
   return (
     <div className="hm" role="group" aria-label={label} onKeyDown={roving.onKeyDown}>

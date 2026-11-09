@@ -13,3 +13,11 @@ export function rovingIndex(key: string, current: number, last: number, steps: R
   }
   return Math.min(last, Math.max(0, current + step));
 }
+
+export function activeRovingIndex(keys: readonly string[], focused: string | null): number {
+  const index = focused === null ? -1 : keys.indexOf(focused);
+  if (index === -1) {
+    return keys.length - 1;
+  }
+  return index;
+}
