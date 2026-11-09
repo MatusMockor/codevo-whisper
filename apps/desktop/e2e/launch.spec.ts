@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { appWindows } from './app-windows';
+import { appWindows, mainWindow } from './app-windows';
 import { startExternalSite, type ExternalSite } from './external-site';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
@@ -14,7 +14,7 @@ test.beforeEach(async () => {
   external = await startExternalSite();
   userDataDir = await createUserDataDir(ONBOARDED);
   app = await launchApp(userDataDir);
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 });
 
 test.afterEach(async () => {

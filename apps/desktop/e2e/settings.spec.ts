@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { appWindows } from './app-windows';
+import { appWindows, mainWindow } from './app-windows';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
@@ -47,7 +47,7 @@ let userDataDir: string;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS, { fakeHelper: true });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 }
 
 test.afterEach(async () => {
@@ -174,7 +174,7 @@ function levelWithin(ms: number): Promise<boolean> {
   );
 }
 
-function mainWindow(action: 'hide' | 'showInactive' | 'minimize' | 'restore'): Promise<void> {
+function changeMainWindow(action: 'hide' | 'showInactive' | 'minimize' | 'restore'): Promise<void> {
   return app.evaluate(({ BrowserWindow }, name) => {
     BrowserWindow.getAllWindows()
       .find((window) => window.webContents.getURL().endsWith('/renderer/index.html'))
@@ -562,16 +562,16 @@ test.describe('settings page', () => {
   test('the meter releases the microphone while the main window is hidden or minimized', async () => {
     await expect.poll(() => levelWithin(1500)).toBe(true);
 
-    await mainWindow('hide');
+    await changeMainWindow('hide');
     await page.waitForTimeout(300);
     expect(await levelWithin(1500)).toBe(false);
-    await mainWindow('showInactive');
+    await changeMainWindow('showInactive');
     await expect.poll(() => levelWithin(1500)).toBe(true);
 
-    await mainWindow('minimize');
+    await changeMainWindow('minimize');
     await page.waitForTimeout(300);
     expect(await levelWithin(1500)).toBe(false);
-    await mainWindow('restore');
+    await changeMainWindow('restore');
     await expect.poll(() => levelWithin(1500)).toBe(true);
   });
 

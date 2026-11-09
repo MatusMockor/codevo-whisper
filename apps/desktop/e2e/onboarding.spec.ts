@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HotkeyRecordResult } from '../src/shared/hotkey-record';
 import type { Settings } from '../src/shared/settings';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
@@ -27,7 +28,7 @@ let gateway: LocalGateway | null = null;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS, { fakeHelper: true });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 }
 
 test.beforeEach(async () => {

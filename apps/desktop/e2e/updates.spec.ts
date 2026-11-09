@@ -1,5 +1,6 @@
 import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import type { FakeAppUpdater } from '../src/main/updates/fake-app-updater';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir, type LaunchOptions } from './launch-app';
 
 type UpdaterGlobal = { codevoE2e: { updater: Promise<FakeAppUpdater>; loadUpdater(): Promise<{ checkForUpdates(): Promise<unknown> }> } };
@@ -14,7 +15,7 @@ let currentVersion: string;
 async function start(options: LaunchOptions = {}): Promise<void> {
   userDataDir = await createUserDataDir(ONBOARDED);
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS, { fakeHelper: true, ...options });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
   currentVersion = await app.evaluate(({ app: electronApp }) => electronApp.getVersion());
   await page.getByRole('tab', { name: 'Nastavenia' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');

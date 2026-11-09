@@ -5,6 +5,7 @@ import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { addDays, localDate, weekStart } from '../src/shared/calendar-date';
 import type { AppStatus } from '../src/shared/app-status';
 import type { DayStats } from '../src/shared/stats';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks };
@@ -19,7 +20,7 @@ let userDataDir: string;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir);
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 }
 
 test.beforeEach(async () => {

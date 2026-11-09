@@ -1,6 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
@@ -15,7 +16,7 @@ test.beforeEach(async () => {
   gateway = await startLocalGateway();
   dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'modifiers', keycodes: [63], label: 'Fn' }, mode: 'hold', muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'headphones', feedbackVolume: 73 });
   app = await launchApp(dir, FAKE_MEDIA_ARGS, { fakeHelper: true });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
   const pairing = await gateway.openPairingWindow();
   await page.evaluate((token) => window.codevo.pairServer(token), pairing.token);
   await pairing.admin.next();

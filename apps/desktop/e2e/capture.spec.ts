@@ -1,6 +1,6 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
-import { isCapturePage } from './app-windows';
+import { isCapturePage, mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_DEVICE_ARGS, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks; levelCount: number };
@@ -102,7 +102,7 @@ function launchWith(chromiumArgs: readonly string[]): void {
   test.beforeEach(async () => {
     userDataDir = await createUserDataDir();
     app = await launchApp(userDataDir, chromiumArgs);
-    await app.firstWindow();
+    await mainWindow(app);
   });
 
   test.afterEach(async () => {
@@ -127,8 +127,7 @@ test.describe('with Chromium fake media', () => {
   launchWith(FAKE_MEDIA_ARGS);
 
   test('loads the capture page once the main window is shown, without opening the microphone', async () => {
-    const main = await app.firstWindow();
-    expect(isCapturePage(main)).toBe(false);
+    await mainWindow(app);
 
     await expect.poll(() => app.windows().some(isCapturePage)).toBe(true);
     const capture = app.windows().find(isCapturePage) as Page;
@@ -259,7 +258,7 @@ test.describe('with the app permission handler', () => {
 
   test('grants the microphone to the capture window only and never the camera', async () => {
     const capture = await openCapturePage();
-    const main = await app.firstWindow();
+    const main = await mainWindow(app);
 
     expect(await capture.evaluate(requestMedia, { audio: true })).toBe('granted');
     expect(await main.evaluate(requestMedia, { audio: true })).toBe('NotAllowedError');

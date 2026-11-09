@@ -4,6 +4,7 @@ import { copyFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, FAKE_MEDIA_ARGS } from './launch-app';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 
@@ -24,8 +25,7 @@ test('built Linux app pastes native dictation and replays through the native sho
   const app = await launchApp(dir, [...FAKE_MEDIA_ARGS, `--use-file-for-fake-audio-capture=${resolve(process.env['CW_NATIVE_AUDIO']!)}`]);
   const xdo = (...args: string[]) => execFileSync('xdotool', args);
   try {
-    const page = await app.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
+    const page = await mainWindow(app);
     const security = await app.evaluate(({ app, BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().includes('index.html'))!;
       const pid = window.webContents.getOSProcessId();

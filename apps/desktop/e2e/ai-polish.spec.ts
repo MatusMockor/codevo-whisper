@@ -7,7 +7,7 @@ import { findCodex } from '../src/main/ai/codex-cli';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import type { Settings } from '../src/shared/settings';
-import { appWindows } from './app-windows';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
@@ -65,10 +65,7 @@ async function start(settings: Partial<Settings>): Promise<void> {
   dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'modifiers', keycodes: [63], label: 'Fn' }, mode: 'hold', ...settings });
   const launched = await launchApp(dir, FAKE_MEDIA_ARGS, { fakeHelper: true });
   app = launched;
-  await launched.firstWindow();
-  await expect.poll(() => appWindows(launched).length).toBeGreaterThan(0);
-  page = appWindows(launched)[0]!;
-  await page.waitForLoadState('domcontentloaded');
+  page = await mainWindow(launched);
   await launched.evaluate(() => {
     const hooks = globalThis as unknown as Hooks;
     hooks.aiFrames = 0;

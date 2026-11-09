@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, FAKE_MEDIA_ARGS } from './launch-app';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 
@@ -8,7 +9,7 @@ test('native Wayland uses a reduced regular window and copies through the real h
   const dir = await createUserDataDir(ONBOARDED);
   const app = await launchApp(dir, [...FAKE_MEDIA_ARGS, '--ozone-platform=wayland']);
   try {
-    await app.firstWindow();
+    await mainWindow(app);
     await app.evaluate(() => { const hooks = (globalThis as unknown as { codevoE2e: E2eHooks }).codevoE2e; hooks.overlay.show({ kind: 'recording', elapsedMs: 2300, level: 0.4, language: 'SK', live: { confirmed: 'Text vo Waylande', tentative: 'pokračuje' } }); });
     await expect.poll(() => app.windows().some((p) => p.url().endsWith('/overlay/overlay.html'))).toBe(true);
     const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;

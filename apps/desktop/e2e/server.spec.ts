@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pairingStep } from '../src/renderer/server/server-copy';
 import type { Settings } from '../src/shared/settings';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
@@ -16,7 +17,7 @@ let gateway: LocalGateway;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS, { fakeHelper: true });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 }
 
 async function engineOrder(): Promise<Settings['engineOrder']> {

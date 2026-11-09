@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
 
@@ -16,7 +17,7 @@ let gateway: LocalGateway | null = null;
 
 async function start(): Promise<void> {
   app = await launchApp(dir, FAKE_MEDIA_ARGS, { fakeHelper: true });
-  page = await app.firstWindow();
+  page = await mainWindow(app);
   await app.evaluate(() => {
     const hooks = globalThis as unknown as Hooks;
     hooks.historyFrames = 0;

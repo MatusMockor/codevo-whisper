@@ -1,6 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import type { OverlayState } from '../src/shared/overlay-contract';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks };
@@ -18,7 +19,7 @@ let userDataDir: string;
 test.beforeEach(async () => {
   userDataDir = await createUserDataDir(ONBOARDED);
   app = await launchApp(userDataDir);
-  main = await app.firstWindow();
+  main = await mainWindow(app);
 });
 
 test.afterEach(async () => {
