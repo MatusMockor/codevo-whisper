@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { appWindows, mainWindow } from './app-windows';
+import { appWindows, MAIN_PAGE, mainWindow } from './app-windows';
 import { startExternalSite, type ExternalSite } from './external-site';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
@@ -25,7 +25,7 @@ test.afterEach(async () => {
 
 test('shows a window titled Codevo Whisper with the sidebar sections', async () => {
   await expect(page).toHaveTitle('Codevo Whisper');
-  const nativeTitle = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
+  const nativeTitle = await app.evaluate(({ BrowserWindow }, mainPage) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith(mainPage))?.getTitle(), MAIN_PAGE);
   expect(nativeTitle).toBe('Codevo Whisper');
 
   const sidebar = page.getByRole('tablist', { name: 'Sekcie aplikácie' });
@@ -74,11 +74,10 @@ test('closing the main window keeps the app running in the tray and it opens aga
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith('/renderer/index.html')))).toBe(false);
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
 
-  const reopened = app.waitForEvent('window');
   await app.evaluate(({ app: electronApp }) => {
     electronApp.emit('activate');
   });
-  const reopenedPage = await reopened;
+  const reopenedPage = await mainWindow(app);
 
   await expect(reopenedPage.getByRole('tablist', { name: 'Sekcie aplikácie' })).toBeVisible();
   await expect(reopenedPage.getByRole('tab', { name: 'Domov' })).toHaveAttribute('aria-selected', 'true');
