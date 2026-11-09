@@ -19,6 +19,8 @@
     "@codevo-whisper/protocol": "workspace:*",
     "@codevo-whisper/stt-runner": "workspace:*",
     "@electron/fuses": "1.8.0",
+    "@fontsource-variable/archivo": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",

@@ -47,6 +47,19 @@ describe('EncryptedPairingFile', () => {
     expect(text).not.toContain('e255ea96');
   });
 
+  it('removes the pairing of one device only and keeps a pairing that replaced it', async () => {
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+    const newer = { ...pairing(), deviceId: 'f3a1c0de' };
+    await repository.save(newer);
+
+    await repository.clearDevice('e255ea96');
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(newer);
+
+    await repository.clearDevice('f3a1c0de');
+    expect(await repository.load()).toBeNull();
+    await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('returns null without a file and after clear', async () => {
     const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
     expect(await repository.load()).toBeNull();

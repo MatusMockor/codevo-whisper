@@ -1,6 +1,6 @@
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import type { ChildProcess } from 'node:child_process';
-import { appWindows } from './app-windows';
+import { appWindows, mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir, spawnApp } from './launch-app';
 
 const SECOND_INSTANCE_EXIT_MS = 10_000;
@@ -12,7 +12,7 @@ let second: ChildProcess | null = null;
 test.beforeEach(async () => {
   userDataDir = await createUserDataDir(ONBOARDED);
   app = await launchApp(userDataDir);
-  await app.firstWindow();
+  await mainWindow(app);
 });
 
 test.afterEach(async () => {

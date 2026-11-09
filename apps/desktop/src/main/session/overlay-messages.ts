@@ -1,18 +1,20 @@
 import type { EngineFailureReason, EngineUnavailableReason } from '../engines/transcription-engine';
 import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../insertion/insertion-service';
 import type { AiFailure } from '../../shared/ai';
-import type { OverlayState } from '../../shared/overlay-contract';
+import { engineRemedy, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
+import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
 import type { Language } from '../../shared/settings';
 
-type ErrorState = Extract<OverlayState, { kind: 'error' }>;
+type ErrorState = OverlayError;
 type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
 
 export const MESSAGES = Object.freeze({
-  noModel: 'Nemáte stiahnutý model',
+  noModel: 'Lokálny model chýba',
   brokenModel: 'Model chýba alebo je poškodený',
   binaryMissing: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
   engineUnavailable: 'Prepis teraz nie je dostupný',
+  engineSwitchFailed: 'Prepis sa nepodarilo prepnúť. Skontrolujte stránku Server alebo Nastavenia.',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
   recordingAudio: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.',
   transcriptionFailed: 'Prepis sa nepodaril',
@@ -46,17 +48,49 @@ function serverError(message: string): ErrorState {
   return { kind: 'error', message, action: 'open-server' };
 }
 
-const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, ErrorState>> = Object.freeze({
-  'no-model': settingsError(MESSAGES.noModel),
-  'model-missing': settingsError(MESSAGES.brokenModel),
-  'model-broken': settingsError(MESSAGES.brokenModel),
-  'language-required': settingsError(MESSAGES.languageRequired),
-  'binary-missing': errorState(MESSAGES.binaryMissing),
-  'server-not-paired': serverError(MESSAGES.serverNotPaired),
-  'server-offline': errorState(MESSAGES.serverOffline),
-  'server-repair-needed': serverError(MESSAGES.serverRepair),
-  'server-busy': errorState(MESSAGES.serverBusy),
-  'server-storage': errorState(MESSAGES.serverStorage),
+function fixError(message: string, action: OverlayAction, alternative?: OverlayAction): ErrorState {
+  if (alternative === undefined) {
+    return { kind: 'error', message, action };
+  }
+  return { kind: 'error', message, action, alternative };
+}
+
+function remedyError(message: string, problem: EngineProblem): (conditions: EngineConditions) => ErrorState {
+  return (conditions) => {
+    const remedy = engineRemedy(problem, conditions);
+    if (remedy === null) {
+      return errorState(message);
+    }
+    return fixError(message, remedy.action, remedy.alternative);
+  };
+}
+
+function switchRemedy(problem: EngineProblem | null, conditions: EngineConditions | null): EngineRemedy | null {
+  if (problem === null || conditions === null) {
+    return null;
+  }
+  return engineRemedy(problem, conditions);
+}
+
+export function switchFailedState(problem: EngineProblem | null, conditions: EngineConditions | null): ErrorState {
+  const remedy = switchRemedy(problem, conditions);
+  if (remedy === null) {
+    return settingsError(MESSAGES.engineSwitchFailed);
+  }
+  return fixError(MESSAGES.engineSwitchFailed, remedy.action, remedy.alternative);
+}
+
+const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: EngineConditions) => ErrorState>> = Object.freeze({
+  'no-model': remedyError(MESSAGES.noModel, 'no-model'),
+  'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
+  'model-broken': () => settingsError(MESSAGES.brokenModel),
+  'language-required': () => settingsError(MESSAGES.languageRequired),
+  'binary-missing': () => errorState(MESSAGES.binaryMissing),
+  'server-not-paired': remedyError(MESSAGES.serverNotPaired, 'server-not-paired'),
+  'server-offline': remedyError(MESSAGES.serverOffline, 'server-offline'),
+  'server-repair-needed': () => serverError(MESSAGES.serverRepair),
+  'server-busy': () => errorState(MESSAGES.serverBusy),
+  'server-storage': () => errorState(MESSAGES.serverStorage),
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
@@ -79,11 +113,11 @@ export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean)
   return errorState(FAILURE_MESSAGES[reason]);
 }
 
-export function readinessError(reason: EngineUnavailableReason | undefined): ErrorState {
+export function readinessError(reason: EngineUnavailableReason | undefined, conditions: EngineConditions): ErrorState {
   if (reason === undefined) {
     return errorState(MESSAGES.engineUnavailable);
   }
-  return READINESS_ERRORS[reason];
+  return READINESS_ERRORS[reason](conditions);
 }
 
 const COPIED: TerminalState = { kind: 'copied' };

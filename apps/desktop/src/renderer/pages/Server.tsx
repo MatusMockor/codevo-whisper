@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { LockIcon, ServerIcon } from '../components/Icons';
 import { CommandBox } from '../server/CommandBox';
 import { PairingCard } from '../server/PairingCard';
+import { PairingNotice } from '../server/PairingNotice';
+import { pairingNotice } from '../server/pairing-notice';
 import { ServerCard } from '../server/ServerCard';
 import { STORAGE_WARNINGS } from '../server/server-copy';
+import { useDismissedNotices } from '../server/use-dismissed-notices';
 import { useServer } from '../server/use-server';
 import { useSettings } from '../settings/use-settings';
 
@@ -47,6 +50,7 @@ export function Server() {
   const server = useServer();
   const settings = useSettings();
   const [revoke, setRevoke] = useState<string | null>(null);
+  const notices = useDismissedNotices();
   if (server.kind === 'loading') {
     return null;
   }
@@ -59,6 +63,7 @@ export function Server() {
   }
   const view = server.value;
   const engineOrder = settings.kind === 'ready' ? settings.value.engineOrder : [];
+  const notice = pairingNotice(view, engineOrder, notices.dismissed);
   return (
     <div className="server">
       {view.storage !== 'available' && (
@@ -67,7 +72,8 @@ export function Server() {
         </p>
       )}
       {revoke !== null && view.server === null && <Disconnected command={revoke} />}
-      {view.server === null ? <Introduction /> : <ServerCard server={view.server} engineOrder={engineOrder} onDisconnected={setRevoke} />}
+      <PairingNotice notice={notice} onDismiss={notices.dismiss} />
+      {view.server === null ? <Introduction /> : <ServerCard server={view.server} engineOrder={engineOrder} offerServer={notice?.kind !== 'available'} onDisconnected={setRevoke} />}
       <PairingCard key={view.server?.deviceId ?? 'unpaired'} pairing={view.pairing} storage={view.storage} replacing={view.server !== null} />
     </div>
   );

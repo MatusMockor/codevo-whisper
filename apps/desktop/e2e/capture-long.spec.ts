@@ -1,5 +1,6 @@
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks };
@@ -55,7 +56,7 @@ test.skip(process.env['CW_E2E_LONG'] !== '1', 'Set CW_E2E_LONG=1 to run the 60 s
 test.beforeEach(async () => {
   userDataDir = await createUserDataDir();
   app = await launchApp(userDataDir, FAKE_MEDIA_ARGS);
-  await app.firstWindow();
+  await mainWindow(app);
 });
 
 test.afterEach(async () => {

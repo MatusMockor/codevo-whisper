@@ -1,10 +1,13 @@
 import { useId, type ReactNode } from 'react';
+import type { SettingsSection } from '../../shared/settings-focus';
 
-export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+export function SettingsGroup({ title, section, children }: { title: string; section?: SettingsSection; children: ReactNode }) {
   const id = useId();
   return (
-    <section className="sgroup" aria-labelledby={id}>
-      <h2 id={id}>{title}</h2>
+    <section className="sgroup" aria-labelledby={id} data-section={section}>
+      <h2 id={id} tabIndex={-1}>
+        {title}
+      </h2>
       <div className="sbox">{children}</div>
     </section>
   );

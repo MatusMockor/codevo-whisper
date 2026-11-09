@@ -49,7 +49,7 @@ function LanguageSelect({ language, activeModel }: { language: Language; activeM
 
 export function DictationSection({ settings, activeModel }: { settings: Settings; activeModel: ModelInfo | null }) {
   return (
-    <SettingsGroup title="Diktovanie">
+    <SettingsGroup title="Diktovanie" section="dictation">
       <SettingsRow title="Klávesová skratka" titleId="set-hotkey" description={navigator.userAgent.includes('Linux') ? 'Nahrajte skratku pre aktuálnu reláciu X11 alebo Wayland. Ctrl+Super+V je vyhradené na posledný prepis.' : 'Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.'}>
         <HotkeyRecorder hotkey={settings.hotkey} labelledBy="set-hotkey" onRecorded={(hotkey) => saveSettings({ hotkey })} />
       </SettingsRow>

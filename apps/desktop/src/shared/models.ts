@@ -4,6 +4,10 @@ export type ModelStatus = 'not-downloaded' | 'downloading' | 'paused' | 'ready' 
 
 export type ModelState = { id: string; status: ModelStatus; receivedBytes: number; totalBytes: number };
 
+export function isModelReady(states: readonly ModelState[], id: string | null): boolean {
+  return id !== null && states.some((state) => state.id === id && state.status === 'ready');
+}
+
 export type ModelInfo = {
   id: string;
   name: string;

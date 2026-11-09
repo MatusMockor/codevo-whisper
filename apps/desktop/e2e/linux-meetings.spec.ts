@@ -4,7 +4,7 @@ import { mkdir, readFile, stat, symlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { MeetingSummary } from '../src/shared/meetings';
-import { appWindows } from './app-windows';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 const run = promisify(execFile);
@@ -100,9 +100,7 @@ test.beforeEach(async () => {
   await mkdir(join(userDataDir, 'models'));
   await symlink(resolve(MODEL ?? ''), join(userDataDir, 'models', 'parakeet-ultra-q8.gguf'));
   app = await launchApp(userDataDir, [...FAKE_MEDIA_ARGS, ...OZONE], { fakeHelper: true });
-  await app.firstWindow();
-  await expect.poll(() => appWindows(app).length).toBeGreaterThan(0);
-  page = appWindows(app)[0] as Page;
+  page = await mainWindow(app);
 });
 
 test.afterEach(async () => {

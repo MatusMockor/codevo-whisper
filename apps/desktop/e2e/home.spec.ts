@@ -5,6 +5,7 @@ import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { addDays, localDate, weekStart } from '../src/shared/calendar-date';
 import type { AppStatus } from '../src/shared/app-status';
 import type { DayStats } from '../src/shared/stats';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
 
 type HookGlobal = { codevoE2e: E2eHooks };
@@ -19,7 +20,7 @@ let userDataDir: string;
 
 async function start(): Promise<void> {
   app = await launchApp(userDataDir);
-  page = await app.firstWindow();
+  page = await mainWindow(app);
 }
 
 test.beforeEach(async () => {
@@ -35,8 +36,12 @@ function banner(): Locator {
   return page.locator('.banner');
 }
 
+function period(label: string): Locator {
+  return page.getByRole('group', { name: 'Obdobie štatistík' }).getByRole('button', { name: label, exact: true });
+}
+
 function tile(label: string): Locator {
-  return page.locator('.tiles > div', { hasText: label }).locator('.v');
+  return page.locator('.kpis > div', { hasText: label }).locator('.v');
 }
 
 function pushStatus(status: AppStatus): Promise<void> {
@@ -56,20 +61,46 @@ test('banner shows the call to action or the hotkey label', async () => {
   await page.getByRole('tab', { name: 'Domov' }).click();
 
   await page.evaluate((hotkey) => window.codevo.updateSettings({ hotkey }), RIGHT_CONTROL);
-  await expect(banner()).toContainText('Stiahnite si model na prepis reči.');
+  await expect(banner()).toContainText('Lokálny model nie je stiahnutý.');
+  await expect(banner().getByRole('button')).toHaveText(['Spárovať server', 'Stiahnuť model']);
+  await expect(banner().getByRole('button', { name: 'Stiahnuť model' })).toHaveClass(/primary/);
+  await expect(page.getByRole('region', { name: 'Od klávesu po vložený text' }).locator('.node', { hasText: 'Prepis' })).toHaveClass(/\berr\b/);
+  await banner().getByRole('button', { name: 'Stiahnuť model' }).click();
+  await expect(page.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
+  await page.getByRole('tab', { name: 'Domov' }).click();
 
   await expect(async () => {
     await pushStatus(READY);
-    await expect(banner()).toHaveText('Všetko je pripravené. Podržte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
+    await expect(banner().locator('.msg')).toHaveText('Všetko je pripravené. Podržte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
   }).toPass();
   await expect(banner().locator('kbd')).toHaveText(RIGHT_CONTROL.label);
 
   for (const mode of ['toggle', 'smart'] as const) {
     await expect(async () => {
       await pushStatus({ ...READY, mode });
-      await expect(banner()).toHaveText('Všetko je pripravené. Stlačte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
+      await expect(banner().locator('.msg')).toHaveText('Všetko je pripravené. Stlačte Pravý ⌃ Control v ľubovoľnej aplikácii a hovorte.', { timeout: 500 });
     }).toPass();
   }
+});
+
+test('the signal path shows each step and opens its settings section', async () => {
+  await start();
+  const path = page.getByRole('region', { name: 'Od klávesu po vložený text' });
+  const hotkey = path.locator('.node', { hasText: 'Skratka' });
+
+  await expect(path.locator('.node')).toHaveCount(5);
+  await expect(hotkey).toHaveClass(/\berr\b/);
+  await expect(hotkey).toContainText('Nenastavená');
+  await expect(path.locator('.node', { hasText: 'AI úprava' })).toContainText('Vypnutá');
+  await expect(page.getByRole('tab', { name: 'Domov', exact: true })).toHaveAttribute('aria-describedby', 'rail-attention');
+  await expect(page.locator('.sbar')).toContainText('Diktovanie nefunguje');
+
+  await hotkey.click();
+
+  await expect(page.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { level: 2, name: 'Diktovanie', exact: true })).toBeFocused();
 });
 
 test('tiles show values from seeded stats and switch periods', async () => {
@@ -84,27 +115,27 @@ test('tiles show values from seeded stats and switch periods', async () => {
   await writeFile(join(userDataDir, 'stats.json'), JSON.stringify({ version: 1, days }));
   await start();
 
-  await expect(page.getByRole('button', { name: 'Dnes' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(period('Dnes')).toHaveAttribute('aria-pressed', 'true');
   await expect(tile('Nadiktované slová')).toHaveText('120');
   await expect(tile('Počet diktovaní')).toHaveText('4');
   await expect(tile('Čas diktovania')).toHaveText('1 min');
-  await expect(tile('Priemerná rýchlosť')).toHaveText('120slov/min');
+  await expect(tile('Priemerná rýchlosť')).toHaveText('120');
   await expect(tile('Ušetrený čas')).toHaveText('2 min');
-  await expect(page.locator('.week-top span')).toHaveText(`spolu ${120 + mondayWords}`);
+  await expect(page.locator('.chart-top .ttl span')).toHaveText(`${120 + mondayWords} spolu`);
   await expect(page.getByText('Štatistiky sú len súčty čísel na tomto Macu, bez textu.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Tento týždeň' }).click();
-  await expect(page.getByRole('button', { name: 'Tento týždeň' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Dnes' })).toHaveAttribute('aria-pressed', 'false');
+  await period('Tento týždeň').click();
+  await expect(period('Tento týždeň')).toHaveAttribute('aria-pressed', 'true');
+  await expect(period('Dnes')).toHaveAttribute('aria-pressed', 'false');
   await expect(tile('Nadiktované slová')).toHaveText(String(120 + mondayWords));
 
-  await page.getByRole('button', { name: 'Celkom' }).click();
+  await period('Celkom').click();
   await expect(tile('Nadiktované slová')).toHaveText(String(420 + mondayWords));
   await expect(tile('Počet diktovaní')).toHaveText(String(14 + (monday === today ? 0 : 2)));
 
   await page.evaluate(() => window.codevo.resetStats());
   await expect(tile('Nadiktované slová')).toHaveText('0');
-  await expect(page.locator('.week-top span')).toHaveText('spolu 0');
+  await expect(page.locator('.chart-top .ttl span')).toHaveText('0 spolu');
   await expect(stat(join(userDataDir, 'stats.json'))).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
@@ -192,11 +223,17 @@ test('Dnes moves to the new day at local midnight while the window stays open', 
   await page.clock.install({ time: new Date('2026-10-25T23:59:50') });
   await page.reload();
   await expect(tile('Nadiktované slová')).toHaveText('120');
-  await expect(page.locator('.week .day.now')).toHaveText('Ne');
+  await expect(page.locator('.wc-col.today')).toHaveAttribute('aria-label', 'dnes, 25. 10.: 120 slov');
+  await expect(page.locator('.wc-x span').nth(5)).toHaveText('so');
+  await expect(page.locator('.hm .c.today')).toHaveAttribute('aria-label', 'Dnes: 120 slov');
+  await page.locator('.hm .c.today').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('.hm .c:focus')).toHaveAttribute('aria-label', 'sobota 24. 10.: bez diktovania');
 
   await page.clock.runFor(20_000);
 
   await expect(tile('Nadiktované slová')).toHaveText('0');
-  await expect(page.locator('.week .day.now')).toHaveText('Po');
-  await expect(tile('Séria')).toHaveText('1deň po sebe');
+  await expect(page.locator('.wc-col.today')).toHaveAttribute('aria-label', 'dnes, 26. 10.: 0 slov');
+  await expect(page.locator('.wc-x span').nth(5)).toHaveText('ne');
+  await expect(page.locator('.st-streak .big')).toHaveText('1deň po sebe');
 });

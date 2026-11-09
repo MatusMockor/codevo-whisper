@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron';
 import { fileURLToPath } from 'node:url';
-import { isOverlayAction, OVERLAY_CHANNELS, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
+import { isOverlayAction, offeredActions, OVERLAY_CHANNELS, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
 import { Listeners } from '../helper/listeners';
 import { isTrustedSenderUrl } from '../ipc/trusted-sender';
 import type { Logger } from '../logging/logger';
@@ -50,7 +50,7 @@ function createPanel(): BrowserWindow {
 }
 
 function isInteractive(state: OverlayState): boolean {
-  return state.kind === 'blocked' || (state.kind === 'error' && state.action !== undefined);
+  return offeredActions(state).length > 0;
 }
 
 export class OverlayWindow {
@@ -165,6 +165,10 @@ export class OverlayWindow {
     }
     if (!isOverlayAction(payload)) {
       this.logger.error('Rejected an invalid overlay action', typeof payload);
+      return;
+    }
+    if (!offeredActions(this.latest).includes(payload)) {
+      this.logger.error('Rejected an overlay action the overlay does not offer', payload);
       return;
     }
     this.actions.emit(payload);

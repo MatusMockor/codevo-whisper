@@ -1,9 +1,12 @@
 import { app } from 'electron';
 import { join } from 'node:path';
+import type { EngineOrderQueue } from '../engines/engine-order-queue';
 import type { Logger } from '../logging/logger';
 import { computerName } from '../remote/computer-name';
 import { DevicePairing } from '../remote/device-pairing';
+import type { LocalModelReadiness } from '../models/local-model-readiness';
 import { InsecureTestVault } from '../remote/insecure-test-vault';
+import { PairingEngineSwitch } from '../remote/pairing-engine-switch';
 import { EncryptedPairingFile } from '../remote/pairing-repository';
 import { RemoteEngine } from '../remote/remote-engine';
 import { SafeStorageVault } from '../remote/safe-storage-vault';
@@ -12,14 +15,13 @@ import { vaultKind, type VaultContext } from '../remote/vault-choice';
 import { ServerConnector } from '../remote/server-connector';
 import { ServerService } from '../remote/server-service';
 import { ServerStatusBoard } from '../remote/server-status';
-import type { SettingsStore } from '../settings/settings-store';
 import type { MainWindowEvents } from '../windows/main-window-controller';
 
 const PAIRING_FILE = 'server-pairing.json';
 const CONNECT_TIMEOUT_MS = 4_000;
 const PAIRING_TIMEOUT_MS = 10_000;
 
-export type ServerWiringDeps = { settings: SettingsStore; window: MainWindowEvents; e2e: boolean; isPackaged: boolean; logger: Logger };
+export type ServerWiringDeps = { order: EngineOrderQueue; local: LocalModelReadiness; window: MainWindowEvents; e2e: boolean; isPackaged: boolean; logger: Logger };
 
 export type ServerServices = { engine: RemoteEngine; service: ServerService; dispose(): void };
 
@@ -30,13 +32,14 @@ export function vaultFor(context: VaultContext): SecretVault {
   return new SafeStorageVault();
 }
 
-export function createServerServices({ settings, window, e2e, isPackaged, logger }: ServerWiringDeps): ServerServices {
+export function createServerServices({ order, local, window, e2e, isPackaged, logger }: ServerWiringDeps): ServerServices {
   const vault = vaultFor({ e2e, isPackaged });
   const pairings = new EncryptedPairingFile(join(app.getPath('userData'), PAIRING_FILE), vault, logger);
   const status = new ServerStatusBoard(logger);
   const connector = new ServerConnector({ pairings, observer: status, clock: Date.now, timeoutMs: CONNECT_TIMEOUT_MS });
   const pairing = new DevicePairing({ pairings, vault, deviceName: () => computerName(), clock: Date.now, timeoutMs: PAIRING_TIMEOUT_MS });
-  const service = new ServerService({ pairings, vault, connector, status, pairing, settings, logger, linux: process.platform === 'linux' });
+  const engineSwitch = new PairingEngineSwitch({ order, local });
+  const service = new ServerService({ pairings, vault, connector, status, pairing, engineSwitch, order, logger, linux: process.platform === 'linux' });
   const unsubscribers = [service.onChange((view) => window.send('server-changed', view)), window.onFocus(() => void service.refreshOnFocus())];
   void service.check();
   return {

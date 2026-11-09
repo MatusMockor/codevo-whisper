@@ -1,5 +1,5 @@
 import type { AppStatus } from '../../shared/app-status';
-import type { ModelState } from '../../shared/models';
+import { isModelReady, type ModelState } from '../../shared/models';
 import { allPermissionsGranted } from '../../shared/permissions';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
@@ -23,10 +23,6 @@ const STATUS_KEYS = ['hotkeyLabel', 'mode', 'modelReady', 'pairingNeeded', 'serv
 
 function sameStatus(a: AppStatus | null, b: AppStatus): boolean {
   return a !== null && STATUS_KEYS.every((key) => a[key] === b[key]);
-}
-
-function isReady(states: readonly ModelState[], id: string | null): boolean {
-  return id !== null && states.some((state) => state.id === id && state.status === 'ready');
 }
 
 export class AppStatusService {
@@ -53,7 +49,7 @@ export class AppStatusService {
   async status(): Promise<AppStatus> {
     const { hotkey, mode, localModelId, engineOrder } = this.deps.settings.get();
     const permissions = await this.deps.permissions.status();
-    const localReady = isReady(this.deps.models.states(), localModelId);
+    const localReady = isModelReady(this.deps.models.states(), localModelId);
     const paired = (await this.deps.server?.isPaired()) ?? false;
     const repair = paired && (this.deps.server?.needsRepair() ?? false);
     this.localReady = localReady;
@@ -96,7 +92,7 @@ export class AppStatusService {
   }
 
   private refreshOnReadiness(states: readonly ModelState[]): void {
-    const ready = isReady(states, this.deps.settings.get().localModelId);
+    const ready = isModelReady(states, this.deps.settings.get().localModelId);
     if (this.lastEmitted !== null && this.localReady === ready) {
       return;
     }

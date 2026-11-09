@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED } from './launch-app';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 
@@ -9,8 +10,7 @@ test('managed X11 product overlay retains focus above normal and fullscreen targ
   const dir = await createUserDataDir(ONBOARDED);
   const app = await launchApp(dir);
   try {
-    const main = await app.firstWindow();
-    await main.waitForLoadState('domcontentloaded');
+    await mainWindow(app);
     const targetId = await app.evaluate(async ({ BrowserWindow }) => {
       const target = new BrowserWindow({ title: 'Codevo controlled overlay target', width: 500, height: 220, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
       await target.loadURL('data:text/html,<title>Codevo controlled overlay target</title><textarea autofocus aria-label="Target"></textarea>');

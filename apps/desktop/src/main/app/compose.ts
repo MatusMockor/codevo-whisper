@@ -4,6 +4,8 @@ import { prewarmWhenShown } from '../audio/capture-prewarm';
 import { CaptureWindow } from '../audio/capture-window';
 import { WindowAudioCapture } from '../audio/window-audio-capture';
 import type { InputHelper } from '../helper/input-helper';
+import { EngineOrderQueue } from '../engines/engine-order-queue';
+import { EngineRouting } from '../engines/engine-routing';
 import { EngineSelector } from '../engines/engine-selector';
 import { Listeners } from '../helper/listeners';
 import { electronPowerEvents } from '../hotkey/electron-power-events';
@@ -15,6 +17,7 @@ import { InsertionService } from '../insertion/insertion-service';
 import { LastTranscript } from '../insertion/last-transcript';
 import { registerIpc } from '../ipc/register-ipc';
 import type { Logger } from '../logging/logger';
+import { ActiveModelReadiness } from '../models/local-model-readiness';
 import { AskedPermissionsStore } from '../permissions/asked-permissions-store';
 import { electronMicrophoneAccess } from '../permissions/electron-microphone-access';
 import { MACOS_PERMISSION_LINKS } from '../permissions/macos-permission-links';
@@ -32,6 +35,7 @@ import { coordinatorDictationGuard } from '../updates/coordinator-dictation-guar
 import { TrayMenu } from '../tray/tray-menu';
 import { MainWindowController } from '../windows/main-window-controller';
 import { OverlayWindow } from '../windows/overlay-window';
+import { SettingsFocus } from '../windows/settings-focus';
 import { rendererSource } from '../windows/renderer-source';
 import { backgroundPresentation, foregroundPresentation } from '../windows/window-presentation';
 import type { OverlayState } from '../../shared/overlay-contract';
@@ -144,7 +148,11 @@ export function composeApplication(logger: Logger): Application {
       logger,
       inputReady: input.promise,
     });
-    const server = createServerServices({ settings, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const localModel = new ActiveModelReadiness(models.manager, settings);
+    const order = new EngineOrderQueue(settings);
+    const server = createServerServices({ order, local: localModel, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const routing = new EngineRouting({ order, local: localModel, server: server.service });
+    const settingsFocus = new SettingsFocus(mainWindow);
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
@@ -172,6 +180,9 @@ export function composeApplication(logger: Logger): Application {
       actions: settingsServices.actions,
       microphones: settingsServices.microphones,
       server: server.service,
+      order,
+      routing,
+      settingsFocus,
       source: rendererSource(),
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
@@ -186,6 +197,7 @@ export function composeApplication(logger: Logger): Application {
       hotkey,
       capture,
       engines: new EngineSelector([models.engine, server.engine]),
+      routing,
       insertion,
       lastTranscript,
       helper,
@@ -196,6 +208,7 @@ export function composeApplication(logger: Logger): Application {
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
       openServer: () => mainWindow.open('server'),
+      openModelSettings: () => settingsFocus.reveal('local-model'),
       polish: (text, signal) => aiServices.polish(text, signal),
       logger,
     });

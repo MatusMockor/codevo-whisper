@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
+import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED } from './launch-app';
 
 test('Linux settings explicitly enable text-field recognition for an existing installation', async () => {
@@ -7,7 +8,7 @@ test('Linux settings explicitly enable text-field recognition for an existing in
   const dir = await createUserDataDir(ONBOARDED);
   const app = await launchApp(dir);
   try {
-    const page = await app.firstWindow();
+    const page = await mainWindow(app);
     await page.getByRole('tab', { name: 'Nastavenia', exact: true }).click();
     const enable = page.getByRole('button', { name: 'Povoliť rozpoznávanie polí', exact: true });
     await expect(enable).toBeVisible({ timeout: 3000 });
@@ -22,7 +23,7 @@ test('Linux paste shortcut settings persist and reject invalid values', async ()
   const dir = await createUserDataDir(ONBOARDED);
   const app = await launchApp(dir);
   try {
-    const page = await app.firstWindow();
+    const page = await mainWindow(app);
     await page.getByRole('tab', { name: 'Nastavenia', exact: true }).click();
     const shortcut = page.getByRole('combobox', { name: 'Skratka na vloženie' });
     await expect(shortcut).toHaveValue('ctrl-v');
@@ -46,7 +47,7 @@ test('Linux onboarding explains keyboard access and manual paste without Mac rel
   const dir = await createUserDataDir();
   const app = await launchApp(dir);
   try {
-    const page = await app.firstWindow();
+    const page = await mainWindow(app);
     await page.getByRole('button', { name: 'Ďalej', exact: true }).click();
     await expect(page.getByText('Po zmene medzi X11 a Waylandom nahrajte skratku znova.', { exact: false })).toBeVisible();
     const permissions = await page.evaluate(() => window.codevo.getPermissions());

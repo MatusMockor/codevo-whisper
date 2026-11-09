@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { BlockedReason, LiveText, OverlayAction, OverlayState } from '../../shared/overlay-contract';
+import { offeredActions, type BlockedReason, type LiveText, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
+import type { EngineId } from '../../shared/settings';
 import { barScale, formatElapsed, WAVE_BARS } from './level-history';
 import { CheckIcon, CopyIcon, LockIcon, MarkColor, MicIcon, WarnIcon } from './OverlayIcons';
 
@@ -11,6 +12,23 @@ const BLOCKED_TITLES: Readonly<Record<BlockedReason, string>> = Object.freeze({
   focus: 'Okno sa zmenilo, text nebol vložený',
   secure: 'Zabezpečené zadávanie, text nebol vložený',
 });
+
+const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.freeze({
+  'open-settings': 'Otvoriť nastavenia',
+  'open-server': 'Otvoriť Server',
+  'copy-last': 'Kopírovať doterajší text',
+  'pair-server': 'Spárovať server',
+  'download-model': 'Stiahnuť model',
+  'use-server': 'Prepisovať na serveri',
+  'use-local': 'Prepisovať lokálne',
+});
+
+const REROUTED_TITLES: Readonly<Record<EngineId, string>> = Object.freeze({
+  server: 'Prepis teraz beží na serveri',
+  local: 'Prepis teraz beží lokálne',
+});
+
+type MessageButton = { label: string; action: OverlayAction; primary: boolean };
 
 function fallbackNotice(device: string): string {
   if (device === '') {
@@ -88,7 +106,7 @@ function StatusPill({ children, live }: { children: ReactNode; live?: LiveText |
   );
 }
 
-function Message({ title, button, onClick }: { title: string; button?: string; onClick?: () => void }) {
+function Message({ title, buttons, onAction }: { title: string; buttons: readonly MessageButton[]; onAction: (action: OverlayAction) => void }) {
   return (
     <div className="ov card" role="alert">
       <div className="ov-msg">
@@ -97,15 +115,39 @@ function Message({ title, button, onClick }: { title: string; button?: string; o
         </span>
         <p className="ov-title">{title}</p>
       </div>
-      {button !== undefined && (
+      {buttons.length > 0 && (
         <div className="ov-actions">
-          <button type="button" className="ov-btn primary" onClick={onClick}>
-            {button}
-          </button>
+          {buttons.map((button) => (
+            <button key={button.action} type="button" className={button.primary ? 'ov-btn primary' : 'ov-btn'} onClick={() => onAction(button.action)}>
+              {button.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
+}
+
+function Rerouted({ engine }: { engine: EngineId }) {
+  return (
+    <div className="ov card" role="status">
+      <div className="ov-msg">
+        <span className="orb done">
+          <CheckIcon />
+        </span>
+        <div>
+          <p className="ov-title">{REROUTED_TITLES[engine]}</p>
+          <p className="ov-sub">Stlačte skratku a diktujte znova.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function errorButtons(state: OverlayState): MessageButton[] {
+  return offeredActions(state)
+    .map((action, index) => ({ action, label: ACTION_LABELS[action], primary: index === 0 }))
+    .reverse();
 }
 
 function Content({ state, levels, onAction }: OverlayProps) {
@@ -153,19 +195,13 @@ function Content({ state, levels, onAction }: OverlayProps) {
     );
   }
   if (state.kind === 'blocked') {
-    return <Message title={BLOCKED_TITLES[state.reason]} button="Kopírovať" onClick={() => onAction('copy-last')} />;
+    return <Message title={BLOCKED_TITLES[state.reason]} buttons={[{ action: 'copy-last', label: 'Kopírovať', primary: true }]} onAction={onAction} />;
   }
-  if (state.kind === 'error' && state.action === 'open-settings') {
-    return <Message title={state.message} button="Otvoriť nastavenia" onClick={() => onAction('open-settings')} />;
-  }
-  if (state.kind === 'error' && state.action === 'open-server') {
-    return <Message title={state.message} button="Otvoriť Server" onClick={() => onAction('open-server')} />;
-  }
-  if (state.kind === 'error' && state.action === 'copy-last') {
-    return <Message title={state.message} button="Kopírovať doterajší text" onClick={() => onAction('copy-last')} />;
+  if (state.kind === 'rerouted') {
+    return <Rerouted engine={state.engine} />;
   }
   if (state.kind === 'error') {
-    return <Message title={state.message} />;
+    return <Message title={state.message} buttons={errorButtons(state)} onAction={onAction} />;
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayStats } from '../src/shared/stats';
-import { summarize } from '../src/shared/stats-summary';
+import { dailyWords, summarize } from '../src/shared/stats-summary';
 
 const SUNDAY = '2026-10-25';
 
@@ -47,8 +47,25 @@ describe('summarize', () => {
     expect(summarize([day('2026-10-31', 5), day('2026-11-01', 5)], 'today', '2026-11-01')).toMatchObject({ streakDays: 2, streakSince: '2026-10-31' });
   });
 
-  it('last7 fills missing days with 0', () => {
-    expect(summarize(DAYS, 'total', SUNDAY).last7).toEqual([
+  it('averages words and seconds per dictation for the period', () => {
+    expect(summarize(DAYS, 'today', SUNDAY)).toMatchObject({ wordsPerDictation: 20, secondsPerDictation: 12 });
+    expect(summarize(DAYS, 'week', SUNDAY)).toMatchObject({ wordsPerDictation: 33, secondsPerDictation: 20 });
+    expect(summarize([], 'total', SUNDAY)).toMatchObject({ wordsPerDictation: 0, secondsPerDictation: 0 });
+  });
+
+  it('dailyWords returns a gap-free series ending today', () => {
+    const month = dailyWords(DAYS, SUNDAY, 30);
+
+    expect(month).toHaveLength(30);
+    expect(month[0]).toEqual({ date: '2026-09-26', words: 0 });
+    expect(month.find((entry) => entry.date === '2026-10-10')).toEqual({ date: '2026-10-10', words: 1000 });
+    expect(month.at(-1)).toEqual({ date: SUNDAY, words: 80 });
+    expect(month.reduce((sum, entry) => sum + entry.words, 0)).toBe(1430);
+    expect(dailyWords([], SUNDAY, 0)).toEqual([]);
+  });
+
+  it('dailyWords fills missing days of the week with 0', () => {
+    expect(dailyWords(DAYS, SUNDAY, 7)).toEqual([
       { date: '2026-10-19', words: 100 },
       { date: '2026-10-20', words: 0 },
       { date: '2026-10-21', words: 0 },
@@ -57,7 +74,7 @@ describe('summarize', () => {
       { date: '2026-10-24', words: 0 },
       { date: SUNDAY, words: 80 },
     ]);
-    expect(summarize([], 'today', '2026-03-02').last7.map((entry) => entry.date)).toEqual([
+    expect(dailyWords([], '2026-03-02', 7).map((entry) => entry.date)).toEqual([
       '2026-02-24',
       '2026-02-25',
       '2026-02-26',

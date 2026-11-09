@@ -1,5 +1,6 @@
 import type { Polished } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
+import type { EngineRouting } from '../engines/engine-routing';
 import type { EngineSelector } from '../engines/engine-selector';
 import type { HistoryStore } from '../history/history-store';
 import type { InputHelper } from '../helper/input-helper';
@@ -12,10 +13,12 @@ import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import { countWords } from '../stats/count-words';
 import type { StatsRecorder } from '../stats/stats-store';
+import { orderProblem, type EngineConditions, type EngineProblem, type EngineSwitch } from '../../shared/engine-routing';
 import { pcmDurationMs } from '../../shared/pcm';
 import type { OverlayAction, OverlayState } from '../../shared/overlay-contract';
+import type { EngineId } from '../../shared/settings';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
-import { copyLastState, errorState, MESSAGES, pasteLastState } from './overlay-messages';
+import { copyLastState, errorState, MESSAGES, pasteLastState, switchFailedState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
 import type { PauseState } from './pause-state';
 
@@ -23,6 +26,7 @@ export type SessionCoordinatorDeps = {
   hotkey: HotkeyService;
   capture: AudioCapture;
   engines: Pick<EngineSelector, 'prepare'>;
+  routing: Pick<EngineRouting, 'capabilities' | 'prefer'>;
   insertion: InsertionService;
   lastTranscript: LastTranscript;
   helper: InputHelper;
@@ -33,6 +37,7 @@ export type SessionCoordinatorDeps = {
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
   openServer?: () => void;
+  openModelSettings?: () => void;
   polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
   clock?: () => number;
   logger?: Logger;
@@ -41,6 +46,15 @@ export type SessionCoordinatorDeps = {
 export class SessionCoordinator {
   private readonly presenter: OverlayPresenter;
   private readonly logger: Logger;
+  private readonly actions: Readonly<Record<OverlayAction, () => void>> = {
+    'open-settings': () => this.deps.openSettings?.(),
+    'open-server': () => this.deps.openServer?.(),
+    'pair-server': () => this.deps.openServer?.(),
+    'download-model': () => this.deps.openModelSettings?.(),
+    'copy-last': () => this.copyLastFromOverlay(),
+    'use-server': () => this.reroute('server'),
+    'use-local': () => this.reroute('local'),
+  };
   private readonly sessions = new Set<DictationSession>();
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
@@ -125,21 +139,47 @@ export class SessionCoordinator {
   }
 
   act(action: OverlayAction): void {
-    if (action === 'open-settings') {
-      this.deps.openSettings?.();
-      return;
-    }
-    if (action === 'open-server') {
-      this.deps.openServer?.();
-      return;
-    }
+    this.actions[action]();
+  }
+
+  dispose(): void {
+    void this.shutdown();
+  }
+
+  private copyLastFromOverlay(): void {
     this.copyLast().catch((error: unknown) => {
       this.logger.error('Copying the last transcript failed', error);
     });
   }
 
-  dispose(): void {
-    void this.shutdown();
+  private reroute(engine: EngineId): void {
+    this.deps.routing
+      .prefer(engine)
+      .then((outcome) => this.showSwitch(engine, outcome))
+      .catch((error: unknown) => {
+        this.logger.error('The transcription engine could not be switched', error);
+        return this.showSwitchFailure(null);
+      });
+  }
+
+  private async showSwitch(engine: EngineId, outcome: EngineSwitch): Promise<void> {
+    if (outcome.kind === 'refused') {
+      await this.showSwitchFailure(outcome.reason);
+      return;
+    }
+    this.showUtility({ kind: 'rerouted', engine });
+  }
+
+  private async showSwitchFailure(reason: EngineProblem | null): Promise<void> {
+    const conditions = await this.deps.routing.capabilities().catch(() => null);
+    this.showUtility(switchFailedState(reason ?? this.orderProblem(conditions), conditions));
+  }
+
+  private orderProblem(conditions: EngineConditions | null): EngineProblem | null {
+    if (conditions === null) {
+      return null;
+    }
+    return orderProblem(this.deps.settings.get().engineOrder, conditions);
   }
 
   private handleStart(): void {
@@ -209,6 +249,7 @@ export class SessionCoordinator {
     return {
       capture: this.deps.capture,
       engines: this.deps.engines,
+      capabilities: () => this.deps.routing.capabilities(),
       insertion: this.deps.insertion,
       lastTranscript: this.deps.lastTranscript,
       helper: this.deps.helper,

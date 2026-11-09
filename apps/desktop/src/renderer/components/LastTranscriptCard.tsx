@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Live } from '../home/live-value';
-import { CheckIcon, CopyIcon, LockIcon } from './Icons';
+import { Glyph } from './Glyph';
 
 const COPIED_MS = 1400;
 
@@ -10,7 +10,7 @@ function CopyLabel({ state }: { state: CopyState }) {
   if (state === 'copied') {
     return (
       <>
-        <CheckIcon />
+        <Glyph name="check" size="sm" />
         Skopírované
       </>
     );
@@ -20,7 +20,7 @@ function CopyLabel({ state }: { state: CopyState }) {
   }
   return (
     <>
-      <CopyIcon />
+      <Glyph name="copy" size="sm" />
       Kopírovať
     </>
   );
@@ -63,13 +63,13 @@ export function LastTranscriptCard({ transcript }: { transcript: Live<string | n
     <section className="last" aria-labelledby="h-last">
       <div className="last-top">
         <h2 id="h-last">Posledné diktovanie</h2>
-        <button type="button" className={copy === 'copied' ? 'btn ok' : 'btn'} disabled={text === null} onClick={copyText} aria-live="polite">
+        <button type="button" className={copy === 'copied' ? 'btn sm ok' : 'btn sm'} disabled={text === null} onClick={copyText} aria-live="polite">
           <CopyLabel state={copy} />
         </button>
       </div>
-      <p className={text === null ? 'empty' : undefined}>{text ?? placeholder(transcript)}</p>
+      <p className={text === null ? 'empty' : 'transcript'}>{text ?? placeholder(transcript)}</p>
       <p className="note">
-        <LockIcon />
+        <Glyph name="lock" size="sm" />
         Táto karta ostáva v pamäti do zatvorenia aplikácie. Voliteľnú históriu na disku spravujete v Nastaveniach.
       </p>
     </section>
