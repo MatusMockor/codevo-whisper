@@ -18,6 +18,7 @@ import { ActiveModelReadiness } from '../src/main/models/local-model-readiness';
 import { ModelManager } from '../src/main/models/model-manager';
 import type { ServerService } from '../src/main/remote/server-service';
 import { PauseState } from '../src/main/session/pause-state';
+import { MESSAGES } from '../src/main/session/overlay-messages';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
@@ -597,9 +598,8 @@ describe('SessionCoordinator', () => {
     harness.coordinator.act('use-server');
 
     expect(harness.settingsOpened).toEqual(['local-model', 'server']);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed });
     expect(harness.settings.get().engineOrder).toEqual(['local']);
-    expect(lastVisible(harness.states)).toMatchObject({ kind: 'error' });
   });
 
   it('stops the microphone as soon as the model turns out to be broken', async () => {

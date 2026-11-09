@@ -156,12 +156,14 @@ export class SessionCoordinator {
       .prefer(engine)
       .then((order) => {
         if (order[0] !== engine) {
+          this.showUtility(errorState(MESSAGES.engineSwitchFailed));
           return;
         }
         this.showUtility({ kind: 'rerouted', engine });
       })
       .catch((error: unknown) => {
         this.logger.error('The transcription engine could not be switched', error);
+        this.showUtility(errorState(MESSAGES.engineSwitchFailed));
       });
   }
 

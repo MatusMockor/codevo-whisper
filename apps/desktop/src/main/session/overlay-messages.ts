@@ -14,6 +14,7 @@ export const MESSAGES = Object.freeze({
   binaryMissing: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
   engineUnavailable: 'Prepis teraz nie je dostupný',
+  engineSwitchFailed: 'Prepis sa nepodarilo prepnúť. Skontrolujte stránku Server alebo Nastavenia.',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
   recordingAudio: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.',
   transcriptionFailed: 'Prepis sa nepodaril',
