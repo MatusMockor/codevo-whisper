@@ -51,4 +51,12 @@ describe('writeSettings', () => {
     expect(settings.get()).toMatchObject({ engineOrder: ['server', 'local'], language: 'en' });
     expect(await write({ engineOrder: ['local'] })).toMatchObject({ engineOrder: ['local'], language: 'en' });
   });
+
+  it('keeps the newest value when a later patch is sent before an earlier one with an engine order finishes', async () => {
+    const first = write({ engineOrder: ['server'], language: 'en' });
+    const second = write({ language: 'cs' });
+    await Promise.all([first, second]);
+
+    expect(settings.get()).toMatchObject({ engineOrder: ['server'], language: 'cs' });
+  });
 });

@@ -11,7 +11,7 @@ import { validateSettingsPatch } from './validate';
 export type CoreHandlerDeps = {
   helper: Pick<InputHelper, 'getOutputAudio'>;
   settings: Pick<SettingsStore, 'get' | 'update'>;
-  order: Pick<EngineOrderQueue, 'change'>;
+  order: Pick<EngineOrderQueue, 'exclusive'>;
   stats: Pick<StatsStore, 'days' | 'reset'>;
   status: Pick<AppStatusService, 'status'>;
   lastTranscript: Pick<LastTranscript, 'get'>;
@@ -19,15 +19,8 @@ export type CoreHandlerDeps = {
 
 export type SettingsWriter = Pick<CoreHandlerDeps, 'settings' | 'order'>;
 
-export async function writeSettings({ settings, order }: SettingsWriter, patch: Partial<Settings>): Promise<Settings> {
-  const { engineOrder, ...rest } = patch;
-  if (engineOrder !== undefined) {
-    await order.change(() => ({ order: engineOrder, result: undefined }));
-  }
-  if (Object.keys(rest).length === 0) {
-    return settings.get();
-  }
-  return settings.update(rest);
+export function writeSettings({ settings, order }: SettingsWriter, patch: Partial<Settings>): Promise<Settings> {
+  return order.exclusive(() => settings.update(patch));
 }
 
 export function coreHandlers({ settings, order, stats, status, lastTranscript, helper }: CoreHandlerDeps): HandlerGroup<'getSettings' | 'updateSettings' | 'getStats' | 'resetStats' | 'getStatus' | 'getLastTranscript' | 'getOutputAudio'> {

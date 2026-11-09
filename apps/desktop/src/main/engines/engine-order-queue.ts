@@ -11,7 +11,11 @@ export class EngineOrderQueue {
   constructor(private readonly settings: Pick<SettingsStore, 'get' | 'update'>) {}
 
   change<T>(decide: OrderDecider<T>): Promise<T> {
-    const run = this.tail.then(() => this.apply(decide));
+    return this.exclusive(() => this.apply(decide));
+  }
+
+  exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(task);
     this.tail = run.catch(() => undefined);
     return run;
   }
