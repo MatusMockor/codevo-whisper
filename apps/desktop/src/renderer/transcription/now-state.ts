@@ -46,7 +46,7 @@ function notPaired(order: readonly EngineId[], facts: EngineFacts): Explanation 
   return { title: 'Server nie je spárovaný', detail: 'Prepis je nastavený na server, ale žiadny nie je spárovaný.' };
 }
 
-const UNAVAILABLE_TITLES = Object.freeze({ busy: 'Server je zaneprázdnený', failed: 'Server odpovedá chybou' });
+const UNAVAILABLE_TITLES = Object.freeze({ busy: 'Server je zaneprázdnený', failed: 'Server odpovedá chybou', storage: 'Párovanie sa nedá načítať' });
 
 function offline(facts: EngineFacts): Explanation {
   const status = facts.server?.status;

@@ -9,10 +9,16 @@ export type EngineFacts = { server: PairedServerView | null; local: LocalFacts; 
 
 export type EngineCard = { id: EngineId; title: string; noun: string; meta: string; ready: boolean };
 
+const UNAVAILABLE_META: Readonly<Record<Extract<ServerStatus, { kind: 'unavailable' }>['reason'], string>> = Object.freeze({
+  busy: 'zaneprázdnený',
+  failed: 'odpovedá chybou',
+  storage: 'párovanie sa nedá načítať',
+});
+
 const STATUS_META: Readonly<Record<ServerStatus['kind'], (status: ServerStatus) => string>> = Object.freeze({
   online: (status) => (status.kind === 'online' ? `${status.connectMs} ms · šifrované E2E` : ''),
   offline: () => 'neodpovedá',
-  unavailable: (status) => (status.kind === 'unavailable' && status.reason === 'busy' ? 'zaneprázdnený' : 'odpovedá chybou'),
+  unavailable: (status) => (status.kind === 'unavailable' ? UNAVAILABLE_META[status.reason] : ''),
   'repair-needed': () => 'treba znova spárovať',
   checking: () => 'overujem spojenie',
   unknown: () => 'overujem spojenie',

@@ -34,6 +34,12 @@ type PairingRun = { abort: AbortController; committed: boolean };
 
 type RunningCheck = { scope: StatusScope; run: Promise<void> };
 
+type PairingRead = { kind: 'paired'; pairing: ServerPairing } | { kind: 'unpaired' } | { kind: 'unreadable' };
+
+const UNPAIRED: PairingRead = Object.freeze({ kind: 'unpaired' });
+
+const UNREADABLE: PairingRead = Object.freeze({ kind: 'unreadable' });
+
 function describe(pairing: ServerPairing, status: PairedServerView['status'], enabled: boolean): PairedServerView {
   return {
     host: new URL(pairing.endpoint).host,
@@ -149,12 +155,16 @@ export class ServerService {
 
   private async runCheck(scope: StatusScope): Promise<void> {
     this.lastCheckAt = this.now();
-    const usable = this.deps.serverSwitch.isEnabled() && (await this.isPaired());
+    const read = await this.readPairing(this.deps.vault.availability());
     if (!scope.isCurrent()) {
       return;
     }
-    if (!usable) {
+    if (!this.deps.serverSwitch.isEnabled() || read.kind === 'unpaired') {
       this.deps.status.reset();
+      return;
+    }
+    if (read.kind === 'unreadable') {
+      scope.failed('storage-insecure');
       return;
     }
     scope.checking();
@@ -245,14 +255,20 @@ export class ServerService {
   }
 
   private async loadPairing(storage: VaultAvailability): Promise<ServerPairing | null> {
+    const read = await this.readPairing(storage);
+    return read.kind === 'paired' ? read.pairing : null;
+  }
+
+  private async readPairing(storage: VaultAvailability): Promise<PairingRead> {
     if (storage !== 'available') {
-      return null;
+      return UNPAIRED;
     }
     try {
-      return await this.deps.pairings.load();
+      const pairing = await this.deps.pairings.load();
+      return pairing === null ? UNPAIRED : { kind: 'paired', pairing };
     } catch (error) {
       this.deps.logger.error('The server pairing could not be loaded', error);
-      return null;
+      return UNREADABLE;
     }
   }
 

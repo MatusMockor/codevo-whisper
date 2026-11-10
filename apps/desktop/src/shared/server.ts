@@ -7,7 +7,7 @@ export type ServerStatus =
   | { kind: 'checking' }
   | { kind: 'online'; connectMs: number; serverVersion: string }
   | { kind: 'offline' }
-  | { kind: 'unavailable'; reason: 'busy' | 'failed' }
+  | { kind: 'unavailable'; reason: 'busy' | 'failed' | 'storage' }
   | { kind: 'repair-needed'; reason: 'server-key-changed' | 'device-unknown' };
 
 export type PairedServerView = {

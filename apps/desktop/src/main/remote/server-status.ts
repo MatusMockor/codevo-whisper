@@ -8,6 +8,7 @@ const UNKNOWN: ServerStatus = { kind: 'unknown' };
 const OFFLINE: ServerStatus = { kind: 'offline' };
 const BUSY: ServerStatus = { kind: 'unavailable', reason: 'busy' };
 const FAILING: ServerStatus = { kind: 'unavailable', reason: 'failed' };
+const UNREADABLE: ServerStatus = { kind: 'unavailable', reason: 'storage' };
 
 const STATUS_BY_FAILURE: Partial<Record<RemoteFailureKind, ServerStatus>> = Object.freeze({
   'not-paired': UNKNOWN,
@@ -17,6 +18,7 @@ const STATUS_BY_FAILURE: Partial<Record<RemoteFailureKind, ServerStatus>> = Obje
   'device-unknown': { kind: 'repair-needed', reason: 'device-unknown' },
   'server-key-changed': { kind: 'repair-needed', reason: 'server-key-changed' },
   busy: BUSY,
+  'storage-insecure': UNREADABLE,
 });
 
 export type StatusScope = ConnectionScope & { checking(): void };

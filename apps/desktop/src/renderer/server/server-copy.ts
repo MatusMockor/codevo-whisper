@@ -15,6 +15,7 @@ const STATUS_PILLS: Readonly<Record<Exclude<ServerStatus['kind'], 'unavailable'>
 const UNAVAILABLE_PILLS: Readonly<Record<Extract<ServerStatus, { kind: 'unavailable' }>['reason'], StatusPill>> = Object.freeze({
   busy: { label: 'Zaneprázdnený', tone: 'amber' },
   failed: { label: 'Odpovedá chybou', tone: 'err' },
+  storage: { label: 'Párovanie sa nedá načítať', tone: 'err' },
 });
 
 const DISCONNECTED: StatusPill = Object.freeze({ label: 'Odpojený', tone: 'muted' });
@@ -32,6 +33,7 @@ export function statusPill(server: Pick<PairedServerView, 'status' | 'enabled'>)
 export const UNAVAILABLE_MESSAGES: Readonly<Record<Extract<ServerStatus, { kind: 'unavailable' }>['reason'], { title: string; text: string }>> = Object.freeze({
   busy: { title: 'Server je zaneprázdnený', text: 'Server má otvorený najvyšší povolený počet spojení naraz. Keď sa niektoré uvoľní, spojenie sa obnoví.' },
   failed: { title: 'Server odpovedal chybou', text: 'Server je dostupný, ale spojenie neprebehlo podľa očakávania. Skontrolujte, či na serveri beží aktuálna verzia Codevo Whisper.' },
+  storage: { title: 'Párovanie sa nedá načítať', text: 'Bezpečné úložisko kľúčov teraz nie je dostupné, preto sa Codevo Whisper k serveru nepripája. Keď bude úložisko znova dostupné, spojenie sa obnoví.' },
 });
 
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', '[::1]']);
