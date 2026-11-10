@@ -81,6 +81,16 @@ export function switchFailedState(problem: EngineProblem | null, conditions: Eng
   return fixError(MESSAGES.engineSwitchFailed, remedy.action, remedy.alternative);
 }
 
+function disconnectedError(conditions: EngineConditions): ErrorState {
+  if (conditions.serverOff) {
+    return fixError(MESSAGES.serverDisconnected, 'enable-server');
+  }
+  if (conditions.serverReady) {
+    return errorState(MESSAGES.serverDisconnected);
+  }
+  return remedyError(MESSAGES.serverDisconnected, 'server-not-paired')(conditions);
+}
+
 const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: EngineConditions) => ErrorState>> = Object.freeze({
   'no-model': remedyError(MESSAGES.noModel, 'no-model'),
   'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
@@ -92,7 +102,7 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'server-repair-needed': () => serverError(MESSAGES.serverRepair),
   'server-busy': () => errorState(MESSAGES.serverBusy),
   'server-storage': () => errorState(MESSAGES.serverStorage),
-  'server-disconnected': () => fixError(MESSAGES.serverDisconnected, 'enable-server'),
+  'server-disconnected': disconnectedError,
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
