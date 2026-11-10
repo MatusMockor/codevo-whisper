@@ -22,6 +22,10 @@ export class AudioOutbox {
     this.append(pcm);
   }
 
+  putBack(frames: readonly Uint8Array[]): void {
+    this.chunks = [...frames, ...this.chunks];
+  }
+
   take(final: boolean): Uint8Array[] {
     const pending = concatPcm(this.chunks);
     this.chunks = [];

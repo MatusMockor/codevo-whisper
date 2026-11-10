@@ -45,11 +45,22 @@ function lasting(observer: ConnectionObserver): ConnectionScope {
   };
 }
 
+function disconnected(): RemoteFailure {
+  return new RemoteFailure('disconnected', 'the server was disconnected or its pairing changed');
+}
+
 function assertCurrent(scope: ConnectionScope): void {
   if (scope.isCurrent()) {
     return;
   }
-  throw new RemoteFailure('disconnected', 'the server was disconnected or its pairing changed');
+  throw disconnected();
+}
+
+function failureIn(scope: ConnectionScope, error: unknown): RemoteFailure {
+  if (!scope.isCurrent()) {
+    return disconnected();
+  }
+  return asRemoteFailure(error, 'offline');
 }
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
@@ -79,18 +90,22 @@ export class ServerConnector {
   }
 
   private async attempt(pairingSource: () => Promise<ServerPairing | null>, scope: ConnectionScope): Promise<ReadyConnection> {
+    const cancel = new AbortController();
+    const stopWatching = scope.onExpire(() => cancel.abort());
     try {
       assertCurrent(scope);
       const pairing = await pairingSource();
       assertCurrent(scope);
-      const opened = await this.open(pairing);
+      const opened = await this.open(pairing, cancel.signal);
       this.keepIfCurrent(opened, scope);
       scope.connected(opened.connectMs, opened.serverVersion);
       return { ...opened, scope };
     } catch (error) {
-      const failure = asRemoteFailure(error, 'offline');
+      const failure = failureIn(scope, error);
       scope.failed(failure.kind);
       throw failure;
+    } finally {
+      stopWatching();
     }
   }
 
@@ -102,13 +117,15 @@ export class ServerConnector {
     assertCurrent(scope);
   }
 
-  private async open(pairing: ServerPairing | null): Promise<OpenedConnection> {
+  private async open(pairing: ServerPairing | null, signal: AbortSignal): Promise<OpenedConnection> {
     if (pairing === null) {
       throw new RemoteFailure('not-paired', 'no server is paired');
     }
     const startedAt = this.deps.clock();
-    const options = { handshakeTimeoutMs: this.deps.timeoutMs, ...(this.deps.keepAliveMs === undefined ? {} : { keepAliveMs: this.deps.keepAliveMs }) };
+    const options = { handshakeTimeoutMs: this.deps.timeoutMs, signal, ...(this.deps.keepAliveMs === undefined ? {} : { keepAliveMs: this.deps.keepAliveMs }) };
     const connection = await SecureConnection.open(pairing.endpoint, beginSession(pairing.deviceKey, pairing.serverPublicKey), options);
+    const close = (): void => connection.close();
+    signal.addEventListener('abort', close, { once: true });
     try {
       connection.send({ type: 'hello' });
       const serverVersion = readyVersion(await connection.next(this.deps.timeoutMs));
@@ -116,6 +133,8 @@ export class ServerConnector {
     } catch (error) {
       connection.close();
       throw error;
+    } finally {
+      signal.removeEventListener('abort', close);
     }
   }
 }

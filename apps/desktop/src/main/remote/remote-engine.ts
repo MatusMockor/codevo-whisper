@@ -37,6 +37,10 @@ export class RemoteEngine implements TranscriptionEngine {
   async prepare(): Promise<Preparation> {
     try {
       const ready = await this.deps.connector.connect();
+      if (!ready.scope.isCurrent()) {
+        ready.connection.close();
+        return notReady('server-disconnected');
+      }
       const stopWatching = ready.scope.onExpire(() => ready.connection.close());
       return {
         ready: true,
