@@ -1,6 +1,8 @@
 import { InsecureTestVault } from '../../src/main/remote/insecure-test-vault';
 import type { SecretVault, VaultAvailability } from '../../src/main/remote/secret-vault';
 
+const TAG_OFFSET = 12;
+
 export type KeychainState = VaultAvailability | 'cannot-decrypt';
 
 export class FlakyKeychain implements SecretVault {
@@ -16,9 +18,13 @@ export class FlakyKeychain implements SecretVault {
   }
 
   open(sealed: Uint8Array): string {
-    if (this.state === 'cannot-decrypt') {
-      throw new Error('the keychain refused to decrypt the item');
-    }
-    return this.keychain.open(sealed);
+    return this.keychain.open(this.state === 'cannot-decrypt' ? withBrokenTag(sealed) : sealed);
   }
 }
+
+function withBrokenTag(sealed: Uint8Array): Uint8Array {
+  const broken = new Uint8Array(sealed);
+  broken[TAG_OFFSET] = (broken[TAG_OFFSET] ?? 0) ^ 0xff;
+  return broken;
+}
+
