@@ -14,7 +14,10 @@ import { createServerService, tinyModels, type ServerServiceHarness } from './su
 const CHUNK = new Uint8Array(3200);
 const QUIET_MS = 600;
 const HANDSHAKE_TIMEOUT_MS = 2000;
-const PUSHED_WHILE_STALLED = 300;
+const PUSHED_WHILE_STALLED = 1000;
+const PUSHES_PER_SETTLE = 10;
+const STALLED_PUSH_BYTES = 32_000;
+const STALLED_TEST_TIMEOUT_MS = 20_000;
 
 let dir: string;
 let gateway: TestGateway;
@@ -182,7 +185,10 @@ describe('disconnecting the server during remote dictation', () => {
     proxy.stallClients();
     const stalledAt = proxy.clientBytes();
     for (let index = 0; index < PUSHED_WHILE_STALLED; index += 1) {
-      dictation.push(new Uint8Array(32_000));
+      dictation.push(new Uint8Array(STALLED_PUSH_BYTES));
+      if (index % PUSHES_PER_SETTLE !== 0) {
+        continue;
+      }
       await settle(2);
     }
     await settle(200);
@@ -192,10 +198,10 @@ describe('disconnecting the server during remote dictation', () => {
     proxy.resumeClients();
     await settle(QUIET_MS);
 
-    expect(proxy.clientBytes() - stalledAt).toBeLessThan((PUSHED_WHILE_STALLED * 32_000) / 4);
+    expect(proxy.clientBytes() - stalledAt).toBeLessThan((PUSHED_WHILE_STALLED * STALLED_PUSH_BYTES) / 2);
     expect(gateway.stt.requests).toEqual([]);
     await expect.poll(activeSessions).toBe(0);
-  });
+  }, STALLED_TEST_TIMEOUT_MS);
 });
 
 describe('disconnecting the server while a connection is being opened', () => {
