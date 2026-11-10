@@ -23,6 +23,7 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineUnavailableReason>
   'server-key-changed': 'server-repair-needed',
   busy: 'server-busy',
   'storage-insecure': 'server-storage',
+  disconnected: 'server-disconnected',
 };
 
 export class RemoteEngine implements TranscriptionEngine {
@@ -36,21 +37,26 @@ export class RemoteEngine implements TranscriptionEngine {
   async prepare(): Promise<Preparation> {
     try {
       const ready = await this.deps.connector.connect();
+      const stopWatching = ready.scope.onExpire(() => ready.connection.close());
       return {
         ready: true,
         engine: {
           id: this.id,
-          start: (options) =>
-            new RemoteDictation(ready, {
+          start: (options) => {
+            stopWatching();
+            return new RemoteDictation(ready, {
               options,
-              observer: ready.observer,
               finishIdleMs: this.options.finishIdleMs,
               retryBufferBytes: this.options.retryBufferBytes,
               reconnectDelaysMs: this.options.reconnectDelaysMs,
               reconnectWindowMs: this.options.reconnectWindowMs,
               reconnect: (previous) => this.deps.connector.reconnect(previous),
-            }),
-          release: () => ready.connection.close(),
+            });
+          },
+          release: () => {
+            stopWatching();
+            ready.connection.close();
+          },
         },
       };
     } catch (error) {

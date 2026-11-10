@@ -1,7 +1,7 @@
 import { connect, createServer, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 
-export type DropProxy = { url: string; port: number; connections(): number; dropAll(): void; freezeAll(): void; blackhole(): void; close(): Promise<void> };
+export type DropProxy = { url: string; port: number; connections(): number; clientBytes(): number; dropAll(): void; freezeAll(): void; blackhole(): void; close(): Promise<void> };
 
 const WEBSOCKET_UPGRADE = /^GET [^\r\n]* HTTP\/1\.1\r\n(?:[^\r\n]+\r\n)*upgrade:\s*websocket\r\n/i;
 
@@ -45,6 +45,7 @@ function readRequestHead(client: Socket, onHead: (head: Buffer) => void): void {
 export async function startDropProxy(targetPort: number, port = 0): Promise<DropProxy> {
   const sockets = new Set<Socket>();
   let connections = 0;
+  let clientBytes = 0;
   let swallowing = false;
   const track = (socket: Socket): void => {
     sockets.add(socket);
@@ -55,6 +56,9 @@ export async function startDropProxy(targetPort: number, port = 0): Promise<Drop
     const upstream = connect(targetPort, '127.0.0.1');
     track(upstream);
     upstream.write(request);
+    client.on('data', (chunk: Buffer) => {
+      clientBytes += chunk.length;
+    });
     client.pipe(upstream);
     upstream.pipe(client);
     client.on('close', () => upstream.destroy());
@@ -81,6 +85,7 @@ export async function startDropProxy(targetPort: number, port = 0): Promise<Drop
     url: `ws://127.0.0.1:${actual}`,
     port: actual,
     connections: () => connections,
+    clientBytes: () => clientBytes,
     dropAll: () => sockets.forEach((socket) => socket.destroy()),
     blackhole: () => {
       swallowing = true;

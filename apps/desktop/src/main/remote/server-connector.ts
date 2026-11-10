@@ -3,19 +3,24 @@ import type { PairingRepository, ServerPairing } from './pairing-repository';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { SecureConnection } from './secure-connection';
 
-export type ReadyConnection = { connection: SecureConnection; serverVersion: string; connectMs: number; pairing: ServerPairing; observer: ConnectionObserver };
+export type ReadyConnection = { connection: SecureConnection; serverVersion: string; connectMs: number; pairing: ServerPairing; scope: ConnectionScope };
 
-type OpenedConnection = Omit<ReadyConnection, 'observer'>;
+type OpenedConnection = Omit<ReadyConnection, 'scope'>;
 
 export interface ConnectionObserver {
   connected(connectMs: number, serverVersion: string): void;
   failed(kind: RemoteFailureKind): void;
 }
 
+export interface ConnectionScope extends ConnectionObserver {
+  isCurrent(): boolean;
+  onExpire(listener: () => void): () => void;
+}
+
 export type ConnectorDeps = {
   pairings: Pick<PairingRepository, 'load'>;
   observer: ConnectionObserver;
-  scope?: () => ConnectionObserver;
+  scope?: () => ConnectionScope;
   clock: () => number;
   timeoutMs: number;
   keepAliveMs?: number;
@@ -31,6 +36,22 @@ function readyVersion(message: ServerMessage): string {
   throw new RemoteFailure('protocol', `expected ready, got ${message.type}`);
 }
 
+function lasting(observer: ConnectionObserver): ConnectionScope {
+  return {
+    connected: (connectMs, serverVersion) => observer.connected(connectMs, serverVersion),
+    failed: (kind) => observer.failed(kind),
+    isCurrent: () => true,
+    onExpire: () => () => undefined,
+  };
+}
+
+function assertCurrent(scope: ConnectionScope): void {
+  if (scope.isCurrent()) {
+    return;
+  }
+  throw new RemoteFailure('disconnected', 'the server was disconnected or its pairing changed');
+}
+
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }
@@ -42,31 +63,43 @@ function samePairing(current: ServerPairing, previous: ServerPairing): boolean {
 export class ServerConnector {
   constructor(private readonly deps: ConnectorDeps) {}
 
-  connect(observer: ConnectionObserver = this.begin()): Promise<ReadyConnection> {
-    return this.attempt(() => this.deps.pairings.load(), observer);
+  connect(scope: ConnectionScope = this.begin()): Promise<ReadyConnection> {
+    return this.attempt(() => this.deps.pairings.load(), scope);
   }
 
   reconnect(previous: ReadyConnection): Promise<ReadyConnection> {
     return this.attempt(async () => {
       const current = await this.deps.pairings.load();
       return current !== null && samePairing(current, previous.pairing) ? current : null;
-    }, previous.observer);
+    }, previous.scope);
   }
 
-  private begin(): ConnectionObserver {
-    return this.deps.scope?.() ?? this.deps.observer;
+  private begin(): ConnectionScope {
+    return this.deps.scope?.() ?? lasting(this.deps.observer);
   }
 
-  private async attempt(pairingSource: () => Promise<ServerPairing | null>, observer: ConnectionObserver): Promise<ReadyConnection> {
+  private async attempt(pairingSource: () => Promise<ServerPairing | null>, scope: ConnectionScope): Promise<ReadyConnection> {
     try {
-      const opened = await this.open(await pairingSource());
-      observer.connected(opened.connectMs, opened.serverVersion);
-      return { ...opened, observer };
+      assertCurrent(scope);
+      const pairing = await pairingSource();
+      assertCurrent(scope);
+      const opened = await this.open(pairing);
+      this.keepIfCurrent(opened, scope);
+      scope.connected(opened.connectMs, opened.serverVersion);
+      return { ...opened, scope };
     } catch (error) {
       const failure = asRemoteFailure(error, 'offline');
-      observer.failed(failure.kind);
+      scope.failed(failure.kind);
       throw failure;
     }
+  }
+
+  private keepIfCurrent(opened: OpenedConnection, scope: ConnectionScope): void {
+    if (scope.isCurrent()) {
+      return;
+    }
+    opened.connection.close();
+    assertCurrent(scope);
   }
 
   private async open(pairing: ServerPairing | null): Promise<OpenedConnection> {

@@ -28,6 +28,7 @@ export const MESSAGES = Object.freeze({
   serverRepair: 'Server treba znova spárovať',
   serverBusy: 'Server je zaneprázdnený, skúste to o chvíľu',
   serverStorage: 'Párovanie servera sa nedá bezpečne uložiť ani načítať',
+  serverDisconnected: 'Server je odpojený, diktovanie na ňom sa zastavilo',
   serverSttUnavailable: 'Prepis na serveri teraz nefunguje',
   serverTooLong: 'Diktovanie je pre server príliš dlhé',
   serverConnectionLost: 'Spojenie so serverom sa prerušilo',
@@ -91,6 +92,7 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'server-repair-needed': () => serverError(MESSAGES.serverRepair),
   'server-busy': () => errorState(MESSAGES.serverBusy),
   'server-storage': () => errorState(MESSAGES.serverStorage),
+  'server-disconnected': () => fixError(MESSAGES.serverDisconnected, 'enable-server'),
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
@@ -101,6 +103,7 @@ const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.f
   'connection-lost': MESSAGES.serverConnectionLost,
   'repair-needed': MESSAGES.serverRepair,
   protocol: MESSAGES.serverProtocol,
+  disconnected: MESSAGES.serverDisconnected,
 });
 
 export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean): ErrorState {

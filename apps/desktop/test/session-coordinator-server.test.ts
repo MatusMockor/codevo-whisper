@@ -80,7 +80,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   if (paired) {
     await server.pairings.save(pairing);
   }
-  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, scope: () => server.status.scope(), clock: Date.now, timeoutMs: 2000 });
   const remote = new RemoteEngine({ connector });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
@@ -210,6 +210,37 @@ describe('SessionCoordinator with the server engine', () => {
 
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.noModel });
     expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('stops a server dictation when the server is disconnected and tells the user why', async () => {
+    const harness = await prepared({ engineOrder: ['server', 'local'] }, { respond: () => ({ status: 200, body: { text: 'nemalo by sa prepisat' } }) });
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(2));
+    await expect.poll(async () => ((await gateway.admin({ cmd: 'status' })) as { activeSessions: number }).activeSessions).toBe(1);
+
+    await harness.server.setEnabled(false);
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverDisconnected });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('falls back to the local fallback when the server is disconnected before its connection is ready', async () => {
+    const release = Promise.withResolvers<void>();
+    const harness = await prepared({ engineOrder: ['server', 'local'] }, { respond: () => ({ status: 200, body: { text: 'nemalo by sa prepisat' } }) }, release.promise);
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(2));
+
+    await harness.server.setEnabled(false);
+    release.resolve();
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'inserted' });
+    expect(gateway.stt.requests).toEqual([]);
+    expect(((await gateway.admin({ cmd: 'status' })) as { activeSessions: number }).activeSessions).toBe(0);
   });
 
   it('switches a turned off server back on for a missing local model and reports the route it actually takes', async () => {

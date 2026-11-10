@@ -105,7 +105,7 @@ describe('server checks across lifecycle changes', () => {
     expect(harness.status.status()).toEqual({ kind: 'unknown' });
   });
 
-  it('ignores an old dictation that fails after a new pairing replaced it', async () => {
+  it('stops an old dictation when a new pairing replaces it and never lets it change the new status', async () => {
     const replaced = await pair();
     const preparation = await new RemoteEngine({ connector: harness.connector }).prepare();
     expect(preparation.ready).toBe(true);
@@ -117,7 +117,7 @@ describe('server checks across lifecycle changes', () => {
     statuses.splice(0);
     await gateway.admin({ cmd: 'revoke', deviceId: replaced });
 
-    await expect(dictation?.finish()).rejects.toMatchObject({ reason: 'repair-needed' });
+    await expect(dictation?.finish()).rejects.toMatchObject({ reason: 'disconnected' });
     expect(statuses).toEqual([]);
     expect((await harness.service.view()).server).toMatchObject({ deviceId: current, status: { kind: 'online' } });
   });
