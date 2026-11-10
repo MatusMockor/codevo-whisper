@@ -3,7 +3,9 @@ import type { PairingRepository, ServerPairing } from './pairing-repository';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { SecureConnection } from './secure-connection';
 
-export type ReadyConnection = { connection: SecureConnection; serverVersion: string; connectMs: number; pairing: ServerPairing };
+export type ReadyConnection = { connection: SecureConnection; serverVersion: string; connectMs: number; pairing: ServerPairing; observer: ConnectionObserver };
+
+type OpenedConnection = Omit<ReadyConnection, 'observer'>;
 
 export interface ConnectionObserver {
   connected(connectMs: number, serverVersion: string): void;
@@ -13,6 +15,7 @@ export interface ConnectionObserver {
 export type ConnectorDeps = {
   pairings: Pick<PairingRepository, 'load'>;
   observer: ConnectionObserver;
+  scope?: () => ConnectionObserver;
   clock: () => number;
   timeoutMs: number;
   keepAliveMs?: number;
@@ -39,30 +42,34 @@ function samePairing(current: ServerPairing, previous: ServerPairing): boolean {
 export class ServerConnector {
   constructor(private readonly deps: ConnectorDeps) {}
 
-  connect(): Promise<ReadyConnection> {
-    return this.attempt(() => this.deps.pairings.load());
+  connect(observer: ConnectionObserver = this.begin()): Promise<ReadyConnection> {
+    return this.attempt(() => this.deps.pairings.load(), observer);
   }
 
-  reconnect(previous: ServerPairing): Promise<ReadyConnection> {
+  reconnect(previous: ReadyConnection): Promise<ReadyConnection> {
     return this.attempt(async () => {
       const current = await this.deps.pairings.load();
-      return current !== null && samePairing(current, previous) ? current : null;
-    });
+      return current !== null && samePairing(current, previous.pairing) ? current : null;
+    }, previous.observer);
   }
 
-  private async attempt(pairingSource: () => Promise<ServerPairing | null>): Promise<ReadyConnection> {
+  private begin(): ConnectionObserver {
+    return this.deps.scope?.() ?? this.deps.observer;
+  }
+
+  private async attempt(pairingSource: () => Promise<ServerPairing | null>, observer: ConnectionObserver): Promise<ReadyConnection> {
     try {
-      const ready = await this.open(await pairingSource());
-      this.deps.observer.connected(ready.connectMs, ready.serverVersion);
-      return ready;
+      const opened = await this.open(await pairingSource());
+      observer.connected(opened.connectMs, opened.serverVersion);
+      return { ...opened, observer };
     } catch (error) {
       const failure = asRemoteFailure(error, 'offline');
-      this.deps.observer.failed(failure.kind);
+      observer.failed(failure.kind);
       throw failure;
     }
   }
 
-  private async open(pairing: ServerPairing | null): Promise<ReadyConnection> {
+  private async open(pairing: ServerPairing | null): Promise<OpenedConnection> {
     if (pairing === null) {
       throw new RemoteFailure('not-paired', 'no server is paired');
     }

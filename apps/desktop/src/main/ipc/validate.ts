@@ -11,7 +11,7 @@ export class IpcValidationError extends Error {
   override readonly name = 'IpcValidationError';
 }
 
-const MAIN_OWNED_KEYS: ReadonlySet<keyof Settings> = new Set(['localModelId']);
+const MAIN_OWNED_KEYS: ReadonlySet<keyof Settings> = new Set(['localModelId', 'serverEnabled', 'serverRestoreOrder']);
 
 const MODEL_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
 
@@ -56,6 +56,14 @@ export function validateEngineId(args: readonly unknown[]): EngineId {
     throw new IpcValidationError('Invalid engine');
   }
   return engine;
+}
+
+export function validateEnabled(args: readonly unknown[]): boolean {
+  const [enabled] = args;
+  if (args.length !== 1 || typeof enabled !== 'boolean') {
+    throw new IpcValidationError('Invalid enabled flag');
+  }
+  return enabled;
 }
 
 export function validatePermissionKind(input: unknown): PermissionKind {

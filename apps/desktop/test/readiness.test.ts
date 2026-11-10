@@ -35,22 +35,22 @@ describe('pathHeader', () => {
 });
 
 describe('railBadges', () => {
-  it('flags Home when dictation would fail and Server when it needs pairing', () => {
+  it('flags Home when dictation would fail and Prepis when the server needs pairing', () => {
     expect(railBadges(READY, null)).toEqual({});
     expect(railBadges({ ...READY, paused: true }, null)).toEqual({});
     expect(railBadges({ ...READY, modelReady: false }, NO_MODEL)).toEqual({ home: 'err' });
-    expect(railBadges({ ...READY, modelReady: false, pairingNeeded: true }, NOT_PAIRED)).toEqual({ home: 'err', server: 'err' });
-    expect(railBadges({ ...READY, serverRepairNeeded: true }, null)).toEqual({ home: 'err', server: 'err' });
+    expect(railBadges({ ...READY, modelReady: false, pairingNeeded: true }, NOT_PAIRED)).toEqual({ home: 'err', transcription: 'err' });
+    expect(railBadges({ ...READY, serverRepairNeeded: true }, null)).toEqual({ home: 'err', transcription: 'err' });
   });
 });
 
 describe('readinessActions', () => {
   it('opens the page and section that fixes the problem', () => {
     expect(actions({ ...READY, hotkeyLabel: null })).toEqual([{ id: 'open-settings', label: 'Otvoriť nastavenia', command: { kind: 'navigate', target: { page: 'settings', section: 'dictation' } }, primary: true }]);
-    expect(actions({ ...READY, modelReady: false }, NO_MODEL)).toEqual([{ id: 'open-settings', label: 'Otvoriť nastavenia', command: { kind: 'navigate', target: { page: 'settings', section: 'local-model' } }, primary: true }]);
+    expect(actions({ ...READY, modelReady: false }, NO_MODEL)).toEqual([{ id: 'open-transcription', label: 'Otvoriť Prepis', command: { kind: 'navigate', target: { page: 'transcription', section: 'local-model' } }, primary: true }]);
     expect(actions({ ...READY, permissionsOk: false })).toEqual([{ id: 'open-settings', label: 'Otvoriť nastavenia', command: { kind: 'navigate', target: { page: 'settings' } }, primary: true }]);
-    expect(actions({ ...READY, serverRepairNeeded: true })).toEqual([{ id: 'open-server', label: 'Otvoriť Server', command: { kind: 'navigate', target: { page: 'server' } }, primary: true }]);
-    expect(actions({ ...READY, modelReady: false, pairingNeeded: true }, NOT_PAIRED)).toEqual([{ id: 'open-server', label: 'Otvoriť Server', command: { kind: 'navigate', target: { page: 'server' } }, primary: true }]);
+    expect(actions({ ...READY, serverRepairNeeded: true })).toEqual([{ id: 'open-server', label: 'Otvoriť server', command: { kind: 'navigate', target: { page: 'transcription', section: 'server' } }, primary: true }]);
+    expect(actions({ ...READY, modelReady: false, pairingNeeded: true }, NOT_PAIRED)).toEqual([{ id: 'open-server', label: 'Otvoriť server', command: { kind: 'navigate', target: { page: 'transcription', section: 'server' } }, primary: true }]);
   });
 
   it('labels the switch to the server plainly when the host is unknown', () => {

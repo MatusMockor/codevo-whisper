@@ -12,6 +12,7 @@ const SERVER: PairedServerView = {
   serverFingerprint: 'AAAA',
   deviceFingerprint: 'BBBB',
   status: { kind: 'online', connectMs: 12, serverVersion: '1.0.0' },
+  enabled: true,
 };
 
 function view(pairing: PairingView, server: PairedServerView | null = SERVER): ServerView {
@@ -53,12 +54,17 @@ describe('engineConditions', () => {
   });
 
   it('treats a server that needs re-pairing as unusable', () => {
-    expect(engineConditions('tiny', READY_MODEL, AVAILABLE)).toEqual({ localReady: true, serverReady: true, serverOffline: false });
-    expect(engineConditions(null, READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'repair-needed', reason: 'device-unknown' } }))).toEqual({ localReady: false, serverReady: false, serverOffline: false });
+    expect(engineConditions('tiny', READY_MODEL, AVAILABLE)).toEqual({ localReady: true, serverReady: true, serverOffline: false, serverOff: false, serverRepair: false });
+    expect(engineConditions(null, READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'repair-needed', reason: 'device-unknown' } }))).toEqual({ localReady: false, serverReady: false, serverOffline: false, serverOff: false, serverRepair: true });
   });
 
   it('reports a paired server that is offline right now', () => {
-    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'offline' } }))).toEqual({ localReady: true, serverReady: true, serverOffline: true });
-    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, null))).toEqual({ localReady: true, serverReady: false, serverOffline: false });
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, { ...SERVER, status: { kind: 'offline' } }))).toEqual({ localReady: true, serverReady: true, serverOffline: true, serverOff: false, serverRepair: false });
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, null))).toEqual({ localReady: true, serverReady: false, serverOffline: false, serverOff: false, serverRepair: false });
+  });
+
+  it('treats a switched off server as paired but not usable', () => {
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, { ...SERVER, enabled: false }))).toEqual({ localReady: true, serverReady: false, serverOffline: false, serverOff: true, serverRepair: false });
+    expect(engineConditions('tiny', READY_MODEL, view({ kind: 'idle' }, { ...SERVER, enabled: false, status: { kind: 'offline' } }))).toEqual({ localReady: true, serverReady: false, serverOffline: false, serverOff: true, serverRepair: false });
   });
 });

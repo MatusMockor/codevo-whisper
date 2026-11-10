@@ -1,13 +1,13 @@
 import type { EngineRemedy, EngineRemedyAction } from '../../shared/engine-routing';
 import type { EngineId } from '../../shared/settings';
-import type { NavTarget } from '../navigation';
+import { MODEL_SECTION, SERVER_SECTION, type NavTarget } from '../navigation';
 import type { ActionContent } from './banner-content';
 
-export type ReadinessCommand = { kind: 'navigate'; target: NavTarget } | { kind: 'prefer-engine'; engine: EngineId };
+export type ReadinessCommand = { kind: 'navigate'; target: NavTarget } | { kind: 'prefer-engine'; engine: EngineId } | { kind: 'enable-server' };
 
 export type ReadinessAction = { id: string; label: string; command: ReadinessCommand; primary: boolean };
 
-export type CommandHandlers = { navigate: (target: NavTarget) => void; prefer: (engine: EngineId) => void };
+export type CommandHandlers = { navigate: (target: NavTarget) => void; prefer: (engine: EngineId) => void; enableServer: () => void };
 
 type RemedyButton = { label: (serverHost: string | null) => string; command: ReadinessCommand };
 
@@ -21,9 +21,10 @@ function serverLabel(serverHost: string | null): string {
 const REMEDY_BUTTONS: Readonly<Record<EngineRemedyAction, RemedyButton>> = Object.freeze({
   'use-server': { label: serverLabel, command: { kind: 'prefer-engine', engine: 'server' } },
   'use-local': { label: () => 'Prepisovať lokálne', command: { kind: 'prefer-engine', engine: 'local' } },
-  'download-model': { label: () => 'Stiahnuť model', command: { kind: 'navigate', target: { page: 'settings', section: 'local-model' } } },
-  'pair-server': { label: () => 'Spárovať server', command: { kind: 'navigate', target: { page: 'server' } } },
-  'open-server': { label: () => 'Otvoriť Server', command: { kind: 'navigate', target: { page: 'server' } } },
+  'download-model': { label: () => 'Stiahnuť model', command: { kind: 'navigate', target: MODEL_SECTION } },
+  'pair-server': { label: () => 'Spárovať server', command: { kind: 'navigate', target: SERVER_SECTION } },
+  'open-server': { label: () => 'Otvoriť server', command: { kind: 'navigate', target: SERVER_SECTION } },
+  'enable-server': { label: () => 'Pripojiť server', command: { kind: 'enable-server' } },
 });
 
 function remedyAction(action: EngineRemedyAction, serverHost: string | null, primary: boolean): ReadinessAction {
@@ -31,12 +32,18 @@ function remedyAction(action: EngineRemedyAction, serverHost: string | null, pri
   return { id: action, label: button.label(serverHost), command: button.command, primary };
 }
 
-function openAction(target: NavTarget): ReadinessAction {
-  const command: ReadinessCommand = { kind: 'navigate', target };
-  if (target.page === 'server') {
-    return { id: 'open-server', label: 'Otvoriť Server', command, primary: true };
+function openLink(target: NavTarget): Pick<ReadinessAction, 'id' | 'label'> {
+  if (target.page === 'settings') {
+    return { id: 'open-settings', label: 'Otvoriť nastavenia' };
   }
-  return { id: 'open-settings', label: 'Otvoriť nastavenia', command, primary: true };
+  if (target.section === 'server') {
+    return { id: 'open-server', label: 'Otvoriť server' };
+  }
+  return { id: 'open-transcription', label: 'Otvoriť Prepis' };
+}
+
+function openAction(target: NavTarget): ReadinessAction {
+  return { ...openLink(target), command: { kind: 'navigate', target }, primary: true };
 }
 
 export function remedyActions(remedy: EngineRemedy, serverHost: string | null): ReadinessAction[] {
@@ -58,6 +65,10 @@ export function readinessActions(content: ActionContent): ReadinessAction[] {
 export function runCommand(command: ReadinessCommand, handlers: CommandHandlers): void {
   if (command.kind === 'prefer-engine') {
     handlers.prefer(command.engine);
+    return;
+  }
+  if (command.kind === 'enable-server') {
+    handlers.enableServer();
     return;
   }
   handlers.navigate(command.target);

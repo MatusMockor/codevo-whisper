@@ -67,7 +67,7 @@ const TRANSCRIBED_REASONS: ReadonlySet<StopReason> = new Set(['released', 'toggl
 
 const NOT_READY: Preparation = { ready: false };
 
-const NO_CAPABILITIES: EngineConditions = Object.freeze({ localReady: false, serverReady: false, serverOffline: false });
+const NO_CAPABILITIES: EngineConditions = Object.freeze({ localReady: false, serverReady: false, serverOffline: false, serverOff: false, serverRepair: false });
 
 export class DictationSession {
   private phase: Phase = 'recording';

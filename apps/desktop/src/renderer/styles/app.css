@@ -292,6 +292,78 @@ kbd {
   letter-spacing: -.01em;
 }
 
+.phead .sub {
+  max-width: 72ch;
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+  width: 100%;
+  max-width: var(--page-max);
+  container-type: inline-size;
+}
+
+.page-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: var(--page-gap);
+  align-items: start;
+}
+
+@container (max-width: 860px) {
+  .page-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.page-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-margin-top: 12px;
+}
+
+.sec-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 8px;
+}
+
+.sec-h .n {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--amber-text);
+}
+
+.sec-h h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+.sec-h h2:focus {
+  outline: none;
+}
+
+.sec-h h2:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.sec-h p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
 .sbar {
   grid-area: status;
   display: flex;

@@ -52,6 +52,8 @@ export type Settings = {
   language: Language;
   microphone: MicrophoneSetting;
   engineOrder: Array<EngineId>;
+  serverEnabled: boolean;
+  serverRestoreOrder: Array<EngineId> | null;
   localModelId: string | null;
   localAcceleration: LocalAcceleration;
   localModelUnload: LocalModelUnload;
@@ -83,6 +85,8 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   language: 'sk',
   microphone: Object.freeze({ deviceId: null, label: null }),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,
+  serverEnabled: true,
+  serverRestoreOrder: null,
   localModelId: null,
   localAcceleration: 'auto',
   localModelUnload: 5,

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import type { SettingsSection } from '../../shared/settings-focus';
+import type { SectionId } from '../../shared/section-focus';
 import type { NavTarget } from '../navigation';
 
-export function revealSettingsSection(section: SettingsSection): void {
+export function revealSection(section: SectionId): void {
   const group = document.querySelector<HTMLElement>(`[data-section="${section}"]`);
   if (group === null) {
     return;
@@ -16,6 +16,6 @@ export function useRevealSection(target: NavTarget, ready: boolean): void {
     if (target.section === undefined || !ready) {
       return;
     }
-    revealSettingsSection(target.section);
+    revealSection(target.section);
   }, [target, ready]);
 }

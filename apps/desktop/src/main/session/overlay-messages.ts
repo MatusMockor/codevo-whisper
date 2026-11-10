@@ -14,7 +14,7 @@ export const MESSAGES = Object.freeze({
   binaryMissing: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
   languageRequired: 'Zvolený model potrebuje nastavený jazyk',
   engineUnavailable: 'Prepis teraz nie je dostupný',
-  engineSwitchFailed: 'Prepis sa nepodarilo prepnúť. Skontrolujte stránku Server alebo Nastavenia.',
+  engineSwitchFailed: 'Prepis sa nepodarilo prepnúť. Skontrolujte stránku Prepis.',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
   recordingAudio: 'Zvukový výstup sa nepodarilo nastaviť alebo obnoviť. Skontrolujte zvuk systému.',
   transcriptionFailed: 'Prepis sa nepodaril',
@@ -83,7 +83,7 @@ export function switchFailedState(problem: EngineProblem | null, conditions: Eng
 const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: EngineConditions) => ErrorState>> = Object.freeze({
   'no-model': remedyError(MESSAGES.noModel, 'no-model'),
   'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
-  'model-broken': () => settingsError(MESSAGES.brokenModel),
+  'model-broken': () => fixError(MESSAGES.brokenModel, 'download-model'),
   'language-required': () => settingsError(MESSAGES.languageRequired),
   'binary-missing': () => errorState(MESSAGES.binaryMissing),
   'server-not-paired': remedyError(MESSAGES.serverNotPaired, 'server-not-paired'),

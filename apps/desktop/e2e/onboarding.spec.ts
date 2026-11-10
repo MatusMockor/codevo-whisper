@@ -194,7 +194,7 @@ test('the engine step offers three choices, preselects none and moves on without
   await expect(page.getByRole('textbox', { name: 'Párovací token' })).toHaveCount(0);
 
   await engines().getByRole('radio', { name: /^Nastavím neskôr/ }).check();
-  await expect(page.getByText('spárujete server na stránke Server')).toBeVisible();
+  await expect(page.getByText('Kedykoľvek neskôr si na stránke Prepis stiahnete model')).toBeVisible();
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
   await expect(page.getByText('Prepis zatiaľ nie je nastavený.')).toBeVisible();

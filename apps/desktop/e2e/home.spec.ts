@@ -66,7 +66,7 @@ test('banner shows the call to action or the hotkey label', async () => {
   await expect(banner().getByRole('button', { name: 'Stiahnuť model' })).toHaveClass(/primary/);
   await expect(page.getByRole('region', { name: 'Od klávesu po vložený text' }).locator('.node', { hasText: 'Prepis' })).toHaveClass(/\berr\b/);
   await banner().getByRole('button', { name: 'Stiahnuť model' }).click();
-  await expect(page.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Prepis' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
   await expect(page.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
   await page.getByRole('tab', { name: 'Domov' }).click();

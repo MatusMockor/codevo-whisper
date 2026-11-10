@@ -4,7 +4,7 @@ import { Glyph, type GlyphName } from './Glyph';
 const ICONS: Readonly<Record<PageId, GlyphName>> = {
   home: 'home',
   meetings: 'meet',
-  server: 'server',
+  transcription: 'route',
   settings: 'sliders',
   privacy: 'shield',
 };

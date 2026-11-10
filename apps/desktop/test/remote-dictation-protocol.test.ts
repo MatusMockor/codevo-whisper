@@ -29,7 +29,7 @@ async function scripted(script: (session: ResponderSession, message: ClientMessa
   });
   const pairing = { deviceKey: generateKeyPair(), serverPublicKey: serverKey.publicKey, endpoint: responder.url, deviceId: 'abcdef01', deviceName: 'Mac', pairedAt: '2026-10-26T08:00:00.000Z' };
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector, observer: silentObserver });
+  return new RemoteEngine({ connector });
 }
 
 async function startDictation(engine: RemoteEngine, extra: Partial<DictationOptions> = {}): Promise<EngineDictation> {

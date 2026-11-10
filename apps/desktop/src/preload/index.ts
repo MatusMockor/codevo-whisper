@@ -12,7 +12,7 @@ import type { DiarizerView, ModelCatalogView, ModelState } from '../shared/model
 import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
-import type { SettingsSection } from '../shared/settings-focus';
+import type { SectionId } from '../shared/section-focus';
 import type { DayStats } from '../shared/stats';
 import type { InstallOutcome, UpdateStatus } from '../shared/updates';
 
@@ -67,8 +67,9 @@ const api: IpcApi = {
   cancelServerPairing: () => ipcRenderer.invoke(INVOKE_CHANNELS.cancelServerPairing) as Promise<void>,
   checkServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkServer) as Promise<void>,
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
+  setServerEnabled: (enabled) => ipcRenderer.invoke(INVOKE_CHANNELS.setServerEnabled, enabled) as Promise<void>,
   preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<EngineSwitch>,
-  takeSettingsFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSettingsFocus) as Promise<SettingsSection | null>,
+  takeSectionFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSectionFocus) as Promise<SectionId | null>,
   getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,
   checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,
   installUpdate: () => ipcRenderer.invoke(INVOKE_CHANNELS.installUpdate) as Promise<InstallOutcome>,

@@ -145,7 +145,10 @@ test('removing the local model during a meeting keeps the recording and its stop
   await expect(page.getByRole('list', { name: 'Nahrávané stopy' })).toBeVisible();
   await page.getByRole('button', { name: 'Zastaviť a prepísať' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Lokálny model nie je stiahnutý.' })).toBeVisible();
-  await expect(page.getByText('Najprv si v Nastaveniach stiahnite', { exact: false })).toBeVisible();
+  await expect(page.getByText('Najprv si na stránke Prepis stiahnite', { exact: false })).toBeVisible();
+  await page.locator('.meeting-record').getByRole('button', { name: 'Stiahnuť model' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
+  await expect(page.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
 });
 
 test.describe('notes', () => {

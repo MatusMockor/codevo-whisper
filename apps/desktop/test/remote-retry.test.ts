@@ -37,7 +37,7 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
   const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: extra.timeoutMs ?? 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
-  const preparation = await new RemoteEngine({ connector, observer: silentObserver, options }).prepare();
+  const preparation = await new RemoteEngine({ connector, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
   const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };

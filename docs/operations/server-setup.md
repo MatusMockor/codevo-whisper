@@ -70,9 +70,9 @@ The token works for one device only. The window closes when a device is paired o
 
 ### In the desktop app
 
-Open **Server** in the app, copy the pair command if you need it (on Linux the app shows `codevo-whisper-server pair`), paste the whole `cw1:` line into **Párovací token** and press **Spárovať**. The app shows the connection fingerprint; answer `y` on the server only if it matches. The device name is the computer name. The device key, the pinned server key and the endpoint are stored encrypted with the system key store (macOS Keychain through Electron `safeStorage`); on Linux the app refuses to pair when only the `basic_text` backend is available.
+Open **Prepis** in the app (section **Vlastný server**), copy the pair command if you need it (on Linux the app shows `codevo-whisper-server pair`), paste the whole `cw1:` line into **Párovací token** and press **Spárovať**. The app shows the connection fingerprint; answer `y` on the server only if it matches. The device name is the computer name. The device key, the pinned server key and the endpoint are stored encrypted with the system key store (macOS Keychain through Electron `safeStorage`); on Linux the app refuses to pair when only the `basic_text` backend is available.
 
-Then choose the order in **Nastavenia > Kde beží prepis**: "Lokálne", "Server", "Server, potom lokálne" or "Lokálne, potom server". The engine is picked when a dictation starts and never changes during it. If the connection drops during a dictation, the app reconnects once and sends the whole recording again (up to 2 minutes of audio).
+Then choose the order in **Prepis > Trasa prepisu**: "Lokálne", "Server", "Server, potom lokálne" or "Lokálne, potom server". The engine is picked when a dictation starts and never changes during it. If the connection drops during a dictation, the app reconnects once and sends the whole recording again (up to 2 minutes of audio).
 
 ## Manage devices
 
@@ -82,7 +82,7 @@ $COMPOSE exec gateway codevo-whisper revoke <id>
 $COMPOSE exec gateway codevo-whisper status
 ```
 
-`revoke` takes effect immediately: open sessions of the device are closed with `revoked`, its queued and running transcriptions are cancelled and its buffered audio is dropped. "Odpojiť server" in the app only deletes the pairing on the device; use `revoke` to remove it from the server.
+`revoke` takes effect immediately: open sessions of the device are closed with `revoked`, its queued and running transcriptions are cancelled and its buffered audio is dropped. "Odpojiť" in the app only pauses the connection and keeps the pairing; "Pripojiť" resumes it without pairing again. "Zrušiť párovanie" deletes the pairing on the device only; use `revoke` to remove it from the server.
 
 ## Rotate the server key
 

@@ -2,11 +2,11 @@ import type { LocalAcceleration, LocalModelUnload, Settings } from '../../shared
 import { LanguagePrompt } from '../components/LanguagePrompt';
 import { ModelList } from '../components/ModelList';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
-import { SettingsRow } from './SettingsGroup';
-import { saveSettings } from './use-settings';
-import { busyModelId } from './model-rows';
-import { useModelActions } from './use-model-actions';
-import type { Models } from './use-models';
+import { SettingsRow } from '../settings/SettingsGroup';
+import { saveSettings } from '../settings/use-settings';
+import { busyModelId } from '../settings/model-rows';
+import { useModelActions } from '../settings/use-model-actions';
+import type { Models } from '../settings/use-models';
 
 const UNLOAD_OPTIONS: ReadonlyArray<{ value: LocalModelUnload; label: string }> = [
   { value: 'never', label: 'Nikdy' },
@@ -36,8 +36,8 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
     );
   }
   return (
-    <>
-      <p className="sbox-lead">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa na tento Mac. Potom prepis funguje aj bez internetu.</p>
+    <div className="card model-card">
+      <p className="card-lead">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa do tohto počítača. Potom prepis funguje aj bez internetu.</p>
       <ModelList
         models={models.catalog.value.models}
         states={models.states}
@@ -64,6 +64,6 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
         <SegmentedControl label="Akcelerácia" options={ACCELERATIONS} value={settings.localAcceleration} onChange={(localAcceleration) => saveSettings({ localAcceleration })} />
       </SettingsRow>
       {actions.prompt !== null && <LanguagePrompt prompt={actions.prompt} onChoose={actions.chooseLanguage} onCancel={actions.cancelPrompt} />}
-    </>
+    </div>
   );
 }

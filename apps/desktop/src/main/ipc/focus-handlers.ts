@@ -1,11 +1,11 @@
-import type { SettingsFocus } from '../windows/settings-focus';
+import type { SectionFocus } from '../windows/section-focus';
 import type { HandlerGroup } from './invoke-handlers';
 import { withoutArguments } from './without-arguments';
 
-export type FocusHandlerDeps = { settingsFocus: Pick<SettingsFocus, 'take'> };
+export type FocusHandlerDeps = { sectionFocus: Pick<SectionFocus, 'take'> };
 
-export function focusHandlers({ settingsFocus }: FocusHandlerDeps): HandlerGroup<'takeSettingsFocus'> {
+export function focusHandlers({ sectionFocus }: FocusHandlerDeps): HandlerGroup<'takeSectionFocus'> {
   return {
-    takeSettingsFocus: withoutArguments(() => settingsFocus.take()),
+    takeSectionFocus: withoutArguments(() => sectionFocus.take()),
   };
 }

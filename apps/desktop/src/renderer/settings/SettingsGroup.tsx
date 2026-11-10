@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import type { SettingsSection } from '../../shared/settings-focus';
+import type { SettingsSection } from '../../shared/section-focus';
 
 export function SettingsGroup({ title, section, children }: { title: string; section?: SettingsSection; children: ReactNode }) {
   const id = useId();

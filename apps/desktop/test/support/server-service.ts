@@ -12,6 +12,7 @@ import type { VaultAvailability } from '../../src/main/remote/secret-vault';
 import { ServerConnector } from '../../src/main/remote/server-connector';
 import { ServerService } from '../../src/main/remote/server-service';
 import { ServerStatusBoard } from '../../src/main/remote/server-status';
+import { ServerSwitch } from '../../src/main/remote/server-switch';
 import type { SettingsStore } from '../../src/main/settings/settings-store';
 import { testEntry } from '../model-fixtures';
 
@@ -26,7 +27,7 @@ export type ServerServiceSetup = {
   wrapPairings?: (pairings: PairingRepository) => PairingRepository;
 };
 
-export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; file: string };
+export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; connector: ServerConnector; file: string };
 
 const MODEL_BODY = 'GGUF';
 
@@ -48,10 +49,11 @@ export function createServerService(setup: ServerServiceSetup): ServerServiceHar
   const stored = setup.wrapPairings?.(pairings) ?? pairings;
   const status = new ServerStatusBoard(logger);
   const order = new EngineOrderQueue(settings);
-  const connector = new ServerConnector({ pairings: stored, observer: status, clock: Date.now, timeoutMs });
+  const connector = new ServerConnector({ pairings: stored, observer: status, scope: () => status.scope(), clock: Date.now, timeoutMs });
   const pairing = new DevicePairing({ pairings: stored, vault, deviceName: () => Promise.resolve('Test Mac'), clock: Date.now, timeoutMs });
   const engineSwitch = new PairingEngineSwitch({ order, local: new ActiveModelReadiness(models, settings) });
   const clock = setup.clock === undefined ? {} : { clock: setup.clock };
-  const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, order, logger, ...clock });
-  return { service, pairings, status, order, file };
+  const serverSwitch = new ServerSwitch({ settings, queue: order, local: new ActiveModelReadiness(models, settings) });
+  const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, serverSwitch, logger, ...clock });
+  return { service, pairings, status, order, connector, file };
 }

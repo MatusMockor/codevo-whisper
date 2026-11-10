@@ -208,25 +208,26 @@ test('the overlay settings action opens the settings page', async () => {
   await expect(main.getByRole('tab', { name: 'Nastavenia' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('Stiahnuť model opens Settings at the Lokálny model section', async () => {
+test('Stiahnuť model opens Prepis at the Lokálny model section', async () => {
   await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
   const overlay = await overlayPage();
   await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Spárovať server', 'Stiahnuť model']);
 
   await overlay.getByRole('button', { name: 'Stiahnuť model' }).click();
 
-  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
   await expect(main.getByRole('heading', { level: 2, name: 'Lokálny model', exact: true })).toBeFocused();
   await expect(main.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
 });
 
-test('Spárovať server opens the Server page', async () => {
+test('Spárovať server opens Prepis at the server section', async () => {
   await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
   const overlay = await overlayPage();
 
   await overlay.getByRole('button', { name: 'Spárovať server' }).click();
 
-  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Server');
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
+  await expect(main.getByRole('heading', { level: 2, name: 'Vlastný server' })).toBeFocused();
 });
 
 test('the overlay ignores an action the shown state does not offer', async () => {

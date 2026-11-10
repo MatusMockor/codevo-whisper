@@ -14,13 +14,13 @@ export const ENGINE_CHOICES: readonly EngineChoiceOption[] = Object.freeze([
   { id: 'later', title: 'Nastavím neskôr', description: 'Teraz sa nič nesťahuje ani nepáruje.' },
 ]);
 
-export const LATER_NOTE = 'Kedykoľvek neskôr si model stiahnete v Nastaveniach alebo spárujete server na stránke Server.';
+export const LATER_NOTE = 'Kedykoľvek neskôr si na stránke Prepis stiahnete model alebo spárujete server.';
 
 export const TRY_HINTS = Object.freeze({
   model: 'Model sa ešte sťahuje alebo nie je vybraný. Diktovanie začne fungovať, keď bude pripravený.',
-  server: 'Server zatiaľ nie je spárovaný. Diktovanie začne fungovať, keď ho spárujete v predchádzajúcom kroku alebo na stránke Server.',
+  server: 'Server zatiaľ nie je spárovaný. Diktovanie začne fungovať, keď ho spárujete v predchádzajúcom kroku alebo na stránke Prepis.',
   repair: ACTION_MESSAGES.repair,
-  unset: 'Prepis zatiaľ nie je nastavený. Diktovanie začne fungovať, keď si v Nastaveniach stiahnete model alebo na stránke Server spárujete server.',
+  unset: 'Prepis zatiaľ nie je nastavený. Diktovanie začne fungovať, keď si na stránke Prepis stiahnete model alebo spárujete server.',
 });
 
 const STARTED_STATUSES: ReadonlySet<ModelState['status']> = new Set(['downloading', 'paused', 'ready']);

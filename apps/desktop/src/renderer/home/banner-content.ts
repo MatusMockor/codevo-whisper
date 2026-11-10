@@ -1,7 +1,7 @@
 import type { AppStatus } from '../../shared/app-status';
 import type { EngineProblem } from '../../shared/engine-routing';
 import type { DictationMode } from '../../shared/settings';
-import type { NavTarget } from '../navigation';
+import { SERVER_SECTION, type NavTarget } from '../navigation';
 import { ISSUE_TARGETS, type EngineIssue } from './engine-issue';
 
 export type HotkeyVerb = 'Podržte' | 'Stlačte';
@@ -36,7 +36,7 @@ function engineAction(issue: EngineIssue): ActionContent {
 
 export function bannerContent(status: AppStatus, issue: EngineIssue | null): BannerContent {
   if (status.serverRepairNeeded) {
-    return action(ACTION_MESSAGES.repair, { page: 'server' });
+    return action(ACTION_MESSAGES.repair, SERVER_SECTION);
   }
   if (status.hotkeyLabel === null) {
     return action(ACTION_MESSAGES.hotkey, { page: 'settings', section: 'dictation' });

@@ -59,6 +59,8 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   language: oneOf(['sk', 'en', 'cs', 'auto']),
   microphone: isMicrophone,
   engineOrder: isEngineOrder,
+  serverEnabled: isBoolean,
+  serverRestoreOrder: (value: unknown): value is Settings['serverRestoreOrder'] => value === null || isEngineOrder(value),
   localModelId: isNullableText,
   localAcceleration: oneOf(['auto', 'gpu', 'cpu']),
   localModelUnload: oneOf(['never', 'immediately', 2, 5, 10, 15, 60]),

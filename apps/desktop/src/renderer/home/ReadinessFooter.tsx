@@ -60,7 +60,7 @@ export function ReadinessFooter({ status, issue, onNavigate }: ReadinessFooterPr
   const actions = (
     <div className="row-btns">
       {readinessActions(content).map((action) => (
-        <button key={action.id} type="button" className={action.primary ? 'btn primary' : 'btn'} onClick={() => runCommand(action.command, { navigate: onNavigate, prefer: engineSwitch.prefer })}>
+        <button key={action.id} type="button" className={action.primary ? 'btn primary' : 'btn'} onClick={() => runCommand(action.command, { navigate: onNavigate, prefer: engineSwitch.prefer, enableServer: engineSwitch.enableServer })}>
           {action.label}
         </button>
       ))}

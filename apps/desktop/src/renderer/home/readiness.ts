@@ -38,7 +38,7 @@ export function railBadges(status: AppStatus, issue: EngineIssue | null): RailBa
     badges.home = 'err';
   }
   if (status.serverRepairNeeded || status.pairingNeeded) {
-    badges.server = 'err';
+    badges.transcription = 'err';
   }
   return badges;
 }

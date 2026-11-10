@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { changeAfterPairing, engineRemedy, isEngineId, isEngineSwitch, orderProblem, preferredOrder, refusalReason } from '../src/shared/engine-routing';
+import { changeAfterPairing, engineAvailability, engineRemedy, isEngineId, isEngineSwitch, orderProblem, preferredOrder, refusalReason, restoredOrder, routeOutcome, stopsRoute } from '../src/shared/engine-routing';
 
 const NOTHING = { localReady: false, serverReady: false } as const;
 const LOCAL = { localReady: true, serverReady: false } as const;
 const SERVER = { localReady: false, serverReady: true } as const;
 const BOTH = { localReady: true, serverReady: true } as const;
 
-function now(capabilities: { localReady: boolean; serverReady: boolean }, serverOffline = false) {
-  return { ...capabilities, serverOffline };
+function now(capabilities: { localReady: boolean; serverReady: boolean }, serverOffline = false, serverOff = false, serverRepair = false) {
+  return { ...capabilities, serverOffline, serverOff, serverRepair };
 }
 
 describe('engine routing policy', () => {
@@ -42,6 +42,30 @@ describe('engine routing policy', () => {
 
   it('never offers a paired server that is offline right now as the remedy', () => {
     expect(engineRemedy('no-model', now(SERVER, true))).toEqual({ action: 'download-model', alternative: 'open-server' });
+  });
+
+  it('stops at a server that needs re-pairing exactly like the engine selector and names it as the problem', () => {
+    const repair = now(LOCAL, false, false, true);
+    expect(routeOutcome(['server', 'local'], repair)).toEqual({ engine: null, blockedBy: 'server' });
+    expect(orderProblem(['server', 'local'], repair)).toBe('server-not-paired');
+    expect(engineRemedy('server-not-paired', repair)).toEqual({ action: 'use-local', alternative: 'pair-server' });
+    expect(routeOutcome(['local', 'server'], repair)).toEqual({ engine: 'local', blockedBy: null });
+    expect(routeOutcome(['server', 'local'], now(BOTH, true))).toEqual({ engine: 'local', blockedBy: null });
+    expect(routeOutcome(['local'], now(NOTHING))).toEqual({ engine: null, blockedBy: null });
+    expect(engineAvailability('server', repair)).toBe('blocked');
+    expect([stopsRoute('ready'), stopsRoute('blocked'), stopsRoute('unavailable')]).toEqual([true, true, false]);
+  });
+
+  it('restores a saved route only when it can transcribe and otherwise routes to the server', () => {
+    expect(restoredOrder(['server', 'local'], now(LOCAL))).toEqual(['server', 'local']);
+    expect(restoredOrder(['local'], now(BOTH))).toEqual(['local']);
+    expect(restoredOrder(['local'], now(SERVER))).toEqual(['server']);
+    expect(restoredOrder(['local', 'server'], now(SERVER))).toEqual(['local', 'server']);
+  });
+
+  it('offers to switch a paired server back on when it is off and the local model is missing', () => {
+    expect(engineRemedy('no-model', now(NOTHING, false, true))).toEqual({ action: 'download-model', alternative: 'enable-server' });
+    expect(orderProblem(['local'], now(NOTHING, false, true))).toBe('no-model');
   });
 
   it('switches to the server after pairing only when the local engine cannot transcribe', () => {

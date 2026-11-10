@@ -15,7 +15,8 @@ const BLOCKED_TITLES: Readonly<Record<BlockedReason, string>> = Object.freeze({
 
 const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.freeze({
   'open-settings': 'Otvoriť nastavenia',
-  'open-server': 'Otvoriť Server',
+  'open-server': 'Otvoriť server',
+  'enable-server': 'Pripojiť server',
   'copy-last': 'Kopírovať doterajší text',
   'pair-server': 'Spárovať server',
   'download-model': 'Stiahnuť model',

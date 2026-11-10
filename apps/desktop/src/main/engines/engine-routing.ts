@@ -3,7 +3,7 @@ import type { EngineId } from '../../shared/settings';
 import type { LocalModelReadiness } from '../models/local-model-readiness';
 import type { EngineOrderQueue, OrderDecision } from './engine-order-queue';
 
-export type ServerReadiness = { isPaired(): Promise<boolean>; needsRepair(): boolean; isOffline(): boolean };
+export type ServerReadiness = { isPaired(): Promise<boolean>; isEnabled(): boolean; needsRepair(): boolean; isOffline(): boolean };
 
 export type EngineRoutingDeps = { order: Pick<EngineOrderQueue, 'change'>; local: LocalModelReadiness; server: ServerReadiness };
 
@@ -12,7 +12,14 @@ export class EngineRouting {
 
   async capabilities(): Promise<EngineConditions> {
     const paired = await this.deps.server.isPaired();
-    return { localReady: this.deps.local.isReady(), serverReady: paired && !this.deps.server.needsRepair(), serverOffline: paired && this.deps.server.isOffline() };
+    const enabled = paired && this.deps.server.isEnabled();
+    return {
+      localReady: this.deps.local.isReady(),
+      serverReady: enabled && !this.deps.server.needsRepair(),
+      serverOffline: enabled && this.deps.server.isOffline(),
+      serverOff: paired && !enabled,
+      serverRepair: enabled && this.deps.server.needsRepair(),
+    };
   }
 
   prefer(engine: EngineId): Promise<EngineSwitch> {

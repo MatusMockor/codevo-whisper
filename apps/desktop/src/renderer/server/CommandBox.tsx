@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckIcon, CopyIcon } from '../components/Icons';
+import { Glyph } from '../components/Glyph';
 
 const COPIED_MS = 1500;
 
-export function CommandBox({ command, label = 'Kopírovať príkaz' }: { command: string; label?: string }) {
+export function CommandBox({ command, label = 'Kopírovať' }: { command: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -22,12 +22,10 @@ export function CommandBox({ command, label = 'Kopírovať príkaz' }: { command
   }
 
   return (
-    <div className="term">
-      <code>
-        <span className="pr">$</span> {command}
-      </code>
-      <button type="button" className="btn" onClick={copy} aria-live="polite">
-        {copied ? <CheckIcon /> : <CopyIcon />}
+    <div className="cmd">
+      <code>{command}</code>
+      <button type="button" className={copied ? 'tbtn ok' : 'tbtn'} onClick={copy} aria-live="polite">
+        <Glyph name={copied ? 'check' : 'copy'} size="sm" />
         {copied ? 'Skopírované' : label}
       </button>
     </div>

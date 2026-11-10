@@ -181,7 +181,7 @@ it('fails without a verified local model', async () => {
 
   await transcriber().transcribe(id);
 
-  expect(store.get(id)?.phase).toEqual({ kind: 'failed', error: 'Lokálny model nie je stiahnutý. Stiahnite ho v Nastaveniach a skúste prepis znova.' });
+  expect(store.get(id)?.phase).toEqual({ kind: 'failed', error: 'Lokálny model nie je stiahnutý. Stiahnite ho na stránke Prepis a skúste prepis znova.' });
 });
 
 it('refuses a meeting that is still recording or unknown', async () => {
