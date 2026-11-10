@@ -237,14 +237,17 @@ describe('SessionCoordinator with the server engine', () => {
     const holder = new ServerConnector({ pairings: { load: () => Promise.resolve(harness.pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
     const held = [await holder.connect(), await holder.connect(), await holder.connect(), await holder.connect()];
 
-    await dictate(harness, stampedPcm(2));
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'download-model', alternative: 'enable-server' });
-    coordinator?.act('enable-server');
+    try {
+      await dictate(harness, stampedPcm(2));
+      await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'download-model', alternative: 'enable-server' });
+      coordinator?.act('enable-server');
 
-    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.engineSwitchFailed });
-    expect(harness.states.some((state) => state.kind === 'rerouted')).toBe(false);
-    expect(harness.settings.get()).toMatchObject({ engineOrder: ['server'], serverEnabled: true });
-    held.forEach((ready) => ready.connection.close());
+      await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.engineSwitchFailed });
+      expect(harness.states.some((state) => state.kind === 'rerouted')).toBe(false);
+      expect(harness.settings.get()).toMatchObject({ engineOrder: ['server'], serverEnabled: true });
+    } finally {
+      held.forEach((ready) => ready.connection.close());
+    }
   });
 
   it('offers the paired server for a missing local model and transcribes there after the switch', async () => {
