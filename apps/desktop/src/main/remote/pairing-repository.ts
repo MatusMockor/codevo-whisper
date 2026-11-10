@@ -98,11 +98,33 @@ export class EncryptedPairingFile implements PairingRepository {
   }
 
   private decode(text: string): ServerPairing | null {
+    const sealed = this.sealed(text);
+    if (sealed === null) {
+      return null;
+    }
+    const opened = this.unseal(sealed);
     try {
-      return decodePairing(this.vault.open(parseSealed(text)));
+      return decodePairing(opened);
     } catch (error) {
       this.logger.error('The server pairing could not be read, treating the device as unpaired', error);
       return null;
+    }
+  }
+
+  private sealed(text: string): Uint8Array | null {
+    try {
+      return parseSealed(text);
+    } catch (error) {
+      this.logger.error('The server pairing file has an unknown format, treating the device as unpaired', error);
+      return null;
+    }
+  }
+
+  private unseal(sealed: Uint8Array): string {
+    try {
+      return this.vault.open(sealed);
+    } catch (error) {
+      throw new RemoteFailure('storage-insecure', 'the secure storage could not decrypt the pairing', { cause: error });
     }
   }
 }

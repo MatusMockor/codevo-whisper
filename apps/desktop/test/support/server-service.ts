@@ -8,7 +8,7 @@ import { DevicePairing } from '../../src/main/remote/device-pairing';
 import { InsecureTestVault } from '../../src/main/remote/insecure-test-vault';
 import { PairingEngineSwitch } from '../../src/main/remote/pairing-engine-switch';
 import { EncryptedPairingFile, type PairingRepository } from '../../src/main/remote/pairing-repository';
-import type { VaultAvailability } from '../../src/main/remote/secret-vault';
+import type { SecretVault, VaultAvailability } from '../../src/main/remote/secret-vault';
 import { ServerConnector } from '../../src/main/remote/server-connector';
 import { ServerService } from '../../src/main/remote/server-service';
 import { ServerStatusBoard } from '../../src/main/remote/server-status';
@@ -22,6 +22,7 @@ export type ServerServiceSetup = {
   models: Pick<ModelManager, 'states'>;
   logger: Logger;
   availability?: VaultAvailability;
+  vault?: SecretVault;
   clock?: () => number;
   timeoutMs?: number;
   wrapPairings?: (pairings: PairingRepository) => PairingRepository;
@@ -43,7 +44,7 @@ export async function tinyModels(dir: string, settings: SettingsStore, logger: L
 export function createServerService(setup: ServerServiceSetup): ServerServiceHarness {
   const { dir, settings, models, logger } = setup;
   const timeoutMs = setup.timeoutMs ?? 2000;
-  const vault = new InsecureTestVault(setup.availability ?? 'available');
+  const vault = setup.vault ?? new InsecureTestVault(setup.availability ?? 'available');
   const file = join(dir, 'server-pairing.json');
   const pairings = new EncryptedPairingFile(file, vault, logger);
   const stored = setup.wrapPairings?.(pairings) ?? pairings;

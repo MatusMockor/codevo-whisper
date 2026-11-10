@@ -260,6 +260,9 @@ export class ServerService {
   }
 
   private async readPairing(storage: VaultAvailability): Promise<PairingRead> {
+    if (storage === 'unavailable') {
+      return UNREADABLE;
+    }
     if (storage !== 'available') {
       return UNPAIRED;
     }
