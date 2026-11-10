@@ -13,7 +13,7 @@ import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import { countWords } from '../stats/count-words';
 import type { StatsRecorder } from '../stats/stats-store';
-import { orderProblem, type EngineConditions, type EngineProblem, type EngineSwitch } from '../../shared/engine-routing';
+import { orderProblem, routeOutcome, type EngineConditions, type EngineProblem, type EngineSwitch } from '../../shared/engine-routing';
 import { pcmDurationMs } from '../../shared/pcm';
 import type { OverlayAction, OverlayState } from '../../shared/overlay-contract';
 import type { EngineId } from '../../shared/settings';
@@ -38,6 +38,7 @@ export type SessionCoordinatorDeps = {
   openSettings?: () => void;
   openServer?: () => void;
   openModelSettings?: () => void;
+  enableServer?: () => Promise<void>;
   polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
   clock?: () => number;
   logger?: Logger;
@@ -54,6 +55,7 @@ export class SessionCoordinator {
     'copy-last': () => this.copyLastFromOverlay(),
     'use-server': () => this.reroute('server'),
     'use-local': () => this.reroute('local'),
+    'enable-server': () => this.enableServer(),
   };
   private readonly sessions = new Set<DictationSession>();
   private readonly captureLane = new SerialQueue();
@@ -150,6 +152,29 @@ export class SessionCoordinator {
     this.copyLast().catch((error: unknown) => {
       this.logger.error('Copying the last transcript failed', error);
     });
+  }
+
+  private enableServer(): void {
+    const enable = this.deps.enableServer;
+    if (enable === undefined) {
+      return;
+    }
+    enable()
+      .then(() => this.showEnabledRoute())
+      .catch((error: unknown) => {
+        this.logger.error('The server could not be switched on', error);
+        return this.showSwitchFailure(null);
+      });
+  }
+
+  private async showEnabledRoute(): Promise<void> {
+    const conditions = await this.deps.routing.capabilities();
+    const engine = routeOutcome(this.deps.settings.get().engineOrder, conditions).engine;
+    if (engine === null) {
+      this.showUtility(switchFailedState(this.orderProblem(conditions), conditions));
+      return;
+    }
+    this.showUtility({ kind: 'rerouted', engine });
   }
 
   private reroute(engine: EngineId): void {

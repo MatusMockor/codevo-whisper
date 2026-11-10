@@ -32,6 +32,13 @@ function useCatalog(): Live<ModelCatalogView> {
   return catalog;
 }
 
+export function modelName(models: Models, id: string | null): string | null {
+  if (models.catalog.kind !== 'ready') {
+    return null;
+  }
+  return models.catalog.value.models.find((model) => model.id === id)?.name ?? null;
+}
+
 export function useModels(): Models {
   const catalog = useCatalog();
   const states = useLiveValue('model-states-changed', loadStates);

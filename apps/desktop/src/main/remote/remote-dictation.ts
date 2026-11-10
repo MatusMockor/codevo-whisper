@@ -4,11 +4,10 @@ import { AudioOutbox } from './audio-outbox';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { RetryBuffer } from './retry-buffer';
 import type { SecureConnection } from './secure-connection';
-import type { ConnectionObserver, ReadyConnection } from './server-connector';
+import type { ReadyConnection } from './server-connector';
 
 export type RemoteDictationDeps = {
   options: DictationOptions;
-  observer: Pick<ConnectionObserver, 'failed'>;
   finishIdleMs: number;
   retryBufferBytes: number;
   reconnect: (previous: ReadyConnection) => Promise<ReadyConnection>;
@@ -21,6 +20,8 @@ type Attempt = { connection: SecureConnection; sessionId: string; segments: Map<
 
 export const MAX_SEGMENT_ID = 4095;
 export const MAX_TRANSCRIPT_CHARS = 200_000;
+export const MAX_SOCKET_BACKLOG_BYTES = 64_000;
+const DRAIN_POLL_MS = 40;
 
 const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = {
   busy: 'busy',
@@ -32,6 +33,7 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
   offline: 'connection-lost',
   timeout: 'connection-lost',
   'not-paired': 'connection-lost',
+  disconnected: 'disconnected',
 };
 
 const RETRYABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline', 'timeout']);
@@ -66,7 +68,9 @@ export class RemoteDictation implements EngineDictation {
   private paused = false;
   private settled = false;
   private idleTimer: NodeJS.Timeout | null = null;
+  private drainTimer: NodeJS.Timeout | null = null;
   private backoff: { timer: NodeJS.Timeout; resolve: () => void } | null = null;
+  private stopWatching: () => void = () => undefined;
 
   constructor(
     ready: ReadyConnection,
@@ -75,8 +79,12 @@ export class RemoteDictation implements EngineDictation {
     this.result.promise.catch(() => undefined);
     this.ready = ready;
     this.retry = new RetryBuffer(deps.retryBufferBytes);
+    this.attempt = this.idle(ready.connection);
+    this.stopWatching = ready.scope.onExpire(() => this.disconnected());
+    if (this.settled) {
+      return;
+    }
     if (deps.options.signal.aborted) {
-      this.attempt = this.idle(ready.connection);
       this.cancel();
       return;
     }
@@ -127,14 +135,48 @@ export class RemoteDictation implements EngineDictation {
       return;
     }
     const { connection } = this.attempt;
-    for (const pcm of this.outbox.take(this.finishing)) {
-      connection.send({ type: 'audio', pcm });
+    const frames = this.outbox.take(this.finishing);
+    const sent = this.sendWhileDraining(connection, frames);
+    if (sent < frames.length) {
+      this.outbox.putBack(frames.slice(sent));
+      this.waitForDrain();
+      return;
     }
     if (!this.finishing || this.attempt.finishSent) {
       return;
     }
     this.attempt.finishSent = true;
     connection.send({ type: 'finish' });
+  }
+
+  private sendWhileDraining(connection: SecureConnection, frames: readonly Uint8Array[]): number {
+    let sent = 0;
+    for (const pcm of frames) {
+      if (connection.backlog() >= MAX_SOCKET_BACKLOG_BYTES) {
+        return sent;
+      }
+      connection.send({ type: 'audio', pcm });
+      sent += 1;
+    }
+    return sent;
+  }
+
+  private waitForDrain(): void {
+    if (this.drainTimer !== null) {
+      return;
+    }
+    this.drainTimer = setTimeout(() => {
+      this.drainTimer = null;
+      this.pump();
+    }, DRAIN_POLL_MS);
+  }
+
+  private stopDraining(): void {
+    if (this.drainTimer === null) {
+      return;
+    }
+    clearTimeout(this.drainTimer);
+    this.drainTimer = null;
   }
 
   private receive(attempt: Attempt, message: ServerMessage): void {
@@ -338,9 +380,21 @@ export class RemoteDictation implements EngineDictation {
     this.result.resolve(text);
   }
 
+  private disconnected(): void {
+    if (this.settled) {
+      return;
+    }
+    const { connection, sessionId } = this.attempt;
+    if (sessionId !== '' && connection.backlog() === 0) {
+      connection.send({ type: 'cancel' });
+    }
+    connection.discard();
+    this.fail(new RemoteFailure('disconnected', 'the server was disconnected during the dictation'));
+  }
+
   private fail(failure: RemoteFailure): void {
     this.settle();
-    this.deps.observer.failed(failure.kind);
+    this.ready.scope.failed(failure.kind);
     this.result.reject(new TranscriptionFailedError(REASON_BY_KIND[failure.kind] ?? 'protocol', this.textSoFar(), { cause: failure }));
   }
 
@@ -357,6 +411,8 @@ export class RemoteDictation implements EngineDictation {
 
   private settle(): void {
     this.settled = true;
+    this.stopWatching();
+    this.stopDraining();
     this.clearIdle();
     this.stopBackoff();
     this.attempt.connection.close();

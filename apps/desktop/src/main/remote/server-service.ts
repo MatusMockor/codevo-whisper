@@ -1,8 +1,6 @@
 import { fingerprint } from '@codevo-whisper/protocol';
 import type { PairingEngineChange } from '../../shared/engine-routing';
-import { revokeCommand, type DisconnectResult, type PairedServerView, type PairingView, type ServerView, type VaultAvailability } from '../../shared/server';
-import type { EngineId } from '../../shared/settings';
-import type { EngineOrderQueue, OrderDecision } from '../engines/engine-order-queue';
+import { isServerDown, revokeCommand, type DisconnectResult, type PairedServerView, type PairingView, type ServerView, type VaultAvailability } from '../../shared/server';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
 import type { DevicePairing } from './device-pairing';
@@ -10,7 +8,8 @@ import type { PairingEngineSwitch } from './pairing-engine-switch';
 import type { PairingRepository, ServerPairing } from './pairing-repository';
 import type { SecretVault } from './secret-vault';
 import type { ServerConnector } from './server-connector';
-import type { ServerStatusBoard } from './server-status';
+import type { ServerStatusBoard, StatusScope } from './server-status';
+import type { ServerSwitch } from './server-switch';
 
 export type ServerServiceDeps = {
   pairings: PairingRepository;
@@ -19,7 +18,7 @@ export type ServerServiceDeps = {
   status: ServerStatusBoard;
   pairing: Pick<DevicePairing, 'pair'>;
   engineSwitch: Pick<PairingEngineSwitch, 'afterPairing'>;
-  order: Pick<EngineOrderQueue, 'change'>;
+  serverSwitch: Pick<ServerSwitch, 'isEnabled' | 'switchOff' | 'switchOn' | 'forget'>;
   logger: Logger;
   clock?: () => number;
   linux?: boolean;
@@ -33,11 +32,15 @@ const UNCHANGED: PairingEngineChange = { kind: 'unchanged' };
 
 type PairingRun = { abort: AbortController; committed: boolean };
 
-function withoutServer(current: readonly EngineId[]): OrderDecision<void> {
-  return { order: current.includes('server') ? ['local'] : null, result: undefined };
-}
+type RunningCheck = { scope: StatusScope; run: Promise<void> };
 
-function describe(pairing: ServerPairing, status: PairedServerView['status']): PairedServerView {
+type PairingRead = { kind: 'paired'; pairing: ServerPairing } | { kind: 'unpaired' } | { kind: 'unreadable' };
+
+const UNPAIRED: PairingRead = Object.freeze({ kind: 'unpaired' });
+
+const UNREADABLE: PairingRead = Object.freeze({ kind: 'unreadable' });
+
+function describe(pairing: ServerPairing, status: PairedServerView['status'], enabled: boolean): PairedServerView {
   return {
     host: new URL(pairing.endpoint).host,
     endpoint: pairing.endpoint,
@@ -47,13 +50,14 @@ function describe(pairing: ServerPairing, status: PairedServerView['status']): P
     serverFingerprint: fingerprint(pairing.serverPublicKey),
     deviceFingerprint: fingerprint(pairing.deviceKey.publicKey),
     status,
+    enabled,
   };
 }
 
 export class ServerService {
   private progress: PairingView = IDLE;
   private pairingRun: PairingRun | null = null;
-  private checking: Promise<void> | null = null;
+  private checking: RunningCheck | null = null;
   private lastCheckAt = Number.NEGATIVE_INFINITY;
   private readonly listeners: Listeners<ServerView>;
   private readonly unsubscribe: () => void;
@@ -66,7 +70,7 @@ export class ServerService {
   async view(): Promise<ServerView> {
     const storage = this.deps.vault.availability();
     const pairing = await this.loadPairing(storage);
-    return { storage, server: pairing === null ? null : describe(pairing, this.deps.status.status()), pairing: this.progress };
+    return { storage, server: pairing === null ? null : describe(pairing, this.deps.status.status(), this.deps.serverSwitch.isEnabled()), pairing: this.progress };
   }
 
   async isPaired(): Promise<boolean> {
@@ -78,7 +82,25 @@ export class ServerService {
   }
 
   isOffline(): boolean {
-    return this.deps.status.status().kind === 'offline';
+    return isServerDown(this.deps.status.status());
+  }
+
+  isEnabled(): boolean {
+    return this.deps.serverSwitch.isEnabled();
+  }
+
+  async setEnabled(enabled: boolean): Promise<void> {
+    if (!(await this.isPaired())) {
+      return;
+    }
+    if (!enabled) {
+      await this.deps.serverSwitch.switchOff();
+      this.deps.status.reset();
+      return;
+    }
+    await this.deps.serverSwitch.switchOn();
+    this.deps.status.reset();
+    await this.check();
   }
 
   onChange(listener: (view: ServerView) => void): () => void {
@@ -104,10 +126,20 @@ export class ServerService {
   }
 
   check(): Promise<void> {
-    this.checking ??= this.runCheck().finally(() => {
-      this.checking = null;
-    });
-    return this.checking;
+    if (this.checking !== null && this.checking.scope.isCurrent()) {
+      return this.checking.run;
+    }
+    const scope = this.deps.status.scope();
+    const running: RunningCheck = {
+      scope,
+      run: this.runCheck(scope).finally(() => {
+        if (this.checking === running) {
+          this.checking = null;
+        }
+      }),
+    };
+    this.checking = running;
+    return running.run;
   }
 
   refreshOnFocus(): Promise<void> {
@@ -121,15 +153,23 @@ export class ServerService {
     return (this.deps.clock ?? Date.now)();
   }
 
-  private async runCheck(): Promise<void> {
+  private async runCheck(scope: StatusScope): Promise<void> {
     this.lastCheckAt = this.now();
-    if (!(await this.isPaired())) {
+    const read = await this.readPairing(this.deps.vault.availability());
+    if (!scope.isCurrent()) {
+      return;
+    }
+    if (!this.deps.serverSwitch.isEnabled() || read.kind === 'unpaired') {
       this.deps.status.reset();
       return;
     }
-    this.deps.status.checking();
+    if (read.kind === 'unreadable') {
+      scope.failed('storage-insecure');
+      return;
+    }
+    scope.checking();
     try {
-      const ready = await this.deps.connector.connect();
+      const ready = await this.deps.connector.connect(scope);
       ready.connection.close();
     } catch (error) {
       this.deps.logger.info('The server check failed', error instanceof Error ? error.message : String(error));
@@ -137,17 +177,19 @@ export class ServerService {
   }
 
   async disconnect(): Promise<DisconnectResult> {
+    this.deps.status.invalidate();
     this.pairingRun?.abort.abort();
     this.pairingRun = null;
     const pairing = await this.loadPairing(this.deps.vault.availability());
     await this.deps.pairings.clear();
     this.progress = IDLE;
-    await this.deps.order.change(withoutServer);
+    await this.deps.serverSwitch.forget();
     this.deps.status.reset();
     return { revokeCommand: pairing === null ? null : revokeCommand(pairing.deviceId, this.deps.linux) };
   }
 
   dispose(): void {
+    this.deps.status.invalidate();
     this.pairingRun?.abort.abort();
     this.unsubscribe();
   }
@@ -167,6 +209,7 @@ export class ServerService {
       return;
     }
     this.finish(run, { kind: 'paired', deviceId: outcome.deviceId, engine });
+    this.deps.status.reset();
     await this.check();
   }
 
@@ -212,14 +255,23 @@ export class ServerService {
   }
 
   private async loadPairing(storage: VaultAvailability): Promise<ServerPairing | null> {
+    const read = await this.readPairing(storage);
+    return read.kind === 'paired' ? read.pairing : null;
+  }
+
+  private async readPairing(storage: VaultAvailability): Promise<PairingRead> {
+    if (storage === 'unavailable') {
+      return UNREADABLE;
+    }
     if (storage !== 'available') {
-      return null;
+      return UNPAIRED;
     }
     try {
-      return await this.deps.pairings.load();
+      const pairing = await this.deps.pairings.load();
+      return pairing === null ? UNPAIRED : { kind: 'paired', pairing };
     } catch (error) {
       this.deps.logger.error('The server pairing could not be loaded', error);
-      return null;
+      return UNREADABLE;
     }
   }
 

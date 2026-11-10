@@ -1,3 +1,4 @@
+import { stopsRoute, type EngineAvailability } from '../../shared/engine-routing';
 import type { EngineId } from '../../shared/settings';
 import type { EngineUnavailableReason, Preparation, TranscriptionEngine } from './transcription-engine';
 
@@ -7,8 +8,11 @@ const TERMINAL_REASONS: ReadonlySet<EngineUnavailableReason> = new Set(['server-
 
 const EAGER_ENGINES: ReadonlySet<EngineId> = new Set(['local']);
 
-function isTerminal(preparation: Preparation): boolean {
-  return !preparation.ready && preparation.reason !== undefined && TERMINAL_REASONS.has(preparation.reason);
+function availability(preparation: Preparation): EngineAvailability {
+  if (preparation.ready) {
+    return 'ready';
+  }
+  return preparation.reason !== undefined && TERMINAL_REASONS.has(preparation.reason) ? 'blocked' : 'unavailable';
 }
 
 type Candidate = { engine: TranscriptionEngine; preparation: Promise<Preparation> | null };
@@ -32,7 +36,7 @@ export class EngineSelector {
     let primary: Preparation | null = null;
     for (const [index, candidate] of candidates.entries()) {
       const preparation = await (candidate.preparation ?? candidate.engine.prepare());
-      if (preparation.ready || isTerminal(preparation)) {
+      if (stopsRoute(availability(preparation))) {
         candidates.slice(index + 1).forEach((rest) => releaseReady(rest.preparation));
         return preparation;
       }

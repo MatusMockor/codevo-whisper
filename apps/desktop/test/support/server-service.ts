@@ -8,10 +8,11 @@ import { DevicePairing } from '../../src/main/remote/device-pairing';
 import { InsecureTestVault } from '../../src/main/remote/insecure-test-vault';
 import { PairingEngineSwitch } from '../../src/main/remote/pairing-engine-switch';
 import { EncryptedPairingFile, type PairingRepository } from '../../src/main/remote/pairing-repository';
-import type { VaultAvailability } from '../../src/main/remote/secret-vault';
+import type { SecretVault, VaultAvailability } from '../../src/main/remote/secret-vault';
 import { ServerConnector } from '../../src/main/remote/server-connector';
 import { ServerService } from '../../src/main/remote/server-service';
 import { ServerStatusBoard } from '../../src/main/remote/server-status';
+import { ServerSwitch } from '../../src/main/remote/server-switch';
 import type { SettingsStore } from '../../src/main/settings/settings-store';
 import { testEntry } from '../model-fixtures';
 
@@ -21,12 +22,13 @@ export type ServerServiceSetup = {
   models: Pick<ModelManager, 'states'>;
   logger: Logger;
   availability?: VaultAvailability;
+  vault?: SecretVault;
   clock?: () => number;
   timeoutMs?: number;
   wrapPairings?: (pairings: PairingRepository) => PairingRepository;
 };
 
-export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; file: string };
+export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; connector: ServerConnector; file: string };
 
 const MODEL_BODY = 'GGUF';
 
@@ -42,16 +44,17 @@ export async function tinyModels(dir: string, settings: SettingsStore, logger: L
 export function createServerService(setup: ServerServiceSetup): ServerServiceHarness {
   const { dir, settings, models, logger } = setup;
   const timeoutMs = setup.timeoutMs ?? 2000;
-  const vault = new InsecureTestVault(setup.availability ?? 'available');
+  const vault = setup.vault ?? new InsecureTestVault(setup.availability ?? 'available');
   const file = join(dir, 'server-pairing.json');
   const pairings = new EncryptedPairingFile(file, vault, logger);
   const stored = setup.wrapPairings?.(pairings) ?? pairings;
   const status = new ServerStatusBoard(logger);
   const order = new EngineOrderQueue(settings);
-  const connector = new ServerConnector({ pairings: stored, observer: status, clock: Date.now, timeoutMs });
+  const connector = new ServerConnector({ pairings: stored, observer: status, scope: () => status.scope(), clock: Date.now, timeoutMs });
   const pairing = new DevicePairing({ pairings: stored, vault, deviceName: () => Promise.resolve('Test Mac'), clock: Date.now, timeoutMs });
   const engineSwitch = new PairingEngineSwitch({ order, local: new ActiveModelReadiness(models, settings) });
   const clock = setup.clock === undefined ? {} : { clock: setup.clock };
-  const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, order, logger, ...clock });
-  return { service, pairings, status, order, file };
+  const serverSwitch = new ServerSwitch({ settings, queue: order, local: new ActiveModelReadiness(models, settings) });
+  const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, serverSwitch, logger, ...clock });
+  return { service, pairings, status, order, connector, file };
 }

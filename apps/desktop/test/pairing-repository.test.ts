@@ -71,15 +71,23 @@ describe('EncryptedPairingFile', () => {
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('treats a corrupt or foreign file as no pairing and logs it', async () => {
+  it('treats a foreign file as no pairing and logs it', async () => {
     const logger = new RecordingLogger();
-    await writeFile(file, '{"version":1,"sealed":"bm90IHNlYWxlZA"}');
+    await writeFile(file, 'not json');
 
     expect(await new EncryptedPairingFile(file, new InsecureTestVault('available'), logger).load()).toBeNull();
     expect(logger.errors).toHaveLength(1);
+  });
 
-    await writeFile(file, 'not json');
-    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available'), logger).load()).toBeNull();
+  it('reports a pairing the secure storage cannot decrypt as a storage failure and does not remember it as absent', async () => {
+    await writeFile(file, '{"version":1,"sealed":"bm90IHNlYWxlZA"}');
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+
+    await expect(repository.load()).rejects.toMatchObject({ kind: 'storage-insecure' });
+
+    const saved = pairing();
+    await new EncryptedPairingFile(file, new InsecureTestVault('available')).save(saved);
+    expect(await repository.load()).toMatchObject({ deviceId: saved.deviceId, endpoint: saved.endpoint });
   });
 
   it('refuses to store keys without a secure storage backend', async () => {

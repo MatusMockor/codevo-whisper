@@ -35,7 +35,7 @@ import { coordinatorDictationGuard } from '../updates/coordinator-dictation-guar
 import { TrayMenu } from '../tray/tray-menu';
 import { MainWindowController } from '../windows/main-window-controller';
 import { OverlayWindow } from '../windows/overlay-window';
-import { SettingsFocus } from '../windows/settings-focus';
+import { SectionFocus } from '../windows/section-focus';
 import { rendererSource } from '../windows/renderer-source';
 import { backgroundPresentation, foregroundPresentation } from '../windows/window-presentation';
 import type { OverlayState } from '../../shared/overlay-contract';
@@ -150,9 +150,9 @@ export function composeApplication(logger: Logger): Application {
     });
     const localModel = new ActiveModelReadiness(models.manager, settings);
     const order = new EngineOrderQueue(settings);
-    const server = createServerServices({ order, local: localModel, window: mainWindow, e2e, isPackaged: app.isPackaged, logger });
+    const server = createServerServices({ settings, order, local: localModel, window: mainWindow, power: electronPowerEvents, e2e, isPackaged: app.isPackaged, logger });
     const routing = new EngineRouting({ order, local: localModel, server: server.service });
-    const settingsFocus = new SettingsFocus(mainWindow);
+    const sectionFocus = new SectionFocus(mainWindow);
     const home = createHomeServices({ settings, models: models.manager, permissions, pause, lastTranscript, server: server.service, window: mainWindow, logger });
     const settingsServices = createSettingsServices({ capture, models: models.manager, settings, window: mainWindow, isPackaged: app.isPackaged, logger });
     const hotkey = new HotkeyService(helper, settings, electronPowerEvents, undefined, logger);
@@ -182,7 +182,7 @@ export function composeApplication(logger: Logger): Application {
       server: server.service,
       order,
       routing,
-      settingsFocus,
+      sectionFocus,
       source: rendererSource(),
       updates: updates.service,
       openUpdateUrl: (url) => shell.openExternal(url),
@@ -207,8 +207,9 @@ export function composeApplication(logger: Logger): Application {
       pause,
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
-      openServer: () => mainWindow.open('server'),
-      openModelSettings: () => settingsFocus.reveal('local-model'),
+      openServer: () => sectionFocus.reveal('server'),
+      openModelSettings: () => sectionFocus.reveal('local-model'),
+      enableServer: () => server.service.setEnabled(true),
       polish: (text, signal) => aiServices.polish(text, signal),
       logger,
     });

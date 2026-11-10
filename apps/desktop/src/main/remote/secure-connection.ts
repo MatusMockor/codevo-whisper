@@ -11,7 +11,7 @@ import {
 import WebSocket from 'ws';
 import { failureForCode, RemoteFailure } from './remote-failure';
 
-export type ConnectionOptions = { handshakeTimeoutMs: number; keepAliveMs?: number; rekeyEvery?: number };
+export type ConnectionOptions = { handshakeTimeoutMs: number; keepAliveMs?: number; rekeyEvery?: number; signal?: AbortSignal };
 
 const DEFAULT_KEEP_ALIVE_MS = 10_000;
 const MAX_QUEUED_MESSAGES = 256;
@@ -120,6 +120,11 @@ export class SecureConnection {
       pending.push(toBytes(data));
     });
     const deadline = setTimeout(() => pending.fail(new RemoteFailure('timeout', 'the server did not answer the handshake in time')), options.handshakeTimeoutMs);
+    const cancel = (): void => pending.fail(new RemoteFailure('disconnected', 'the connection was cancelled'));
+    options.signal?.addEventListener('abort', cancel, { once: true });
+    if (options.signal?.aborted === true) {
+      cancel();
+    }
     try {
       await new Promise<void>((resolve, reject) => {
         socket.once('open', () => resolve());
@@ -134,7 +139,17 @@ export class SecureConnection {
       throw error;
     } finally {
       clearTimeout(deadline);
+      options.signal?.removeEventListener('abort', cancel);
     }
+  }
+
+  backlog(): number {
+    return this.socket.bufferedAmount;
+  }
+
+  discard(): void {
+    this.terminate(new RemoteFailure('disconnected', 'the connection was discarded'), false);
+    this.socket.terminate();
   }
 
   send(message: ClientMessage): void {

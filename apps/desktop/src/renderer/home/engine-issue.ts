@@ -2,16 +2,14 @@ import type { AppStatus } from '../../shared/app-status';
 import { engineRemedy, orderProblem, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
 import type { PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
-import type { NavTarget } from '../navigation';
+import { MODEL_SECTION, SERVER_SECTION, type NavTarget } from '../navigation';
 
 export type EngineIssue = { problem: EngineProblem; remedy: EngineRemedy | null; serverHost: string | null };
 
-const SERVER_PAGE: NavTarget = { page: 'server' };
-
 export const ISSUE_TARGETS: Readonly<Record<EngineProblem, NavTarget>> = Object.freeze({
-  'no-model': { page: 'settings', section: 'local-model' },
-  'server-not-paired': SERVER_PAGE,
-  'server-offline': SERVER_PAGE,
+  'no-model': MODEL_SECTION,
+  'server-not-paired': SERVER_SECTION,
+  'server-offline': SERVER_SECTION,
 });
 
 export type EngineIssueInput = { status: AppStatus; engineOrder: readonly EngineId[]; conditions: EngineConditions | null; server: PairedServerView | null };

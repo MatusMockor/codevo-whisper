@@ -29,7 +29,7 @@ afterEach(async () => {
 
 function engine(pairing: ServerPairing | null, options: Partial<RemoteEngineOptions> = {}, observer = new RecordingObserver()): RemoteEngine {
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector, observer, options });
+  return new RemoteEngine({ connector, options });
 }
 
 async function prepared(remote: RemoteEngine): Promise<PreparedEngine> {

@@ -17,6 +17,18 @@
   --radius-overlay: 22px;
   --radius-pill: 999px;
 
+  --page-max: 1280px;
+  --page-gap: 16px;
+
+  --term-bg: #0D0E10;
+  --term-well: #060708;
+  --term-ink: #E7E3DA;
+  --term-dim: #8A867E;
+  --term-line: #26282C;
+  --term-ok: #6BDCA0;
+  --term-err: #FF8080;
+  --term-amber: #FFBD5E;
+
   --amber-base: #F0A23A;
   --lamp: #F0A23A;
   --lamp-hi: #FFD08A;

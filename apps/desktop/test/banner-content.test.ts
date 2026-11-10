@@ -15,12 +15,12 @@ describe('bannerContent', () => {
 
   it('asks for the missing step first', () => {
     expect(bannerContent({ ...READY, hotkeyLabel: null }, NO_MODEL)).toEqual({ kind: 'action', message: 'Nastavte klávesovú skratku, ktorou budete diktovať.', target: { page: 'settings', section: 'dictation' }, issue: null });
-    expect(bannerContent({ ...READY, modelReady: false }, NO_MODEL)).toEqual({ kind: 'action', message: 'Lokálny model nie je stiahnutý.', target: { page: 'settings', section: 'local-model' }, issue: NO_MODEL });
-    expect(bannerContent({ ...READY, modelReady: false, pairingNeeded: true }, { problem: 'server-not-paired', remedy: null, serverHost: null })).toMatchObject({ message: 'Server nie je spárovaný.', target: { page: 'server' } });
-    expect(bannerContent(READY, { problem: 'server-offline', remedy: null, serverHost: 'domáci-pc' })).toMatchObject({ message: 'Server nie je dostupný.', target: { page: 'server' } });
+    expect(bannerContent({ ...READY, modelReady: false }, NO_MODEL)).toEqual({ kind: 'action', message: 'Lokálny model nie je stiahnutý.', target: { page: 'transcription', section: 'local-model' }, issue: NO_MODEL });
+    expect(bannerContent({ ...READY, modelReady: false, pairingNeeded: true }, { problem: 'server-not-paired', remedy: null, serverHost: null })).toMatchObject({ message: 'Server nie je spárovaný.', target: { page: 'transcription', section: 'server' } });
+    expect(bannerContent(READY, { problem: 'server-offline', remedy: null, serverHost: 'domáci-pc' })).toMatchObject({ message: 'Server nie je dostupný.', target: { page: 'transcription', section: 'server' } });
     expect(bannerContent({ ...READY, modelReady: false, serverRepairNeeded: true }, null)).toEqual({
       kind: 'action',
-      target: { page: 'server' },
+      target: { page: 'transcription', section: 'server' },
       message: 'Server treba znova spárovať. Kým to neurobíte, Codevo Whisper naň neposiela zvuk.',
       issue: null,
     });

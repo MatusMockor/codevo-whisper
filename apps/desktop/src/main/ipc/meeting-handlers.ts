@@ -20,7 +20,7 @@ export type MeetingHandlerDeps = {
   };
 };
 
-const NO_MODEL = 'Stretnutia sa prepisujú lokálnym modelom. Najprv ho stiahnite v Nastaveniach.';
+const NO_MODEL = 'Stretnutia sa prepisujú lokálnym modelom. Najprv ho stiahnite na stránke Prepis.';
 
 function meetingId(id: unknown, extra: readonly unknown[]): string {
   rejectArguments(extra);

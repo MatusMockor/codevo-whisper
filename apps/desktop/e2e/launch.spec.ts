@@ -29,7 +29,7 @@ test('shows a window titled Codevo Whisper with the sidebar sections', async () 
   expect(nativeTitle).toBe('Codevo Whisper');
 
   const sidebar = page.getByRole('tablist', { name: 'Sekcie aplikácie' });
-  for (const label of ['Domov', 'Server', 'Nastavenia', 'Súkromie']) {
+  for (const label of ['Domov', 'Stretnutia', 'Prepis', 'Nastavenia', 'Súkromie']) {
     await expect(sidebar.getByRole('tab', { name: label })).toBeVisible();
   }
 });

@@ -18,7 +18,13 @@ export type GlyphName =
   | 'trash'
   | 'refresh'
   | 'warn'
-  | 'x';
+  | 'x'
+  | 'laptop'
+  | 'grip'
+  | 'swap'
+  | 'plus'
+  | 'plug'
+  | 'terminal';
 
 const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
   home: () => <path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z" />,
@@ -98,6 +104,31 @@ const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
     </>
   ),
   x: () => <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  laptop: () => (
+    <>
+      <rect x="4.5" y="5" width="15" height="10.5" rx="1.5" />
+      <path d="M2.5 19h19" />
+    </>
+  ),
+  grip: () => (
+    <g fill="currentColor" stroke="none">
+      <circle cx="9" cy="6" r="1.4" />
+      <circle cx="15" cy="6" r="1.4" />
+      <circle cx="9" cy="12" r="1.4" />
+      <circle cx="15" cy="12" r="1.4" />
+      <circle cx="9" cy="18" r="1.4" />
+      <circle cx="15" cy="18" r="1.4" />
+    </g>
+  ),
+  swap: () => <path d="M4 8h14M14.5 4.5 18 8l-3.5 3.5M20 16H6M9.5 12.5 6 16l3.5 3.5" />,
+  plus: () => <path d="M12 5.5v13M5.5 12h13" />,
+  plug: () => <path d="M9 3.5v4M15 3.5v4M6.5 7.5h11V11a5.5 5.5 0 0 1-11 0zM12 16.5v4" />,
+  terminal: () => (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" />
+    </>
+  ),
 };
 
 type GlyphProps = { name: GlyphName; size?: 'sm' | 'md' | 'lg' };

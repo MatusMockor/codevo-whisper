@@ -80,8 +80,8 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
   if (paired) {
     await server.pairings.save(pairing);
   }
-  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
-  const remote = new RemoteEngine({ connector, observer: silentObserver });
+  const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, scope: () => server.status.scope(), clock: Date.now, timeoutMs: 2000 });
+  const remote = new RemoteEngine({ connector });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
   await hotkey.start();
@@ -107,6 +107,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     overlay: (state) => states.push(state),
     openServer: () => opened.push('server'),
     openModelSettings: () => opened.push('model'),
+    enableServer: () => server.service.setEnabled(true),
     logger,
   });
   coordinator.start();
@@ -209,6 +210,75 @@ describe('SessionCoordinator with the server engine', () => {
 
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.noModel });
     expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('stops a server dictation when the server is disconnected and tells the user why', async () => {
+    const harness = await prepared({ engineOrder: ['server', 'local'] }, { respond: () => ({ status: 200, body: { text: 'nemalo by sa prepisat' } }) });
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(2));
+    await expect.poll(async () => ((await gateway.admin({ cmd: 'status' })) as { activeSessions: number }).activeSessions).toBe(1);
+
+    await harness.server.setEnabled(false);
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverDisconnected });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('falls back to the local fallback when the server is disconnected before its connection is ready', async () => {
+    const release = Promise.withResolvers<void>();
+    const harness = await prepared({ engineOrder: ['server', 'local'] }, { respond: () => ({ status: 200, body: { text: 'nemalo by sa prepisat' } }) }, release.promise);
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.recording).toBe(true);
+    harness.capture.speak(stampedPcm(2));
+
+    await harness.server.setEnabled(false);
+    release.resolve();
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'inserted' });
+    expect(gateway.stt.requests).toEqual([]);
+    expect(((await gateway.admin({ cmd: 'status' })) as { activeSessions: number }).activeSessions).toBe(0);
+  });
+
+  it('switches a turned off server back on for a missing local model and reports the route it actually takes', async () => {
+    const harness = await prepared({ engineOrder: ['local'] }, { respond: () => ({ status: 200, body: { text: 'zase na serveri' } }) });
+    await harness.server.setEnabled(false);
+    expect(harness.settings.get()).toMatchObject({ engineOrder: ['local'], serverEnabled: false, serverRestoreOrder: ['local'] });
+    await harness.settings.update({ localModelId: null });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'download-model', alternative: 'enable-server' });
+    coordinator?.act('enable-server');
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'rerouted', engine: 'server' });
+    expect(harness.settings.get()).toMatchObject({ engineOrder: ['server'], serverEnabled: true, serverRestoreOrder: null });
+
+    await dictate(harness, stampedPcm(3));
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['zase na serveri']);
+  });
+
+  it('does not report a busy server as the new route after switching it back on', async () => {
+    const harness = await prepared({ engineOrder: ['local'] });
+    await harness.server.setEnabled(false);
+    await harness.settings.update({ localModelId: null });
+    const holder = new ServerConnector({ pairings: { load: () => Promise.resolve(harness.pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
+    const held = [await holder.connect(), await holder.connect(), await holder.connect(), await holder.connect()];
+
+    try {
+      await dictate(harness, stampedPcm(2));
+      await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.noModel, action: 'download-model', alternative: 'enable-server' });
+      coordinator?.act('enable-server');
+
+      await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: MESSAGES.engineSwitchFailed });
+      expect(harness.states.some((state) => state.kind === 'rerouted')).toBe(false);
+      expect(harness.settings.get()).toMatchObject({ engineOrder: ['server'], serverEnabled: true });
+    } finally {
+      held.forEach((ready) => ready.connection.close());
+    }
   });
 
   it('offers the paired server for a missing local model and transcribes there after the switch', async () => {

@@ -6,9 +6,11 @@ export type EngineSwitchApi = Pick<IpcInvokeApi, 'preferEngine'>;
 
 export const SWITCH_FAILED_MESSAGE = 'Prepis sa nepodarilo prepnúť. Skúste to znova.';
 
+export const ENABLE_FAILED_MESSAGE = 'Server sa nepodarilo pripojiť. Skúste to znova.';
+
 export const SWITCH_REFUSED_MESSAGES: Readonly<Record<EngineRefusal, string>> = Object.freeze({
   'no-model': 'Prepis sa nepodarilo prepnúť, lokálny model nie je stiahnutý. Stiahnite ho a skúste to znova.',
-  'server-not-paired': 'Prepis sa nepodarilo prepnúť, server nie je pripravený. Skontrolujte párovanie na stránke Server a skúste to znova.',
+  'server-not-paired': 'Prepis sa nepodarilo prepnúť, server nie je pripravený. Skontrolujte párovanie na stránke Prepis a skúste to znova.',
 });
 
 export function switchFailure(outcome: unknown): string | null {

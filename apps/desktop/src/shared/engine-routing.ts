@@ -2,13 +2,17 @@ import type { EngineId } from './settings';
 
 export type EngineCapabilities = { localReady: boolean; serverReady: boolean };
 
-export type EngineConditions = EngineCapabilities & { serverOffline: boolean };
+export type EngineConditions = EngineCapabilities & { serverOffline: boolean; serverOff: boolean; serverRepair: boolean };
+
+export type EngineAvailability = 'ready' | 'unavailable' | 'blocked';
+
+export type RouteOutcome = { engine: EngineId | null; blockedBy: EngineId | null };
 
 export type EngineFix = 'use-server' | 'use-local' | 'download-model';
 
 export type EngineProblem = 'no-model' | 'server-not-paired' | 'server-offline';
 
-export type EngineRemedyAction = EngineFix | 'pair-server' | 'open-server';
+export type EngineRemedyAction = EngineFix | 'pair-server' | 'open-server' | 'enable-server';
 
 export type EngineRemedy = { action: EngineRemedyAction; alternative?: EngineRemedyAction };
 
@@ -71,6 +75,9 @@ function missingModelRemedy(conditions: EngineConditions): EngineRemedy {
   if (conditions.serverReady) {
     return { action: 'download-model', alternative: 'open-server' };
   }
+  if (conditions.serverOff) {
+    return { action: 'download-model', alternative: 'enable-server' };
+  }
   return { action: 'download-model', alternative: 'pair-server' };
 }
 
@@ -84,11 +91,33 @@ export function engineRemedy(problem: EngineProblem, conditions: EngineCondition
   return REMEDIES[problem](conditions);
 }
 
-function isEngineWorking(engine: EngineId, conditions: EngineConditions): boolean {
-  if (engine === 'server') {
-    return isServerUsableNow(conditions);
+export function stopsRoute(availability: EngineAvailability): boolean {
+  return availability !== 'unavailable';
+}
+
+function serverAvailability(conditions: EngineConditions): EngineAvailability {
+  if (conditions.serverRepair) {
+    return 'blocked';
   }
-  return conditions.localReady;
+  return isServerUsableNow(conditions) ? 'ready' : 'unavailable';
+}
+
+export function engineAvailability(engine: EngineId, conditions: EngineConditions): EngineAvailability {
+  if (engine === 'server') {
+    return serverAvailability(conditions);
+  }
+  return conditions.localReady ? 'ready' : 'unavailable';
+}
+
+export function routeOutcome(order: readonly EngineId[], conditions: EngineConditions): RouteOutcome {
+  const stop = order.find((engine) => stopsRoute(engineAvailability(engine, conditions)));
+  if (stop === undefined) {
+    return { engine: null, blockedBy: null };
+  }
+  if (engineAvailability(stop, conditions) === 'blocked') {
+    return { engine: null, blockedBy: stop };
+  }
+  return { engine: stop, blockedBy: null };
 }
 
 function engineProblem(engine: EngineId, conditions: EngineConditions): EngineProblem {
@@ -99,10 +128,18 @@ function engineProblem(engine: EngineId, conditions: EngineConditions): EnginePr
 }
 
 export function orderProblem(order: readonly EngineId[], conditions: EngineConditions): EngineProblem | null {
-  if (order.some((engine) => isEngineWorking(engine, conditions))) {
+  const outcome = routeOutcome(order, conditions);
+  if (outcome.engine !== null) {
     return null;
   }
-  return engineProblem(order[0] ?? 'local', conditions);
+  return engineProblem(outcome.blockedBy ?? order[0] ?? 'local', conditions);
+}
+
+export function restoredOrder(saved: readonly EngineId[], conditions: EngineConditions): EngineId[] {
+  if (routeOutcome(saved, conditions).engine !== null) {
+    return [...saved];
+  }
+  return preferredOrder('server', conditions);
 }
 
 export function changeAfterPairing(order: readonly EngineId[], localReady: boolean): PairingEngineChange {

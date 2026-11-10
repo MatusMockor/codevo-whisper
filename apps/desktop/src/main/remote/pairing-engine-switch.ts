@@ -1,24 +1,28 @@
 import { changeAfterPairing, type PairingEngineChange } from '../../shared/engine-routing';
-import type { EngineId } from '../../shared/settings';
-import type { EngineOrderQueue, OrderDecision } from '../engines/engine-order-queue';
+import type { Settings } from '../../shared/settings';
+import type { EngineOrderQueue, SettingsDecision } from '../engines/engine-order-queue';
 import type { LocalModelReadiness } from '../models/local-model-readiness';
+import { SERVER_ON } from './server-switch';
 
-export type PairingEngineSwitchDeps = { order: Pick<EngineOrderQueue, 'change'>; local: LocalModelReadiness };
+export type PairingEngineSwitchDeps = { order: Pick<EngineOrderQueue, 'update'>; local: LocalModelReadiness };
 
-const ABANDONED: OrderDecision<PairingEngineChange | null> = Object.freeze({ order: null, result: null });
+const ABANDONED: SettingsDecision<PairingEngineChange | null> = Object.freeze({ patch: null, result: null });
 
 export class PairingEngineSwitch {
   constructor(private readonly deps: PairingEngineSwitchDeps) {}
 
   afterPairing(claim: () => boolean): Promise<PairingEngineChange | null> {
-    return this.deps.order.change((current) => this.decide(current, claim));
+    return this.deps.order.update((current) => this.decide(current, claim));
   }
 
-  private decide(current: readonly EngineId[], claim: () => boolean): OrderDecision<PairingEngineChange | null> {
+  private decide(current: Settings, claim: () => boolean): SettingsDecision<PairingEngineChange | null> {
     if (!claim()) {
       return ABANDONED;
     }
-    const change = changeAfterPairing(current, this.deps.local.isReady());
-    return { order: change.kind === 'switched' ? change.current : null, result: change };
+    const change = changeAfterPairing(current.engineOrder, this.deps.local.isReady());
+    if (change.kind === 'switched') {
+      return { patch: { ...SERVER_ON, engineOrder: change.current }, result: change };
+    }
+    return { patch: { ...SERVER_ON }, result: change };
   }
 }

@@ -3,7 +3,7 @@ import { isModelReady } from '../../shared/models';
 import type { PairedServerView, ServerView } from '../../shared/server';
 import type { Settings } from '../../shared/settings';
 import { engineConditions } from '../settings/engine-conditions';
-import { useModels, type Models } from '../settings/use-models';
+import { modelName, useModels, type Models } from '../settings/use-models';
 import { useSettings } from '../settings/use-settings';
 import { useServer } from '../server/use-server';
 import { engineIssue, type EngineIssue } from './engine-issue';
@@ -13,13 +13,6 @@ import { transcriptionRoute, type TranscriptionRoute } from './transcription-rou
 export type Dictation = { status: Live<AppStatus>; settings: Live<Settings>; route: TranscriptionRoute | null; issue: EngineIssue | null };
 
 const loadStatus = () => window.codevo.getStatus();
-
-function modelName(models: Models, id: string | null): string | null {
-  if (models.catalog.kind !== 'ready') {
-    return null;
-  }
-  return models.catalog.value.models.find((model) => model.id === id)?.name ?? null;
-}
 
 function serverView(server: Live<ServerView>): ServerView | null {
   return server.kind === 'ready' ? server.value : null;

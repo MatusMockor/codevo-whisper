@@ -95,7 +95,7 @@ describe('EngineSelector', () => {
       await breakPairing(gateway, pairing);
       const observer = { connected: () => undefined, failed: () => undefined };
       const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-      return new RemoteEngine({ connector, observer });
+      return new RemoteEngine({ connector });
     }
 
     const revoke = (server: TestGateway, pairing: ServerPairing) => server.admin({ cmd: 'revoke', deviceId: pairing.deviceId });
@@ -160,7 +160,7 @@ describe('EngineSelector', () => {
       const observer = { connected: () => undefined, failed: () => undefined };
       const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 300 });
       const events: string[] = [];
-      const selector = new EngineSelector([timed(await localEngine(true), events), timed(new RemoteEngine({ connector, observer }), events)]);
+      const selector = new EngineSelector([timed(await localEngine(true), events), timed(new RemoteEngine({ connector }), events)]);
 
       const preparation = await selector.prepare(['server', 'local']);
 

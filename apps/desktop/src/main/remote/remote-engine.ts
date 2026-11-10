@@ -1,7 +1,7 @@
 import { notReady, type EngineUnavailableReason, type Preparation, type TranscriptionEngine } from '../engines/transcription-engine';
 import { RemoteDictation } from './remote-dictation';
 import { asRemoteFailure, type RemoteFailureKind } from './remote-failure';
-import type { ConnectionObserver, ServerConnector } from './server-connector';
+import type { ServerConnector } from './server-connector';
 
 export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number; reconnectDelaysMs: readonly number[]; reconnectWindowMs: number };
 
@@ -14,7 +14,6 @@ export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({
 
 export type RemoteEngineDeps = {
   connector: Pick<ServerConnector, 'connect' | 'reconnect'>;
-  observer: Pick<ConnectionObserver, 'failed'>;
   options?: Partial<RemoteEngineOptions>;
 };
 
@@ -24,6 +23,7 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineUnavailableReason>
   'server-key-changed': 'server-repair-needed',
   busy: 'server-busy',
   'storage-insecure': 'server-storage',
+  disconnected: 'server-disconnected',
 };
 
 export class RemoteEngine implements TranscriptionEngine {
@@ -37,21 +37,30 @@ export class RemoteEngine implements TranscriptionEngine {
   async prepare(): Promise<Preparation> {
     try {
       const ready = await this.deps.connector.connect();
+      if (!ready.scope.isCurrent()) {
+        ready.connection.close();
+        return notReady('server-disconnected');
+      }
+      const stopWatching = ready.scope.onExpire(() => ready.connection.close());
       return {
         ready: true,
         engine: {
           id: this.id,
-          start: (options) =>
-            new RemoteDictation(ready, {
+          start: (options) => {
+            stopWatching();
+            return new RemoteDictation(ready, {
               options,
-              observer: this.deps.observer,
               finishIdleMs: this.options.finishIdleMs,
               retryBufferBytes: this.options.retryBufferBytes,
               reconnectDelaysMs: this.options.reconnectDelaysMs,
               reconnectWindowMs: this.options.reconnectWindowMs,
-              reconnect: (previous) => this.deps.connector.reconnect(previous.pairing),
-            }),
-          release: () => ready.connection.close(),
+              reconnect: (previous) => this.deps.connector.reconnect(previous),
+            });
+          },
+          release: () => {
+            stopWatching();
+            ready.connection.close();
+          },
         },
       };
     } catch (error) {

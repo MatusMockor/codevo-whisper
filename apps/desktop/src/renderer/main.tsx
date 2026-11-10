@@ -9,6 +9,7 @@ import './styles/home.css';
 import './styles/controls.css';
 import './styles/settings.css';
 import './styles/pages.css';
+import './styles/transcription.css';
 import './styles/onboarding.css';
 import './styles/interaction.css';
 

@@ -6,7 +6,7 @@ import { RecordCard } from '../meetings/RecordCard';
 import { SpeakersCard } from '../meetings/SpeakersCard';
 import { useLocalModelReady, useMeetings } from '../meetings/use-meetings';
 
-export function Meetings({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function Meetings({ onOpenSettings, onOpenModels }: { onOpenSettings: () => void; onOpenModels: () => void }) {
   const meetings = useMeetings();
   const modelReady = useLocalModelReady();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function Meetings({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   return (
     <div className="meetings">
-      <RecordCard recording={recording} modelReady={modelReady} onOpenSettings={onOpenSettings} />
+      <RecordCard recording={recording} modelReady={modelReady} onOpenModels={onOpenModels} />
       <SpeakersCard />
       <section className="last history" aria-labelledby="h-meetings">
         <div className="last-top">

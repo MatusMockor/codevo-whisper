@@ -3,12 +3,12 @@ import { formatClock, type MeetingSummary } from '../../shared/meetings';
 import { systemAudioLabel } from './meeting-copy';
 import { useNow } from './use-meetings';
 
-type RecordCardProps = { recording: MeetingSummary | null; modelReady: boolean | null; onOpenSettings: () => void };
+type RecordCardProps = { recording: MeetingSummary | null; modelReady: boolean | null; onOpenModels: () => void };
 
 const HEADPHONES_TIP = 'Tip: použite slúchadlá. Bez nich mikrofón zachytí aj hlas ostatných z reproduktorov a v prepise sa zopakuje.';
 
 
-export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCardProps) {
+export function RecordCard({ recording, modelReady, onOpenModels }: RecordCardProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(recording !== null);
@@ -30,10 +30,10 @@ export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCard
     return (
       <div className="card meeting-record">
         <h2>Nové stretnutie</h2>
-        <p className="srv-text">Stretnutia sa prepisujú iba lokálnym modelom na tomto počítači. Najprv si v Nastaveniach stiahnite a vyberte lokálny model, potom tu spustíte nahrávanie.</p>
+        <p className="srv-text">Stretnutia sa prepisujú iba lokálnym modelom na tomto počítači. Najprv si na stránke Prepis stiahnite a vyberte lokálny model, potom tu spustíte nahrávanie.</p>
         <div className="row-btns">
-          <button type="button" className="btn" onClick={onOpenSettings}>
-            Otvoriť Nastavenia
+          <button type="button" className="btn" onClick={onOpenModels}>
+            Stiahnuť model
           </button>
         </div>
       </div>
@@ -63,7 +63,7 @@ export function RecordCard({ recording, modelReady, onOpenSettings }: RecordCard
       )}
       <div className="row-btns">
         {recording === null ? (
-          <button type="button" className="btn primary" disabled={pending || modelReady === null} onClick={() => run(() => window.codevo.startMeeting(), 'Nahrávanie sa nepodarilo spustiť. Skontrolujte mikrofón a lokálny model v Nastaveniach.')}>
+          <button type="button" className="btn primary" disabled={pending || modelReady === null} onClick={() => run(() => window.codevo.startMeeting(), 'Nahrávanie sa nepodarilo spustiť. Skontrolujte mikrofón v Nastaveniach a lokálny model na stránke Prepis.')}>
             Začať nahrávanie
           </button>
         ) : (

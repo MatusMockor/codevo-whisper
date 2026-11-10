@@ -29,7 +29,7 @@ const TRACKS: readonly MeetingTrack[] = ['mic', 'system'];
 const MIN_TRACK_BYTES = PCM_BYTES_PER_SECOND / 10;
 const STDOUT_LIMIT_BYTES = 32 * 1024 * 1024;
 const MIN_TIMEOUT_MS = 10 * 60_000;
-const MODEL_MISSING = 'Lokálny model nie je stiahnutý. Stiahnite ho v Nastaveniach a skúste prepis znova.';
+const MODEL_MISSING = 'Lokálny model nie je stiahnutý. Stiahnite ho na stránke Prepis a skúste prepis znova.';
 
 function cliThreads(): number {
   return Math.max(2, Math.floor(availableParallelism() / 2));

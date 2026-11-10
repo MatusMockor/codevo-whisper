@@ -23,6 +23,8 @@ const DEFAULTS: Settings = {
   language: 'sk',
   microphone: { deviceId: null, label: null },
   engineOrder: ['local'],
+  serverEnabled: true,
+  serverRestoreOrder: null,
   localModelId: null,
   localAcceleration: 'auto',
   localModelUnload: 5,
@@ -154,6 +156,11 @@ function row(title: string): Locator {
 async function openSettings(): Promise<void> {
   await page.getByRole('tab', { name: 'Nastavenia' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+}
+
+async function openTranscription(): Promise<void> {
+  await page.getByRole('tab', { name: 'Prepis' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
 }
 
 function levelWithin(ms: number): Promise<boolean> {
@@ -419,6 +426,7 @@ test.describe('settings page', () => {
   });
 
   test('resident settings show all seven unload options, acceleration defaults and persist across relaunch', async () => {
+    await openTranscription();
     const unload = page.getByRole('combobox', { name: 'Uvoľniť model' });
     const acceleration = page.getByRole('group', { name: 'Akcelerácia' });
     const expectedOptions = [
@@ -430,7 +438,6 @@ test.describe('settings page', () => {
     await expect(unload).toHaveValue('5');
     await expect(acceleration.getByRole('button')).toHaveText(['Auto', 'GPU', 'CPU']);
     await expect(acceleration.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
     for (const [value] of expectedOptions) {
       await unload.selectOption(value ?? '');
       await expect(unload).toHaveValue(value ?? '');
@@ -444,10 +451,9 @@ test.describe('settings page', () => {
     await expect.poll(async () => JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as unknown).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
     await app.close();
     await start();
-    await openSettings();
+    await openTranscription();
     await expect(page.getByRole('combobox', { name: 'Uvoľniť model' })).toHaveValue('10');
     await expect(page.getByRole('group', { name: 'Akcelerácia' }).getByRole('button', { name: 'CPU', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Inteligentný', exact: true })).toHaveAttribute('aria-pressed', 'true');
     expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
   });
 
@@ -492,12 +498,18 @@ test.describe('settings page', () => {
     await expect(recorder).toContainText('Pravý ⌃ Control');
   });
 
-  test('the server engine orders are visible but disabled with a note', async () => {
-    const engine = page.getByRole('radiogroup', { name: 'Kde beží prepis' });
-    await expect(engine.getByRole('radio')).toHaveCount(4);
-    await expect(engine.getByRole('radio', { name: /^Lokálne/ }).first()).toBeChecked();
-    await expect(engine.getByRole('radio', { name: /^Server/ }).first()).toBeDisabled();
-    await expect(page.getByText('Najprv spárujte server na stránke Server.')).toBeVisible();
+  test('the transcription groups moved to Prepis and Settings links there', async () => {
+    await expect(page.getByRole('radiogroup', { name: 'Kde beží prepis' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Lokálny model' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: /^Kde beží prepis/ }).click();
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
+    await expect(page.getByRole('heading', { level: 2, name: 'Trasa prepisu' })).toBeFocused();
+    const route = page.locator('.route-card');
+    await expect(route).toContainText('Trasa: Lokálne.');
+    await expect(route).toContainText('Server ako záloha bude dostupný po spárovaní.');
+    await expect(route.getByRole('button', { name: 'Vymeniť hlavný prepis a zálohu' })).toBeDisabled();
   });
 
   test('Živý text can be chosen next to the default indicator and is saved', async () => {
@@ -514,6 +526,7 @@ test.describe('settings page', () => {
   });
 
   test('the model list shows the catalog with roles, sizes and downloads nothing by itself', async () => {
+    await openTranscription();
     const models = page.getByRole('list', { name: 'Modely na prepis' });
     const expected = [
       ['parakeet-ultra-q8', 'Parakeet Ultra', 'Odporúčaný', '740 MB'],
@@ -623,7 +636,7 @@ test.describe('settings page', () => {
     const tab = page.getByRole('tab', { name: 'Domov' });
     const button = page.getByRole('button', { name: 'Vynulovať štatistiky' });
     const segment = page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' });
-    const disabled = page.getByRole('radiogroup', { name: 'Kde beží prepis' }).locator('label').filter({ has: page.locator('input:disabled') }).first();
+    const disabled = page.getByRole('button', { name: 'Uložiť slová', exact: true });
 
     expect(await cursor(tab)).toBe('pointer');
     expect(await cursor(button)).toBe('pointer');

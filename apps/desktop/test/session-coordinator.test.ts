@@ -631,7 +631,7 @@ describe('SessionCoordinator', () => {
 
     await pressAndSpeak(harness, 5);
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'open-settings' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Model chýba alebo je poškodený', action: 'download-model' });
     expect(harness.capture.recording).toBe(false);
     harness.helper.emitHotkey('up');
     await new Promise((resolve) => setTimeout(resolve, 100));

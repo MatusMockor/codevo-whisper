@@ -6,7 +6,7 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { StatsStore } from '../stats/stats-store';
 import type { AppStatusService } from '../status/app-status-service';
 import type { HandlerGroup } from './invoke-handlers';
-import { validateSettingsPatch } from './validate';
+import { IpcValidationError, validateSettingsPatch } from './validate';
 
 export type CoreHandlerDeps = {
   helper: Pick<InputHelper, 'getOutputAudio'>;
@@ -19,8 +19,15 @@ export type CoreHandlerDeps = {
 
 export type SettingsWriter = Pick<CoreHandlerDeps, 'settings' | 'order'>;
 
+function allowedPatch(patch: Partial<Settings>, current: Settings): Partial<Settings> {
+  if (current.serverEnabled || !(patch.engineOrder?.includes('server') ?? false)) {
+    return patch;
+  }
+  throw new IpcValidationError('The server is switched off');
+}
+
 export function writeSettings({ settings, order }: SettingsWriter, patch: Partial<Settings>): Promise<Settings> {
-  return order.exclusive(() => settings.update(patch));
+  return order.exclusive(() => settings.update(allowedPatch(patch, settings.get())));
 }
 
 export function coreHandlers({ settings, order, stats, status, lastTranscript, helper }: CoreHandlerDeps): HandlerGroup<'getSettings' | 'updateSettings' | 'getStats' | 'resetStats' | 'getStatus' | 'getLastTranscript' | 'getOutputAudio'> {

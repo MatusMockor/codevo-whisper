@@ -1,8 +1,8 @@
 import type { AppStatus } from '../../shared/app-status';
-import type { PairedServerView } from '../../shared/server';
+import { isServerDown, type PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
 import type { EngineProblem } from '../../shared/engine-routing';
-import type { NavTarget } from '../navigation';
+import { ENGINE_SECTION, SERVER_SECTION, type NavTarget } from '../navigation';
 import { ISSUE_TARGETS, type EngineIssue } from './engine-issue';
 
 export type SignalState = 'ok' | 'warn' | 'err' | 'off';
@@ -10,10 +10,6 @@ export type SignalState = 'ok' | 'warn' | 'err' | 'off';
 export type TranscriptionRoute = { state: Exclude<SignalState, 'off'>; label: string; detail: string; latencyMs: number | null; target: NavTarget };
 
 export type RouteInput = { status: AppStatus; engineOrder: readonly EngineId[]; server: PairedServerView | null; localReady: boolean; modelName: string | null; issue: EngineIssue | null };
-
-const SERVER_PAGE: NavTarget = { page: 'server' };
-
-const ENGINE_SECTION: NavTarget = { page: 'settings', section: 'engine' };
 
 const FIX = 'kliknite a opravte';
 
@@ -52,10 +48,10 @@ function serverDetail(server: PairedServerView): string {
 
 function serverFirst({ server, localReady, modelName }: RouteInput): TranscriptionRoute {
   if (server === null) {
-    return { state: 'warn', label: localLabel(modelName), detail: 'server nie je spárovaný', latencyMs: null, target: SERVER_PAGE };
+    return { state: 'warn', label: localLabel(modelName), detail: 'server nie je spárovaný', latencyMs: null, target: SERVER_SECTION };
   }
-  if (server.status.kind === 'offline') {
-    return { state: 'warn', label: serverLabel(server), detail: localReady ? 'offline · záloha lokálne' : 'server je offline', latencyMs: null, target: SERVER_PAGE };
+  if (isServerDown(server.status)) {
+    return { state: 'warn', label: serverLabel(server), detail: localReady ? 'offline · záloha lokálne' : 'server je offline', latencyMs: null, target: SERVER_SECTION };
   }
   return { state: 'ok', label: serverLabel(server), detail: serverDetail(server), latencyMs: latency(server), target: ENGINE_SECTION };
 }
@@ -70,7 +66,7 @@ function localFirst({ engineOrder, server, localReady, modelName }: RouteInput):
 export function transcriptionRoute(input: RouteInput): TranscriptionRoute {
   const { status, engineOrder, issue } = input;
   if (status.serverRepairNeeded) {
-    return problem('Server treba znova spárovať', SERVER_PAGE);
+    return problem('Server treba znova spárovať', SERVER_SECTION);
   }
   if (issue !== null) {
     return problem(ISSUE_LABELS[issue.problem], ISSUE_TARGETS[issue.problem]);

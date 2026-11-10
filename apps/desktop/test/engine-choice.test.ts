@@ -17,6 +17,7 @@ const PAIRED: PairedServerView = {
   serverFingerprint: 'AAAA',
   deviceFingerprint: 'BBBB',
   status: { kind: 'online', connectMs: 12, serverVersion: '0.1.0' },
+  enabled: true,
 };
 
 function modelState(status: ModelState['status']): ModelState {

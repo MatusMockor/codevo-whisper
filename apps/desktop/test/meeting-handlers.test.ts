@@ -70,7 +70,7 @@ it('refuses a new transcription while the notes are generated', async () => {
 it('refuses to record without a downloaded local model', async () => {
   const { api, recorder } = handlers(undefined, false);
 
-  await expect(api.startMeeting()).rejects.toThrow('Najprv ho stiahnite v Nastaveniach.');
+  await expect(api.startMeeting()).rejects.toThrow('Najprv ho stiahnite na stránke Prepis.');
   expect(recorder.start).not.toHaveBeenCalled();
 });
 

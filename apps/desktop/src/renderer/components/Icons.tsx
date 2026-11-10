@@ -76,16 +76,6 @@ export function LaptopIcon() {
   );
 }
 
-export function ServerIcon() {
-  return (
-    <Icon>
-      <rect x="2" y="2.5" width="12" height="4.5" rx="1.5" />
-      <rect x="2" y="9" width="12" height="4.5" rx="1.5" />
-      <path d="M4.8 4.75h.01M4.8 11.25h.01M8 4.75h3M8 11.25h3" />
-    </Icon>
-  );
-}
-
 export function PlusIcon() {
   return (
     <Icon>

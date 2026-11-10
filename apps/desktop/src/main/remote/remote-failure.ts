@@ -13,7 +13,8 @@ export type RemoteFailureKind =
   | 'protocol'
   | 'storage-insecure'
   | 'pairing-closed'
-  | 'pairing-rejected';
+  | 'pairing-rejected'
+  | 'disconnected';
 
 export class RemoteFailure extends Error {
   override readonly name = 'RemoteFailure';
