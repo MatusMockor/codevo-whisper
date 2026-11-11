@@ -1,46 +1,55 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type Ref } from 'react';
 import { panelId, Rail, tabId } from './components/Rail';
 import { StatusBar } from './components/StatusBar';
 import { railBadges } from './home/readiness';
 import { useDictation, type Dictation } from './home/use-dictation';
-import { MODEL_SECTION, pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
+import { isPageOnly, pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
 import { Home } from './pages/Home';
 import { Meetings } from './pages/Meetings';
 import { Onboarding } from './pages/Onboarding';
 import { Privacy } from './pages/Privacy';
 import { Settings } from './pages/Settings';
 import { Transcription } from './pages/Transcription';
+import { useHeadingFocus } from './components/use-heading-focus';
 import { useSectionFocusRequests } from './components/use-section-focus';
+import { CommandPalette, type PaletteRequest } from './palette/CommandPalette';
+import { paletteEntries, type PaletteEntry } from './palette/palette-entries';
+import { usePaletteShortcut } from './palette/use-palette-shortcut';
+import { settingsGroups } from './settings/settings-catalog';
+import { SETTINGS_PLATFORM } from './settings/settings-platform';
 import { useSettings } from './settings/use-settings';
 
 const INSET_TITLE_BAR = navigator.userAgent.includes('Mac');
 
-type PageContentProps = { target: NavTarget; dictation: Dictation; onNavigate: (target: NavTarget) => void };
+const PALETTE_ENTRIES = paletteEntries(settingsGroups(SETTINGS_PLATFORM, SETTINGS_PLATFORM === 'linux'));
 
-function PageContent({ target, dictation, onNavigate }: PageContentProps) {
-  const openSettings = () => onNavigate({ page: 'settings' });
+type PageContentProps = { target: NavTarget; dictation: Dictation; onNavigate: (target: NavTarget) => void; onOpenPalette: (query: string) => void };
+
+function PageContent({ target, dictation, onNavigate, onOpenPalette }: PageContentProps) {
   if (target.page === 'home') {
     return <Home dictation={dictation} onNavigate={onNavigate} />;
   }
   if (target.page === 'meetings') {
-    return <Meetings onOpenSettings={openSettings} onOpenModels={() => onNavigate(MODEL_SECTION)} />;
+    return <Meetings onNavigate={onNavigate} />;
   }
   if (target.page === 'settings') {
-    return <Settings target={target} onNavigate={onNavigate} />;
+    return <Settings target={target} onNavigate={onNavigate} onOpenPalette={onOpenPalette} />;
   }
   if (target.page === 'transcription') {
     return <Transcription target={target} dictation={dictation} onNavigate={onNavigate} />;
   }
-  return <Privacy onOpenSettings={openSettings} />;
+  return <Privacy onNavigate={onNavigate} />;
 }
 
-function PageHead({ page }: { page: PageId }) {
+function PageHead({ page, heading }: { page: PageId; heading: Ref<HTMLHeadingElement> }) {
   const { label, title, lead } = pageDefinition(page);
   return (
     <div className="phead">
       <div>
         {title !== label && <p className="kick">{label}</p>}
-        <h1>{title}</h1>
+        <h1 ref={heading} tabIndex={-1}>
+          {title}
+        </h1>
         {lead !== undefined && <p className="sub">{lead}</p>}
       </div>
       {page === 'home' && <span className="label-mono">Kliknite na uzol a upravte ho</span>}
@@ -53,10 +62,26 @@ function Shell() {
   const dictation = useDictation();
   const badges = dictation.status.kind === 'ready' ? railBadges(dictation.status.value, dictation.issue) : {};
 
+  const [palette, setPalette] = useState<PaletteRequest | null>(null);
+
   const navigate = useCallback((next: NavTarget) => setTarget({ ...next }), []);
+  const { heading, openWithHeading } = useHeadingFocus(target, setTarget);
+  const runEntry = useCallback(
+    (entry: PaletteEntry) => {
+      if (isPageOnly(entry.target)) {
+        openWithHeading(entry.target);
+        return;
+      }
+      navigate(entry.target);
+    },
+    [navigate, openWithHeading],
+  );
+  const openPalette = useCallback((query: string) => setPalette({ query }), []);
+  const togglePalette = useCallback(() => setPalette((current) => (current === null ? { query: '' } : null)), []);
 
   useEffect(() => window.codevo.on('open-page', (page) => setTarget({ page })), []);
   useSectionFocusRequests(navigate);
+  usePaletteShortcut(togglePalette);
 
   return (
     <div className="shell">
@@ -69,12 +94,13 @@ function Shell() {
         <Rail selected={target.page} badges={badges} onSelect={(page) => setTarget({ page })} />
         <main className="main">
           <section key={target.page} className="panel" role="tabpanel" id={panelId(target.page)} aria-labelledby={tabId(target.page)}>
-            <PageHead page={target.page} />
-            <PageContent target={target} dictation={dictation} onNavigate={navigate} />
+            <PageHead page={target.page} heading={heading} />
+            <PageContent target={target} dictation={dictation} onNavigate={navigate} onOpenPalette={openPalette} />
           </section>
         </main>
       </div>
       <StatusBar dictation={dictation} />
+      <CommandPalette request={palette} entries={PALETTE_ENTRIES} onClose={() => setPalette(null)} onRun={runEntry} />
     </div>
   );
 }

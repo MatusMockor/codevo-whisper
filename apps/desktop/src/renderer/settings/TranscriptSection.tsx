@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 import { isCustomWords, type Settings } from '../../shared/settings';
 import { Switch } from '../components/Switch';
-import { SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SettingsBlock, SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SearchHighlight } from './settings-search';
 import { saveSettings } from './use-settings';
 
 export function TranscriptSection({ settings }: { settings: Settings }) {
@@ -32,31 +33,37 @@ export function TranscriptSection({ settings }: { settings: Settings }) {
   }
 
   return (
-    <SettingsGroup title="Úprava prepisu">
-      <div className="transcript-words">
-        <label htmlFor={id}>Vlastné slová</label>
-        <span id={`${id}-hint`}>Jedno slovo na riadok, najviac 100 slov po 64 znakov. Použite požadovaný pravopis mien a odborných výrazov.</span>
-        <textarea
-          id={id}
-          rows={4}
-          value={value}
-          disabled={saving}
-          aria-describedby={`${id}-hint${error === null ? '' : ` ${id}-error`}`}
-          aria-invalid={error !== null}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setError(null);
-          }}
-        />
-        {error !== null && <p id={`${id}-error`} className="save-error" role="alert">{error}</p>}
-        <button type="button" className="btn" disabled={saving || draft === null} onClick={saveWords}>
-          {saving ? 'Ukladá sa…' : 'Uložiť slová'}
-        </button>
-      </div>
-      <SettingsRow title="Odstrániť výplňové slová" description="Vynechá zaváhania ako ehm, eee, hmm, um a uh z hotového prepisu.">
+    <SettingsGroup group="transcript">
+      <SettingsBlock id="custom-words" className="srow">
+        <div className="t">
+          <label htmlFor={id}>
+            <SearchHighlight text="Vlastné slová" />
+          </label>
+          <span id={`${id}-hint`}>Jedno slovo na riadok, najviac 100 slov po 64 znakov. Použite požadovaný pravopis mien a odborných výrazov.</span>
+        </div>
+        <div className="words-ctl">
+          <textarea
+            id={id}
+            rows={5}
+            value={value}
+            disabled={saving}
+            aria-describedby={`${id}-hint${error === null ? '' : ` ${id}-error`}`}
+            aria-invalid={error !== null}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setError(null);
+            }}
+          />
+          {error !== null && <p id={`${id}-error`} className="field-note warn" role="alert">{error}</p>}
+          <button type="button" className="btn" disabled={saving || draft === null} onClick={saveWords}>
+            {saving ? 'Ukladá sa…' : 'Uložiť slová'}
+          </button>
+        </div>
+      </SettingsBlock>
+      <SettingsRow id="filler-words" title="Odstrániť výplňové slová" description="Vynechá zaváhania ako ehm, eee, hmm, um a uh z hotového prepisu.">
         <Switch label="Odstrániť výplňové slová" checked={settings.removeFillerWords} onChange={(checked) => saveSettings({ removeFillerWords: checked })} />
       </SettingsRow>
-      <SettingsRow title="Pridať medzeru na konci" description="Za neprázdny prepis pridá jednu medzeru pre plynulé pokračovanie v písaní.">
+      <SettingsRow id="trailing-space" title="Pridať medzeru na konci" description="Za neprázdny prepis pridá jednu medzeru pre plynulé pokračovanie v písaní.">
         <Switch label="Pridať medzeru na konci" checked={settings.appendTrailingSpace} onChange={(checked) => saveSettings({ appendTrailingSpace: checked })} />
       </SettingsRow>
     </SettingsGroup>

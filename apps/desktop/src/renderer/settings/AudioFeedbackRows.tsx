@@ -49,20 +49,20 @@ export function AudioFeedbackRows({ settings }: { settings: Settings }) {
   const missing = settings.feedbackOutputId !== null && !outputs.some((output) => output.id === settings.feedbackOutputId);
   return (
     <>
-      <SettingsRow title="Stlmiť počas nahrávania" description={available && state.canMute ? 'Dočasne stlmí systémový výstup a potom obnoví jeho pôvodný stav.' : 'Stlmenie systémového výstupu teraz nie je dostupné.'}>
+      <SettingsRow id="mute" title="Stlmiť počas nahrávania" description={available && state.canMute ? 'Dočasne stlmí systémový výstup a potom obnoví jeho pôvodný stav.' : 'Stlmenie systémového výstupu teraz nie je dostupné.'}>
         <Switch label="Stlmiť počas nahrávania" checked={settings.muteWhileRecording} disabled={!settings.muteWhileRecording && (!available || !state.canMute)} onChange={(muteWhileRecording) => saveSettings({ muteWhileRecording })} />
       </SettingsRow>
-      <SettingsRow title="Zvuková odozva" description={<span role={state.kind === 'failed' ? 'alert' : undefined}>{outputNote(state)}</span>}>
+      <SettingsRow id="feedback" title="Zvuková odozva" description={<span role={state.kind === 'failed' ? 'alert' : undefined}>{outputNote(state)}</span>}>
         <Switch label="Zvuková odozva" checked={settings.audioFeedback} disabled={!settings.audioFeedback && !available} onChange={(audioFeedback) => saveSettings({ audioFeedback })} />
       </SettingsRow>
-      <SettingsRow title="Výstupné zariadenie" titleId="set-feedback-output" description={available && missing ? 'Vybrané zariadenie nie je pripojené. Zvuky použijú systémový predvolený výstup.' : undefined}>
+      <SettingsRow id="feedback-output" title="Výstupné zariadenie" titleId="set-feedback-output" description={available && missing ? 'Vybrané zariadenie nie je pripojené. Zvuky použijú systémový predvolený výstup.' : undefined}>
         <select className="select" aria-labelledby="set-feedback-output" disabled={disabled} value={settings.feedbackOutputId ?? ''} onChange={(event) => saveSettings({ feedbackOutputId: event.target.value || null })}>
           <option value="">Systémový predvolený</option>
           {outputs.map((output) => <option key={output.id} value={output.id}>{output.label}</option>)}
           {missing && <option value={settings.feedbackOutputId ?? ''}>Vybrané zariadenie (nepripojené)</option>}
         </select>
       </SettingsRow>
-      <SettingsRow title="Hlasitosť" titleId="set-feedback-volume" description="Hlasitosť zvukovej odozvy. Nemení hlasitosť systému.">
+      <SettingsRow id="feedback-volume" title="Hlasitosť" titleId="set-feedback-volume" description="Hlasitosť zvukovej odozvy. Nemení hlasitosť systému.">
         <div className="feedback-volume">
           <input type="range" min="0" max="100" step="1" aria-labelledby="set-feedback-volume" disabled={disabled} value={settings.feedbackVolume} onChange={(event) => saveSettings({ feedbackVolume: event.target.valueAsNumber })} />
           <output aria-live="polite">{settings.feedbackVolume} %</output>

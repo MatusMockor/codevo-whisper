@@ -32,6 +32,7 @@ export type IpcInvokeApi = {
   openPermissionSettings(kind: PermissionKind): Promise<void>;
   getPermissionGuide(): Promise<PermissionGuide>;
   revealAppInFinder(): Promise<void>;
+  getDataFolder(): Promise<string>;
   relaunch(): Promise<void>;
   recordHotkey(): Promise<HotkeyRecordResult>;
   isHotkeyArmed(): Promise<boolean>;
@@ -116,6 +117,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   openPermissionSettings: 'permissions:open-settings',
   getPermissionGuide: 'permissions:guide',
   revealAppInFinder: 'app:reveal-in-finder',
+  getDataFolder: 'app:data-folder',
   relaunch: 'app:relaunch',
   recordHotkey: 'hotkey:record',
   isHotkeyArmed: 'hotkey:armed',

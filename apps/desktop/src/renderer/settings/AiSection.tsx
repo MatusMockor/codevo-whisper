@@ -3,7 +3,7 @@ import { isAiBaseUrl, isAiKey, isCodexModel, isLocalAddress, type AiCheck, type 
 import type { Settings } from '../../shared/settings';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { Switch } from '../components/Switch';
-import { SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SettingsBlock, SettingsGroup, SettingsLead, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
 type CheckState<T> = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done'; result: T };
@@ -224,74 +224,77 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' 
   }
 
   return (
-    <SettingsGroup title="AI úprava textu" section="ai">
-      <p className="sbox-lead">
+    <SettingsGroup group="ai">
+      <SettingsLead>
         {codex
           ? 'Po prepise môže diktát a poznámky zo stretnutí upraviť model OpenAI cez Codex CLI, v ktorom ste prihlásený.'
           : 'Po prepise môže diktát upraviť jazykový model na serveri, ktorý si nastavíte, napríklad Ollama alebo LM Studio. Bez adresy sa text nikam neposiela.'}
-      </p>
-      <SettingsRow title="Poskytovateľ" description="Codex CLI používa váš účet ChatGPT. Vlastný server môže bežať aj na tomto počítači.">
+      </SettingsLead>
+      <SettingsRow id="ai-provider" title="Poskytovateľ" description="Codex CLI používa váš účet ChatGPT. Vlastný server môže bežať aj na tomto počítači.">
         <SegmentedControl label="Poskytovateľ AI" options={PROVIDERS} value={settings.aiProvider} onChange={(aiProvider) => saveSettings({ aiProvider })} />
       </SettingsRow>
-      {codex ? (
-        <CodexFields settings={settings} />
-      ) : (
-        <div className="ai-fields">
-          <div className="ai-field">
-            <label htmlFor={urlId}>Adresa servera (OpenAI-compatible)</label>
-            <input
-              id={urlId}
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="http://127.0.0.1:11434/v1"
-              value={url ?? settings.aiBaseUrl ?? ''}
-              aria-invalid={!urlValid}
-              aria-describedby={`${urlId}-note`}
-              onChange={(event) => {
-                setUrl(event.target.value);
-                setCheck({ kind: 'idle' });
-              }}
-              onBlur={saveUrl}
-              onKeyDown={(event) => event.key === 'Enter' && saveUrl()}
-            />
-            <span id={`${urlId}-note`} className={urlValid && (urlValue === '' || isLocalAddress(urlValue)) ? 'field-note' : 'field-note warn'} role={urlValid ? undefined : 'alert'}>
-              {!urlValid ? 'Zadajte adresu začínajúcu http:// alebo https://, bez mena, hesla a parametrov.' : urlValue !== '' && !isLocalAddress(urlValue) ? 'Text sa odošle mimo tento počítač.' : 'Adresa končí spravidla na /v1.'}
-            </span>
+      <SettingsBlock id="ai-connection">
+        {codex ? (
+          <CodexFields settings={settings} />
+        ) : (
+          <div className="ai-fields">
+            <div className="ai-field">
+              <label htmlFor={urlId}>Adresa servera (OpenAI-compatible)</label>
+              <input
+                id={urlId}
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="http://127.0.0.1:11434/v1"
+                value={url ?? settings.aiBaseUrl ?? ''}
+                aria-invalid={!urlValid}
+                aria-describedby={`${urlId}-note`}
+                onChange={(event) => {
+                  setUrl(event.target.value);
+                  setCheck({ kind: 'idle' });
+                }}
+                onBlur={saveUrl}
+                onKeyDown={(event) => event.key === 'Enter' && saveUrl()}
+              />
+              <span id={`${urlId}-note`} className={urlValid && (urlValue === '' || isLocalAddress(urlValue)) ? 'field-note' : 'field-note warn'} role={urlValid ? undefined : 'alert'}>
+                {!urlValid ? 'Zadajte adresu začínajúcu http:// alebo https://, bez mena, hesla a parametrov.' : urlValue !== '' && !isLocalAddress(urlValue) ? 'Text sa odošle mimo tento počítač.' : 'Adresa končí spravidla na /v1.'}
+              </span>
+            </div>
+            <div className="ai-field">
+              <label htmlFor={modelId}>Model</label>
+              <input
+                id={modelId}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                list={`${modelId}-list`}
+                placeholder="qwen2.5:1.5b"
+                value={model ?? settings.aiModel}
+                onChange={(event) => setModel(event.target.value)}
+                onBlur={saveModel}
+                onKeyDown={(event) => event.key === 'Enter' && saveModel()}
+              />
+              <datalist id={`${modelId}-list`}>
+                {models.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </div>
+            <ApiKeyField state={keyState} onChange={setKeyState} />
+            <div className="ai-inline">
+              <button type="button" className="btn" disabled={urlValue === '' || !urlValid || check.kind === 'checking'} onClick={verify}>
+                {check.kind === 'checking' ? 'Overuje sa…' : 'Overiť pripojenie'}
+              </button>
+              <span className={check.kind === 'done' && !check.result.ok ? 'field-note warn' : 'field-note'} aria-live="polite">
+                {check.kind === 'done' ? checkMessage(check.result) : ''}
+              </span>
+            </div>
           </div>
-          <div className="ai-field">
-            <label htmlFor={modelId}>Model</label>
-            <input
-              id={modelId}
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              list={`${modelId}-list`}
-              placeholder="qwen2.5:1.5b"
-              value={model ?? settings.aiModel}
-              onChange={(event) => setModel(event.target.value)}
-              onBlur={saveModel}
-              onKeyDown={(event) => event.key === 'Enter' && saveModel()}
-            />
-            <datalist id={`${modelId}-list`}>
-              {models.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-          </div>
-          <ApiKeyField state={keyState} onChange={setKeyState} />
-          <div className="ai-inline">
-            <button type="button" className="btn" disabled={urlValue === '' || !urlValid || check.kind === 'checking'} onClick={verify}>
-              {check.kind === 'checking' ? 'Overuje sa…' : 'Overiť pripojenie'}
-            </button>
-            <span className={check.kind === 'done' && !check.result.ok ? 'field-note warn' : 'field-note'} aria-live="polite">
-              {check.kind === 'done' ? checkMessage(check.result) : ''}
-            </span>
-          </div>
-        </div>
-      )}
+        )}
+      </SettingsBlock>
       <SettingsRow
+        id="ai-polish"
         title="Upraviť diktát cez AI"
         description={
           codex

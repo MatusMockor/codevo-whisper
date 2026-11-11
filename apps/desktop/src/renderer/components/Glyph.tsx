@@ -1,30 +1,7 @@
 import type { JSX } from 'react';
+import type { GlyphName } from './glyph-name';
 
-export type GlyphName =
-  | 'home'
-  | 'meet'
-  | 'server'
-  | 'sliders'
-  | 'shield'
-  | 'mic'
-  | 'key'
-  | 'wave'
-  | 'spark'
-  | 'insert'
-  | 'route'
-  | 'lock'
-  | 'copy'
-  | 'check'
-  | 'trash'
-  | 'refresh'
-  | 'warn'
-  | 'x'
-  | 'laptop'
-  | 'grip'
-  | 'swap'
-  | 'plus'
-  | 'plug'
-  | 'terminal';
+export type { GlyphName };
 
 const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
   home: () => <path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z" />,
@@ -123,12 +100,29 @@ const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
   swap: () => <path d="M4 8h14M14.5 4.5 18 8l-3.5 3.5M20 16H6M9.5 12.5 6 16l3.5 3.5" />,
   plus: () => <path d="M12 5.5v13M5.5 12h13" />,
   plug: () => <path d="M9 3.5v4M15 3.5v4M6.5 7.5h11V11a5.5 5.5 0 0 1-11 0zM12 16.5v4" />,
+  search: () => (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5" />
+    </>
+  ),
   terminal: () => (
     <>
       <rect x="3" y="4.5" width="18" height="15" rx="2" />
       <path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" />
     </>
   ),
+  record: () => <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
+  stop: () => <rect x="7" y="7" width="10" height="10" rx="1.8" fill="currentColor" stroke="none" />,
+  export: () => <path d="M12 14.5V3.5M7.5 8 12 3.5 16.5 8M5 13.5v6.5h14v-6.5" />,
+  headphones: () => (
+    <>
+      <path d="M4.5 15.5v-3a7.5 7.5 0 0 1 15 0v3" />
+      <rect x="3.5" y="14.5" width="4" height="6" rx="1.5" />
+      <rect x="16.5" y="14.5" width="4" height="6" rx="1.5" />
+    </>
+  ),
+  folder: () => <path d="M3.5 6.5a1 1 0 0 1 1-1h4.8l2 2.2h8.2a1 1 0 0 1 1 1V18.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" />,
 };
 
 type GlyphProps = { name: GlyphName; size?: 'sm' | 'md' | 'lg' };

@@ -3,6 +3,7 @@ import { INVOKE_CHANNELS, type IpcInvokeApi } from '../../shared/ipc-contract';
 import type { SettingsStore } from '../settings/settings-store';
 import type { RendererSource } from '../windows/renderer-source';
 import { aiHandlers, type AiHandlerDeps } from './ai-handlers';
+import { appHandlers, type AppHandlerDeps } from './app-handlers';
 import { broadcast } from './broadcast';
 import { coreHandlers, type CoreHandlerDeps } from './core-handlers';
 import { engineHandlers, type EngineHandlerDeps } from './engine-handlers';
@@ -28,6 +29,7 @@ export type IpcDependencies = CoreHandlerDeps &
   FocusHandlerDeps &
   UpdateHandlerDeps &
   AiHandlerDeps &
+  AppHandlerDeps &
   MeetingHandlerDeps & {
     settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
     source: RendererSource;
@@ -45,6 +47,7 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...focusHandlers(dependencies),
     ...updateHandlers(dependencies),
     ...aiHandlers(dependencies),
+    ...appHandlers(dependencies),
     ...meetingHandlers(dependencies),
   };
 }

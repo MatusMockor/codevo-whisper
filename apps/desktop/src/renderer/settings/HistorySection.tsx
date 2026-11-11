@@ -38,11 +38,11 @@ export function HistorySection() {
 
   const view = history.kind === 'ready' ? history.value : null;
   return (
-    <SettingsGroup title="História prepisov">
+    <SettingsGroup group="history">
       {history.kind === 'loading' ? <p className="sbox-lead" role="status">Načítava sa história…</p>
         : view?.kind !== 'ready' ? <p className="sbox-lead load-error" role="alert">{HISTORY_UNAVAILABLE}</p>
           : <>
-            <SettingsRow title="Ukladať históriu prepisov" description="Predvolene vypnuté. Po zapnutí sa ukladajú iba budúce dokončené prepisy ako lokálny text, nikdy zvuk. Vypnutie vymaže uloženú históriu.">
+            <SettingsRow id="history-enabled" title="Ukladať históriu prepisov" description="Predvolene vypnuté. Po zapnutí sa ukladajú iba budúce dokončené prepisy ako lokálny text, nikdy zvuk. Vypnutie vymaže uloženú históriu.">
               <div ref={toggle}>
                 <Switch label="Ukladať históriu prepisov" checked={view.policy.enabled} disabled={pending} onChange={(enabled) => {
                   if (!enabled && view.entries.length > 0) {
@@ -53,7 +53,7 @@ export function HistorySection() {
                 }} />
               </div>
             </SettingsRow>
-            <SettingsRow title="Počet uchovaných prepisov" titleId="history-limit" description="Najstaršie prepisy sa automaticky vymažú. Zníženie limitu ich vymaže ihneď; zvýšenie ich neobnoví.">
+            <SettingsRow id="history-limit" title="Počet uchovaných prepisov" titleId="history-limit" description="Najstaršie prepisy sa automaticky vymažú. Zníženie limitu ich vymaže ihneď; zvýšenie ich neobnoví.">
               <select className="select" aria-labelledby="history-limit" value={view.policy.limit} disabled={pending || action === 'confirm'} onChange={(event) => {
                 const limit = HISTORY_LIMITS.find((value) => String(value) === event.target.value);
                 if (limit !== undefined) configure({ ...view.policy, limit });

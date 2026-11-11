@@ -94,6 +94,12 @@
   --seg-bg: var(--inset);
   --seg-on: var(--panel);
   --bar-now: var(--amber);
+  --spk-0: #8A867E;
+  --spk-1: #D9861A;
+  --spk-2: #2F8BD0;
+  --spk-3: #8A5BD6;
+  --spk-4: #21A361;
+  --spk-5: #D9584A;
   color-scheme: light;
 }
 
@@ -136,6 +142,12 @@
     --hover: rgba(255, 255, 255, .05);
     --press: rgba(255, 255, 255, .09);
     --seg-on: var(--panel-3);
+    --spk-0: #8D8981;
+    --spk-1: #F0A23A;
+    --spk-2: #5FB7F5;
+    --spk-3: #C99BFF;
+    --spk-4: #52D18D;
+    --spk-5: #FF8C7A;
     --shadow-pop: 0 24px 60px -18px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .06);
     --shadow-win: 0 50px 120px -30px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .06);
     color-scheme: dark;

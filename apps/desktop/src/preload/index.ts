@@ -50,6 +50,7 @@ const api: IpcApi = {
   openPermissionSettings: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.openPermissionSettings, kind) as Promise<void>,
   getPermissionGuide: () => ipcRenderer.invoke(INVOKE_CHANNELS.getPermissionGuide) as Promise<PermissionGuide>,
   revealAppInFinder: () => ipcRenderer.invoke(INVOKE_CHANNELS.revealAppInFinder) as Promise<void>,
+  getDataFolder: () => ipcRenderer.invoke(INVOKE_CHANNELS.getDataFolder) as Promise<string>,
   relaunch: () => ipcRenderer.invoke(INVOKE_CHANNELS.relaunch) as Promise<void>,
   recordHotkey: () => ipcRenderer.invoke(INVOKE_CHANNELS.recordHotkey) as Promise<HotkeyRecordResult>,
   isHotkeyArmed: () => ipcRenderer.invoke(INVOKE_CHANNELS.isHotkeyArmed) as Promise<boolean>,

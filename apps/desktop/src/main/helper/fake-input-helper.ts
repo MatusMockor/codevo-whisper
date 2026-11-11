@@ -55,6 +55,8 @@ export class FakeInputHelper implements InputHelper {
   readonly submitted: Exclude<AutoSubmit, 'off'>[] = [];
   readonly requestedPermissions: PermissionKind[] = [];
   readonly recordTimeouts: number[] = [];
+  holdRecordings = false;
+  private releaseRecording: (() => void) | null = null;
   private savedClipboard: string | null = null;
   private readonly keys = new Listeners<HotkeyEvent>(consoleLogger, 'Fake key listener failed');
   private readonly shortcuts = new Listeners<ShortcutName>(consoleLogger, 'Fake shortcut listener failed');
@@ -195,7 +197,15 @@ export class FakeInputHelper implements InputHelper {
 
   recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult> {
     this.recordTimeouts.push(timeoutMs);
-    return Promise.resolve(this.recordedHotkey);
+    if (!this.holdRecordings) return Promise.resolve(this.recordedHotkey);
+    return new Promise((resolve) => {
+      this.releaseRecording = () => resolve(this.recordedHotkey);
+    });
+  }
+
+  finishRecording(): void {
+    this.releaseRecording?.();
+    this.releaseRecording = null;
   }
 
   onHotkey(listener: (event: HotkeyEvent) => void): () => void {
