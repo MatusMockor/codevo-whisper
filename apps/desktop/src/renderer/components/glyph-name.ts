@@ -23,4 +23,9 @@ export type GlyphName =
   | 'plus'
   | 'plug'
   | 'terminal'
-  | 'search';
+  | 'search'
+  | 'record'
+  | 'stop'
+  | 'export'
+  | 'headphones'
+  | 'folder';

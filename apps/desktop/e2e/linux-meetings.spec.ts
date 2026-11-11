@@ -36,9 +36,16 @@ function diarizerRow() {
   return page.getByRole('list', { name: 'Model na rozpoznávanie hovoriacich' }).getByRole('listitem');
 }
 
+function transcript() {
+  return page.getByRole('list', { name: 'Prepis stretnutia' });
+}
+
+function turnsBy(speaker: string, text: RegExp = /./) {
+  return transcript().getByRole('listitem').filter({ has: page.locator('b').getByText(speaker, { exact: true }) }).filter({ hasText: text });
+}
+
 async function speakerLabels(): Promise<string[]> {
-  const lines = await page.getByRole('list', { name: 'Prepis stretnutia' }).getByRole('listitem').allTextContents();
-  return [...new Set(lines.map((line) => /^\[[\d:]+\] ([^:]+):/.exec(line)?.[1] ?? ''))];
+  return [...new Set(await transcript().locator('li b').allTextContents())];
 }
 
 async function currentMeeting(): Promise<MeetingSummary> {
@@ -55,7 +62,7 @@ async function startMeeting(): Promise<MeetingSummary> {
   await page.getByRole('tab', { name: 'Stretnutia' }).click();
   await expect(page.getByText('Zatiaľ nemáte žiadne nahrané stretnutia.', { exact: false })).toBeVisible();
   await expect(diarizerRow()).toContainText('Nestiahnutý');
-  await expect(page.getByText('Bez neho sa celá druhá strana označí ako Ostatní.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Bez modelu je celá druhá strana Ostatní.', { exact: false })).toBeVisible();
   await shot('empty');
   await page.getByRole('button', { name: 'Začať nahrávanie' }).click();
   await expect(page.getByRole('timer', { name: 'Dĺžka nahrávania' })).toBeVisible();
@@ -67,9 +74,8 @@ async function stopAndTranscribe(transcribeTimeoutMs: number): Promise<void> {
   await page.getByRole('button', { name: 'Zastaviť a prepísať' }).click();
   await expect(page.getByRole('status').filter({ hasText: /Prepisuje sa|čaká na prepis/ })).toBeVisible();
   await shot('transcribing');
-  const transcript = page.getByRole('list', { name: 'Prepis stretnutia' });
-  await expect(transcript).toBeVisible({ timeout: transcribeTimeoutMs });
-  await expect(transcript.getByText(/\] Ostatní: .*fellow Americans/).first()).toBeVisible();
+  await expect(transcript()).toBeVisible({ timeout: transcribeTimeoutMs });
+  await expect(turnsBy('Ostatní', /fellow Americans/).first()).toBeVisible();
   await shot('ready');
 }
 
@@ -162,13 +168,15 @@ test.describe('notes', () => {
     const create = page.getByRole('button', { name: 'Vytvoriť poznámky' });
     await expect(create).toBeDisabled();
     await create.scrollIntoViewIfNeeded();
-    await expect(page.getByText('v časti „AI úprava textu“', { exact: false })).toBeVisible();
+    await expect(page.getByText('Zatiaľ nie je nastavený ani jeden.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Poznámky', exact: true }).getByRole('button', { name: 'Nastaviť AI úpravu' })).toBeVisible();
     await shot('notes-not-configured');
 
     await page.evaluate(() => window.codevo.updateSettings({ aiBaseUrl: 'http://127.0.0.1:9/v1', aiModel: 'missing' }));
     await create.click();
     await expect(page.getByRole('alert')).toContainText('AI server sa nepodarilo zastihnúť', { timeout: 30_000 });
-    await expect(page.getByRole('list', { name: 'Prepis stretnutia' }).getByText(/\] Ostatní: .*fellow Americans/).first()).toBeVisible();
+    await expect(page.getByRole('alert').getByRole('button', { name: 'Skontrolovať AI server' })).toBeVisible();
+    await expect(turnsBy('Ostatní', /fellow Americans/).first()).toBeVisible();
     await shot('notes-unreachable');
 
     await page.evaluate(([baseUrl, model]) => window.codevo.updateSettings({ aiBaseUrl: baseUrl, aiModel: model }), [OLLAMA, NOTES_MODEL] as const);
@@ -223,8 +231,7 @@ test.describe('remote speakers', () => {
 
     await page.getByRole('button', { name: 'Prepísať znova' }).click();
     await expect(page.getByRole('status').filter({ hasText: /Prepisuje sa|Rozlišujú sa hovoriaci/ })).toBeVisible();
-    const transcript = page.getByRole('list', { name: 'Prepis stretnutia' });
-    await expect(transcript.getByText(/\] Hovoriaci 2: /).first()).toBeVisible({ timeout: 240_000 });
+    await expect(turnsBy('Hovoriaci 2').first()).toBeVisible({ timeout: 240_000 });
     const labels = await speakerLabels();
     test.info().annotations.push({ type: 'speakers', description: JSON.stringify(labels) });
     expect(labels.filter((label) => label.startsWith('Hovoriaci')).length).toBeGreaterThanOrEqual(2);

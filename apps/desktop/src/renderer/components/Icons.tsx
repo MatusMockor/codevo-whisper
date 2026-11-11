@@ -16,15 +16,6 @@ export function CheckIcon() {
   );
 }
 
-export function LockIcon() {
-  return (
-    <Icon>
-      <rect x="3" y="7" width="10" height="7.5" rx="2" />
-      <path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2" />
-    </Icon>
-  );
-}
-
 export function CopyIcon() {
   return (
     <Icon>
@@ -46,32 +37,6 @@ export function PauseIcon() {
   return (
     <Icon>
       <path d="M6 4.5v7M10 4.5v7" />
-    </Icon>
-  );
-}
-
-export function XIcon() {
-  return (
-    <Icon>
-      <path d="M4 4l8 8M12 4l-8 8" />
-    </Icon>
-  );
-}
-
-export function MicIcon() {
-  return (
-    <Icon>
-      <rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" />
-      <path d="M3 8a5 5 0 0 0 10 0M8 13v1.8" />
-    </Icon>
-  );
-}
-
-export function LaptopIcon() {
-  return (
-    <Icon>
-      <rect x="3" y="3" width="10" height="7" rx="1" />
-      <path d="M1.5 12.5h13" />
     </Icon>
   );
 }

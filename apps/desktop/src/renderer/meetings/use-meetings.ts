@@ -1,13 +1,29 @@
 import { useEffect, useState } from 'react';
+import { isAiConfigured, type AiProvider } from '../../shared/ai';
 import type { Meeting, MeetingSummary } from '../../shared/meetings';
+import type { DiarizerView } from '../../shared/models';
 import { useLiveValue, type Live } from '../home/live-value';
 import { useSettings } from '../settings/use-settings';
 
 const loadMeetings = () => window.codevo.getMeetings();
 const loadModelStates = () => window.codevo.getModelStates();
+const loadDiarizer = () => window.codevo.getDiarizer();
+
+export type NotesProvider = AiProvider | 'none';
 
 export function useMeetings(): Live<MeetingSummary[]> {
   return useLiveValue('meetings-changed', loadMeetings);
+}
+
+export function useDiarizer(): Live<DiarizerView> {
+  return useLiveValue('diarizer-changed', loadDiarizer);
+}
+
+export function useNotesProvider(): NotesProvider | null {
+  const settings = useSettings();
+  if (settings.kind === 'loading') return null;
+  if (settings.kind === 'failed') return 'none';
+  return isAiConfigured(settings.value) ? settings.value.aiProvider : 'none';
 }
 
 export function useLocalModelReady(): boolean | null {

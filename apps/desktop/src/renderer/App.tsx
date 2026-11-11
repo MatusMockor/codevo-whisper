@@ -3,7 +3,7 @@ import { panelId, Rail, tabId } from './components/Rail';
 import { StatusBar } from './components/StatusBar';
 import { railBadges } from './home/readiness';
 import { useDictation, type Dictation } from './home/use-dictation';
-import { MODEL_SECTION, pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
+import { pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
 import { Home } from './pages/Home';
 import { Meetings } from './pages/Meetings';
 import { Onboarding } from './pages/Onboarding';
@@ -25,12 +25,11 @@ const PALETTE_ENTRIES = paletteEntries(settingsGroups(SETTINGS_PLATFORM, SETTING
 type PageContentProps = { target: NavTarget; dictation: Dictation; onNavigate: (target: NavTarget) => void; onOpenPalette: (query: string) => void };
 
 function PageContent({ target, dictation, onNavigate, onOpenPalette }: PageContentProps) {
-  const openSettings = () => onNavigate({ page: 'settings' });
   if (target.page === 'home') {
     return <Home dictation={dictation} onNavigate={onNavigate} />;
   }
   if (target.page === 'meetings') {
-    return <Meetings onOpenSettings={openSettings} onOpenModels={() => onNavigate(MODEL_SECTION)} />;
+    return <Meetings onNavigate={onNavigate} />;
   }
   if (target.page === 'settings') {
     return <Settings target={target} onNavigate={onNavigate} onOpenPalette={onOpenPalette} />;
@@ -38,7 +37,7 @@ function PageContent({ target, dictation, onNavigate, onOpenPalette }: PageConte
   if (target.page === 'transcription') {
     return <Transcription target={target} dictation={dictation} onNavigate={onNavigate} />;
   }
-  return <Privacy onOpenSettings={openSettings} />;
+  return <Privacy onNavigate={onNavigate} />;
 }
 
 function PageHead({ page }: { page: PageId }) {

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { notesFailureMessage, phaseLabel, recordedSystemAudioLabel, systemAudioLabel } from '../src/renderer/meetings/meeting-copy';
-import { formatClock, turnLine } from '../src/shared/meetings';
+import { notesFailureMessage, phaseLabel, phaseTone, recordedSystemAudioLabel, systemAudioLabel } from '../src/renderer/meetings/meeting-copy';
+import { formatClock, turnLine, type MeetingPhase } from '../src/shared/meetings';
 
 it('formats a clock as mm:ss and adds hours past one hour', () => {
   expect(formatClock(0)).toBe('00:00');
@@ -29,5 +29,10 @@ it('names every phase and system audio state in Slovak', () => {
 
 it('explains a refused long transcript and a missing AI server in Slovak', () => {
   expect(notesFailureMessage('too-long')).toContain('200 000 znakov');
-  expect(notesFailureMessage('not-configured')).toContain('AI úprava textu');
+  expect(notesFailureMessage('not-configured')).toBe('Najprv nastavte AI server a model alebo zvoľte Codex CLI.');
+});
+
+it('gives every phase the signal tone of its list marker', () => {
+  const phases: MeetingPhase[] = [{ kind: 'recording' }, { kind: 'transcribing', step: 'speakers' }, { kind: 'stopped' }, { kind: 'ready' }, { kind: 'failed', error: 'x' }];
+  expect(phases.map(phaseTone)).toEqual(['warn', 'warn', 'off', 'ok', 'err']);
 });

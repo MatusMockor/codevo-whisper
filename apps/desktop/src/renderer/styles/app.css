@@ -305,6 +305,7 @@ kbd {
   gap: var(--page-gap);
   width: 100%;
   max-width: var(--page-max);
+  margin-inline: auto;
   container-type: inline-size;
 }
 
