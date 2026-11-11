@@ -1,5 +1,6 @@
 import { isPageId, type PageId } from '../shared/pages';
 import type { SectionId } from '../shared/section-focus';
+import type { SettingId } from './settings/settings-catalog';
 
 export type { PageId, SectionId };
 
@@ -18,7 +19,7 @@ export const PAGES: readonly PageDefinition[] = [
   { id: 'privacy', label: 'Súkromie', title: 'Súkromie' },
 ];
 
-export type NavTarget = { page: PageId; section?: SectionId };
+export type NavTarget = { page: PageId; section?: SectionId; setting?: SettingId };
 
 export function pageFromHash(hash: string): PageId {
   const page = hash.replace(/^#/, '');

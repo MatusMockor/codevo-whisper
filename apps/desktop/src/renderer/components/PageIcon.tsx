@@ -1,14 +1,7 @@
 import type { PageId } from '../navigation';
-import { Glyph, type GlyphName } from './Glyph';
-
-const ICONS: Readonly<Record<PageId, GlyphName>> = {
-  home: 'home',
-  meetings: 'meet',
-  transcription: 'route',
-  settings: 'sliders',
-  privacy: 'shield',
-};
+import { Glyph } from './Glyph';
+import { PAGE_GLYPHS } from './page-glyphs';
 
 export function PageIcon({ page }: { page: PageId }) {
-  return <Glyph name={ICONS[page]} size="lg" />;
+  return <Glyph name={PAGE_GLYPHS[page]} size="lg" />;
 }

@@ -837,30 +837,6 @@
   border-top: 0;
 }
 
-.moved {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px dashed var(--line-2);
-  border-radius: var(--radius-lg);
-  background: transparent;
-  color: var(--ink-2);
-  font-size: 12.5px;
-  text-align: left;
-}
-
-.moved .ic {
-  color: var(--amber-text);
-}
-
-.moved b {
-  display: block;
-  color: var(--ink);
-  font-size: 13px;
-}
-
 @container (max-width: 760px) {
   .route {
     grid-template-columns: minmax(0, 1fr);

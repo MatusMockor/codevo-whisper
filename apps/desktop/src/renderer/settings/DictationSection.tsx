@@ -49,17 +49,17 @@ function LanguageSelect({ language, activeModel }: { language: Language; activeM
 
 export function DictationSection({ settings, activeModel }: { settings: Settings; activeModel: ModelInfo | null }) {
   return (
-    <SettingsGroup title="Diktovanie" section="dictation">
-      <SettingsRow title="Klávesová skratka" titleId="set-hotkey" description={navigator.userAgent.includes('Linux') ? 'Nahrajte skratku pre aktuálnu reláciu X11 alebo Wayland. Ctrl+Super+V je vyhradené na posledný prepis.' : 'Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.'}>
+    <SettingsGroup group="dictation">
+      <SettingsRow id="hotkey" title="Klávesová skratka" titleId="set-hotkey" description={navigator.userAgent.includes('Linux') ? 'Nahrajte skratku pre aktuálnu reláciu X11 alebo Wayland. Ctrl+Super+V je vyhradené na posledný prepis.' : 'Zvoľte napríklad ⌃Space, ⌥⇧D alebo kombináciu modifikátorov.'}>
         <HotkeyRecorder hotkey={settings.hotkey} labelledBy="set-hotkey" onRecorded={(hotkey) => saveSettings({ hotkey })} />
       </SettingsRow>
-      <SettingsRow title="Režim" description={MODE_DESCRIPTIONS[settings.mode]}>
+      <SettingsRow id="mode" title="Režim" description={MODE_DESCRIPTIONS[settings.mode]}>
         <SegmentedControl label="Režim klávesu" options={MODES} value={settings.mode} onChange={(mode) => saveSettings({ mode })} />
       </SettingsRow>
-      <SettingsRow title="Zobrazenie panela" description="Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.">
+      <SettingsRow id="overlay" title="Zobrazenie panela" description="Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.">
         <SegmentedControl label="Zobrazenie panela" options={OVERLAYS} value={settings.overlay} onChange={(overlay) => saveSettings({ overlay })} />
       </SettingsRow>
-      <SettingsRow title="Jazyk" titleId="set-language" description={languageNote(activeModel)}>
+      <SettingsRow id="language" title="Jazyk" titleId="set-language" description={languageNote(activeModel)}>
         <LanguageSelect language={settings.language} activeModel={activeModel} />
       </SettingsRow>
       <AudioFeedbackRows settings={settings} />

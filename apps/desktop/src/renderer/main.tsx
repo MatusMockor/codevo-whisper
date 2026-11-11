@@ -8,6 +8,8 @@ import './styles/app.css';
 import './styles/home.css';
 import './styles/controls.css';
 import './styles/settings.css';
+import './styles/settings-page.css';
+import './styles/palette.css';
 import './styles/pages.css';
 import './styles/transcription.css';
 import './styles/onboarding.css';

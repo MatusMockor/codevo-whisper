@@ -27,7 +27,7 @@ function ResetStats() {
   }
 
   return (
-    <SettingsRow title="Štatistiky" description={<span aria-live="polite">{RESET_NOTES[state]}</span>}>
+    <SettingsRow id="stats" title="Štatistiky" description={<span aria-live="polite">{RESET_NOTES[state]}</span>}>
       {state === 'confirm' ? (
         <div className="row-btns">
           <button type="button" className="btn ghost" onClick={() => setState('idle')}>
@@ -48,8 +48,8 @@ function ResetStats() {
 
 export function SystemSection({ launchAtLogin }: { launchAtLogin: boolean }) {
   return (
-    <SettingsGroup title="Systém">
-      <SettingsRow title="Spustiť po prihlásení" description="Codevo Whisper sa potichu usadí v lište.">
+    <SettingsGroup group="system">
+      <SettingsRow id="launch-at-login" title="Spustiť po prihlásení" description="Codevo Whisper sa potichu usadí v lište.">
         <Switch label="Spustiť po prihlásení" checked={launchAtLogin} onChange={(checked) => saveSettings({ launchAtLogin: checked })} />
       </SettingsRow>
       <ResetStats />

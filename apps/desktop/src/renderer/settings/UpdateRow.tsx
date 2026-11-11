@@ -36,11 +36,11 @@ export function UpdateRow() {
   }
 
   if (status.kind !== 'ready') {
-    return <SettingsRow title={TITLE} description={status.kind === 'failed' ? 'Stav aktualizácií sa nepodarilo načítať.' : undefined}>{null}</SettingsRow>;
+    return <SettingsRow id="updates" title={TITLE} description={status.kind === 'failed' ? 'Stav aktualizácií sa nepodarilo načítať.' : undefined}>{null}</SettingsRow>;
   }
   const view = updateRowView(status.value, notice);
   return (
-    <SettingsRow title={TITLE} description={<span aria-live="polite">{view.description}</span>}>
+    <SettingsRow id="updates" title={TITLE} description={<span aria-live="polite">{view.description}</span>}>
       <div className="row-btns">
         {view.actions.map((action) => (
           <UpdateButton key={action.id} action={action} onClick={act} />

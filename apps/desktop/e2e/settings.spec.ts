@@ -512,6 +512,99 @@ test.describe('settings page', () => {
     await expect(route.getByRole('button', { name: 'Vymeniť hlavný prepis a zálohu' })).toBeDisabled();
   });
 
+  test('the search filters rows and groups live, marks matches and offers the palette when nothing matches', async () => {
+    const search = page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' });
+    const groups = page.locator('.set-group:visible h2');
+    await expect(groups).toHaveText(['Diktovanie', 'Mikrofón', 'Vkladanie textu', 'Úprava prepisu', 'AI úprava textu', 'História prepisov', 'Systém', ...(process.platform === 'linux' ? ['Prístup k systému'] : [])]);
+
+    await search.fill('schranka');
+    await expect(groups).toHaveText(['Vkladanie textu']);
+    await expect(row('Schránka')).toBeVisible();
+    await expect(row('Schránka').locator('mark')).toHaveText('Schránka');
+    await expect(row('Automatické odoslanie')).toBeHidden();
+    await expect(page.getByRole('radio', { name: 'Iba skopírovať do schránky' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Sekcie nastavení' }).getByRole('button', { name: /Vkladanie textu/ })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Sekcie nastavení' }).getByRole('button', { name: /Diktovanie/ })).toBeHidden();
+
+    await search.fill('hlasitost');
+    await expect(groups).toHaveText(['Diktovanie']);
+    await expect(row('Hlasitosť')).toBeVisible();
+    await expect(row('Režim')).toBeHidden();
+
+    await search.fill('xyz neexistuje');
+    await expect(groups).toHaveCount(0);
+    await expect(page.getByText('Nič sa nenašlo.', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: 'príkazovú paletu' }).click();
+    const palette = page.getByRole('dialog', { name: 'Príkazová paleta' });
+    await expect(palette).toBeVisible();
+    await expect(palette.getByRole('combobox')).toHaveValue('xyz neexistuje');
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
+
+    await search.focus();
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(groups).toHaveCount(process.platform === 'linux' ? 8 : 7);
+  });
+
+  test('the section index jumps to a group, focuses it and follows the scroll', async () => {
+    const index = page.getByRole('navigation', { name: 'Sekcie nastavení' });
+    await expect(index.getByRole('button', { name: /Diktovanie/ })).toHaveAttribute('aria-current', 'true');
+
+    await index.getByRole('button', { name: /AI úprava textu/ }).click();
+
+    await expect(page.getByRole('heading', { level: 2, name: 'AI úprava textu', exact: true })).toBeFocused();
+    await expect(page.getByRole('region', { name: 'AI úprava textu', exact: true })).toBeInViewport();
+    await expect(index.getByRole('button', { name: /AI úprava textu/ })).toHaveAttribute('aria-current', 'true');
+    await expect(index.getByRole('button', { name: /Diktovanie/ })).not.toHaveAttribute('aria-current', 'true');
+  });
+
+  test('the command palette opens with the shortcut and jumps to a setting on any page', async () => {
+    const shortcut = process.platform === 'darwin' ? 'Meta+k' : 'Control+k';
+    await page.getByRole('tab', { name: 'Domov' }).click();
+    await page.keyboard.press(shortcut);
+    const palette = page.getByRole('dialog', { name: 'Príkazová paleta' });
+    const input = palette.getByRole('combobox', { name: 'Prejsť na nastavenie alebo stránku' });
+    await expect(input).toBeFocused();
+    await input.fill('hlasitost');
+    await expect(palette.getByRole('option')).toHaveText([/Hlasitosť.*Diktovanie/]);
+    await page.keyboard.press('Enter');
+
+    await expect(palette).toBeHidden();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+    await expect(page.getByRole('slider', { name: 'Hlasitosť', exact: true })).toBeInViewport();
+    await expect(row('Hlasitosť')).toHaveClass(/flash/);
+
+    await page.keyboard.press(shortcut);
+    await input.fill('spustit');
+    await expect(palette.getByRole('option', { selected: true })).toContainText('Spustiť po prihlásení');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('switch', { name: 'Spustiť po prihlásení' })).toBeFocused();
+
+    await page.getByRole('button', { name: /^Paleta/ }).click();
+    await expect(input).toHaveValue('');
+    await input.fill('server');
+    await palette.getByRole('option', { name: /Vlastný server/ }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kde beží prepis');
+    await expect(page.getByRole('heading', { level: 2, name: 'Vlastný server' })).toBeFocused();
+
+    await page.keyboard.press(shortcut);
+    await expect(palette).toBeVisible();
+    await page.keyboard.press(shortcut);
+    await expect(palette).toBeHidden();
+  });
+
+  test('a palette jump clears the search so the target row is visible', async () => {
+    await page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' }).fill('jazyk');
+    await expect(row('Štatistiky')).toBeHidden();
+    await page.getByRole('button', { name: /^Paleta/ }).click();
+    await page.getByRole('dialog', { name: 'Príkazová paleta' }).getByRole('combobox').fill('statistiky');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' })).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Vynulovať štatistiky' })).toBeFocused();
+    await expect(row('Štatistiky')).toBeInViewport();
+  });
+
   test('Živý text can be chosen next to the default indicator and is saved', async () => {
     const overlay = page.getByRole('group', { name: 'Zobrazenie panela' });
     await expect(overlay.getByRole('button', { name: 'Indikátor' })).toHaveAttribute('aria-pressed', 'true');

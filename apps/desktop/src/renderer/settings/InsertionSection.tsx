@@ -1,5 +1,6 @@
 import type { AutoSubmit, ClipboardPolicy, InsertionMode, LinuxPasteShortcut, Settings } from '../../shared/settings';
-import { SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SettingsBlock, SettingsGroup, SettingsRow } from './SettingsGroup';
+import { SearchHighlight } from './settings-search';
 import { saveSettings } from './use-settings';
 
 const OPTIONS: ReadonlyArray<{ id: InsertionMode; title: string; description: string }> = [
@@ -30,26 +31,30 @@ export function InsertionSection({ settings }: { settings: Pick<Settings, 'inser
   const linux = navigator.userAgent.includes('Linux');
   const copying = insertion === 'clipboard';
   return (
-    <SettingsGroup title="Vkladanie textu" section="insertion">
-      <div className="radio" role="radiogroup" aria-label="Spôsob vkladania">
-        {OPTIONS.map((option) => (
-          <label key={option.id}>
-            <input
-              type="radio"
-              name="insertion"
-              checked={insertion === option.id}
-              onChange={() => {
-                saveSettings({ insertion: option.id });
-              }}
-            />
-            <div>
-              <b>{option.title}</b>
-              <span>{linux && option.id === 'type' ? 'Priame písanie v Linuxe nie je dostupné. Text sa skopíruje do schránky.' : linux && option.id === 'clipboard' ? 'Text vložíte ručne pomocou Ctrl+V alebo skratky aplikácie.' : option.description}</span>
-            </div>
-          </label>
-        ))}
-      </div>
-      {linux && <SettingsRow title="Skratka na vloženie" titleId="set-linux-paste" description="Zvoľte skratku cieľovej aplikácie. Shift+Insert používa primárny výber. Vo Waylande sa text kopíruje na ručné vloženie.">
+    <SettingsGroup group="insertion">
+      <SettingsBlock id="insertion-method">
+        <div className="radio" role="radiogroup" aria-label="Spôsob vkladania">
+          {OPTIONS.map((option) => (
+            <label key={option.id}>
+              <input
+                type="radio"
+                name="insertion"
+                checked={insertion === option.id}
+                onChange={() => {
+                  saveSettings({ insertion: option.id });
+                }}
+              />
+              <div>
+                <b>
+                  <SearchHighlight text={option.title} />
+                </b>
+                <span>{linux && option.id === 'type' ? 'Priame písanie v Linuxe nie je dostupné. Text sa skopíruje do schránky.' : linux && option.id === 'clipboard' ? 'Text vložíte ručne pomocou Ctrl+V alebo skratky aplikácie.' : option.description}</span>
+              </div>
+            </label>
+          ))}
+        </div>
+      </SettingsBlock>
+      {linux && <SettingsRow id="linux-paste" title="Skratka na vloženie" titleId="set-linux-paste" description="Zvoľte skratku cieľovej aplikácie. Shift+Insert používa primárny výber. Vo Waylande sa text kopíruje na ručné vloženie.">
         <select className="select" aria-labelledby="set-linux-paste" value={linuxPasteShortcut} disabled={insertion !== 'paste'} onChange={(event) => {
           const choices: readonly LinuxPasteShortcut[] = ['ctrl-v', 'ctrl-shift-v', 'shift-insert'];
           const next = choices.find((choice) => choice === event.target.value);
@@ -60,7 +65,7 @@ export function InsertionSection({ settings }: { settings: Pick<Settings, 'inser
           <option value="shift-insert">Shift+Insert</option>
         </select>
       </SettingsRow>}
-      <SettingsRow title="Schránka" titleId="set-clipboard-policy" description={CLIPBOARD_DESCRIPTIONS[insertion]}>
+      <SettingsRow id="clipboard" title="Schránka" titleId="set-clipboard-policy" description={CLIPBOARD_DESCRIPTIONS[insertion]}>
         <select
           className="select"
           aria-labelledby="set-clipboard-policy"
@@ -74,7 +79,7 @@ export function InsertionSection({ settings }: { settings: Pick<Settings, 'inser
           {CLIPBOARD_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
         </select>
       </SettingsRow>
-      <SettingsRow title="Automatické odoslanie" titleId="set-auto-submit" description="Po vložení textu stlačí zvolenú skratku. Cmd+Enter na Macu, Ctrl+Enter na Linuxe.">
+      <SettingsRow id="auto-submit" title="Automatické odoslanie" titleId="set-auto-submit" description="Po vložení textu stlačí zvolenú skratku. Cmd+Enter na Macu, Ctrl+Enter na Linuxe.">
         <select
           className="select"
           aria-labelledby="set-auto-submit"
