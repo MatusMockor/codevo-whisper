@@ -34,6 +34,7 @@ test.afterEach(async () => {
 test('each zone shows where the voice goes right now and links its setting', async () => {
   await openPrivacy();
 
+  await expect(page.locator('.phead .sub')).toContainText('Ak použijete AI úpravu alebo poznámky zo stretnutí, text sa odošle zvolenému AI poskytovateľovi.');
   await expect(zone('Ostáva na tomto počítači')).toContainText('Teraz hlavný prepis');
   await expect(zone('Ide na váš server')).toContainText('Nepoužíva sa, server nie je spárovaný');
   await expect(zone('Ide k AI poskytovateľovi')).toContainText('Nepoužíva sa, AI úprava nie je nastavená');

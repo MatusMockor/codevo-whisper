@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { isPaletteShortcut, paletteShortcutAria, paletteShortcutLabel } from './palette-shortcut';
+import { HOTKEY_RECORDING } from '../components/activity-gate';
+import { paletteShortcutAria, paletteShortcutLabel, togglesPalette } from './palette-shortcut';
 
 const MAC = navigator.userAgent.includes('Mac');
 
@@ -8,7 +9,7 @@ export const PALETTE_KEYS = Object.freeze({ label: paletteShortcutLabel(MAC), ar
 export function usePaletteShortcut(onToggle: () => void): void {
   useEffect(() => {
     const handle = (event: KeyboardEvent): void => {
-      if (event.repeat || !isPaletteShortcut(event, MAC)) {
+      if (!togglesPalette(event, MAC, HOTKEY_RECORDING.active)) {
         return;
       }
       event.preventDefault();

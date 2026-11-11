@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Settings as SettingsValue } from '../../shared/settings';
 import { MicrophonePicker } from '../components/MicrophonePicker';
-import { revealSection } from '../components/use-reveal-section';
 import type { NavTarget } from '../navigation';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { searchTerms } from '../search/text-match';
@@ -9,7 +8,9 @@ import { AiSection } from '../settings/AiSection';
 import { DictationSection } from '../settings/DictationSection';
 import { HistorySection } from '../settings/HistorySection';
 import { InsertionSection } from '../settings/InsertionSection';
-import { revealSetting } from '../settings/reveal-setting';
+import { awaitReveal } from '../settings/await-reveal';
+import { domChanges, userInteractions } from '../settings/dom-changes';
+import { revealDestination, revealNearestGroup } from '../settings/reveal-setting';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { filterSettings, settingsGroups } from '../settings/settings-catalog';
 import { SETTINGS_PLATFORM } from '../settings/settings-platform';
@@ -26,16 +27,22 @@ import { saveSettings, useSettings } from '../settings/use-settings';
 
 type SettingsProps = { target: NavTarget; onNavigate: (target: NavTarget) => void; onOpenPalette: (query: string) => void };
 
-function useRevealTarget(target: NavTarget): void {
+const REVEAL_TIMEOUT_MS = 3000;
+
+function useRevealTarget(target: NavTarget, root: RefObject<HTMLElement | null>): void {
   useEffect(() => {
-    if (target.setting !== undefined) {
-      revealSetting(target.setting);
+    const page = root.current;
+    if (page === null) {
       return;
     }
-    if (target.section !== undefined) {
-      revealSection(target.section);
-    }
-  }, [target]);
+    return awaitReveal({
+      attempt: () => revealDestination(target),
+      changes: domChanges(page),
+      interruptions: userInteractions(window),
+      giveUp: () => revealNearestGroup(target),
+      timeoutMs: REVEAL_TIMEOUT_MS,
+    });
+  }, [target, root]);
 }
 
 function useTargetQuery(target: NavTarget): [string, (query: string) => void] {
@@ -65,11 +72,11 @@ function SettingsLayout({ target, value, onNavigate, onOpenPalette }: SettingsLa
   const access = permissions.permissions.kind === 'ready' && permissions.permissions.value.platform === 'linux';
   const groups = useMemo(() => settingsGroups(SETTINGS_PLATFORM, access), [access]);
   const terms = useMemo(() => searchTerms(query), [query]);
-  const filter = useMemo(() => filterSettings(groups, terms), [groups, terms]);
+  const filter = useMemo(() => filterSettings(groups, terms, value.aiProvider), [groups, terms, value.aiProvider]);
   const search = useMemo(() => ({ terms, filter, groups }), [terms, filter, groups]);
   const active = useActiveGroup(root, `${groups.length}:${terms.join(' ')}`);
   const activeModel = models.catalog.kind === 'ready' ? (models.catalog.value.models.find((model) => model.id === value.localModelId) ?? null) : null;
-  useRevealTarget(target);
+  useRevealTarget(target, root);
 
   return (
     <div className="page set-page" ref={root}>

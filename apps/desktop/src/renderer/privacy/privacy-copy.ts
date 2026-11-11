@@ -51,7 +51,7 @@ export const VOICE_STEPS: readonly string[] = Object.freeze([
 ]);
 
 export const NEVER: readonly string[] = Object.freeze([
-  'V lokálnom režime neposiela zvuk ani text na internet.',
+  'V lokálnom režime neposiela zvuk na internet a text iba AI poskytovateľovi, ktorého si nastavíte.',
   'Nezbiera analytiku ani telemetriu.',
   'Neuchováva zvuk v histórii prepisov.',
   'Nepotrebuje účet, e-mail ani predplatné.',

@@ -1,4 +1,5 @@
 import { revealSection } from '../components/use-reveal-section';
+import type { NavTarget } from '../navigation';
 import { settingGroup, type SettingId } from './settings-catalog';
 
 const FOCUSABLE = 'input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)';
@@ -19,17 +20,31 @@ function flash(row: HTMLElement): void {
   row.addEventListener('animationend', () => row.classList.remove('flash'), { once: true });
 }
 
-export function revealSetting(id: SettingId): void {
+export function revealSetting(id: SettingId): boolean {
   const row = document.querySelector<HTMLElement>(`[data-setting="${id}"]`);
-  const group = settingGroup(id);
-  if (row === null && group !== null) {
-    revealSection(group);
-    return;
-  }
   if (row === null) {
-    return;
+    return false;
   }
   row.scrollIntoView({ block: 'center' });
   flash(row);
   focusTarget(row).focus({ preventScroll: true });
+  return true;
+}
+
+export function revealDestination(target: NavTarget): boolean {
+  if (target.setting !== undefined) {
+    return revealSetting(target.setting);
+  }
+  if (target.section !== undefined) {
+    return revealSection(target.section);
+  }
+  return true;
+}
+
+export function revealNearestGroup(target: NavTarget): void {
+  const group = target.setting === undefined ? null : settingGroup(target.setting);
+  if (group === null) {
+    return;
+  }
+  revealSection(group);
 }

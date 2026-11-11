@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import type { HotkeySetting } from '../../shared/settings';
 import { hotkeyRecordMessage } from '../settings/hotkey-record-message';
+import { HOTKEY_RECORDING } from './activity-gate';
 
 type HotkeyRecorderProps = { hotkey: HotkeySetting; labelledBy: string; onRecorded: (hotkey: NonNullable<HotkeySetting>) => void };
 
@@ -14,6 +15,7 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
     if (recording) {
       return;
     }
+    const end = HOTKEY_RECORDING.begin();
     setRecording(true);
     setMessage(null);
     window.codevo
@@ -31,7 +33,10 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
           setMessage(hotkeyRecordMessage('failed'));
         },
       )
-      .finally(() => setRecording(false));
+      .finally(() => {
+        end();
+        setRecording(false);
+      });
   }
 
   return (

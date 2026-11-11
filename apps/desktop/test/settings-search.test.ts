@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ActivityGate } from '../src/renderer/components/activity-gate';
 import { filterEntries, paletteEntries } from '../src/renderer/palette/palette-entries';
-import { isPaletteShortcut, paletteShortcutLabel, type ShortcutKeys } from '../src/renderer/palette/palette-shortcut';
+import { isPaletteShortcut, paletteShortcutLabel, togglesPalette, type ShortcutEvent, type ShortcutKeys } from '../src/renderer/palette/palette-shortcut';
 import { highlightParts, matchesTerms, searchTerms } from '../src/renderer/search/text-match';
 import { pickActiveGroup } from '../src/renderer/settings/active-group';
 import { filterSettings, settingGroup, settingsGroups } from '../src/renderer/settings/settings-catalog';
@@ -60,24 +61,35 @@ describe('settings catalog', () => {
   });
 
   it('shows nothing filtered for an empty query', () => {
-    expect(filterSettings(MAC_GROUPS, searchTerms('   '))).toBeNull();
+    expect(filterSettings(MAC_GROUPS, searchTerms('   '), 'server')).toBeNull();
   });
 
   it('finds rows by title, keyword or group and hides the groups without a hit', () => {
-    const clipboard = filterSettings(MAC_GROUPS, searchTerms('schranka'));
+    const clipboard = filterSettings(MAC_GROUPS, searchTerms('schranka'), 'server');
     expect([...(clipboard?.rows ?? [])]).toEqual(['insertion-method', 'clipboard']);
     expect([...(clipboard?.groups ?? [])]).toEqual(['insertion']);
 
-    const ollama = filterSettings(MAC_GROUPS, searchTerms('ollama'));
-    expect([...(ollama?.rows ?? [])]).toEqual(['ai-connection']);
+    const ollama = filterSettings(MAC_GROUPS, searchTerms('ollama'), 'server');
+    expect([...(ollama?.rows ?? [])]).toEqual(['ai-provider', 'ai-connection']);
 
-    const history = filterSettings(MAC_GROUPS, searchTerms('história prepisov'));
+    const history = filterSettings(MAC_GROUPS, searchTerms('história prepisov'), 'server');
     expect([...(history?.rows ?? [])]).toEqual(['history-enabled', 'history-limit']);
 
-    const none = filterSettings(MAC_GROUPS, searchTerms('wayland'));
+    const none = filterSettings(MAC_GROUPS, searchTerms('wayland'), 'server');
     expect(none?.rows.size).toBe(0);
     expect(none?.groups.size).toBe(0);
-    expect([...(filterSettings(LINUX_GROUPS, searchTerms('wayland'))?.groups ?? [])]).toEqual(['insertion', 'access']);
+    expect([...(filterSettings(LINUX_GROUPS, searchTerms('wayland'), 'server')?.groups ?? [])]).toEqual(['insertion', 'access']);
+  });
+
+  it('matches the connection fields of the active AI provider and keeps the provider switch in reach', () => {
+    const rows = (query: string, provider: 'server' | 'codex') => [...(filterSettings(MAC_GROUPS, searchTerms(query), provider)?.rows ?? [])];
+
+    expect(rows('API kľúč', 'server')).toEqual(['ai-provider', 'ai-connection']);
+    expect(rows('API kľúč', 'codex')).toEqual(['ai-provider']);
+    expect(rows('úroveň uvažovania', 'codex')).toEqual(['ai-provider', 'ai-connection']);
+    expect(rows('úroveň uvažovania', 'server')).toEqual(['ai-provider']);
+    expect(rows('overit', 'codex')).toEqual(['ai-provider', 'ai-connection']);
+    expect(rows('interpunkcia', 'codex')).toEqual(['ai-polish']);
   });
 
   it('knows the group of every setting', () => {
@@ -124,6 +136,8 @@ describe('command palette', () => {
     expect(filterEntries(entries, searchTerms('sparovat')).map((entry) => entry.title)).toEqual(['Vlastný server']);
     expect(filterEntries(entries, searchTerms('gpu')).map((entry) => entry.title)).toEqual(['Lokálny model']);
     expect(filterEntries(entries, searchTerms('system spustit')).map((entry) => entry.title)).toEqual(['Spustiť po prihlásení']);
+    expect(filterEntries(entries, searchTerms('api kluc')).map((entry) => entry.title)).toEqual(['Pripojenie k modelu']);
+    expect(filterEntries(entries, searchTerms('uroven uvazovania')).map((entry) => entry.title)).toEqual(['Pripojenie k modelu']);
     expect(filterEntries(entries, [])).toHaveLength(entries.length);
   });
 
@@ -135,5 +149,30 @@ describe('command palette', () => {
     expect(isPaletteShortcut(keys({ ctrlKey: true, shiftKey: true }), false)).toBe(false);
     expect(isPaletteShortcut(keys({ ctrlKey: true, key: 'j' }), false)).toBe(false);
     expect([paletteShortcutLabel(true), paletteShortcutLabel(false)]).toEqual(['⌘K', 'Ctrl+K']);
+  });
+
+  it('leaves the shortcut alone while a hotkey is recorded, while composing, on repeat or when already handled', () => {
+    const event = (overrides: Partial<ShortcutEvent>): ShortcutEvent => ({ ...keys({ metaKey: true }), repeat: false, defaultPrevented: false, isComposing: false, ...overrides });
+
+    expect(togglesPalette(event({}), true, false)).toBe(true);
+    expect(togglesPalette(event({}), true, true)).toBe(false);
+    expect(togglesPalette(event({ defaultPrevented: true }), true, false)).toBe(false);
+    expect(togglesPalette(event({ repeat: true }), true, false)).toBe(false);
+    expect(togglesPalette(event({ isComposing: true }), true, false)).toBe(false);
+    expect(togglesPalette(event({ key: 'j' }), true, false)).toBe(false);
+  });
+
+  it('counts a hotkey recording as active until every recording ends', () => {
+    const recording = new ActivityGate();
+    expect(recording.active).toBe(false);
+
+    const first = recording.begin();
+    const second = recording.begin();
+    first();
+    first();
+    expect(recording.active).toBe(true);
+    second();
+
+    expect(recording.active).toBe(false);
   });
 });

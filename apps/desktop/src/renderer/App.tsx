@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type Ref } from 'react';
 import { panelId, Rail, tabId } from './components/Rail';
 import { StatusBar } from './components/StatusBar';
 import { railBadges } from './home/readiness';
 import { useDictation, type Dictation } from './home/use-dictation';
-import { pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
+import { isPageOnly, pageDefinition, pageFromHash, type NavTarget, type PageId } from './navigation';
 import { Home } from './pages/Home';
 import { Meetings } from './pages/Meetings';
 import { Onboarding } from './pages/Onboarding';
 import { Privacy } from './pages/Privacy';
 import { Settings } from './pages/Settings';
 import { Transcription } from './pages/Transcription';
+import { useHeadingFocus } from './components/use-heading-focus';
 import { useSectionFocusRequests } from './components/use-section-focus';
 import { CommandPalette, type PaletteRequest } from './palette/CommandPalette';
-import { paletteEntries } from './palette/palette-entries';
+import { paletteEntries, type PaletteEntry } from './palette/palette-entries';
 import { usePaletteShortcut } from './palette/use-palette-shortcut';
 import { settingsGroups } from './settings/settings-catalog';
 import { SETTINGS_PLATFORM } from './settings/settings-platform';
@@ -40,13 +41,15 @@ function PageContent({ target, dictation, onNavigate, onOpenPalette }: PageConte
   return <Privacy onNavigate={onNavigate} />;
 }
 
-function PageHead({ page }: { page: PageId }) {
+function PageHead({ page, heading }: { page: PageId; heading: Ref<HTMLHeadingElement> }) {
   const { label, title, lead } = pageDefinition(page);
   return (
     <div className="phead">
       <div>
         {title !== label && <p className="kick">{label}</p>}
-        <h1>{title}</h1>
+        <h1 ref={heading} tabIndex={-1}>
+          {title}
+        </h1>
         {lead !== undefined && <p className="sub">{lead}</p>}
       </div>
       {page === 'home' && <span className="label-mono">Kliknite na uzol a upravte ho</span>}
@@ -62,6 +65,17 @@ function Shell() {
   const [palette, setPalette] = useState<PaletteRequest | null>(null);
 
   const navigate = useCallback((next: NavTarget) => setTarget({ ...next }), []);
+  const { heading, openWithHeading } = useHeadingFocus(target, setTarget);
+  const runEntry = useCallback(
+    (entry: PaletteEntry) => {
+      if (isPageOnly(entry.target)) {
+        openWithHeading(entry.target);
+        return;
+      }
+      navigate(entry.target);
+    },
+    [navigate, openWithHeading],
+  );
   const openPalette = useCallback((query: string) => setPalette({ query }), []);
   const togglePalette = useCallback(() => setPalette((current) => (current === null ? { query: '' } : null)), []);
 
@@ -80,13 +94,13 @@ function Shell() {
         <Rail selected={target.page} badges={badges} onSelect={(page) => setTarget({ page })} />
         <main className="main">
           <section key={target.page} className="panel" role="tabpanel" id={panelId(target.page)} aria-labelledby={tabId(target.page)}>
-            <PageHead page={target.page} />
+            <PageHead page={target.page} heading={heading} />
             <PageContent target={target} dictation={dictation} onNavigate={navigate} onOpenPalette={openPalette} />
           </section>
         </main>
       </div>
       <StatusBar dictation={dictation} />
-      <CommandPalette request={palette} entries={PALETTE_ENTRIES} onClose={() => setPalette(null)} onRun={(entry) => navigate(entry.target)} />
+      <CommandPalette request={palette} entries={PALETTE_ENTRIES} onClose={() => setPalette(null)} onRun={runEntry} />
     </div>
   );
 }

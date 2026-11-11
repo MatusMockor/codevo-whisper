@@ -3,7 +3,7 @@ import type { GlyphName } from '../components/glyph-name';
 import { PAGE_GLYPHS } from '../components/page-glyphs';
 import { PAGES, type NavTarget } from '../navigation';
 import { matchesTerms } from '../search/text-match';
-import type { SettingsGroupEntry, SettingsGroupId } from '../settings/settings-catalog';
+import { settingKeywords, type SettingsGroupEntry, type SettingsGroupId } from '../settings/settings-catalog';
 
 export type PaletteEntry = { id: string; title: string; group: string; keywords: string; icon: GlyphName; target: NavTarget };
 
@@ -36,7 +36,7 @@ function transcriptionEntries(): readonly PaletteEntry[] {
 
 function settingEntries(groups: readonly SettingsGroupEntry[]): readonly PaletteEntry[] {
   return groups.flatMap((group) =>
-    group.rows.map((row) => ({ id: `setting-${row.id}`, title: row.title, group: group.title, keywords: row.keywords, icon: GROUP_GLYPHS[group.id], target: { page: 'settings', setting: row.id } })),
+    group.rows.map((row) => ({ id: `setting-${row.id}`, title: row.title, group: group.title, keywords: settingKeywords(row), icon: GROUP_GLYPHS[group.id], target: { page: 'settings', setting: row.id } })),
   );
 }
 

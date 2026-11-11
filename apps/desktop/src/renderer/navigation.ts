@@ -25,11 +25,15 @@ export const PAGES: readonly PageDefinition[] = [
     id: 'privacy',
     label: 'Súkromie',
     title: 'Kam putuje váš hlas',
-    lead: 'V lokálnom režime sa reč prepisuje priamo na tomto počítači. Na internet ide iba stiahnutie modelu, keď kliknete na Stiahnuť, a kontrola aktualizácií.',
+    lead: 'V lokálnom režime sa reč prepisuje priamo na tomto počítači. Na internet ide stiahnutie modelu, keď kliknete na Stiahnuť, a kontrola aktualizácií. Ak použijete AI úpravu alebo poznámky zo stretnutí, text sa odošle zvolenému AI poskytovateľovi.',
   },
 ];
 
 export type NavTarget = { page: PageId; section?: SectionId; setting?: SettingId };
+
+export function isPageOnly(target: NavTarget): boolean {
+  return target.section === undefined && target.setting === undefined;
+}
 
 export function pageFromHash(hash: string): PageId {
   const page = hash.replace(/^#/, '');

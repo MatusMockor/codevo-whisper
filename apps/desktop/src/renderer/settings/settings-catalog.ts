@@ -1,3 +1,4 @@
+import type { AiProvider } from '../../shared/ai';
 import { matchesTerms } from '../search/text-match';
 
 export type SettingsGroupId = 'dictation' | 'microphone' | 'insertion' | 'transcript' | 'ai' | 'history' | 'system' | 'access';
@@ -31,13 +32,15 @@ export type SettingId =
 
 export type SettingsPlatform = 'mac' | 'linux';
 
-export type SettingEntry = { id: SettingId; title: string; keywords: string; linuxOnly?: true };
+export type SettingEntry = { id: SettingId; title: string; keywords: string; providerKeywords?: Readonly<Record<AiProvider, string>>; linuxOnly?: true };
 
 type GroupDefinition = { id: SettingsGroupId; title: string; rows: readonly SettingEntry[]; linuxOnly?: true };
 
 export type SettingsGroupEntry = GroupDefinition & { index: string };
 
 export type SettingsFilter = { rows: ReadonlySet<SettingId>; groups: ReadonlySet<SettingsGroupId> };
+
+const PROVIDER_SELECTOR: SettingId = 'ai-provider';
 
 const GROUPS: readonly GroupDefinition[] = [
   {
@@ -83,7 +86,12 @@ const GROUPS: readonly GroupDefinition[] = [
     title: 'AI úprava textu',
     rows: [
       { id: 'ai-provider', title: 'Poskytovateľ', keywords: 'ai poskytovateľ vlastný server codex cli chatgpt openai' },
-      { id: 'ai-connection', title: 'Pripojenie k modelu', keywords: 'ai adresa servera url model api kľúč ollama lm studio codex úroveň uvažovania overiť' },
+      {
+        id: 'ai-connection',
+        title: 'Pripojenie k modelu',
+        keywords: 'ai model overiť',
+        providerKeywords: { server: 'adresa servera url api kľúč ollama lm studio', codex: 'codex úroveň uvažovania' },
+      },
       { id: 'ai-polish', title: 'Upraviť diktát cez AI', keywords: 'ai úprava interpunkcia zaváhania' },
     ],
   },
@@ -126,21 +134,34 @@ export function settingGroup(id: SettingId): SettingsGroupId | null {
   return GROUPS.find((group) => group.rows.some((row) => row.id === id))?.id ?? null;
 }
 
-function groupMatches(group: SettingsGroupEntry, terms: readonly string[]): readonly SettingEntry[] {
+export function settingKeywords(row: SettingEntry): string {
+  return [row.keywords, ...Object.values(row.providerKeywords ?? {})].join(' ');
+}
+
+function rowMatches(row: SettingEntry, groupTitle: string, keywords: string, terms: readonly string[]): boolean {
+  return matchesTerms(`${row.title} ${keywords} ${groupTitle}`, terms);
+}
+
+function offersProviderSwitch(row: SettingEntry, groupTitle: string, terms: readonly string[]): boolean {
+  return row.providerKeywords !== undefined && rowMatches(row, groupTitle, settingKeywords(row), terms);
+}
+
+function groupMatches(group: SettingsGroupEntry, terms: readonly string[], provider: AiProvider): readonly SettingEntry[] {
   if (matchesTerms(group.title, terms)) {
     return group.rows;
   }
-  return group.rows.filter((row) => matchesTerms(`${row.title} ${row.keywords} ${group.title}`, terms));
+  const switching = group.rows.some((row) => offersProviderSwitch(row, group.title, terms));
+  return group.rows.filter((row) => (switching && row.id === PROVIDER_SELECTOR) || rowMatches(row, group.title, `${row.keywords} ${row.providerKeywords?.[provider] ?? ''}`, terms));
 }
 
-export function filterSettings(groups: readonly SettingsGroupEntry[], terms: readonly string[]): SettingsFilter | null {
+export function filterSettings(groups: readonly SettingsGroupEntry[], terms: readonly string[], provider: AiProvider): SettingsFilter | null {
   if (terms.length === 0) {
     return null;
   }
   const rows = new Set<SettingId>();
   const visibleGroups = new Set<SettingsGroupId>();
   for (const group of groups) {
-    const hits = groupMatches(group, terms);
+    const hits = groupMatches(group, terms, provider);
     hits.forEach((row) => rows.add(row.id));
     if (hits.length > 0) {
       visibleGroups.add(group.id);

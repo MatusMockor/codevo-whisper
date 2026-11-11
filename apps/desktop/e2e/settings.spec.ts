@@ -149,6 +149,8 @@ test.describe('settings api', () => {
   });
 });
 
+const PALETTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+k' : 'Control+k';
+
 function row(title: string): Locator {
   return page.locator('.srow', { has: page.locator('b', { hasText: title }) });
 }
@@ -603,6 +605,71 @@ test.describe('settings page', () => {
     await expect(page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' })).toHaveValue('');
     await expect(page.getByRole('button', { name: 'Vynulovať štatistiky' })).toBeFocused();
     await expect(row('Štatistiky')).toBeInViewport();
+  });
+
+  test('a palette jump from another page waits for a setting whose data loads later', async () => {
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('history:get');
+      ipcMain.handle('history:get', () => new Promise((resolve) => setTimeout(() => resolve({ kind: 'ready', policy: { enabled: false, limit: 100 }, entries: [], writeError: false }), 800)));
+    });
+    await page.getByRole('tab', { name: 'Domov' }).click();
+    await page.keyboard.press(PALETTE_SHORTCUT);
+    await page.getByRole('dialog', { name: 'Príkazová paleta' }).getByRole('combobox').fill('ukladat historiu');
+    await page.keyboard.press('Enter');
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+    await expect(page.getByRole('switch', { name: 'Ukladať históriu prepisov' })).toBeFocused();
+    await expect(row('Ukladať históriu prepisov')).toBeInViewport();
+  });
+
+  test('a page command from the palette moves the focus to the heading of the new page', async () => {
+    await page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' }).focus();
+    await page.keyboard.press(PALETTE_SHORTCUT);
+    const palette = page.getByRole('dialog', { name: 'Príkazová paleta' });
+    await palette.getByRole('combobox').fill('sukromie');
+    await palette.getByRole('option', { name: /Súkromie.*Stránka/ }).click();
+
+    await expect(palette).toBeHidden();
+    await expect(page.getByRole('heading', { level: 1, name: 'Kam putuje váš hlas' })).toBeFocused();
+  });
+
+  test('the palette shortcut is left to the hotkey recorder while a new hotkey is recorded', async () => {
+    await app.evaluate(() => {
+      (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.holdRecordings = true;
+    });
+    const recorder = row('Klávesová skratka').locator('.hk');
+    const palette = page.getByRole('dialog', { name: 'Príkazová paleta' });
+    await recorder.click();
+    await expect(recorder).toContainText('Stlačte novú skratku');
+
+    await page.keyboard.press(PALETTE_SHORTCUT);
+    await app.evaluate(() => {
+      (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.finishRecording();
+    });
+    await expect(recorder).toContainText('Nenastavená');
+    await expect(palette).toBeHidden();
+
+    await page.keyboard.press(PALETTE_SHORTCUT);
+    await expect(palette).toBeVisible();
+  });
+
+  test('the search keeps the AI provider switch next to the connection fields of either provider', async () => {
+    await page.evaluate(() => window.codevo.updateSettings({ aiProvider: 'codex' }));
+    const search = page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' });
+    const provider = page.getByRole('group', { name: 'Poskytovateľ AI' });
+    const apiKey = page.getByLabel('API kľúč (nepovinné)');
+
+    await search.fill('API kľúč');
+    await expect(provider).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Úroveň uvažovania' })).toBeHidden();
+    await provider.getByRole('button', { name: 'Vlastný server' }).click();
+    await expect(apiKey).toBeVisible();
+
+    await search.fill('úroveň uvažovania');
+    await expect(apiKey).toBeHidden();
+    await expect(provider).toBeVisible();
+    await provider.getByRole('button', { name: 'Codex CLI' }).click();
+    await expect(page.getByRole('group', { name: 'Úroveň uvažovania' })).toBeVisible();
   });
 
   test('Živý text can be chosen next to the default indicator and is saved', async () => {

@@ -294,6 +294,15 @@ kbd {
   letter-spacing: -.01em;
 }
 
+.phead h1:focus {
+  outline: none;
+}
+
+.phead h1:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
 .phead .sub {
   max-width: 72ch;
   margin: 6px 0 0;
