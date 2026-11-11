@@ -36,6 +36,7 @@ export type Gateway = {
   sessions: SessionRegistry;
   limiter: PreAuthLimiter;
   clientLimiter: PreAuthLimiter | null;
+  connections(): number;
 };
 
 function keyProvider(serverKey: GatewayDeps['serverKey']): () => KeyPair {
@@ -98,6 +99,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     sessions,
     limiter,
     clientLimiter,
+    connections: () => sockets.clients.size,
     close: async () => {
       await closeClients(sockets.clients);
       await new Promise<void>((resolve) => sockets.close(() => resolve()));

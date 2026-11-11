@@ -203,7 +203,7 @@ describe('HelperProcessInputHelper', () => {
     const { helper } = await started();
 
     await expect(helper.recordHotkey(50)).resolves.toBe('timeout');
-  }, 1500);
+  });
 
   it('reports lost input on tap events and after a helper restart', async () => {
     const { channel, helper } = await started();
