@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiZone, localZone, privacyZones, serverZone, UNKNOWN_ZONES } from '../src/renderer/privacy/privacy-zones';
+import { aiZone, localZone, privacyView, privacyViewWithoutServer, serverZone, UNKNOWN_PRIVACY, UNKNOWN_ZONES, voiceRoute } from '../src/renderer/privacy/privacy-zones';
 import type { PairedServerView } from '../src/shared/server';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
 
@@ -67,20 +67,50 @@ describe('aiZone', () => {
   });
 });
 
-describe('privacyZones', () => {
-  it('combines the three zones from the settings and the paired server', () => {
-    const zones = privacyZones({ ...DEFAULT_SETTINGS, engineOrder: ['server', 'local'] }, PAIRED);
+describe('voiceRoute', () => {
+  it('follows the transcription order through the engines that are in use', () => {
+    expect(voiceRoute(['local'], PAIRED)).toEqual({ primary: 'local', fallback: null });
+    expect(voiceRoute(['server', 'local'], PAIRED)).toEqual({ primary: 'server', fallback: 'local' });
+    expect(voiceRoute(['local', 'server'], PAIRED)).toEqual({ primary: 'local', fallback: 'server' });
+    expect(voiceRoute(['server'], PAIRED)).toEqual({ primary: 'server', fallback: null });
+  });
+
+  it('skips a server that is not paired or switched off', () => {
+    expect(voiceRoute(['server', 'local'], null)).toEqual({ primary: 'local', fallback: null });
+    expect(voiceRoute(['server', 'local'], { ...PAIRED, enabled: false })).toEqual({ primary: 'local', fallback: null });
+    expect(voiceRoute(['server'], null)).toBeNull();
+  });
+});
+
+describe('privacyView', () => {
+  it('combines the three zones and the voice route from the settings and the paired server', () => {
+    const { zones, route } = privacyView({ ...DEFAULT_SETTINGS, engineOrder: ['server', 'local'] }, PAIRED);
 
     expect(zones.local.status?.label).toBe('Teraz záloha prepisu');
     expect(zones.server.status?.label).toBe('Teraz hlavný prepis');
     expect(zones.ai.action?.label).toBe('Nastaviť AI úpravu');
+    expect(route).toEqual({ primary: 'server', fallback: 'local' });
+  });
+
+  it('keeps the local and AI zones when only the server state is unknown', () => {
+    const { zones, route } = privacyViewWithoutServer({ ...DEFAULT_SETTINGS, engineOrder: ['local'], aiProvider: 'codex' });
+
+    expect(zones.local.status).toEqual({ tone: 'ok', label: 'Teraz hlavný prepis' });
+    expect(zones.ai.status?.label).toBe('Teraz iba poznámky zo stretnutí');
+    expect(zones.server).toEqual(UNKNOWN_ZONES.server);
+    expect(route).toEqual({ primary: 'local', fallback: null });
+  });
+
+  it('leaves the voice route unknown when the server is in the order but its state is unknown', () => {
+    expect(privacyViewWithoutServer({ ...DEFAULT_SETTINGS, engineOrder: ['server', 'local'] }).route).toBeNull();
   });
 
   it('keeps the data paths but no live status while the facts are unknown', () => {
-    expect(Object.values(UNKNOWN_ZONES).map((zone) => [zone.status, zone.action])).toEqual([
+    expect(Object.values(UNKNOWN_PRIVACY.zones).map((zone) => [zone.status, zone.action])).toEqual([
       [null, null],
       [null, null],
       [null, null],
     ]);
+    expect(UNKNOWN_PRIVACY.route).toBeNull();
   });
 });

@@ -1,12 +1,12 @@
 import { useId } from 'react';
 import { Glyph } from '../components/Glyph';
-import type { NavTarget } from '../navigation';
+import { STATS_SETTING, type NavTarget } from '../navigation';
 import { HISTORY_RULES, STORED } from './privacy-copy';
-
-const APP_FOLDER = '~/Library/Application Support/Codevo Whisper';
+import { useDataFolder } from './use-data-folder';
 
 export function StorageCard({ onNavigate }: { onNavigate: (target: NavTarget) => void }) {
   const id = useId();
+  const folder = useDataFolder();
   return (
     <section className="last priv-card" aria-labelledby={id}>
       <div className="last-top">
@@ -16,7 +16,7 @@ export function StorageCard({ onNavigate }: { onNavigate: (target: NavTarget) =>
         </h2>
       </div>
       <p className="priv-folder">
-        Všetko je v priečinku aplikácie <code>{APP_FOLDER}</code>
+        Všetko je v priečinku aplikácie {folder !== null && <code>{folder}</code>}
       </p>
       <ul className="files" aria-label="Uložené súbory">
         {STORED.map((item) => (
@@ -38,7 +38,7 @@ export function StorageCard({ onNavigate }: { onNavigate: (target: NavTarget) =>
         <button type="button" className="linkbtn" onClick={() => onNavigate({ page: 'home' })}>
           Otvoriť históriu na stránke Domov
         </button>
-        <button type="button" className="linkbtn" onClick={() => onNavigate({ page: 'settings' })}>
+        <button type="button" className="linkbtn" onClick={() => onNavigate(STATS_SETTING)}>
           Vynulovať štatistiky v Nastaveniach
         </button>
       </div>

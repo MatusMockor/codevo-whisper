@@ -30,6 +30,7 @@ import { PauseState } from '../session/pause-state';
 import { SessionCoordinator } from '../session/session-coordinator';
 import { SettingsStore } from '../settings/settings-store';
 import { AppReveal } from '../system/app-reveal';
+import { homeRelativePath } from '../system/home-relative-path';
 import { RecordingDesktopShell, type DesktopShell } from '../system/desktop-shell';
 import { coordinatorDictationGuard } from '../updates/coordinator-dictation-guard';
 import { TrayMenu } from '../tray/tray-menu';
@@ -188,6 +189,7 @@ export function composeApplication(logger: Logger): Application {
       openUpdateUrl: (url) => shell.openExternal(url),
       ai: aiServices,
       meetings,
+      dataFolder: () => homeRelativePath(app.getPath('userData'), app.getPath('home')),
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
     const overlay = new OverlayWindow(rendererSource('overlay'), logger);

@@ -43,13 +43,6 @@ export const ZONES: readonly ZoneCopy[] = Object.freeze([
   },
 ]);
 
-export const VOICE_STEPS: readonly string[] = Object.freeze([
-  'Mikrofón sa zapne, až keď podržíte kláves. Keď ho pustíte, vypne sa.',
-  'Zvuk sa prepíše na text priamo na tomto počítači stiahnutým modelom.',
-  'Nahrávka existuje iba počas prepisu a hneď potom sa zahodí.',
-  'Text sa vloží do aplikácie. Posledné diktovanie ostane iba v pamäti, kým aplikáciu nezatvoríte.',
-]);
-
 export const NEVER: readonly string[] = Object.freeze([
   'V lokálnom režime neposiela zvuk na internet a text iba AI poskytovateľovi, ktorého si nastavíte.',
   'Nezbiera analytiku ani telemetriu.',

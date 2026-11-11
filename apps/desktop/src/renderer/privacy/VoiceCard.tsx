@@ -1,8 +1,10 @@
 import { useId } from 'react';
 import { Glyph } from '../components/Glyph';
-import { METER_NOTE, NEVER, VOICE_STEPS } from './privacy-copy';
+import { METER_NOTE, NEVER } from './privacy-copy';
+import type { VoiceRoute } from './privacy-zones';
+import { voiceSteps } from './voice-steps';
 
-export function VoiceCard() {
+export function VoiceCard({ route }: { route: VoiceRoute }) {
   const voiceId = useId();
   const neverId = useId();
   return (
@@ -15,7 +17,7 @@ export function VoiceCard() {
           </h2>
         </div>
         <ol className="priv-steps">
-          {VOICE_STEPS.map((step) => (
+          {voiceSteps(route).map((step) => (
             <li key={step}>{step}</li>
           ))}
         </ol>

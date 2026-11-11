@@ -1,12 +1,12 @@
 import type { NavTarget } from '../navigation';
 import { ZONES } from '../privacy/privacy-copy';
 import { StorageCard } from '../privacy/StorageCard';
-import { usePrivacyZones } from '../privacy/use-privacy-zones';
+import { usePrivacyView } from '../privacy/use-privacy-view';
 import { VoiceCard } from '../privacy/VoiceCard';
 import { Zone } from '../privacy/Zone';
 
 export function Privacy({ onNavigate }: { onNavigate: (target: NavTarget) => void }) {
-  const zones = usePrivacyZones();
+  const { zones, route } = usePrivacyView();
   return (
     <div className="page privacy">
       <div className="zones">
@@ -15,7 +15,7 @@ export function Privacy({ onNavigate }: { onNavigate: (target: NavTarget) => voi
         ))}
       </div>
       <div className="priv-cols">
-        <VoiceCard />
+        <VoiceCard route={route} />
         <StorageCard onNavigate={onNavigate} />
       </div>
     </div>

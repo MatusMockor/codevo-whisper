@@ -14,6 +14,10 @@ export type ZoneId = 'local' | 'server' | 'ai';
 
 export type PrivacyZones = Readonly<Record<ZoneId, ZoneState>>;
 
+export type VoiceRoute = { primary: EngineId; fallback: EngineId | null } | null;
+
+export type PrivacyView = { zones: PrivacyZones; route: VoiceRoute };
+
 export type ZoneSettings = Pick<Settings, 'engineOrder' | 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'aiPolish'>;
 
 const OPEN_MODEL: ZoneAction = Object.freeze({ label: 'Otvoriť lokálny model', target: MODEL_SECTION });
@@ -37,6 +41,8 @@ export const UNKNOWN_ZONES: PrivacyZones = Object.freeze({
   server: { status: null, path: serverPath('váš server'), action: null },
   ai: { status: null, path: aiPath('AI poskytovateľ'), action: null },
 });
+
+export const UNKNOWN_PRIVACY: PrivacyView = Object.freeze({ zones: UNKNOWN_ZONES, route: null });
 
 function routeRole(order: readonly EngineId[], engine: EngineId): string | null {
   const position = order.indexOf(engine);
@@ -89,6 +95,28 @@ export function aiZone(settings: Omit<ZoneSettings, 'engineOrder'>): ZoneState {
   return { status: { tone: isLocalAddress(address) ? 'ok' : 'warn', label: aiUse(settings.aiPolish) }, path: aiPath(addressHost(address)), action: OPEN_AI };
 }
 
-export function privacyZones(settings: ZoneSettings, server: PairedServerView | null): PrivacyZones {
-  return { local: localZone(settings.engineOrder), server: serverZone(settings.engineOrder, server), ai: aiZone(settings) };
+function serverInUse(server: PairedServerView | null): boolean {
+  return server !== null && server.enabled;
+}
+
+export function voiceRoute(order: readonly EngineId[], server: PairedServerView | null): VoiceRoute {
+  const [primary, fallback] = order.filter((engine) => engine === 'local' || serverInUse(server));
+  if (primary === undefined) {
+    return null;
+  }
+  return { primary, fallback: fallback ?? null };
+}
+
+export function privacyView(settings: ZoneSettings, server: PairedServerView | null): PrivacyView {
+  return {
+    zones: { local: localZone(settings.engineOrder), server: serverZone(settings.engineOrder, server), ai: aiZone(settings) },
+    route: voiceRoute(settings.engineOrder, server),
+  };
+}
+
+export function privacyViewWithoutServer(settings: ZoneSettings): PrivacyView {
+  return {
+    zones: { local: localZone(settings.engineOrder), server: UNKNOWN_ZONES.server, ai: aiZone(settings) },
+    route: settings.engineOrder.includes('server') ? null : voiceRoute(settings.engineOrder, null),
+  };
 }

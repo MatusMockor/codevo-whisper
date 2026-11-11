@@ -53,3 +53,5 @@ export const MODEL_SECTION: NavTarget = Object.freeze({ page: 'transcription', s
 export const AI_SECTION: NavTarget = Object.freeze({ page: 'settings', section: 'ai' });
 
 export const MICROPHONE_SECTION: NavTarget = Object.freeze({ page: 'settings', section: 'microphone' });
+
+export const STATS_SETTING: NavTarget = Object.freeze({ page: 'settings', setting: 'stats' });
