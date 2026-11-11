@@ -5,7 +5,7 @@ import type { HelperArgs, HelperChannel, HelperMessage } from './helper-channel'
 import { Listeners } from './listeners';
 import { launchHelper, type HelperCommand } from './helper-launch';
 
-export type HelperProcessOptions = { logger?: Logger; timeoutMs?: number };
+export type HelperProcessOptions = { logger?: Logger; timeoutMs?: number; readyTimeoutMs?: number };
 
 type Pending = {
   cmd: string;
@@ -49,6 +49,7 @@ export class HelperProcess implements HelperChannel {
   private readonly pending = new Map<number, Pending>();
   private readonly logger: Logger;
   private readonly timeoutMs: number;
+  private readonly readyTimeoutMs: number;
   private readonly events: Listeners<HelperMessage>;
   private readonly restarts: Listeners<void>;
   private readonly giveUps: Listeners<void>;
@@ -59,6 +60,7 @@ export class HelperProcess implements HelperChannel {
   ) {
     this.logger = options.logger ?? consoleLogger;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.readyTimeoutMs = options.readyTimeoutMs ?? this.timeoutMs;
     this.events = new Listeners(this.logger, 'Input helper event listener failed');
     this.restarts = new Listeners(this.logger, 'Input helper restart listener failed');
     this.giveUps = new Listeners(this.logger, 'Input helper give-up listener failed');
@@ -134,7 +136,7 @@ export class HelperProcess implements HelperChannel {
       const timer = setTimeout(() => {
         reject(new Error('helper-ready-timeout'));
         child.kill('SIGKILL');
-      }, this.timeoutMs);
+      }, this.readyTimeoutMs);
       markReady = () => {
         clearTimeout(timer);
         resolve(child);

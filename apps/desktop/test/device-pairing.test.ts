@@ -121,6 +121,7 @@ describe('DevicePairing', () => {
     controller.abort();
 
     expect(await outcome).toEqual({ kind: 'failed', failure: 'cancelled' });
+    await expect.poll(() => gateway.server.gateway.connections()).toBe(0);
     window.admin.send({ decision: 'approve' });
     expect(await window.admin.next()).toEqual({ event: 'abandoned' });
     expect(await repository.load()).toBeNull();
