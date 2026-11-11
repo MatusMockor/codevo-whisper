@@ -271,7 +271,9 @@ kbd {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto 16px;
 }
 
 .phead .kick {
