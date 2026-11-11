@@ -24,7 +24,12 @@ export type GlyphName =
   | 'swap'
   | 'plus'
   | 'plug'
-  | 'terminal';
+  | 'terminal'
+  | 'record'
+  | 'stop'
+  | 'export'
+  | 'headphones'
+  | 'folder';
 
 const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
   home: () => <path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z" />,
@@ -129,6 +134,17 @@ const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
       <path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" />
     </>
   ),
+  record: () => <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
+  stop: () => <rect x="7" y="7" width="10" height="10" rx="1.8" fill="currentColor" stroke="none" />,
+  export: () => <path d="M12 14.5V3.5M7.5 8 12 3.5 16.5 8M5 13.5v6.5h14v-6.5" />,
+  headphones: () => (
+    <>
+      <path d="M4.5 15.5v-3a7.5 7.5 0 0 1 15 0v3" />
+      <rect x="3.5" y="14.5" width="4" height="6" rx="1.5" />
+      <rect x="16.5" y="14.5" width="4" height="6" rx="1.5" />
+    </>
+  ),
+  folder: () => <path d="M3.5 6.5a1 1 0 0 1 1-1h4.8l2 2.2h8.2a1 1 0 0 1 1 1V18.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" />,
 };
 
 type GlyphProps = { name: GlyphName; size?: 'sm' | 'md' | 'lg' };
