@@ -10,7 +10,7 @@ describe('voiceSteps', () => {
     expect(voiceSteps({ primary: 'local', fallback: null })[1]).toBe('Zvuk sa prepíše na text priamo na tomto počítači stiahnutým modelom.');
     expect(voiceSteps({ primary: 'server', fallback: null })[1]).toBe('Zvuk ide zašifrovaný (E2E) na váš server, ktorý vráti text.');
     expect(voiceSteps({ primary: 'server', fallback: 'local' })[1]).toBe('Zvuk ide zašifrovaný (E2E) na váš server, ktorý vráti text. Ak server nie je dostupný, prepíše sa na tomto počítači.');
-    expect(voiceSteps({ primary: 'local', fallback: 'server' })[1]).toBe('Zvuk sa prepíše na text priamo na tomto počítači stiahnutým modelom. Ak lokálny model chýba, ide zašifrovaný na váš server.');
+    expect(voiceSteps({ primary: 'local', fallback: 'server' })[1]).toBe('Zvuk sa prepíše na text priamo na tomto počítači stiahnutým modelom. Ak lokálny prepis nie je pripravený, ide zašifrovaný na váš server.');
     expect(voiceSteps(null)[1]).toBe('Zvuk sa prepíše na tomto počítači alebo zašifrovaný na vašom serveri, podľa trasy prepisu.');
   });
 

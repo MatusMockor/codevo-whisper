@@ -10,7 +10,7 @@ const TRANSCRIBE_STEP: Readonly<Record<EngineId, string>> = Object.freeze({
 
 const FALLBACK_STEP: Readonly<Record<EngineId, string>> = Object.freeze({
   local: 'Ak server nie je dostupný, prepíše sa na tomto počítači.',
-  server: 'Ak lokálny model chýba, ide zašifrovaný na váš server.',
+  server: 'Ak lokálny prepis nie je pripravený, ide zašifrovaný na váš server.',
 });
 
 const UNKNOWN_ROUTE_STEP = 'Zvuk sa prepíše na tomto počítači alebo zašifrovaný na vašom serveri, podľa trasy prepisu.';

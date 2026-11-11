@@ -92,6 +92,13 @@ describe('privacyView', () => {
     expect(route).toEqual({ primary: 'server', fallback: 'local' });
   });
 
+  it('shows local as the main route when the server ahead of it is disconnected', () => {
+    const { zones, route } = privacyView({ ...DEFAULT_SETTINGS, engineOrder: ['server', 'local'] }, { ...PAIRED, enabled: false });
+
+    expect(zones.local.status).toEqual({ tone: 'ok', label: 'Teraz hlavný prepis' });
+    expect(route).toEqual({ primary: 'local', fallback: null });
+  });
+
   it('keeps the local and AI zones when only the server state is unknown', () => {
     const { zones, route } = privacyViewWithoutServer({ ...DEFAULT_SETTINGS, engineOrder: ['local'], aiProvider: 'codex' });
 

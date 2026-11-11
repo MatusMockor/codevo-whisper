@@ -99,8 +99,12 @@ function serverInUse(server: PairedServerView | null): boolean {
   return server !== null && server.enabled;
 }
 
+function effectiveOrder(order: readonly EngineId[], server: PairedServerView | null): readonly EngineId[] {
+  return order.filter((engine) => engine === 'local' || serverInUse(server));
+}
+
 export function voiceRoute(order: readonly EngineId[], server: PairedServerView | null): VoiceRoute {
-  const [primary, fallback] = order.filter((engine) => engine === 'local' || serverInUse(server));
+  const [primary, fallback] = effectiveOrder(order, server);
   if (primary === undefined) {
     return null;
   }
@@ -109,7 +113,7 @@ export function voiceRoute(order: readonly EngineId[], server: PairedServerView 
 
 export function privacyView(settings: ZoneSettings, server: PairedServerView | null): PrivacyView {
   return {
-    zones: { local: localZone(settings.engineOrder), server: serverZone(settings.engineOrder, server), ai: aiZone(settings) },
+    zones: { local: localZone(effectiveOrder(settings.engineOrder, server)), server: serverZone(settings.engineOrder, server), ai: aiZone(settings) },
     route: voiceRoute(settings.engineOrder, server),
   };
 }
