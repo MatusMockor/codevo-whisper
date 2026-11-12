@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { OverlayApp } from './OverlayApp';
+import '@fontsource-variable/archivo/wdth.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles/tokens.css';
 import './overlay.css';
 import '../styles/interaction.css';

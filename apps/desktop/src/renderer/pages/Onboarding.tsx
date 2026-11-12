@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import type { Settings } from '../../shared/settings';
-import { HotkeyRecorder } from '../components/HotkeyRecorder';
 import { Logo } from '../components/Logo';
+import { HotkeyStep } from '../onboarding/HotkeyStep';
 import { InputPermissionsStep } from '../onboarding/InputPermissionsStep';
 import { MicrophoneStep } from '../onboarding/MicrophoneStep';
 import { initialEngineChoice, stickyEngineChoice, type EngineChoice } from '../onboarding/engine-choice';
 import { EngineStep } from '../onboarding/EngineStep';
+import { OnboardingNav } from '../onboarding/OnboardingNav';
+import { OnboardingStepper } from '../onboarding/OnboardingStepper';
 import { LINUX_ONBOARDING_STEPS, ONBOARDING_STEPS } from '../onboarding/steps';
 import { TryStep } from '../onboarding/TryStep';
 import { useModels, type Models } from '../settings/use-models';
 import { SaveErrorNotice } from '../settings/SaveErrorNotice';
 import { usePermissions } from '../settings/use-permissions';
 import { saveSettings } from '../settings/use-settings';
-
-const LAST_STEP = ONBOARDING_STEPS.length - 1;
 
 type StepBodyProps = { step: number; settings: Settings; models: Models; choice: EngineChoice | null; onEngineChoice: (choice: EngineChoice) => void };
 
@@ -26,14 +26,7 @@ function StepBody({ step, settings, models, choice, onEngineChoice }: StepBodyPr
     return <InputPermissionsStep permissions={permissions} refresh={refresh} />;
   }
   if (step === 2) {
-    return (
-      <div className="ob-hotkey">
-        <span id="ob-hotkey-title" className="visually-hidden">
-          Klávesová skratka
-        </span>
-        <HotkeyRecorder hotkey={settings.hotkey} labelledBy="ob-hotkey-title" onRecorded={(hotkey) => saveSettings({ hotkey })} />
-      </div>
-    );
+    return <HotkeyStep settings={settings} />;
   }
   if (step === 3) {
     return <EngineStep settings={settings} models={models} choice={choice} onChoose={onEngineChoice} />;
@@ -54,40 +47,27 @@ export function Onboarding({ settings }: { settings: Settings }) {
 
   return (
     <div className="onboarding">
-      <header className="ob-bar">
+      <header className="ob-top">
         <span className="brand">
           <Logo />
           Codevo Whisper
         </span>
+        <OnboardingStepper steps={steps} current={step} />
       </header>
       <main className="ob-main" aria-labelledby="ob-title">
-        <p className="ob-step">
-          Krok {step + 1} z {ONBOARDING_STEPS.length}
-        </p>
-        <h1 id="ob-title">{current?.title}</h1>
-        <p className="ob-lead">{current?.lead}</p>
-        <SaveErrorNotice />
-        <div className="ob-body">
-          <StepBody step={step} settings={settings} models={models} choice={choice} onEngineChoice={setEngineChoice} />
-        </div>
-        <div className="ob-nav">
-          {step > 0 && (
-            <button type="button" className="btn" onClick={() => setStep(step - 1)}>
-              Späť
-            </button>
-          )}
-          {step < LAST_STEP && (
-            <button type="button" className="btn primary" onClick={() => setStep(step + 1)}>
-              Ďalej
-            </button>
-          )}
-          {step === LAST_STEP && (
-            <button type="button" className="btn primary" onClick={() => saveSettings({ onboardingDone: true })}>
-              Dokončiť
-            </button>
-          )}
+        <div className="ob-inner">
+          <p className="ob-kick">
+            Krok {step + 1} z {steps.length}
+          </p>
+          <h1 id="ob-title">{current?.title}</h1>
+          <p className="ob-lead">{current?.lead}</p>
+          <SaveErrorNotice />
+          <div className="ob-body">
+            <StepBody step={step} settings={settings} models={models} choice={choice} onEngineChoice={setEngineChoice} />
+          </div>
         </div>
       </main>
+      <OnboardingNav step={step} total={steps.length} onBack={() => setStep(step - 1)} onNext={() => setStep(step + 1)} onDone={() => saveSettings({ onboardingDone: true })} />
     </div>
   );
 }

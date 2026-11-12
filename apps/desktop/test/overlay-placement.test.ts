@@ -3,7 +3,7 @@ import { bottomCenter } from '../src/main/windows/overlay-placement';
 
 describe('bottomCenter', () => {
   it('centers the overlay above the bottom edge of the work area', () => {
-    expect(bottomCenter({ x: 0, y: 25, width: 1512, height: 920 })).toEqual({ x: 546, y: 749, width: 420, height: 168 });
+    expect(bottomCenter({ x: 0, y: 25, width: 1512, height: 920 })).toEqual({ x: 526, y: 733, width: 460, height: 184 });
   });
 
   it('places the overlay on a secondary display with negative coordinates', () => {

@@ -2,7 +2,7 @@ export type Rect = { x: number; y: number; width: number; height: number };
 
 export type Size = { width: number; height: number };
 
-export const OVERLAY_SIZE: Size = Object.freeze({ width: 420, height: 168 });
+export const OVERLAY_SIZE: Size = Object.freeze({ width: 460, height: 184 });
 
 export const OVERLAY_BOTTOM_MARGIN = 28;
 

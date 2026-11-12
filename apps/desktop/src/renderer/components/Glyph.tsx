@@ -123,6 +123,8 @@ const PATHS: Readonly<Record<GlyphName, () => JSX.Element>> = {
     </>
   ),
   folder: () => <path d="M3.5 6.5a1 1 0 0 1 1-1h4.8l2 2.2h8.2a1 1 0 0 1 1 1V18.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" />,
+  arrow: () => <path d="M5 12h14M13 6l6 6-6 6" />,
+  chev: () => <path d="M9.5 6l6 6-6 6" />,
 };
 
 type GlyphProps = { name: GlyphName; size?: 'sm' | 'md' | 'lg' };

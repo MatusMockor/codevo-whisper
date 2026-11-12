@@ -3,6 +3,7 @@ import type { DictationMode, OverlayMode, Settings } from '../../shared/settings
 import { HotkeyRecorder } from '../components/HotkeyRecorder';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { DictationLanguagesRow } from './DictationLanguagesRow';
+import { MODE_DESCRIPTIONS } from './mode-descriptions';
 import { SettingsGroup, SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 import { AudioFeedbackRows } from './AudioFeedbackRows';
@@ -12,12 +13,6 @@ const MODES: ReadonlyArray<SegmentOption<DictationMode>> = [
   { id: 'hold', label: 'Podrž klávesu' },
   { id: 'toggle', label: 'Prepínanie' },
 ];
-
-const MODE_DESCRIPTIONS: Readonly<Record<DictationMode, string>> = {
-  smart: 'Krátke stlačenie zapne diktovanie, ďalšie ho ukončí. Pri podržaní aspoň 300 ms sa diktovanie ukončí uvoľnením klávesu.',
-  hold: 'Nahráva sa, kým kláves držíte.',
-  toggle: 'Prvé stlačenie začne nahrávať, druhé ukončí.',
-};
 
 const OVERLAYS: ReadonlyArray<SegmentOption<OverlayMode>> = [
   { id: 'indicator', label: 'Indikátor' },
