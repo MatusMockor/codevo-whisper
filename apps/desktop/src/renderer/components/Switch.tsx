@@ -1,8 +1,11 @@
-type SwitchProps = { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void };
+import type { Ref } from 'react';
 
-export function Switch({ label, checked, disabled, onChange }: SwitchProps) {
+type SwitchProps = { label: string; checked: boolean; disabled?: boolean; ref?: Ref<HTMLButtonElement>; onChange: (checked: boolean) => void };
+
+export function Switch({ label, checked, disabled, ref, onChange }: SwitchProps) {
   return (
     <button
+      ref={ref}
       type="button"
       className="switch"
       role="switch"

@@ -32,6 +32,10 @@ function card(): Locator {
   return page.locator('.server-card');
 }
 
+function connection(): Locator {
+  return card().getByRole('switch', { name: 'Pripojenie k serveru' });
+}
+
 function nowCard(): Locator {
   return page.locator('.now');
 }
@@ -149,32 +153,29 @@ test('disconnecting the server keeps the pairing, warns without a local model an
   await pair();
   await route().getByRole('button', { name: 'Pridať lokálny prepis ako zálohu' }).click();
   await expect.poll(engineOrder).toEqual(['server', 'local']);
-  const disconnect = card().getByRole('button', { name: 'Odpojiť server', exact: true });
-  await expect(disconnect).toHaveText('Odpojiť');
+  await expect(connection()).toHaveAttribute('aria-checked', 'true');
   await expect(card().getByRole('button', { name: 'Zrušiť párovanie' })).toBeVisible();
 
-  await disconnect.click();
+  await connection().click();
   const confirm = page.getByRole('alertdialog', { name: 'Odpojiť server' });
   await expect(confirm).toHaveAccessibleDescription(/po odpojení servera diktovanie nebude fungovať/);
   await expect(page.getByRole('button', { name: 'Nechať pripojený' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(confirm).toHaveCount(0);
-  await expect(disconnect).toBeFocused();
-  await disconnect.press('Space');
+  await expect(connection()).toBeFocused();
+  await connection().press('Space');
   await expect(confirm).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(disconnect).toBeFocused();
+  await expect(connection()).toBeFocused();
   await expect.poll(engineOrder).toEqual(['server', 'local']);
-  await disconnect.click();
+  await connection().click();
   await confirm.getByRole('button', { name: 'Odpojiť server', exact: true }).click();
 
-  const connect = card().getByRole('button', { name: 'Pripojiť server', exact: true });
-  await expect(connect).toHaveText('Pripojiť');
-  await expect(connect).toHaveClass(/primary/);
-  await expect(connect).toBeFocused();
+  await expect(connection()).toHaveAttribute('aria-checked', 'false');
+  await expect(connection()).toBeFocused();
   await expect(card().locator('.pill')).toHaveText('Odpojený');
   await expect(card()).toContainText('Server je odpojený');
-  await expect(card()).toContainText('Pripojiť ho znova pripojí bez nového párovania');
+  await expect(card()).toContainText('prepínač Pripojenie k serveru znova pripojí bez nového párovania');
   await expect(card()).toContainText('Po pripojení sa obnoví trasa Server, potom lokálne.');
   await expect.poll(savedSettings).toMatchObject({ engineOrder: ['local'], serverEnabled: false, serverRestoreOrder: ['server', 'local'] });
   await expect(nowCard()).toContainText('Lokálny model chýba');
@@ -191,12 +192,13 @@ test('disconnecting the server keeps the pairing, warns without a local model an
   await expect.poll(savedSettings).toMatchObject({ engineOrder: ['server', 'local'], serverEnabled: true, serverRestoreOrder: null });
   await expect(card().locator('.pill')).toHaveText('Online');
   await expect(nowCard()).toContainText(`Prepisuje sa na: Server 127.0.0.1:${gateway.port}`);
-  await card().getByRole('button', { name: 'Odpojiť server', exact: true }).click();
+  await connection().click();
   await page.getByRole('alertdialog', { name: 'Odpojiť server' }).getByRole('button', { name: 'Odpojiť server', exact: true }).click();
   await expect(card().locator('.pill')).toHaveText('Odpojený');
-  await card().getByRole('button', { name: 'Pripojiť server', exact: true }).click();
+  await connection().click();
   await expect(card().locator('.pill')).toHaveText('Online');
-  await expect(card().getByRole('button', { name: 'Odpojiť server', exact: true })).toBeFocused();
+  await expect(connection()).toHaveAttribute('aria-checked', 'true');
+  await expect(connection()).toBeFocused();
   await expect.poll(engineOrder).toEqual(['server', 'local']);
 });
 

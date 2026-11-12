@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Glyph } from '../components/Glyph';
+import { Switch } from '../components/Switch';
 
 type ServerToggleProps = { connected: boolean; localReady: boolean };
 
@@ -96,19 +96,7 @@ export function useServerToggle({ connected, localReady }: ServerToggleProps) {
     apply(false);
   }
 
-  const control = (
-    <button
-      ref={toggleRef}
-      type="button"
-      className={connected ? 'btn srv-connect' : 'btn primary srv-connect'}
-      aria-label={connected ? 'Odpojiť server' : 'Pripojiť server'}
-      disabled={pending}
-      onClick={toggle}
-    >
-      <Glyph name="plug" size="sm" />
-      {connected ? 'Odpojiť' : 'Pripojiť'}
-    </button>
-  );
+  const control = <Switch ref={toggleRef} label="Pripojenie k serveru" checked={connected} disabled={pending} onChange={toggle} />;
   const notice = (
     <>
       {confirming && <DisconnectConfirm onCancel={dismiss} onConfirm={confirmDisconnect} />}
