@@ -3,11 +3,13 @@ set -euo pipefail
 
 output=""
 model=""
+language="auto"
 args=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output) output="$2"; shift 2 ;;
     --model) model="$2"; shift 2 ;;
+    --language) language="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -27,9 +29,17 @@ if [[ -n "${FAKE_CLI_DELAY_S:-}" ]]; then
   sleep "$FAKE_CLI_DELAY_S"
 fi
 
+if [[ -n "${FAKE_CLI_LID_OUTPUT_FILE:-}" && "$model" == *lang-id* ]]; then
+  cat "$FAKE_CLI_LID_OUTPUT_FILE" > "$output"
+  exit 0
+fi
+
 case "${FAKE_CLI_MODE:-text}" in
   text)
     printf '  %s \n' "${FAKE_CLI_TEXT:-ahoj svet}" > "$output"
+    ;;
+  model-language)
+    printf '%s:%s\n' "$(basename "$model" .gguf)" "$language" > "$output"
     ;;
   echo-chunk)
     first_sample="$(od -An -t d2 -j 44 -N 2 "$wav" | tr -d ' ')"

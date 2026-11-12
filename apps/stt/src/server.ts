@@ -1,13 +1,22 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { TranscribeCliError, type TranscribeLanguage } from '@codevo-whisper/stt-runner';
+import { TranscribeCliError } from '@codevo-whisper/stt-runner';
+import type { LanguageRouter } from './language-router';
+import type { ServerModels } from './model-names';
 import { readPcm } from './read-pcm';
+import { parseTranscribeQuery, type TranscribeQuery } from './transcribe-query';
 import type { Transcriber } from './transcriber';
+import { TranscriptionJobs } from './transcription-job';
 
 export type SttServer = Server & { stop(): Promise<void> };
 
-export type SttServerOptions = { transcriber: Transcriber; port: number; host: string; onError?: (code: string) => void };
-
-const LANGUAGES: readonly string[] = ['sk', 'en', 'cs', 'auto'];
+export type SttServerOptions = {
+  transcriber: Transcriber;
+  router: LanguageRouter;
+  models: ServerModels;
+  port: number;
+  host: string;
+  onError?: (code: string) => void;
+};
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
@@ -38,7 +47,10 @@ function failureStatus(error: unknown): number {
 class SingleFlightHandler {
   private busy = false;
 
-  constructor(private readonly options: SttServerOptions) {}
+  constructor(
+    private readonly jobs: TranscriptionJobs,
+    private readonly onError: ((code: string) => void) | undefined,
+  ) {}
 
   isBusy(): boolean {
     return this.busy;
@@ -55,13 +67,13 @@ class SingleFlightHandler {
     }
     this.busy = true;
     try {
-      await this.transcribe(request, response, url.searchParams.get('language') ?? '');
+      await this.transcribe(request, response, parseTranscribeQuery(url.searchParams));
     } finally {
       this.busy = false;
     }
   }
 
-  private async transcribe(request: IncomingMessage, response: ServerResponse, language: string): Promise<void> {
+  private async transcribe(request: IncomingMessage, response: ServerResponse, query: TranscribeQuery): Promise<void> {
     const body = await readPcm(request);
     if (body.kind === 'aborted') {
       request.destroy();
@@ -71,25 +83,30 @@ class SingleFlightHandler {
       reply(response, 413, { error: 'audio is too long' });
       return;
     }
-    if (body.kind === 'invalid' || !LANGUAGES.includes(language)) {
+    if (body.kind === 'invalid' || query.kind === 'invalid') {
       reply(response, 400, { error: 'invalid PCM or language' });
+      return;
+    }
+    const job = this.jobs.for(query);
+    if (job === null) {
+      reply(response, 409, { error: 'languages unavailable' });
       return;
     }
     const controller = new AbortController();
     response.once('close', () => controller.abort());
     try {
-      const text = await this.options.transcriber.transcribe(body.pcm, language as TranscribeLanguage, controller.signal);
-      reply(response, 200, { text });
+      reply(response, 200, await job.run(body.pcm, controller.signal));
     } catch (error) {
       const status = failureStatus(error);
-      this.options.onError?.(String(status));
+      this.onError?.(String(status));
       reply(response, status, { error: 'transcription failed' });
     }
   }
 }
 
 export async function startSttServer(options: SttServerOptions): Promise<SttServer> {
-  const handler = new SingleFlightHandler(options);
+  const { router, models } = options;
+  const handler = new SingleFlightHandler(new TranscriptionJobs(options.transcriber, router), options.onError);
   const server = createServer((request, response) => {
     request.on('error', () => request.destroy());
     response.once('finish', () => request.resume());
@@ -102,6 +119,10 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
     if (request.method === 'GET' && url.pathname === '/health') {
       const ready = options.transcriber.ready();
       reply(response, ready ? 200 : 503, { status: ready ? 'UP' : 'DOWN', busy: handler.isBusy() });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/capabilities') {
+      reply(response, 200, { languages: router.languages(), models });
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {

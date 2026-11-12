@@ -222,6 +222,9 @@ importers:
 
   apps/stt:
     dependencies:
+      '@codevo-whisper/language-routing':
+        specifier: workspace:*
+        version: link:../../packages/language-routing
       '@codevo-whisper/stt-runner':
         specifier: workspace:*
         version: link:../../packages/stt-runner

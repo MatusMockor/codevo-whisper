@@ -4,11 +4,14 @@ import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliTranscriber } from '../src/cli-transcriber';
+import { UnavailableLanguageRouter } from '../src/language-router';
 import { startSttServer, type SttServer } from '../src/server';
 
 const FAKE_CLI = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-transcribe-cli.sh', import.meta.url));
 
 type Reply = { status: number; body: unknown };
+
+const NO_ROUTING = { router: new UnavailableLanguageRouter(), models: { transcription: 'fake', conditioned: null, languageId: null } };
 
 let server: SttServer;
 
@@ -38,7 +41,7 @@ function send(path: string, options: { method?: string; contentType?: string; bo
 
 beforeEach(async () => {
   const transcriber = new CliTranscriber({ binary: FAKE_CLI, model: '/models/fake.gguf', backend: 'cpu', threads: 2 });
-  server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
+  server = await startSttServer({ transcriber, ...NO_ROUTING, port: 0, host: '127.0.0.1' });
 });
 
 afterEach(async () => {
@@ -89,7 +92,7 @@ describe('STT sidecar', () => {
     await server.stop();
 
     const transcriber = new CliTranscriber({ binary: FAKE_CLI, model: '/models/fake.gguf', backend: 'cpu', threads: 2, timeoutMs: 100 });
-    server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
+    server = await startSttServer({ transcriber, ...NO_ROUTING, port: 0, host: '127.0.0.1' });
     vi.stubEnv('FAKE_CLI_MODE', 'hang');
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(504);
   });
@@ -127,6 +130,11 @@ describe('STT sidecar', () => {
 
     expect(response).toMatch(/^HTTP\/1\.1 400/);
     expect((await send('/health', { method: 'GET' })).status).toBe(200);
+  });
+
+  it('reports no languages and refuses language lists without a language router', async () => {
+    expect(await send('/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: NO_ROUTING.models } });
+    expect(await send('/transcribe?language=auto&languages=sk,cs', { body: new Uint8Array(32_000) })).toEqual({ status: 409, body: { error: 'languages unavailable' } });
   });
 
   it('answers 404 for unknown routes', async () => {

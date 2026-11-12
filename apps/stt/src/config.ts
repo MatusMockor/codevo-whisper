@@ -7,13 +7,17 @@ export type SttConfig = {
   workerBinary: string;
   binary: string;
   model: string;
+  conditionedModel: string;
+  lidModel: string;
   backend: TranscribeBackend;
+  lidBackend: TranscribeBackend;
   threads: number;
   port: number;
   host: string;
 };
 
 const BACKENDS: readonly TranscribeBackend[] = ['vulkan', 'metal', 'cpu'];
+const LID_BACKENDS: readonly TranscribeBackend[] = ['cpu', 'vulkan', 'metal'];
 const ENGINES: readonly SttEngine[] = ['worker', 'cli'];
 
 function value(env: NodeJS.ProcessEnv, key: string, fallback: string): string {
@@ -45,7 +49,10 @@ export function loadSttConfig(env: NodeJS.ProcessEnv): SttConfig {
     workerBinary: value(env, 'STT_WORKER_BINARY', '/opt/transcribe/bin/cw-stt-worker'),
     binary: value(env, 'STT_BINARY', '/opt/transcribe/bin/transcribe-cli'),
     model: value(env, 'STT_MODEL_PATH', '/models/parakeet-ultra-F16.gguf'),
+    conditionedModel: value(env, 'STT_CONDITIONED_MODEL_PATH', '/models/canary-1b-v2-Q8_0.gguf'),
+    lidModel: value(env, 'STT_LID_MODEL_PATH', '/models/lang-id-voxlingua107-ecapa-Q8_0.gguf'),
     backend: choice(env, 'STT_BACKEND', BACKENDS),
+    lidBackend: choice(env, 'STT_LID_BACKEND', LID_BACKENDS),
     threads: integer(env, 'STT_THREADS', '4', { min: 1, max: 256 }),
     port: integer(env, 'STT_PORT', '8001', { min: 0, max: 65535 }),
     host: value(env, 'STT_HOST', '0.0.0.0'),

@@ -8,6 +8,11 @@ x-hardening: &hardening
     - no-new-privileges:true
   restart: unless-stopped
 
+x-model-paths: &model-paths
+  STT_MODEL_PATH: ${STT_MODEL_PATH:-/models/parakeet-ultra-F16.gguf}
+  STT_CONDITIONED_MODEL_PATH: ${STT_CONDITIONED_MODEL_PATH:-/models/canary-1b-v2-Q8_0.gguf}
+  STT_LID_MODEL_PATH: ${STT_LID_MODEL_PATH:-/models/lang-id-voxlingua107-ecapa-Q8_0.gguf}
+
 services:
   gateway:
     <<: *hardening
@@ -45,8 +50,10 @@ services:
       dockerfile: apps/stt/Dockerfile
     image: codevo-whisper-stt:local
     environment:
+      <<: *model-paths
       STT_ENGINE: ${STT_ENGINE:-worker}
       STT_BACKEND: ${STT_BACKEND:-vulkan}
+      STT_LID_BACKEND: ${STT_LID_BACKEND:-cpu}
       STT_THREADS: ${STT_THREADS:-4}
       TMPDIR: /tmp
     tmpfs:
@@ -72,6 +79,8 @@ services:
     profiles:
       - provision
     command: ["node", "dist/provision.js"]
+    environment:
+      <<: *model-paths
     tmpfs:
       - /tmp:size=64m,mode=1777
     volumes:
