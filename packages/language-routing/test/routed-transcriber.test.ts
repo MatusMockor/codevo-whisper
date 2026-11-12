@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageSelection } from '../src/language-selection';
 import { SK_GIBSON, UK_DRIFT } from './support/benchmark-texts';
-import { closeRig, createRig, pcm, pidOf, startWith, type RoutingRig } from './support/routing-rig';
+import { closeRig, createRig, pcm, pidOf, settlement, startWith, waitForFailure, type RoutingRig } from './support/routing-rig';
 
 const SK = LanguageSelection.of(['sk']);
 const SK_CS = LanguageSelection.of(['sk', 'cs']);
@@ -184,9 +184,10 @@ describe('RoutedTranscriber on resident workers', () => {
   it('propagates an abort to language ID and starts no transcription', async () => {
     await startWith(rig.identifier, { ...CONFIDENT_SK, FAKE_WORKER_DELAY_MS: '5000' });
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 100);
+    const reason = new DOMException('segment cancelled during language ID', 'AbortError');
+    setTimeout(() => controller.abort(reason), 100);
 
-    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final', signal: controller.signal })).rejects.toThrow();
+    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final', signal: controller.signal })).rejects.toBe(reason);
 
     expect(rig.conditioned.ready()).toBe(false);
     expect(rig.verbatim.ready()).toBe(false);
@@ -233,12 +234,17 @@ describe('RoutedTranscriber fallbacks', () => {
     await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
     const controller = new AbortController();
     const reason = new DOMException('segment cancelled', 'AbortError');
-    setTimeout(() => controller.abort(reason), 400);
+    const call = rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final', signal: controller.signal });
+    const settled = settlement(call);
+    const rejected = expect(call).rejects.toBe(reason);
+
+    await waitForFailure(rig.conditioned);
+    expect(settled()).toBe(false);
     const started = performance.now();
+    controller.abort(reason);
 
-    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final', signal: controller.signal })).rejects.toBe(reason);
-
-    expect(performance.now() - started).toBeLessThan(2_000);
+    await rejected;
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   it('returns the verbatim text when the conditioned fix fails', async () => {
@@ -365,9 +371,17 @@ describe('RoutedTranscriber partials', () => {
     await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
     const controller = new AbortController();
     const reason = new DOMException('partial cancelled', 'AbortError');
-    setTimeout(() => controller.abort(reason), 400);
+    const call = rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial', signal: controller.signal });
+    const settled = settlement(call);
+    const rejected = expect(call).rejects.toBe(reason);
 
-    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial', signal: controller.signal })).rejects.toBe(reason);
+    await waitForFailure(rig.conditioned);
+    expect(settled()).toBe(false);
+    const started = performance.now();
+    controller.abort(reason);
+
+    await rejected;
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   it('keeps short and foreign partials verbatim', async () => {

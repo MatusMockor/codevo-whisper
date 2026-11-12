@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { ResidentLanguageIdentifier, ResidentTranscriber, type ResidentWorkerOptions } from '@codevo-whisper/stt-runner';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { RoutedTranscriber } from '../../src/index';
 
 const FAKE_WORKER = fileURLToPath(new URL('../../../stt-runner/test/support/fake-worker.js', import.meta.url));
@@ -43,4 +43,17 @@ export function pcm(samples: number): Uint8Array {
 
 export function pidOf(text: string): string {
   return text.split(':')[0] ?? '';
+}
+
+export async function waitForFailure(worker: { ready(): boolean }): Promise<void> {
+  await expect.poll(() => worker.ready(), { interval: 5, timeout: 2_000 }).toBe(false);
+}
+
+export function settlement(promise: Promise<unknown>): () => boolean {
+  let settled = false;
+  const mark = (): void => {
+    settled = true;
+  };
+  promise.then(mark, mark);
+  return () => settled;
 }
