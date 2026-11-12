@@ -33,6 +33,7 @@ FROM node:24-trixie-slim AS app
 WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY patches ./patches
 COPY scripts ./scripts
 COPY packages/protocol ./packages/protocol
 COPY packages/language-routing ./packages/language-routing
