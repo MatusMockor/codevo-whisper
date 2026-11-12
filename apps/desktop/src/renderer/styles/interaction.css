@@ -89,19 +89,21 @@ label:has(> input:disabled) {
 }
 
 .ov-btn:not(:disabled):hover {
-  background: rgba(255, 255, 255, .2);
+  border-color: var(--ov-ink-t);
+  background: var(--ov-raise-2);
 }
 
 .ov-btn:not(:disabled):active {
-  background: rgba(255, 255, 255, .28);
+  background: var(--ov-orb);
 }
 
 .ov-btn.primary:not(:disabled):hover {
-  background: var(--lamp-hover);
+  border-color: transparent;
+  background: var(--ov-amber-hi);
 }
 
 .ov-btn.primary:not(:disabled):active {
-  background: var(--lamp-press);
+  background: var(--ov-amber-press);
 }
 
 .linkbtn:hover {
@@ -110,6 +112,15 @@ label:has(> input:disabled) {
 
 .linkbtn:active {
   opacity: .75;
+}
+
+.ob-choice:hover {
+  border-color: var(--line-3);
+}
+
+.ob-choice:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .radio label:has(> input:not(:disabled)):hover,

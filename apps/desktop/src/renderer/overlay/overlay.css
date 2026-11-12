@@ -2,6 +2,10 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 html,
 body,
 #overlay-root {
@@ -12,8 +16,9 @@ body,
 }
 
 body {
-  font-family: var(--font-ui);
-  font-size: 14px;
+  font-family: var(--f-ui);
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--ov-ink);
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -27,63 +32,74 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 0 10px 6px;
+  padding: 0 15px 12px;
 }
 
 .ic {
   width: 14px;
   height: 14px;
+  flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
-  flex: none;
 }
 
 .ov {
   position: relative;
-  border-radius: var(--radius-overlay);
-  background: rgba(18, 22, 32, 0.86);
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  border: 1px solid var(--ov-line);
+  border-radius: var(--radius-pill);
+  background: var(--ov-bg);
   color: var(--ov-ink);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.6), inset 0 0 0 0.5px rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .85), inset 0 1px 0 rgba(255, 255, 255, .05);
   overflow: hidden;
+}
+
+.ov.rec {
+  box-shadow: 0 0 0 1px var(--ov-amber-line), 0 0 14px -4px rgba(240, 162, 58, .5), 0 8px 18px -10px rgba(0, 0, 0, .85);
 }
 
 .ov.ind {
   width: 310px;
-  border-radius: var(--radius-pill);
 }
 
 .ov.pill {
-  max-width: 330px;
-  border-radius: var(--radius-pill);
-}
-
-.ov.card {
-  width: 380px;
+  max-width: 430px;
 }
 
 .ov.live {
-  width: 380px;
-  border-radius: var(--radius-pill);
+  width: 430px;
 }
 
-.ov.live.has-text {
-  border-radius: var(--radius-overlay);
+.ov.live.has-text,
+.ov.card {
+  border-radius: 16px;
+}
+
+.ov.card {
+  width: 430px;
+  padding: 12px;
+}
+
+.ov.card.err {
+  border-color: var(--ov-err-line);
 }
 
 .ov-text {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  max-height: calc(3 * 1.45em + 16px);
+  max-height: calc(3 * 1.5em + 12px);
   overflow: hidden;
-  padding: 12px 18px 2px;
-  font-size: 15px;
-  line-height: 1.45;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  padding: 12px 16px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 
 .ov-text .lines {
@@ -92,7 +108,7 @@ body {
 }
 
 .w {
-  transition: color 0.45s;
+  transition: color .45s;
 }
 
 .w.t {
@@ -102,68 +118,71 @@ body {
 .ov-bar {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 40px;
-  padding: 0 14px 0 8px;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 6px;
 }
 
 .orb {
   position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex: none;
   display: grid;
   place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ov-orb);
+  color: var(--ov-ink);
 }
 
 .orb.rec {
-  background: radial-gradient(circle at 35% 30%, var(--lamp-hi), var(--lamp) 55%, var(--lamp-deep));
-  color: #3a2200;
-  box-shadow: 0 0 0 calc(var(--lvl, 0.2) * 8px) rgba(240, 162, 58, 0.2), 0 0 16px rgba(240, 162, 58, 0.45);
-  transition: box-shadow 0.08s linear;
+  background: var(--ov-amber);
+  color: var(--ov-amber-ink);
+  box-shadow: 0 0 0 calc(var(--lvl, .2) * 7px) rgba(240, 162, 58, .2), 0 0 12px rgba(240, 162, 58, .6);
+  transition: box-shadow .08s linear;
 }
 
 .orb.rec .ic {
   stroke-width: 2;
 }
 
-.orb.proc {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.orb.proc svg {
-  width: 18px;
-  height: 18px;
-  animation: spin 1.8s cubic-bezier(0.55, 0.1, 0.45, 0.9) infinite;
+.orb.proc .ic {
+  animation: spin 1.2s linear infinite;
 }
 
 .orb.done {
-  background: var(--ok);
-  color: #06301c;
-  animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+  background: var(--ov-ok-wash);
+  color: var(--ov-ok);
+  animation: pop .45s cubic-bezier(.3, 1.6, .5, 1);
 }
 
 .orb.done .ic {
-  stroke-width: 2.4;
+  stroke-width: 2.2;
 }
 
 .orb.err {
-  background: rgba(240, 106, 90, 0.2);
-  color: #ff9a8d;
+  background: var(--ov-err-wash);
+  color: var(--ov-err);
 }
 
-.orb.err .ic {
-  stroke-width: 2;
+.orb.amber {
+  background: var(--ov-amber-wash);
+  color: var(--ov-amber-hi);
+}
+
+.orb.err .ic,
+.orb.amber .ic {
+  stroke-width: 1.9;
 }
 
 .wave {
   flex: 1;
-  height: 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 2px;
   min-width: 0;
+  height: 22px;
 }
 
 .wave i {
@@ -171,32 +190,36 @@ body {
   width: 3px;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(to bottom, var(--lamp-hi), var(--lamp) 50%, var(--lamp-hi));
-  transform: scaleY(0.08);
-  transition: transform 0.08s linear;
+  background: var(--ov-amber);
+  transform: scaleY(.08);
+  transition: transform .08s linear;
 }
 
 .ov-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  color: var(--ov-ink-2);
   min-width: 30px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   text-align: right;
+  color: var(--ov-ink-2);
 }
 
 .chip {
-  font-size: 11.5px;
-  font-weight: 650;
-  padding: 3px 7px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(242, 244, 247, 0.88);
-  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border: 1px solid var(--ov-line-2);
+  border-radius: 5px;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ov-ink-2);
 }
 
 .ov-lock {
   display: inline-flex;
-  color: rgba(242, 244, 247, 0.5);
+  color: var(--ov-ok);
 }
 
 .ov-lock .ic {
@@ -205,74 +228,99 @@ body {
 }
 
 .ov-status {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 540;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 4px;
 }
 
 .ov-status small {
-  font-weight: 400;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
   color: var(--ov-ink-2);
-  font-size: 13px;
-  margin-left: 6px;
 }
 
 .ov-notice {
+  max-width: 430px;
   margin: 0;
-  max-width: 380px;
-  padding: 6px 12px;
-  border-radius: var(--radius-lg);
-  background: rgba(18, 22, 32, 0.86);
-  color: var(--ov-ink-2);
-  font-size: 12.5px;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.16);
+  padding: 4px 10px;
+  border: 1px solid rgba(240, 162, 58, .3);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(rgba(240, 162, 58, .1), rgba(240, 162, 58, .1)), var(--ov-bg);
+  color: var(--ov-amber-hi);
+  font-size: 11.5px;
+  text-align: center;
 }
 
 .ov-msg {
   display: flex;
-  gap: 12px;
-  padding: 14px 16px 12px;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ov-copy {
+  min-width: 0;
+  padding-top: 5px;
 }
 
 .ov-title {
   margin: 0;
+  font-size: 13.5px;
   font-weight: 650;
-  font-size: 14.5px;
+  line-height: 1.35;
 }
 
 .ov-sub {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--ov-ink-2);
 }
 
 .ov-actions {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 0 12px 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+  padding-left: 40px;
 }
 
 .ov-btn {
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 28px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.12);
+  padding: 0 11px;
+  border: 1px solid var(--ov-line-2);
+  border-radius: 7px;
+  background: var(--ov-raise);
   color: var(--ov-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ov-btn .ic {
+  width: 13px;
+  height: 13px;
 }
 
 .ov-btn.primary {
-  background: var(--lamp);
-  color: #2a1600;
+  border-color: transparent;
+  background: var(--ov-amber);
+  color: var(--ov-amber-ink);
+}
+
+.ov .ov-btn:focus-visible {
+  outline-color: var(--ov-amber);
 }
 
 @keyframes spin {
@@ -283,12 +331,12 @@ body {
 
 @keyframes pop {
   0% {
-    transform: scale(0.4);
+    transform: scale(.4);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb.proc svg,
+  .orb.proc .ic,
   .orb.done {
     animation: none;
   }

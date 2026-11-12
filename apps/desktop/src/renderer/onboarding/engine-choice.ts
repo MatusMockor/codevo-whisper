@@ -1,4 +1,5 @@
 import type { AppStatus } from '../../shared/app-status';
+import type { GlyphName } from '../components/glyph-name';
 import { ACTION_MESSAGES } from '../home/banner-content';
 import type { ModelState } from '../../shared/models';
 import type { ServerView } from '../../shared/server';
@@ -6,12 +7,12 @@ import type { EngineId, Settings } from '../../shared/settings';
 
 export type EngineChoice = 'local' | 'server' | 'later';
 
-export type EngineChoiceOption = { id: EngineChoice; title: string; description: string };
+export type EngineChoiceOption = { id: EngineChoice; icon: GlyphName; title: string; description: string };
 
 export const ENGINE_CHOICES: readonly EngineChoiceOption[] = Object.freeze([
-  { id: 'local', title: 'Na tomto zariadení', description: 'Model sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač.' },
-  { id: 'server', title: 'Na vlastnom serveri', description: 'Prepisuje váš spárovaný server, napríklad domáci počítač s grafickou kartou. Zvuk putuje zašifrovaný od začiatku do konca.' },
-  { id: 'later', title: 'Nastavím neskôr', description: 'Teraz sa nič nesťahuje ani nepáruje.' },
+  { id: 'local', icon: 'laptop', title: 'Na tomto zariadení', description: 'Model sa raz stiahne z Hugging Face a potom prepisuje aj bez internetu. Zvuk neopustí počítač.' },
+  { id: 'server', icon: 'server', title: 'Na vlastnom serveri', description: 'Prepisuje váš spárovaný server, napríklad domáci počítač s grafickou kartou. Zvuk putuje zašifrovaný od začiatku do konca.' },
+  { id: 'later', icon: 'chev', title: 'Nastavím neskôr', description: 'Teraz sa nič nesťahuje ani nepáruje.' },
 ]);
 
 export const LATER_NOTE = 'Kedykoľvek neskôr si na stránke Prepis stiahnete model alebo spárujete server.';
@@ -64,4 +65,9 @@ export function tryHint(choice: EngineChoice | null, status: AppStatus | null): 
     return TRY_HINTS.server;
   }
   return choice === 'local' ? TRY_HINTS.model : TRY_HINTS.unset;
+}
+
+export function recommendedEngine(serverPaired: boolean, states: readonly ModelState[]): Exclude<EngineChoice, 'later'> {
+  const modelReady = states.some((state) => state.status === 'ready');
+  return serverPaired && !modelReady ? 'server' : 'local';
 }

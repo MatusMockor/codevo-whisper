@@ -159,10 +159,12 @@ test('overlay error and blocked states offer their actions', async () => {
   const overlay = await overlayPage();
   const alert = overlay.getByRole('alert');
   await expect(alert).toContainText('Lokálny model chýba');
-  await expect(alert.getByRole('button')).toHaveText(['Stiahnuť model', 'Prepisovať na serveri']);
+  await expect(alert.getByRole('button')).toHaveText(['Prepisovať na serveri', 'Stiahnuť model']);
   await expect(alert.getByRole('button', { name: 'Prepisovať na serveri' })).toHaveClass(/primary/);
   await expect(alert.getByRole('button', { name: 'Stiahnuť model' })).not.toHaveClass(/primary/);
   const card = await alert.boundingBox();
+  const viewport = await overlay.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  expect((card?.x ?? -1) >= 0 && (card?.x ?? 0) + (card?.width ?? 0) <= viewport.width && (card?.y ?? -1) >= 0).toBe(true);
   for (const button of await alert.getByRole('button').all()) {
     const box = await button.boundingBox();
     expect((box?.x ?? -1) >= (card?.x ?? 0) && (box?.x ?? 0) + (box?.width ?? 0) <= (card?.x ?? 0) + (card?.width ?? 0)).toBe(true);
@@ -173,10 +175,16 @@ test('overlay error and blocked states offer their actions', async () => {
 
   await inject({ kind: 'blocked', reason: 'focus' });
   await expect(overlay.getByRole('alert')).toContainText('Okno sa zmenilo, text nebol vložený');
+  await expect(overlay.getByRole('alert')).toContainText('Prepis je pripravený, vložte ho ručne.');
   await expect(overlay.getByRole('button', { name: 'Kopírovať' })).toBeVisible();
+
+  await inject({ kind: 'error', message: 'Spojenie so serverom sa prerušilo', action: 'copy-last' });
+  await expect(overlay.getByRole('alert')).toContainText('Doterajší prepis sa nestratil.');
+  await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Kopírovať doterajší text']);
 
   await inject({ kind: 'error', message: 'Prepis sa nepodaril' });
   await expect(overlay.getByRole('alert')).toContainText('Prepis sa nepodaril');
+  await expect(overlay.getByRole('alert')).not.toContainText('Doterajší prepis sa nestratil.');
   await expect(overlay.getByRole('button')).toHaveCount(0);
 });
 
@@ -212,7 +220,7 @@ test('the overlay settings action opens the settings page', async () => {
 test('Stiahnuť model opens Prepis at the Lokálny model section', async () => {
   await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
   const overlay = await overlayPage();
-  await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Spárovať server', 'Stiahnuť model']);
+  await expect(overlay.getByRole('alert').getByRole('button')).toHaveText(['Stiahnuť model', 'Spárovať server']);
 
   await overlay.getByRole('button', { name: 'Stiahnuť model' }).click();
 

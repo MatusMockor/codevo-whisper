@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENGINE_CHOICES, engineOrderFor, initialEngineChoice, serverNeedsPairing, stickyEngineChoice, TRY_HINTS, tryHint } from '../src/renderer/onboarding/engine-choice';
+import { ENGINE_CHOICES, engineOrderFor, initialEngineChoice, recommendedEngine, serverNeedsPairing, stickyEngineChoice, TRY_HINTS, tryHint } from '../src/renderer/onboarding/engine-choice';
 import type { AppStatus } from '../src/shared/app-status';
 import type { ModelState } from '../src/shared/models';
 import type { PairedServerView } from '../src/shared/server';
@@ -74,6 +74,16 @@ describe('engineOrderFor', () => {
 
   it('keeps the order untouched when the user decides later', () => {
     expect(engineOrderFor('later')).toBeNull();
+  });
+});
+
+describe('recommendedEngine', () => {
+  it('recommends this device unless a paired server can transcribe while no local model is ready', () => {
+    expect(recommendedEngine(false, [])).toBe('local');
+    expect(recommendedEngine(true, [])).toBe('server');
+    expect(recommendedEngine(true, [modelState('downloading')])).toBe('server');
+    expect(recommendedEngine(true, [modelState('ready')])).toBe('local');
+    expect(recommendedEngine(false, [modelState('ready')])).toBe('local');
   });
 });
 

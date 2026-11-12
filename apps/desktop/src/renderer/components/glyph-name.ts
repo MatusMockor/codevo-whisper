@@ -28,4 +28,6 @@ export type GlyphName =
   | 'stop'
   | 'export'
   | 'headphones'
-  | 'folder';
+  | 'folder'
+  | 'arrow'
+  | 'chev';

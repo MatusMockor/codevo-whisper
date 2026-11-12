@@ -1,5 +1,3 @@
-const ARC = 'M44 18 A26 26 0 0 1 66.5 57 L56.1 51 A14 14 0 0 0 44 30 Z';
-
 export function MicIcon() {
   return (
     <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
@@ -38,17 +36,24 @@ export function CopyIcon() {
 export function WarnIcon() {
   return (
     <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M8 4.5v4.2M8 11.3h.01" />
+      <path d="M8 2.6 1.9 13h12.2z" />
+      <path d="M8 6.6v2.8M8 11.3h.01" />
     </svg>
   );
 }
 
-export function MarkColor() {
+export function DownIcon() {
   return (
-    <svg viewBox="17 17 54 54" aria-hidden="true">
-      <path d={ARC} fill="#22D3EE" />
-      <path d={ARC} fill="#E2E8F0" transform="rotate(180 44 44)" />
-      <circle cx="44" cy="44" r="3.2" fill="#22D3EE" />
+    <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 2.5v7.5M4.7 6.8 8 10.1l3.3-3.3M3.3 13.5h9.4" />
+    </svg>
+  );
+}
+
+export function SpinIcon() {
+  return (
+    <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 2.3a5.7 5.7 0 1 1-5.7 5.7" />
     </svg>
   );
 }
