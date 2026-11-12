@@ -4,10 +4,9 @@ import { mkdir, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { ModelFile, ServerModelManifest } from './model-manifest';
 
-export const MODEL_REVISION = 'a1539be1b849ea7463b88343e5277b373d0c4ea9';
-export const MODEL_URL = `https://huggingface.co/handy-computer/parakeet-ultra-gguf/resolve/${MODEL_REVISION}/parakeet-ultra-F16.gguf`;
-export const MODEL_SHA256 = 'cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d';
+export type ProvisionResult = 'present' | 'downloaded';
 
 export type ProvisionOptions = {
   url: string;
@@ -51,7 +50,7 @@ async function download(options: ProvisionOptions, temp: string): Promise<string
   return hash.digest('hex');
 }
 
-export async function provision(options: ProvisionOptions): Promise<'present' | 'downloaded'> {
+export async function provision(options: ProvisionOptions): Promise<ProvisionResult> {
   const expected = options.sha256.toLowerCase();
   if ((await sha256Of(options.target)) === expected) {
     return 'present';
@@ -68,4 +67,17 @@ export async function provision(options: ProvisionOptions): Promise<'present' | 
   } finally {
     await rm(temp, { force: true });
   }
+}
+
+export type ProvisionedFile = { file: ModelFile; result: ProvisionResult };
+
+export type ManifestProgress = (file: ModelFile, bytes: number, total: number | null) => void;
+
+export async function provisionManifest(manifest: ServerModelManifest, onProgress?: ManifestProgress): Promise<ProvisionedFile[]> {
+  const provisioned: ProvisionedFile[] = [];
+  for (const file of manifest.files) {
+    const result = await provision({ url: file.url, sha256: file.sha256, target: file.target, onProgress: (bytes, total) => onProgress?.(file, bytes, total) });
+    provisioned.push({ file, result });
+  }
+  return provisioned;
 }

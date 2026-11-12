@@ -1,8 +1,8 @@
 import type { TranscribeLanguage } from '@codevo-whisper/stt-runner';
+import type { EngineComponent } from './engine-component';
 
-export interface Transcriber {
-  transcribe(pcm: Uint8Array, language: TranscribeLanguage, signal: AbortSignal): Promise<string>;
-  ready(): boolean;
-  warmUp(): Promise<void>;
-  close(): Promise<void>;
+export type TranscriberCall = { pcm: Uint8Array; language: TranscribeLanguage; signal?: AbortSignal };
+
+export interface Transcriber extends EngineComponent {
+  transcribe(call: TranscriberCall): Promise<string>;
 }
