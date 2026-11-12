@@ -21,7 +21,15 @@ type FocusRequest = { ids: readonly string[]; from: string };
 
 const OPPOSITE: Readonly<Record<MoveDirection, MoveDirection>> = { up: 'down', down: 'up' };
 
-function focusFirstEnabled(ids: readonly string[]): void {
+function focusLost(ids: readonly string[]): boolean {
+  const active = document.activeElement;
+  return active === null || active === document.body || ids.includes(active.id);
+}
+
+function restoreFocus(ids: readonly string[]): void {
+  if (!focusLost(ids)) {
+    return;
+  }
   const target = ids.map((id) => document.getElementById(id)).find((element) => (element instanceof HTMLButtonElement || element instanceof HTMLInputElement) && !element.disabled);
   target?.focus();
 }
@@ -30,6 +38,8 @@ function LanguagePicker({ languages, activeModel }: PickerProps) {
   const baseId = useId();
   const [error, setError] = useState<LanguageEditError | null>(null);
   const focusRequest = useRef<FocusRequest | null>(null);
+  const intended = useRef<readonly DictationLanguage[] | null>(null);
+  const saving = useRef(0);
   const { selected } = languages;
   const order = selected.join(',');
   const requiredNote = requiredLanguageNote(activeModel);
@@ -42,24 +52,36 @@ function LanguagePicker({ languages, activeModel }: PickerProps) {
       return;
     }
     focusRequest.current = null;
-    focusFirstEnabled(request.ids);
+    restoreFocus(request.ids);
   }, [order]);
 
+  function save(next: readonly DictationLanguage[], focus: readonly string[]): void {
+    setError(null);
+    intended.current = next;
+    saving.current += 1;
+    focusRequest.current = { ids: focus, from: order };
+    saveSettings({ languages: { mode: 'selected', selected: next } }, (saved) => {
+      saving.current -= 1;
+      if (!saved) {
+        focusRequest.current = null;
+      }
+      if (saving.current === 0) {
+        intended.current = null;
+      }
+    });
+  }
+
   function toggle(code: DictationLanguage): void {
-    const edit = toggleLanguage(selected, code);
+    const edit = toggleLanguage(intended.current ?? selected, code);
     if (!edit.ok) {
       setError(edit.error);
       return;
     }
-    setError(null);
-    focusRequest.current = { ids: [checkId(code)], from: order };
-    saveSettings({ languages: { mode: 'selected', selected: edit.selected } });
+    save(edit.selected, [checkId(code)]);
   }
 
   function move(code: DictationLanguage, direction: MoveDirection): void {
-    setError(null);
-    focusRequest.current = { ids: [moveId(code, direction), moveId(code, OPPOSITE[direction])], from: order };
-    saveSettings({ languages: { mode: 'selected', selected: moveLanguage(selected, code, direction) } });
+    save(moveLanguage(intended.current ?? selected, code, direction), [moveId(code, direction), moveId(code, OPPOSITE[direction])]);
   }
 
   return (

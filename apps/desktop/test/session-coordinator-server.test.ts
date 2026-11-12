@@ -83,7 +83,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     await server.pairings.save(pairing);
   }
   const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, scope: () => server.status.scope(), clock: Date.now, timeoutMs: 2000 });
-  const remote = new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(settings) });
+  const remote = new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => settings.get().languages });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
   await hotkey.start();

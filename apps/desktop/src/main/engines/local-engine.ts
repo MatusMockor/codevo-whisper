@@ -7,9 +7,9 @@ import { consoleLogger } from '../logging/logger';
 import type { ActiveModel } from './active-model';
 import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
 import { LocalDictation } from './local-dictation';
-import { localLanguageHint, localLanguageReason } from './local-language';
+import { localLanguagePlan } from './local-language';
 import { ResidentSegmentTranscriber, type LocalContext } from './resident-segment-transcriber';
-import { notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
+import { EngineUnavailableError, notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
 
 const VERIFICATION_REASON = { missing: 'model-missing', broken: 'model-broken' } as const;
 export const LOCAL_CALL_TIMEOUT_MS = 60_000;
@@ -158,8 +158,8 @@ export class LocalEngine implements TranscriptionEngine {
     if ((await this.deps.models.activeModelPath()) === null) return { ready: false, reason: 'no-model' };
     const verification = await this.deps.models.verifyActive();
     if (verification !== 'ok') return { ready: false, reason: VERIFICATION_REASON[verification] };
-    const language = localLanguageReason(this.deps.settings.get().languages, this.deps.models.activeLanguageHint());
-    if (language !== null) return { ready: false, reason: language };
+    const language = localLanguagePlan(this.deps.settings.get().languages, this.deps.models.activeLanguageHint());
+    if (!language.ready) return { ready: false, reason: language.reason };
     return { ready: true };
   }
 
@@ -180,19 +180,24 @@ export class LocalEngine implements TranscriptionEngine {
         engine: {
           id: this.id,
           start: (options) => {
-            const hint = localLanguageHint(options.languages);
-            if (state !== 'prepared' || this.disposed || generation !== this.generation || hint === null) {
+            if (state !== 'prepared' || this.disposed || generation !== this.generation) {
               if (state === 'prepared') {
                 state = 'released';
                 this.release(lease);
               }
               throw new Error('Local preparation is no longer available');
             }
+            const language = localLanguagePlan(options.languages, this.deps.models.activeLanguageHint());
+            if (!language.ready) {
+              state = 'released';
+              this.release(lease);
+              throw new EngineUnavailableError(language.reason);
+            }
             state = 'started';
             return new LocalDictation({
               dispatcher: generation.dispatcher,
               clock: this.clock,
-              context: { hint, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
+              context: { hint: language.hint, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
               options: { ...options, signal: AbortSignal.any([options.signal, generation.retired.signal]) },
               onRecordingEnd: () => {
                 if (lease.revision !== this.revision) return;

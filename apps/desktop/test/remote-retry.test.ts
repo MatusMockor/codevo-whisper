@@ -11,7 +11,7 @@ import { freePort, startTestGateway, type TestGateway } from './support/gateway'
 import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
 
-const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const FRAME = 3200;
 const SECOND = 32000;
@@ -41,7 +41,7 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
   const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: extra.timeoutMs ?? 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
-  const preparation = await new RemoteEngine({ connector, languages: AUTO_ONLY, options }).prepare();
+  const preparation = await new RemoteEngine({ connector, ...AUTO_ONLY, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
   const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };

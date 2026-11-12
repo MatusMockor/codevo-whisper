@@ -13,7 +13,7 @@ import { createServerService, tinyModels, type ServerServiceHarness } from './su
 import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
 
-const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const CHUNK = new Uint8Array(3200);
 const QUIET_MS = 600;
@@ -60,7 +60,7 @@ async function pair(): Promise<string> {
 }
 
 function engine(connector: Pick<ServerConnector, 'connect' | 'reconnect'> = harness.connector): RemoteEngine {
-  return new RemoteEngine({ connector, languages: AUTO_ONLY, options: { reconnectDelaysMs: [50], reconnectWindowMs: 2000 } });
+  return new RemoteEngine({ connector, ...AUTO_ONLY, options: { reconnectDelaysMs: [50], reconnectWindowMs: 2000 } });
 }
 
 function started(preparation: Preparation): EngineDictation {

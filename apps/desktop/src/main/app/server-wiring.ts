@@ -60,7 +60,7 @@ export function createServerServices({ settings, order, local, window, power, e2
   reconnect.start();
   void service.check();
   return {
-    engine: new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(settings) }),
+    engine: new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => settings.get().languages }),
     service,
     dispose: () => {
       for (const unsubscribe of unsubscribers.splice(0)) {

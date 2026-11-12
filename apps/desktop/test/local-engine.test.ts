@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../src/main/engines/local-engine';
-import type { Preparation } from '../src/main/engines/transcription-engine';
+import { EngineUnavailableError, type Preparation } from '../src/main/engines/transcription-engine';
 import type { CatalogEntry } from '../src/main/models/catalog-entry';
 import { loadCatalog } from '../src/main/models/model-catalog';
 import { ModelManager } from '../src/main/models/model-manager';
@@ -147,6 +147,17 @@ describe('LocalEngine', () => {
     await expect(local.isReady()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
     await expect(local.prepare()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+  });
+
+  it('refuses a session whose languages changed after the preparation instead of ignoring them', async () => {
+    const local = engine({ models: await activateBundled('parakeet-ultra-q8') });
+    const preparation = await local.prepare();
+    expect(preparation.ready).toBe(true);
+    const prepared = (preparation as Extract<Preparation, { ready: true }>).engine;
+
+    expect(() => prepared.start({ languages: { mode: 'selected', selected: ['sk'] }, signal: new AbortController().signal })).toThrow(new EngineUnavailableError('languages-pack-missing'));
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+    await expect(dictate(local, secondStampedPcm(1))).resolves.toEqual(expect.any(String));
   });
 
   it('refuses canary with a primary language the worker cannot force yet', async () => {

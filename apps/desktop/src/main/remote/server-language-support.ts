@@ -1,15 +1,13 @@
 import type { EngineUnavailableReason } from '../engines/transcription-engine';
-import type { Settings } from '../../shared/settings';
+import type { LanguageSelection } from '../../shared/dictation-languages';
 
 export interface ServerLanguageSupport {
-  unavailableReason(): EngineUnavailableReason | null;
+  unavailableReason(selection: LanguageSelection): EngineUnavailableReason | null;
 }
 
 export class AutoOnlyServerLanguages implements ServerLanguageSupport {
-  constructor(private readonly settings: { get(): Pick<Settings, 'languages'> }) {}
-
-  unavailableReason(): EngineUnavailableReason | null {
-    if (this.settings.get().languages.mode === 'auto') {
+  unavailableReason(selection: LanguageSelection): EngineUnavailableReason | null {
+    if (selection.mode === 'auto') {
       return null;
     }
     return 'server-languages-outdated';

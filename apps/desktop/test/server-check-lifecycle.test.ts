@@ -15,7 +15,7 @@ import { createServerService, tinyModels, type ServerServiceHarness } from './su
 import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
 
-const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const silentObserver = { connected: () => undefined, failed: () => undefined };
 
@@ -111,7 +111,7 @@ describe('server checks across lifecycle changes', () => {
 
   it('stops an old dictation when a new pairing replaces it and never lets it change the new status', async () => {
     const replaced = await pair();
-    const preparation = await new RemoteEngine({ connector: harness.connector, languages: AUTO_ONLY }).prepare();
+    const preparation = await new RemoteEngine({ connector: harness.connector, ...AUTO_ONLY }).prepare();
     expect(preparation.ready).toBe(true);
     const dictation = preparation.ready ? preparation.engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal }) : null;
     dictation?.push(new Uint8Array(3200));
@@ -128,7 +128,7 @@ describe('server checks across lifecycle changes', () => {
 
   it('lets a dictation of the current pairing report its failure', async () => {
     const deviceId = await pair();
-    const preparation = await new RemoteEngine({ connector: harness.connector, languages: AUTO_ONLY }).prepare();
+    const preparation = await new RemoteEngine({ connector: harness.connector, ...AUTO_ONLY }).prepare();
     const dictation = preparation.ready ? preparation.engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal }) : null;
     dictation?.push(new Uint8Array(3200));
 

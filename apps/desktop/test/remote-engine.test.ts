@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { TranscriptionFailedError, type EngineDictation, type Preparation, type PreparedEngine } from '../src/main/engines/transcription-engine';
+import { EngineUnavailableError, TranscriptionFailedError, type EngineDictation, type Preparation, type PreparedEngine } from '../src/main/engines/transcription-engine';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import type { RemoteFailureKind } from '../src/main/remote/remote-failure';
@@ -11,7 +11,7 @@ import { startTestGateway, type TestGateway } from './support/gateway';
 import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
 
-const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const FRAME = 3200;
 const SECOND = 32000;
@@ -33,7 +33,7 @@ afterEach(async () => {
 
 function engine(pairing: ServerPairing | null, options: Partial<RemoteEngineOptions> = {}, observer = new RecordingObserver()): RemoteEngine {
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector, languages: AUTO_ONLY, options });
+  return new RemoteEngine({ connector, ...AUTO_ONLY, options });
 }
 
 async function prepared(remote: RemoteEngine): Promise<PreparedEngine> {
@@ -103,9 +103,17 @@ describe('RemoteEngine', () => {
     const { gateway: server, pairing } = await startWith(bySize);
     const observer = new RecordingObserver();
     const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-    const languages = new AutoOnlyServerLanguages({ get: () => ({ languages: { mode: 'selected', selected: ['sk'] } }) });
+    const remote = new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => ({ mode: 'selected', selected: ['sk'] }) });
 
-    expect(await new RemoteEngine({ connector, languages }).prepare()).toEqual({ ready: false, reason: 'server-languages-outdated' });
+    expect(await remote.prepare()).toEqual({ ready: false, reason: 'server-languages-outdated' });
+    expect(server.stt.requests).toEqual([]);
+  });
+
+  it('refuses a session that asks for selected languages after an automatic preparation', async () => {
+    const { gateway: server, pairing } = await startWith(bySize);
+    const remote = await prepared(engine(pairing));
+
+    expect(() => remote.start({ languages: { mode: 'selected', selected: ['sk', 'cs'] }, signal: new AbortController().signal })).toThrow(new EngineUnavailableError('server-languages-outdated'));
     expect(server.stt.requests).toEqual([]);
   });
 

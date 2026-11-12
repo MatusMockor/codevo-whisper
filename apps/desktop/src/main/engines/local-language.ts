@@ -3,22 +3,18 @@ import { primaryLanguage, type LanguageSelection } from '../../shared/dictation-
 import type { LanguageHint } from '../../shared/models';
 import type { EngineUnavailableReason } from './transcription-engine';
 
+export type LocalLanguagePlan = { ready: true; hint: TranscribeLanguage } | { ready: false; reason: EngineUnavailableReason };
+
 const WORKER_LANGUAGES: readonly TranscribeLanguage[] = ['sk', 'cs', 'en'];
 
-export function localLanguageHint(selection: LanguageSelection): TranscribeLanguage | null {
+export function localLanguagePlan(selection: LanguageSelection, modelHint: LanguageHint | null): LocalLanguagePlan {
   if (selection.mode === 'auto') {
-    return 'auto';
+    return modelHint === 'required' ? { ready: false, reason: 'languages-required' } : { ready: true, hint: 'auto' };
   }
   const primary = primaryLanguage(selection);
-  return WORKER_LANGUAGES.find((language) => language === primary) ?? null;
-}
-
-export function localLanguageReason(selection: LanguageSelection, hint: LanguageHint | null): EngineUnavailableReason | null {
-  if (selection.mode === 'auto') {
-    return hint === 'required' ? 'languages-required' : null;
+  const hint = WORKER_LANGUAGES.find((language) => language === primary);
+  if (modelHint !== 'required' || hint === undefined) {
+    return { ready: false, reason: 'languages-pack-missing' };
   }
-  if (hint !== 'required' || localLanguageHint(selection) === null) {
-    return 'languages-pack-missing';
-  }
-  return null;
+  return { ready: true, hint };
 }
