@@ -16,9 +16,9 @@ fail() {
 }
 
 model_source() {
-  local configured="$1" copy="$2" desktop="$3"
-  if [[ -n "$configured" && "$configured" != "$copy" ]]; then
-    echo "$configured"
+  local explicit="$1" copy="$2" desktop="$3"
+  if [[ -n "$explicit" ]]; then
+    echo "$explicit"
     return
   fi
   if [[ -f "$copy" ]]; then
@@ -26,6 +26,11 @@ model_source() {
     return
   fi
   echo "$desktop"
+}
+
+require_explicit_model() {
+  local variable="$1" path="$2"
+  [[ -z "$path" || -f "$path" ]] || fail "Súbor modelu zadaný v $variable neexistuje: $path"
 }
 
 copy_model() {
@@ -42,6 +47,9 @@ copy_model() {
 node="$(command -v node)" || fail "node not found on PATH; install Node.js 24 or newer"
 "$node" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' || fail "Node.js 24 or newer is required, found $("$node" -v)"
 
+explicit_conditioned="${STT_CONDITIONED_MODEL_PATH:-}"
+explicit_lid="${STT_LID_MODEL_PATH:-}"
+
 if [[ -f "$env_file" ]]; then
   while IFS='=' read -r key value; do
     [[ -n "${!key:-}" ]] || export "$key=${value//\"/}"
@@ -52,9 +60,9 @@ worker_source="${STT_WORKER_BINARY:-/opt/Codevo Whisper/resources/bin/x64/cw-stt
 worker="$app_dir/bin/cw-stt-worker"
 desktop_models="$HOME/.config/Codevo Whisper/models"
 conditioned_model="$app_dir/models/canary-1b-v2-Q8_0.gguf"
-conditioned_source="$(model_source "${STT_CONDITIONED_MODEL_PATH:-}" "$conditioned_model" "$desktop_models/canary-1b-v2-q8.gguf")"
+conditioned_source="$(model_source "$explicit_conditioned" "$conditioned_model" "$desktop_models/canary-1b-v2-q8.gguf")"
 lid_model="$app_dir/models/lang-id-voxlingua107-ecapa-Q8_0.gguf"
-lid_source="$(model_source "${STT_LID_MODEL_PATH:-}" "$lid_model" "$desktop_models/langid-voxlingua107-q8.gguf")"
+lid_source="$(model_source "$explicit_lid" "$lid_model" "$desktop_models/langid-voxlingua107-q8.gguf")"
 
 settings=(
   "STT_HOST=127.0.0.1"
@@ -79,6 +87,8 @@ done
 
 [[ -x "$worker_source" ]] || fail "STT worker not found: $worker_source. Install the Codevo Whisper desktop app or set STT_WORKER_BINARY."
 [[ -f "$STT_MODEL_PATH" ]] || fail "model not found: $STT_MODEL_PATH. Download Parakeet Ultra in the desktop app or set STT_MODEL_PATH."
+require_explicit_model STT_CONDITIONED_MODEL_PATH "$explicit_conditioned"
+require_explicit_model STT_LID_MODEL_PATH "$explicit_lid"
 
 pnpm --dir "$root" --filter @codevo-whisper/server --filter @codevo-whisper/stt build
 
