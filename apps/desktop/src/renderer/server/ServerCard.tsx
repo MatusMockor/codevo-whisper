@@ -38,7 +38,7 @@ function UnpairConfirm({ server, onCancel, onUnpaired }: { server: PairedServerV
     <div className="confirm">
       <p>
         <b>Zrušiť párovanie s {server.host}?</b> Zmaže sa párovanie a kľúče na tomto počítači a server sa odoberie z trasy prepisu. Ak server chcete iba dočasne nepoužívať, radšej ho
-        odpojte tlačidlom Odpojiť, párovanie tak zostane. Server bude toto zariadenie poznať, kým ho na ňom neodvoláte:
+        odpojte prepínačom Pripojenie k serveru, párovanie tak zostane. Server bude toto zariadenie poznať, kým ho na ňom neodvoláte:
       </p>
       <CommandBox command={revokeCommand(server.deviceId, navigator.userAgent.includes('Linux'))} />
       {failed && (

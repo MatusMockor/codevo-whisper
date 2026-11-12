@@ -285,10 +285,6 @@
   font-size: 12px;
 }
 
-.srv-connect {
-  min-width: 104px;
-}
-
 .server-card.is-off .srv-id h3 {
   color: var(--ink-2);
 }

@@ -60,7 +60,7 @@ function Disconnected({ restoreOrder, localReady, onDownloadModel }: Omit<PanelP
       <div>
         <b>Server je odpojený</b>
         <p>
-          Codevo Whisper sa k nemu nepripája a neposiela naň zvuk. Párovanie aj kľúče zostávajú uložené, takže tlačidlo Pripojiť ho znova pripojí bez nového párovania.{' '}
+          Codevo Whisper sa k nemu nepripája a neposiela naň zvuk. Párovanie aj kľúče zostávajú uložené, takže ho prepínač Pripojenie k serveru znova pripojí bez nového párovania.{' '}
           {restoreNote(restoreOrder)}
         </p>
         {!localReady && <p className="srv-panel-warn">Lokálny model nemáte stiahnutý, takže kým je server odpojený, diktovanie nefunguje.</p>}
