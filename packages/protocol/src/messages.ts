@@ -14,3 +14,4 @@ export {
   type ServerMessage,
 } from './message-types';
 export { decodeServerMessage, encodeServerMessage } from './server-messages';
+export { isModelName, MAX_MODEL_NAME_CHARS, UNKNOWN_MODELS, type ServerModels } from './server-models';

@@ -7,6 +7,7 @@ export type DictationSummary = {
   partials: number;
   durationMs: number;
   result: string;
+  routes: Readonly<Record<string, number>>;
 };
 
 export function logDictation(logger: Logger, summary: DictationSummary): void {

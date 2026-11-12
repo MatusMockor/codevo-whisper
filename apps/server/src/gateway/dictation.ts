@@ -1,13 +1,15 @@
 import { RollingSession, SegmentFailedError, SessionCancelledError, type TranscriptEvent } from '@codevo-whisper/audio';
-import { ProtocolError, type ErrorCode, type Language } from '@codevo-whisper/protocol';
+import { ProtocolError, type DictationLanguage, type ErrorCode, type Language } from '@codevo-whisper/protocol';
 import type { GatewayContext, GatewayDispatcher } from '../stt/gateway-context';
 import { limitText } from './limit-text';
+import { SegmentTranscripts } from './segment-transcripts';
 import type { SecureChannel } from './secure-channel';
 
 export type DictationOptions = {
   sessionId: string;
   deviceId: string;
   language: Language;
+  languages: readonly DictationLanguage[] | null;
   partials: boolean;
   dispatcher: GatewayDispatcher;
   clock: () => number;
@@ -17,6 +19,10 @@ export type DictationOptions = {
 export type DictationResult = 'ok' | 'cancelled' | ErrorCode;
 
 export type DictationCounts = { audioBytes: number; finals: number; partials: number };
+
+export type DictationStats = DictationCounts & { routes: Readonly<Record<string, number>> };
+
+type DetectedLanguage = { language?: DictationLanguage | null };
 
 function errorCodeOf(error: unknown): ErrorCode {
   const cause = error instanceof SegmentFailedError ? error.cause : error;
@@ -29,12 +35,13 @@ function errorCodeOf(error: unknown): ErrorCode {
 export class Dictation {
   private readonly session: RollingSession<GatewayContext>;
   private readonly counts: DictationCounts = { audioBytes: 0, finals: 0, partials: 0 };
+  private readonly transcripts = new SegmentTranscripts();
 
   constructor(private readonly options: DictationOptions) {
     this.session = new RollingSession({
       deviceId: options.deviceId,
       partials: options.partials,
-      context: { language: options.language },
+      context: { language: options.language, languages: options.languages, observer: this.transcripts },
       submitter: options.dispatcher,
       registry: options.dispatcher,
       interval: options.dispatcher.partialIntervalSource(),
@@ -51,8 +58,8 @@ export class Dictation {
     return this.counts.audioBytes;
   }
 
-  stats(): DictationCounts {
-    return { ...this.counts };
+  stats(): DictationStats {
+    return { ...this.counts, routes: this.transcripts.routes() };
   }
 
   push(pcm: Uint8Array): void {
@@ -81,12 +88,21 @@ export class Dictation {
 
   private forward(event: TranscriptEvent): void {
     const text = limitText(event.text);
+    const detected = this.detectedLanguage(event);
     if (event.type === 'partial') {
       this.counts.partials += 1;
-      this.options.channel.send({ type: 'partial', sessionId: this.sessionId, segmentId: event.segmentId, revision: event.revision, text });
+      this.options.channel.send({ type: 'partial', sessionId: this.sessionId, segmentId: event.segmentId, revision: event.revision, text, ...detected });
       return;
     }
     this.counts.finals += 1;
-    this.options.channel.send({ type: 'final', sessionId: this.sessionId, segmentId: event.segmentId, text });
+    this.options.channel.send({ type: 'final', sessionId: this.sessionId, segmentId: event.segmentId, text, ...detected });
+  }
+
+  private detectedLanguage(event: TranscriptEvent): DetectedLanguage {
+    const language = this.transcripts.languageOf(event);
+    if (this.options.languages === null) {
+      return {};
+    }
+    return { language };
   }
 }

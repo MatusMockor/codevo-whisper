@@ -1,5 +1,6 @@
 import type { ClientMessage } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
+import type { CapabilityLookup } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
 import { logDictation } from './dictation-log';
 import { Dictation, type DictationResult } from './dictation';
@@ -24,6 +25,7 @@ export type SessionDeps = {
   logger: Logger;
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
+  capabilities: CapabilityLookup;
 };
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
@@ -88,7 +90,8 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    this.channel.send({ type: 'capabilities', languages: [] });
+    const { languages, models } = this.deps.capabilities.current();
+    this.channel.send({ type: 'capabilities', languages, models });
   }
 
   private onStart(message: StartMessage): void {
@@ -96,7 +99,7 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    if (message.languages !== undefined) {
+    if (message.languages !== undefined && !this.deps.capabilities.supports(message.languages)) {
       this.channel.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
       return;
     }
@@ -104,6 +107,7 @@ export class SessionHandler {
       sessionId: message.sessionId,
       deviceId: this.deviceId,
       language: message.language,
+      languages: message.languages ?? null,
       partials: message.partials === true,
       dispatcher: this.deps.dispatcher,
       clock: this.deps.clock,
@@ -165,7 +169,7 @@ export class SessionHandler {
   }
 
   private log(dictation: Dictation, startedAt: number, result: DictationResult): void {
-    const { audioBytes, finals, partials } = dictation.stats();
+    const { audioBytes, finals, partials, routes } = dictation.stats();
     logDictation(this.deps.logger, {
       deviceId: this.deviceId,
       audioSeconds: audioBytes / BYTES_PER_SECOND,
@@ -173,6 +177,7 @@ export class SessionHandler {
       partials,
       durationMs: this.deps.clock() - startedAt,
       result,
+      routes,
     });
   }
 

@@ -1,4 +1,4 @@
-export { PROTOCOL_VERSION } from './version';
+export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION } from './version';
 
 export { CipherState, MAX_NONCE } from './noise/cipher-state';
 export {
@@ -21,16 +21,20 @@ export {
   encodeServerMessage,
   DICTATION_LANGUAGES,
   IDENTIFIER_PATTERN,
+  isModelName,
   LANGUAGES,
   MAX_DEVICE_NAME_CHARS,
   MAX_DICTATION_LANGUAGES,
   MAX_IDENTIFIER_CHARS,
+  MAX_MODEL_NAME_CHARS,
   MAX_TEXT_CHARS,
   MessageTag,
+  UNKNOWN_MODELS,
   type ClientMessage,
   type DictationLanguage,
   type Language,
   type ServerMessage,
+  type ServerModels,
 } from './messages';
 export { MAX_NOISE_MESSAGE, REKEY_EVERY, SecureTransport } from './transport/secure-transport';
 export { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from './pairing';

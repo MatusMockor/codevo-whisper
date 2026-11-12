@@ -20,6 +20,7 @@ import {
   MessageTag,
   type ServerMessage,
 } from './message-types';
+import { readServerModels } from './server-models';
 import { jsonFrame, splitTag } from './tagged-frame';
 
 const TYPES = ['ready', 'capabilities', 'partial', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
@@ -50,10 +51,11 @@ function readDetectedLanguage(object: JsonObject): DetectedLanguage {
 }
 
 function decodeCapabilities(object: JsonObject): ServerMessage {
-  assertOnlyKeys(object, ['type', 'languages']);
+  assertOnlyKeys(object, ['type', 'languages', 'models']);
   return {
     type: 'capabilities',
     languages: readChoiceList(object, 'languages', DICTATION_LANGUAGES, { minItems: 0, maxItems: DICTATION_LANGUAGES.length }),
+    models: readServerModels(object, 'models'),
   };
 }
 

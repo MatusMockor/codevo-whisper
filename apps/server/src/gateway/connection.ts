@@ -13,6 +13,7 @@ import WebSocket from 'ws';
 import type { DeviceRepository } from '../devices/device-repository';
 import type { Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
+import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
 import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
@@ -35,6 +36,7 @@ export type ConnectionDeps = {
   logger: Logger;
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
+  capabilities: RefreshableCapabilities;
 };
 
 const EMPTY = new Uint8Array(0);
@@ -123,7 +125,7 @@ export class GatewayConnection {
       channel.fail(revocation);
       return;
     }
-    await this.deps.devices.touch(deviceId, new Date(this.deps.clock())).catch(() => undefined);
+    await Promise.all([this.deps.devices.touch(deviceId, new Date(this.deps.clock())).catch(() => undefined), this.deps.capabilities.refresh()]);
     await this.deps.beforeReady(deviceId);
     if (!channel.isOpen()) {
       return;
@@ -134,6 +136,7 @@ export class GatewayConnection {
       logger: this.deps.logger,
       budget: this.deps.budget,
       ingestion: this.deps.ingestion,
+      capabilities: this.deps.capabilities,
     });
     channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
   }

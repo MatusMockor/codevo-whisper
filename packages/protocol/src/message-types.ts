@@ -1,4 +1,5 @@
 import type { ErrorCode } from './errors';
+import type { ServerModels } from './server-models';
 
 export const LANGUAGES = ['sk', 'en', 'cs', 'auto'] as const;
 
@@ -35,7 +36,7 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
-  | { type: 'capabilities'; languages: readonly DictationLanguage[] }
+  | { type: 'capabilities'; languages: readonly DictationLanguage[]; models: ServerModels }
   | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string; language?: DictationLanguage | null }
   | { type: 'final'; sessionId: string; segmentId: number; text: string; language?: DictationLanguage | null }
   | { type: 'done'; sessionId: string }

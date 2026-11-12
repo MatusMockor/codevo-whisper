@@ -3,7 +3,7 @@
 The server runs as a Docker Compose project with two services, or natively on a Linux desktop with the Codevo Whisper app installed (see [Native (systemd, without Docker)](#native-systemd-without-docker)):
 
 - `gateway` - the encrypted WebSocket endpoint for paired devices, the admin socket and the `codevo-whisper` CLI. It is the only service that publishes a port, on `127.0.0.1:8787` by default.
-- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is mounted read-only; provisioning runs as the separate `stt-provision` service.
+- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node, plus Canary 1B v2 and VoxLingua107 language ID for "Výber jazykov"). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is mounted read-only; provisioning runs as the separate `stt-provision` service.
 
 The gateway stores only its static key (`/data/server-key.json`, mode 0600) and the device registry (`/data/devices.json`) in the `cw-data` volume. Audio and transcripts stay in memory. Core dumps are disabled in both containers (`ulimits.core: 0`) and logs contain only device ids, sizes, durations and error codes. Swap is outside the app's control; disable it or encrypt it if that matters to you.
 
@@ -20,7 +20,7 @@ ls -l /dev/dri/by-path/            # pci-0000:03:00.0-render -> ../renderD128
 ```
 
 Set `STT_RENDER_DEVICE` to that node (default `/dev/dri/renderD128`). It appears in the container as `/dev/dri/renderD128`, so Vulkan sees only that GPU, even on hosts with an integrated GPU next to the discrete one.
-- About 1.3 GB of disk for the model and about 1 GB for the images.
+- About 2.5 GB of disk for the three models (1.3 GB without "Výber jazykov") and about 1 GB for the images.
 
 ## Install
 
@@ -42,6 +42,8 @@ Set in `infrastructure/compose/.env`:
 | `STT_RENDER_DEVICE` | Host render node of the GPU, default `/dev/dri/renderD128` (see above). |
 | `STT_MEM_LIMIT`, `STT_CPUS`, `GATEWAY_MEM_LIMIT`, `GATEWAY_CPUS` | Container limits, defaults `4g`, `4`, `512m`, `2`. Both services also run with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem, PID limits (stt 128, gateway 64) and `nofile` limits (stt 1024, gateway 4096). |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
+| `STT_MODEL_PATH`, `STT_CONDITIONED_MODEL_PATH`, `STT_LID_MODEL_PATH` | Model files in the `cw-models` volume, defaults `/models/parakeet-ultra-F16.gguf`, `/models/canary-1b-v2-Q8_0.gguf` and `/models/lang-id-voxlingua107-ecapa-Q8_0.gguf`. Provisioning and the sidecar read the same values. |
+| `STT_LID_BACKEND` | Backend of the language ID model, `cpu` (default; about 12 ms per 2 s of audio), `vulkan` or `metal`. |
 | `STT_ENGINE` | `worker` (default) keeps the model loaded in one resident `cw-stt-worker` process; `cli` starts `transcribe-cli` for every call (the phase 2 behaviour; measured on the RX 7800 XT at about 550 ms against 120 ms per call for 12 s of audio). |
 | `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
 
@@ -56,7 +58,31 @@ $COMPOSE ps
 ss -ltn | grep 8787
 ```
 
-Provisioning downloads the pinned model (`handy-computer/parakeet-ultra-gguf` revision `a1539be1b849ea7463b88343e5277b373d0c4ea9`, SHA-256 `cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d`) into the `cw-models` volume. It writes to a `.download` file, hashes while streaming and renames only when the hash matches. Running it again verifies the existing file. The `stt` service never downloads at startup; it exits with `model_missing` if the model is absent.
+Provisioning downloads three pinned models into the `cw-models` volume:
+
+| Role | Repository and revision | File | Size | SHA-256 |
+|---|---|---|---|---|
+| Transcription | `handy-computer/parakeet-ultra-gguf` @ `a1539be1b849ea7463b88343e5277b373d0c4ea9` | `parakeet-ultra-F16.gguf` | 1,256,724,448 B | `cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d` |
+| Language-conditioned transcription | `handy-computer/canary-1b-v2-gguf` @ `692af661b140183b60e44f55ad03c59e1e77d078` | `canary-1b-v2-Q8_0.gguf` | 1,144,290,016 B | `224f83d1bc487b3303b495a7d6874912fdece93de19d1a04b550829c30a5d289` |
+| Language ID | `handy-computer/lang-id-voxlingua107-ecapa-gguf` @ `e59f0f3847e77723b7d58447ef9456fa0c7e9436` | `lang-id-voxlingua107-ecapa-Q8_0.gguf` | 26,693,632 B | `063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a` |
+
+It prints `Language models add 1.17 GB` first, then one line per file. Each file is written to a `.download` file, hashed while streaming and renamed only when the hash matches. Running it again verifies the existing files (`Model already present and verified`). The `stt` service never downloads at startup. It exits with `model_missing` if the transcription model is absent. Without Canary or the language ID model it starts anyway, logs `language_models_missing` and serves only automatic dictation.
+
+### Verify "Výber jazykov"
+
+The gateway asks the sidecar for its capabilities at startup, every 30 s and on every device connection. Check the answer from inside the gateway container (the slim image has no `curl`, so the command uses Node.js `fetch`):
+
+```bash
+$COMPOSE exec gateway node -e "fetch('http://stt:8001/capabilities').then((r) => r.text()).then(console.log)"
+```
+
+With all three models it prints the 25 languages and the model names:
+
+```json
+{"languages":["bg","cs","da","de","el","en","es","et","fi","fr","hr","hu","it","lt","lv","mt","nl","pl","pt","ro","ru","sk","sl","sv","uk"],"models":{"transcription":"Parakeet Ultra (F16)","conditioned":"Canary 1B v2 (Q8)","languageId":"VoxLingua107 (rozpoznanie jazyka)"}}
+```
+
+`"languages":[]` means the language models are missing or not loaded: run the provisioning again and check `$COMPOSE logs stt` for `language_models_missing` or `language_models_warmup_failed`. A `404` means the sidecar image predates language sets; rebuild it. Desktop apps see the same list and models in the server card, and restricted dictation needs a gateway of version 0.3.0 or newer (`codevo-whisper status` prints the version). Older desktops and the mobile app keep working unchanged.
 
 ## Pair a device
 
@@ -99,26 +125,26 @@ $COMPOSE logs -f gateway
 $COMPOSE logs -f stt
 ```
 
-The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs` and `result` (`ok`, `cancelled` or an error code). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`) and engine error status codes. Neither logs audio or text.
+The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs`, `result` (`ok`, `cancelled` or an error code) and `routes`, the number of final segments per routing decision of a dictation with languages (for example `{"conditioned":5,"verbatim-unsure":1}`, empty for automatic dictation). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`, `language_models_missing`, `language_models_ready` or `language_models_warmup_failed`) and engine error status codes. Neither logs audio, text or the language of a segment.
 
 ## Native (systemd, without Docker)
 
 On a Linux machine with the Codevo Whisper desktop app, the gateway and the sidecar can run as two systemd user services that reuse the app's STT worker and model. No Docker, no GPU passthrough.
 
-Requirements: Node.js 24+ and pnpm on `PATH`, the desktop app installed (`/opt/Codevo Whisper`) and Parakeet Ultra downloaded in it (`~/.config/Codevo Whisper/models/parakeet-ultra-q8.gguf`).
+Requirements: Node.js 24+ and pnpm on `PATH`, the desktop app installed (`/opt/Codevo Whisper`) and Parakeet Ultra downloaded in it (`~/.config/Codevo Whisper/models/parakeet-ultra-q8.gguf`). For "Výber jazykov" also download Canary 1B v2 and the language ID model in the app (`canary-1b-v2-q8.gguf` and `langid-voxlingua107-q8.gguf` in the same folder). Without them the script prints `Výber jazykov nebude dostupný, stiahnite Canary 1B v2 a rozpoznávanie jazyka v aplikácii`, installs anyway, and the server offers only automatic dictation.
 
 ```bash
 CW_PUBLIC_ENDPOINT=wss://<host>.ts.net scripts/install-server-service.sh
 ```
 
-The script builds `apps/server` and `apps/stt`, copies both bundles and the STT worker to `~/.local/share/codevo-whisper-server/`, so the checkout and the desktop package can be removed or replaced afterwards (deb or AppImage), and writes:
+The script builds `apps/server` and `apps/stt`, copies both bundles, the STT worker and the two language models (to `models/`) to `~/.local/share/codevo-whisper-server/`, so the checkout and the desktop package can be removed or replaced afterwards (deb or AppImage), and writes:
 
-- `~/.config/codevo-whisper-server/env` (mode 0600): the settings. Override any of `CW_PUBLIC_ENDPOINT` (default `ws://127.0.0.1:8787`), `CW_BIND`, `CW_PORT`, `STT_PORT`, `STT_BACKEND`, `STT_THREADS`, `STT_WORKER_BINARY`, `STT_MODEL_PATH` in the environment of the install command. A later run keeps the values of the previous one unless overridden.
+- `~/.config/codevo-whisper-server/env` (mode 0600): the settings. Override any of `CW_PUBLIC_ENDPOINT` (default `ws://127.0.0.1:8787`), `CW_BIND`, `CW_PORT`, `STT_PORT`, `STT_BACKEND`, `STT_THREADS`, `STT_WORKER_BINARY`, `STT_MODEL_PATH`, `STT_CONDITIONED_MODEL_PATH`, `STT_LID_MODEL_PATH` in the environment of the install command. The two language model paths name the files to copy; the env file then points to the copies. A later run keeps the values of the previous one unless overridden.
 - `~/.local/state/codevo-whisper-server/` (mode 0700): server key, device registry and admin socket. If it has no key yet, the pairings from `~/.local/state/codevo-phone-server/data` are copied over.
 - `codevo-whisper-stt.service` and `codevo-whisper-gateway.service` in `~/.config/systemd/user/`, enabled and restarted.
 - `~/.local/bin/codevo-whisper-server`, the `codevo-whisper` CLI bound to the service's admin socket.
 
-Later runs keep the copied worker; to replace it, pass `STT_WORKER_BINARY` (from an AppImage: `./Codevo*.AppImage --appimage-extract 'resources/bin/x64/cw-stt-worker-vulkan'`). Run it again after pulling changes or switching the Node.js version; the units use the absolute `node` path found at install time. User services stop at logout; `loginctl enable-linger` keeps them running.
+Later runs keep the copied worker and language models; to replace one, pass its variable again (`STT_WORKER_BINARY`, `STT_CONDITIONED_MODEL_PATH` or `STT_LID_MODEL_PATH`). Language models downloaded in the app after the first run are picked up by the next run. A worker can also come from an AppImage ( `./Codevo*.AppImage --appimage-extract 'resources/bin/x64/cw-stt-worker-vulkan'`). Run it again after pulling changes or switching the Node.js version; the units use the absolute `node` path found at install time. User services stop at logout; `loginctl enable-linger` keeps them running.
 
 ```bash
 codevo-whisper-server pair
@@ -127,6 +153,7 @@ codevo-whisper-server revoke <id>
 codevo-whisper-server status
 journalctl --user -u codevo-whisper-gateway -f
 journalctl --user -u codevo-whisper-stt -f
+curl -s http://127.0.0.1:8001/capabilities
 ```
 
 Tailscale: keep `CW_BIND=127.0.0.1`, run `tailscale serve --bg 8787` and install with `CW_PUBLIC_ENDPOINT=wss://<host>.ts.net` (the MagicDNS name of the machine). Pair devices only after the endpoint is set; tokens carry it.

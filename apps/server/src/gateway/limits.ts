@@ -14,6 +14,7 @@ export const INGESTION_LIMITS = { burstSeconds: 180, realTimeFactor: 1.25, pause
 export const PRE_AUTH_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 4 } as const;
 export const PROXIED_TCP_LIMITS = { maxPendingTotal: 64, maxPendingPerIp: 64 } as const;
 export const MAX_SESSIONS_PER_DEVICE = 4;
+export const CAPABILITY_REFRESH_MS = 30_000;
 
 export const CLOSE_NORMAL = 1000;
 export const CLOSE_GOING_AWAY = 1001;
