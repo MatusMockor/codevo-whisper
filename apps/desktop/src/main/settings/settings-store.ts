@@ -86,8 +86,10 @@ export class SettingsStore implements LegacySettingsReader {
     const previous = this.current;
     const changes = typeof patch === 'function' ? patch(previous) : patch;
     const next = freezeSettings({ ...previous, ...changes });
-    await writeFileAtomic(this.file, `${JSON.stringify(next, null, 2)}\n`);
-    this.legacy = null;
+    const legacy = Object.hasOwn(changes, 'languages') ? null : this.legacy;
+    const stored = legacy === null ? next : { ...next, language: legacy };
+    await writeFileAtomic(this.file, `${JSON.stringify(stored, null, 2)}\n`);
+    this.legacy = legacy;
     this.current = next;
     this.notify(next, previous);
     return next;

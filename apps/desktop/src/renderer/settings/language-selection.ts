@@ -63,8 +63,8 @@ export function beginSave(pending: PendingSelection, value: LanguageSelection): 
   return { value, saves: (pending?.saves ?? 0) + 1 };
 }
 
-export function settleSave(pending: PendingSelection, saved: boolean): PendingSelection {
-  if (pending === null || !saved || pending.saves <= 1) {
+export function settleSave(pending: PendingSelection): PendingSelection {
+  if (pending === null || pending.saves <= 1) {
     return null;
   }
   return { value: pending.value, saves: pending.saves - 1 };

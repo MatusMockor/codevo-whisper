@@ -82,8 +82,8 @@ describe('pending selection', () => {
     const second = beginSave(first, { mode: 'selected', selected: ['sk', 'cs', 'en'] });
 
     expect(effectiveSelection(second, stored)).toEqual({ mode: 'selected', selected: ['sk', 'cs', 'en'] });
-    expect(effectiveSelection(settleSave(second, true), stored)).toEqual({ mode: 'selected', selected: ['sk', 'cs', 'en'] });
-    expect(settleSave(settleSave(second, true), true)).toBeNull();
+    expect(effectiveSelection(settleSave(second), stored)).toEqual({ mode: 'selected', selected: ['sk', 'cs', 'en'] });
+    expect(settleSave(settleSave(second))).toBeNull();
     expect(effectiveSelection(null, stored)).toEqual(stored);
   });
 
@@ -96,10 +96,15 @@ describe('pending selection', () => {
     expect(effectiveSelection(switched, stored)).toEqual({ mode: 'auto', selected: ['sk', 'cs'] });
   });
 
-  it('falls back to the stored selection when a save fails', () => {
-    const editing = beginSave(beginSave(null, { mode: 'auto', selected: ['sk'] }), { mode: 'selected', selected: ['cs'] });
+  it('keeps the newer edit while it is still saving when an earlier save fails, and clears it after the last one', () => {
+    const a = beginSave(null, { mode: 'selected', selected: ['sk', 'cs'] });
+    const b = beginSave(a, { mode: 'selected', selected: ['sk', 'cs', 'en'] });
 
-    expect(settleSave(editing, false)).toBeNull();
-    expect(settleSave(null, true)).toBeNull();
+    const afterFailedA = settleSave(b);
+
+    expect(afterFailedA).toEqual({ value: { mode: 'selected', selected: ['sk', 'cs', 'en'] }, saves: 1 });
+    expect(effectiveSelection(afterFailedA, stored)).toEqual({ mode: 'selected', selected: ['sk', 'cs', 'en'] });
+    expect(settleSave(afterFailedA)).toBeNull();
+    expect(settleSave(null)).toBeNull();
   });
 });

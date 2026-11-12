@@ -279,7 +279,7 @@ export function DictationLanguagesRow({ languages, activeModel }: { languages: L
 
   function save(next: LanguageSelection): void {
     setPending((current) => beginSave(current, next));
-    saveSettings({ languages: next }, (saved) => setPending((current) => settleSave(current, saved)));
+    saveSettings({ languages: next }, () => setPending((current) => settleSave(current)));
   }
 
   return (

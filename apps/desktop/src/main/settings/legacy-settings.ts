@@ -1,4 +1,4 @@
-import { isPlainRecord, isValidField } from './settings-fields';
+import { isPlainRecord } from './settings-fields';
 
 export type LegacyLanguage = 'sk' | 'cs' | 'en' | 'auto';
 
@@ -9,7 +9,7 @@ export interface LegacySettingsReader {
 const LEGACY_LANGUAGES: readonly LegacyLanguage[] = ['sk', 'cs', 'en', 'auto'];
 
 export function readLegacyLanguage(raw: unknown): LegacyLanguage | null {
-  if (!isPlainRecord(raw) || isValidField('languages', raw['languages'])) {
+  if (!isPlainRecord(raw)) {
     return null;
   }
   const stored = raw['language'];

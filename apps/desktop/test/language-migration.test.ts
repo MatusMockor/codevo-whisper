@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -62,13 +62,21 @@ describe('legacy language migration', () => {
     expect(settings.languages).toEqual({ mode: 'auto', selected: ['sk'] });
   });
 
-  it('keeps valid stored languages and ignores a leftover legacy key', async () => {
+  it('keeps valid stored languages without a legacy key', async () => {
     const languages = { mode: 'selected', selected: ['cs', 'sk', 'en'] };
-    const { migrated, settings, onDisk } = await migrate({ language: 'en', languages, localModelId: 'canary' });
+    const { migrated, settings, onDisk } = await migrate({ languages, localModelId: 'canary' });
 
     expect(migrated).toBe(false);
     expect(settings.languages).toEqual(languages);
-    expect(onDisk['language']).toBe('en');
+    expect(onDisk['languages']).toEqual(languages);
+  });
+
+  it('treats a legacy key next to stored languages as a migration that was never saved', async () => {
+    const { migrated, settings, onDisk } = await migrate({ language: 'en', languages: DEFAULT_SETTINGS.languages, localModelId: 'canary' });
+
+    expect(migrated).toBe(true);
+    expect(settings.languages).toEqual({ mode: 'selected', selected: ['en'] });
+    expect(onDisk).not.toHaveProperty('language');
   });
 
   it('does nothing without a legacy language', async () => {
@@ -105,13 +113,43 @@ describe('legacy language migration', () => {
     expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'auto', selected: ['en'] });
   });
 
-  it('forgets the legacy value once any update was written in the same run', async () => {
+  it('keeps the legacy value through unrelated updates until the languages are saved', async () => {
     await writeFile(file, JSON.stringify({ language: 'cs' }));
     const settings = new SettingsStore(file);
     await settings.load();
+
     await settings.update({ mode: 'toggle' });
+
+    expect(settings.legacyLanguage()).toBe('cs');
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ language: 'cs', mode: 'toggle' });
+
+    await settings.update((current) => ({ languages: { ...current.languages, mode: 'selected' } }));
 
     expect(settings.legacyLanguage()).toBeNull();
     expect(JSON.parse(await readFile(file, 'utf8'))).not.toHaveProperty('language');
+  });
+
+  it('migrates on the next launch when the migration write failed and an unrelated update was saved', async () => {
+    await writeFile(file, JSON.stringify({ language: 'cs', localModelId: 'canary', mode: 'hold' }));
+    const settings = new SettingsStore(file);
+    await settings.load();
+    const models = new ModelManager({ dir: join(dir, 'models'), catalog: CATALOG, settings, warmUp: () => Promise.resolve() });
+    await mkdir(`${file}.tmp`);
+
+    await expect(migrateLegacyLanguage({ legacy: settings, settings, activeLanguageHint: () => models.activeLanguageHint() })).rejects.toMatchObject({ code: expect.any(String) as string });
+
+    await rm(`${file}.tmp`, { recursive: true, force: true });
+    await settings.update({ mode: 'toggle' });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ language: 'cs', mode: 'toggle', languages: DEFAULT_SETTINGS.languages });
+
+    const relaunched = new SettingsStore(file);
+    await relaunched.load();
+    const migrated = await migrateLegacyLanguage({ legacy: relaunched, settings: relaunched, activeLanguageHint: () => models.activeLanguageHint() });
+
+    expect(migrated).toBe(true);
+    expect(relaunched.get()).toMatchObject({ mode: 'toggle', languages: { mode: 'selected', selected: ['cs'] } });
+    const onDisk = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
+    expect(onDisk).not.toHaveProperty('language');
+    expect(onDisk['languages']).toEqual({ mode: 'selected', selected: ['cs'] });
   });
 });
