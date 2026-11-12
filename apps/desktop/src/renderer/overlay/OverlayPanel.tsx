@@ -64,7 +64,7 @@ export function Recording({ state, levels }: { state: RecordingState; levels: re
           <Waveform levels={levels} />
           <span className="ov-time">{formatElapsed(state.elapsedMs)}</span>
           <span className="chip">{state.languageChip}</span>
-          <span className="ov-lock" title="Prepis beží v tomto Macu">
+          <span className="ov-lock" title="Zvuk sa prepisuje na tomto počítači alebo šifrovane na vašom serveri">
             <LockIcon />
           </span>
         </div>
