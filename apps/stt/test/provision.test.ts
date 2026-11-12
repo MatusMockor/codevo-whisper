@@ -141,6 +141,21 @@ describe('ServerModelManifest', () => {
   });
 });
 
+describe('ServerModelManifest targets', () => {
+  it('rejects two models configured at the same path', () => {
+    expect(() => ServerModelManifest.pinned(loadSttConfig({ STT_MODEL_PATH: '/models/shared.gguf', STT_CONDITIONED_MODEL_PATH: '/models/shared.gguf' }))).toThrow(
+      'model targets must be unique: /models/shared.gguf is the target of both verbatim and conditioned',
+    );
+  });
+
+  it('rejects equivalent relative paths before downloading anything', () => {
+    expect(() => localManifest({ conditioned: { target: 'models/shared.gguf' }, 'language-id': { target: './models/../models/shared.gguf' } })).toThrow(
+      /model targets must be unique: .*models\/shared\.gguf is the target of both conditioned and language-id/,
+    );
+    expect(requested).toEqual([]);
+  });
+});
+
 describe('provisionManifest', () => {
   it('downloads and verifies every missing model', async () => {
     const manifest = localManifest();

@@ -5,6 +5,7 @@ import { loadSttConfig } from '../src/config';
 import { createEngine } from '../src/create-engine';
 import type { Engine } from '../src/engine';
 import { startSttServer, type SttServer } from '../src/server';
+import type { RetryBackoff } from '../src/warm-up-retry';
 import { pcm, send } from './support/http-client';
 
 const FAKE_WORKER = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-worker.js', import.meta.url));
@@ -18,14 +19,14 @@ type WorkerEnv = Readonly<Record<string, string>>;
 let server: SttServer | undefined;
 let engine: Engine | undefined;
 
-async function startWith(warmUp: () => Promise<void>, env: WorkerEnv): Promise<void> {
+async function startWith(warmUp: () => Promise<unknown>, env: WorkerEnv): Promise<void> {
   Object.entries(env).forEach(([name, value]) => vi.stubEnv(name, value));
   await warmUp();
   vi.unstubAllEnvs();
 }
 
-async function serve(routing: boolean): Promise<{ engine: Engine; server: SttServer }> {
-  engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, { routing });
+async function serve(routing: boolean, warmUpBackoff?: RetryBackoff): Promise<{ engine: Engine; server: SttServer }> {
+  engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, { routing, ...(warmUpBackoff === undefined ? {} : { warmUpBackoff }) });
   server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
   return { engine, server };
 }
@@ -69,6 +70,38 @@ describe('language routing on resident workers', () => {
     await started.engine.warmUpLanguageModels();
     expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS } });
     expect((await send(started.server, '/health', { method: 'GET' })).body).toEqual({ status: 'UP', busy: false });
+  });
+
+  it('retries a failed language model warm-up until routing becomes available', async () => {
+    const started = await serve(true, { initialMs: 10, maxMs: 40 });
+    await started.engine.transcriber.warmUp();
+    vi.stubEnv('FAKE_WORKER_LOAD', 'fail');
+    const retries: number[] = [];
+
+    const warmedUp = started.engine.warmUpLanguageModels((delayMs) => {
+      retries.push(delayMs);
+      vi.unstubAllEnvs();
+    });
+
+    expect(await warmedUp).toBe(true);
+    expect(retries).toEqual([10]);
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS } });
+  });
+
+  it('stops retrying the language model warm-up on shutdown', async () => {
+    const started = await serve(true, { initialMs: 60_000, maxMs: 60_000 });
+    vi.stubEnv('FAKE_WORKER_LOAD', 'fail');
+    let firstRetry = (): void => undefined;
+    const retrying = new Promise<void>((resolve) => {
+      firstRetry = resolve;
+    });
+    const warmedUp = started.engine.warmUpLanguageModels(() => firstRetry());
+    await retrying;
+
+    await started.engine.close();
+
+    expect(await warmedUp).toBe(false);
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS } });
   });
 
   it('routes a confident final segment to the conditioned model', async () => {

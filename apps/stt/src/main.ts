@@ -34,10 +34,13 @@ void engine.transcriber.warmUp().then(
   () => log('engine_warmup_failed', { engine: config.engine }),
 );
 if (missingLanguageModels.length === 0) {
-  void engine.warmUpLanguageModels().then(
-    () => log('language_models_ready', { engine: config.engine, lidBackend: config.lidBackend }),
-    () => log('language_models_warmup_failed', { engine: config.engine }),
-  );
+  const onRetry = (retryInMs: number): void => log('language_models_warmup_failed', { engine: config.engine, retryInMs });
+  void engine.warmUpLanguageModels(onRetry).then((ready) => {
+    if (!ready) {
+      return;
+    }
+    log('language_models_ready', { engine: config.engine, lidBackend: config.lidBackend });
+  });
 }
 
 const shutdown = (): void => {

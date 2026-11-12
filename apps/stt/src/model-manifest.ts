@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 export type ModelRole = 'verbatim' | 'conditioned' | 'language-id';
 
 export type ModelFile = { role: ModelRole; url: string; sha256: string; size: number; target: string };
@@ -10,8 +12,26 @@ function huggingFaceUrl(repo: string, revision: string, file: string): string {
   return `${HUGGING_FACE}/${repo}/resolve/${revision}/${file}`;
 }
 
+function conflictingTarget(files: readonly ModelFile[]): string | null {
+  const roles = new Map<string, ModelRole>();
+  for (const file of files) {
+    const target = resolve(file.target);
+    const owner = roles.get(target);
+    if (owner !== undefined) {
+      return `model targets must be unique: ${target} is the target of both ${owner} and ${file.role}`;
+    }
+    roles.set(target, file.role);
+  }
+  return null;
+}
+
 export class ServerModelManifest {
-  constructor(readonly files: readonly ModelFile[]) {}
+  constructor(readonly files: readonly ModelFile[]) {
+    const conflict = conflictingTarget(files);
+    if (conflict !== null) {
+      throw new RangeError(conflict);
+    }
+  }
 
   static pinned(targets: ModelTargets): ServerModelManifest {
     return new ServerModelManifest([
