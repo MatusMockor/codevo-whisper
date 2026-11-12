@@ -1,12 +1,17 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EngineUnavailableError, TranscriptionFailedError, type EngineDictation, type Preparation, type PreparedEngine } from '../src/main/engines/transcription-engine';
-import type { ServerPairing } from '../src/main/remote/pairing-repository';
+import { InsecureTestVault } from '../src/main/remote/insecure-test-vault';
+import { EncryptedPairingFile, type ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import type { RemoteFailureKind } from '../src/main/remote/remote-failure';
 import { ServerConnector, type ConnectionObserver } from '../src/main/remote/server-connector';
 import type { ServerOptions } from '../../server/src/app';
 import { ROUTING_MODELS, ROUTING_STT, type FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { continuousSpeech, speech } from '../../server/test/support/speech';
+import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
 import { ServerLanguageGate } from '../src/main/remote/server-language-support';
 import type { LanguageSelection } from '../src/shared/dictation-languages';
@@ -26,10 +31,12 @@ class RecordingObserver implements ConnectionObserver {
 }
 
 let gateway: TestGateway | undefined;
+const scratchDirs: string[] = [];
 
 afterEach(async () => {
   await gateway?.close();
   gateway = undefined;
+  await Promise.all(scratchDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 function engine(pairing: ServerPairing | null, options: Partial<RemoteEngineOptions> = {}, observer = new RecordingObserver()): RemoteEngine {
@@ -103,9 +110,16 @@ describe('RemoteEngine', () => {
   describe('with selected languages', () => {
     const SLOVAK_AND_CZECH: LanguageSelection = { mode: 'selected', selected: ['sk', 'cs'] };
 
-    function restricted(pairing: ServerPairing, selection: LanguageSelection = SLOVAK_AND_CZECH): RemoteEngine {
-      const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: new RecordingObserver(), clock: Date.now, timeoutMs: 2000 });
-      return new RemoteEngine({ connector, languages: new ServerLanguageGate(), selection: () => selection });
+    async function storedConnector(pairing: ServerPairing): Promise<ServerConnector> {
+      const dir = await mkdtemp(join(tmpdir(), 'cw-remote-languages-'));
+      scratchDirs.push(dir);
+      const pairings = new EncryptedPairingFile(join(dir, 'server-pairing.json'), new InsecureTestVault(), new RecordingLogger());
+      await pairings.save(pairing);
+      return new ServerConnector({ pairings, observer: new RecordingObserver(), clock: Date.now, timeoutMs: 2000 });
+    }
+
+    async function restricted(pairing: ServerPairing, selection: LanguageSelection = SLOVAK_AND_CZECH): Promise<RemoteEngine> {
+      return new RemoteEngine({ connector: await storedConnector(pairing), languages: new ServerLanguageGate(), selection: () => selection });
     }
 
     const echoLanguages: FakeSttBehaviour = {
@@ -115,7 +129,7 @@ describe('RemoteEngine', () => {
 
     it('routes them on a current server with the models and sends the ordered list to the STT', async () => {
       const { gateway: server, pairing } = await startWith(echoLanguages);
-      const dictation = (await prepared(restricted(pairing))).start({ languages: SLOVAK_AND_CZECH, signal: new AbortController().signal });
+      const dictation = (await prepared(await restricted(pairing))).start({ languages: SLOVAK_AND_CZECH, signal: new AbortController().signal });
 
       speak(dictation, SECOND);
 
@@ -126,7 +140,7 @@ describe('RemoteEngine', () => {
     it('refuses them on a server older than 0.3.0 without sending any audio', async () => {
       const { gateway: server, pairing } = await startWith(echoLanguages, { serverVersion: '0.2.7' });
 
-      expect(await restricted(pairing).prepare()).toEqual({ ready: false, reason: 'server-languages-outdated' });
+      expect(await (await restricted(pairing)).prepare()).toEqual({ ready: false, reason: 'server-languages-outdated' });
       expect(server.stt.requests).toEqual([]);
       await expect.poll(() => server.server.gateway.sessions.count()).toBe(0);
     });
@@ -134,20 +148,20 @@ describe('RemoteEngine', () => {
     it('refuses them on a current server without the language models', async () => {
       const { gateway: server, pairing } = await startWith(bySize);
 
-      expect(await restricted(pairing).prepare()).toEqual({ ready: false, reason: 'server-languages-missing' });
+      expect(await (await restricted(pairing)).prepare()).toEqual({ ready: false, reason: 'server-languages-missing' });
       expect(server.stt.requests).toEqual([]);
     });
 
     it('refuses a selection the server routes only in part', async () => {
       const { pairing } = await startWith({ ...echoLanguages, capabilities: { status: 200, body: { languages: ['sk', 'en'], models: ROUTING_MODELS } } });
 
-      expect(await restricted(pairing).prepare()).toEqual({ ready: false, reason: 'server-languages-missing' });
-      expect(await restricted(pairing, { mode: 'selected', selected: ['en', 'sk'] }).prepare()).toMatchObject({ ready: true });
+      expect(await (await restricted(pairing)).prepare()).toEqual({ ready: false, reason: 'server-languages-missing' });
+      expect(await (await restricted(pairing, { mode: 'selected', selected: ['en', 'sk'] })).prepare()).toMatchObject({ ready: true });
     });
 
     it('still dictates automatically on an outdated server', async () => {
       const { gateway: server, pairing } = await startWith(bySize, { serverVersion: '0.2.7' });
-      const dictation = (await prepared(restricted(pairing, { mode: 'auto', selected: ['sk'] }))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
+      const dictation = (await prepared(await restricted(pairing, { mode: 'auto', selected: ['sk'] }))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
 
       speak(dictation, SECOND);
 
@@ -165,9 +179,9 @@ describe('RemoteEngine', () => {
 
     it('reports missing models when the server lost them after the preparation', async () => {
       const { gateway: server, pairing } = await startWith(echoLanguages);
-      const remote = await prepared(restricted(pairing));
+      const remote = await prepared(await restricted(pairing));
       server.stt.setCapabilities({ status: 404, body: { error: 'not found' } });
-      const other = await new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: new RecordingObserver(), clock: Date.now, timeoutMs: 2000 }).connect();
+      const other = await (await storedConnector(pairing)).connect();
       other.connection.close();
       const dictation = remote.start({ languages: SLOVAK_AND_CZECH, signal: new AbortController().signal });
 
@@ -179,7 +193,7 @@ describe('RemoteEngine', () => {
 
     it('keeps the earlier text when the models disappear during the dictation', async () => {
       const { gateway: server, pairing } = await startWith(echoLanguages);
-      const dictation = (await prepared(restricted(pairing))).start({ languages: SLOVAK_AND_CZECH, signal: new AbortController().signal });
+      const dictation = (await prepared(await restricted(pairing))).start({ languages: SLOVAK_AND_CZECH, signal: new AbortController().signal });
       talk(dictation, continuousSpeech(25));
       await expect.poll(() => server.stt.requests.length).toBe(1);
       server.stt.setCapabilities({ status: 404, body: { error: 'not found' } });

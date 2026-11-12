@@ -70,6 +70,7 @@ export class RemoteEngine implements TranscriptionEngine {
               reconnectDelaysMs: this.options.reconnectDelaysMs,
               reconnectWindowMs: this.options.reconnectWindowMs,
               reconnect: (previous) => this.deps.connector.reconnect(previous),
+              languages: this.deps.languages,
             });
           },
           release: () => {

@@ -56,6 +56,12 @@ async function dictate(): Promise<void> {
   await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('up'));
 }
 
+async function refusedDictation(message: string): Promise<void> {
+  await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('down'));
+  await expect((await overlay()).getByRole('alert')).toContainText(message);
+  await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('up'));
+}
+
 function pasted(): Promise<string[]> {
   return app.evaluate(() => [...(globalThis as unknown as Hooks).codevoE2e.helper.pasted]);
 }
@@ -83,10 +89,8 @@ test('dictates in the selected languages on a server with the language models an
 test('an outdated server shows the overlay error and the update note, and Automaticky still dictates', async () => {
   await pair({ serverVersion: '0.2.7', languageModels: true });
 
-  await dictate();
+  await refusedDictation('Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.');
 
-  const error = (await overlay()).getByRole('alert');
-  await expect(error).toContainText('Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.');
   expect(await pasted()).toEqual([]);
   const row = await languagesRow();
   await expect(row).toContainText('Server je zastaraný (verzia 0.2.7). Výber jazykov funguje od verzie 0.3.0, aktualizujte server.');
@@ -101,9 +105,8 @@ test('an outdated server shows the overlay error and the update note, and Automa
 test('a server without the language models shows the overlay error and the provisioning note', async () => {
   await pair({});
 
-  await dictate();
+  await refusedDictation('Na serveri chýbajú modely pre zvolené jazyky.');
 
-  await expect((await overlay()).getByRole('alert')).toContainText('Na serveri chýbajú modely pre zvolené jazyky.');
   expect(await pasted()).toEqual([]);
   await expect(await languagesRow()).toContainText('Na serveri chýbajú modely pre výber jazykov. Spustite na serveri stt-provision.');
 });

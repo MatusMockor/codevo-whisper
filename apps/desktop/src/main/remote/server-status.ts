@@ -1,4 +1,6 @@
+import { UNKNOWN_MODELS } from '@codevo-whisper/protocol';
 import type { ConnectedServer, ServerStatus } from '../../shared/server';
+import type { ServerLanguages } from '../../shared/server-languages';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
 import type { RemoteFailureKind } from './remote-failure';
@@ -9,6 +11,7 @@ const OFFLINE: ServerStatus = { kind: 'offline' };
 const BUSY: ServerStatus = { kind: 'unavailable', reason: 'busy' };
 const FAILING: ServerStatus = { kind: 'unavailable', reason: 'failed' };
 const UNREADABLE: ServerStatus = { kind: 'unavailable', reason: 'storage' };
+const NO_LANGUAGES: ServerLanguages = Object.freeze({ kind: 'reported', languages: Object.freeze([]), models: UNKNOWN_MODELS });
 
 const STATUS_BY_FAILURE: Partial<Record<RemoteFailureKind, ServerStatus>> = Object.freeze({
   'not-paired': UNKNOWN,
@@ -28,10 +31,12 @@ export class ServerStatusBoard implements ConnectionObserver {
   private epoch = 0;
   private readonly listeners: Listeners<ServerStatus>;
   private readonly expiry: Listeners<void>;
+  private readonly staleLanguages: Listeners<void>;
 
   constructor(logger: Logger) {
     this.listeners = new Listeners(logger, 'A server status listener failed');
     this.expiry = new Listeners(logger, 'A server connection could not be stopped');
+    this.staleLanguages = new Listeners(logger, 'A server language refresh could not be started');
   }
 
   status(): ServerStatus {
@@ -43,6 +48,10 @@ export class ServerStatusBoard implements ConnectionObserver {
   }
 
   failed(kind: RemoteFailureKind): void {
+    if (kind === 'languages-unavailable') {
+      this.invalidateLanguages();
+      return;
+    }
     const next = STATUS_BY_FAILURE[kind] ?? this.unresolvedCheck();
     if (next === null) {
       return;
@@ -86,6 +95,18 @@ export class ServerStatusBoard implements ConnectionObserver {
 
   onChange(listener: (status: ServerStatus) => void): () => void {
     return this.listeners.add(listener);
+  }
+
+  onStaleLanguages(listener: () => void): () => void {
+    return this.staleLanguages.add(listener);
+  }
+
+  private invalidateLanguages(): void {
+    if (this.current.kind !== 'online') {
+      return;
+    }
+    this.set({ ...this.current, languages: NO_LANGUAGES });
+    this.staleLanguages.emit();
   }
 
   private whenExpired(epoch: number, listener: () => void): () => void {

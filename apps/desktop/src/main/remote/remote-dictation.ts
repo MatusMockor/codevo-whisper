@@ -1,10 +1,11 @@
 import type { ClientMessage, ServerMessage } from '@codevo-whisper/protocol';
-import { TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason, type TranscriptUpdate } from '../engines/transcription-engine';
+import { EngineUnavailableError, TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason, type EngineUnavailableReason, type TranscriptUpdate } from '../engines/transcription-engine';
 import { AudioOutbox } from './audio-outbox';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { RetryBuffer } from './retry-buffer';
 import type { SecureConnection } from './secure-connection';
 import type { ReadyConnection } from './server-connector';
+import type { ServerLanguageSupport } from './server-language-support';
 
 export type RemoteDictationDeps = {
   options: DictationOptions;
@@ -13,6 +14,7 @@ export type RemoteDictationDeps = {
   reconnect: (previous: ReadyConnection) => Promise<ReadyConnection>;
   reconnectDelaysMs: readonly number[];
   reconnectWindowMs: number;
+  languages: ServerLanguageSupport;
   newSessionId?: () => string;
 };
 
@@ -339,6 +341,12 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private resume(ready: ReadyConnection): void {
+    const refused = this.deps.languages.unavailableReason(this.deps.options.languages, ready.languages);
+    if (refused !== null) {
+      ready.connection.close();
+      this.refuse(refused);
+      return;
+    }
     if (!this.retry.canRetry()) {
       ready.connection.close();
       this.fail(new RemoteFailure('connection-lost', 'the recording outgrew the retry buffer during the reconnect'));
@@ -400,6 +408,11 @@ export class RemoteDictation implements EngineDictation {
     this.settle();
     this.ready.scope.failed(failure.kind);
     this.result.reject(new TranscriptionFailedError(this.failureReason(failure.kind), this.textSoFar(), { cause: failure }));
+  }
+
+  private refuse(reason: EngineUnavailableReason): void {
+    this.settle();
+    this.result.reject(new EngineUnavailableError(reason));
   }
 
   private failureReason(kind: RemoteFailureKind): EngineFailureReason {
