@@ -1,7 +1,11 @@
-import { Fragment, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
-import { isDictationLanguage, LANGUAGE_NAMES, MAX_SELECTED_LANGUAGES, type DictationLanguage, type LanguageSelection } from '../../shared/dictation-languages';
+import { Fragment, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { LANGUAGE_NAMES, MAX_SELECTED_LANGUAGES, type DictationLanguage, type LanguageSelection } from '../../shared/dictation-languages';
 import type { ModelInfo } from '../../shared/models';
+import { insertionIndex, regionAt, type Point } from '../components/pointer-drag';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { usePointerDrag, type ActiveDrag } from '../components/use-pointer-drag';
+import { acceptsDrop, languageDropPlan, type LanguageDragSource, type LanguageDropTarget, type LanguageZone } from './language-drop';
 import {
   LANGUAGE_EDIT_ERRORS,
   LANGUAGE_MODE_DESCRIPTIONS,
@@ -27,9 +31,9 @@ import {
 import { SettingsRow } from './SettingsGroup';
 import { saveSettings } from './use-settings';
 
-type Zone = 'used' | 'available';
+type Zone = LanguageZone;
 
-type Dragged = { code: DictationLanguage; from: Zone };
+type Source = LanguageDragSource<DictationLanguage>;
 
 type Notice = { text: string; warn: boolean };
 
@@ -41,26 +45,30 @@ const ARROWS: Readonly<Record<string, 'up' | 'down'>> = Object.freeze({ ArrowUp:
 
 const GRIP_DOTS = [0, 1, 2, 3, 4, 5];
 
-function draggedCode(event: DragEvent): DictationLanguage | null {
-  const code = event.dataTransfer.getData('text/plain');
-  return isDictationLanguage(code) ? code : null;
+function DragPreview({ drag }: { drag: ActiveDrag<Source, LanguageDropTarget> }) {
+  const { code } = drag.source;
+  const style = { width: drag.width, transform: `translate(${drag.pointer.x - drag.grab.x}px, ${drag.pointer.y - drag.grab.y}px)` };
+  return createPortal(
+    <div className="lang-ghost" style={style} aria-hidden="true">
+      <span className="lang-code">{code.toUpperCase()}</span>
+      <span className="lang-name">{LANGUAGE_NAMES[code]}</span>
+    </div>,
+    document.body,
+  );
 }
 
-function leftZone(event: DragEvent<HTMLElement>): boolean {
-  const box = event.currentTarget.getBoundingClientRect();
-  return event.clientX <= box.left || event.clientX >= box.right || event.clientY <= box.top || event.clientY >= box.bottom;
+function startsOnRemove(event: PointerEvent<HTMLElement>): boolean {
+  return event.target instanceof Element && event.target.closest('.lang-remove') !== null;
 }
 
 function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
   const footId = useId();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [dragging, setDragging] = useState<DictationLanguage | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [over, setOver] = useState<Zone | null>(null);
+  const usedZone = useRef<HTMLElement>(null);
+  const availableZone = useRef<HTMLElement>(null);
   const usedList = useRef<HTMLOListElement>(null);
   const chipList = useRef<HTMLDivElement>(null);
-  const dragged = useRef<Dragged | null>(null);
   const focusTarget = useRef<FocusTarget | null>(null);
   const order = selected.join(',');
   const available = availableLanguages(selected, query);
@@ -137,83 +145,45 @@ function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
     onChange(next);
   }
 
-  function startDrag(event: DragEvent, code: DictationLanguage, from: Zone): void {
-    event.dataTransfer.setData('text/plain', code);
-    event.dataTransfer.effectAllowed = from === 'used' ? 'move' : 'copyMove';
-    dragged.current = { code, from };
-    requestAnimationFrame(() => {
-      if (dragged.current?.code === code) setDragging(code);
-    });
+  function resolve(point: Point): LanguageDropTarget {
+    const zone = regionAt(point, [
+      { id: 'used' as const, box: usedZone.current?.getBoundingClientRect() ?? null },
+      { id: 'available' as const, box: availableZone.current?.getBoundingClientRect() ?? null },
+    ]);
+    const rows = [...(usedList.current?.querySelectorAll<HTMLElement>('.lang-item') ?? [])].map((row) => row.getBoundingClientRect());
+    return { zone, index: insertionIndex(rows, point.y) };
   }
 
-  function endDrag(): void {
-    dragged.current = null;
-    setDragging(null);
-    setDropIndex(null);
-    setOver(null);
-  }
-
-  function insertionIndex(clientY: number): number {
-    const rows = [...(usedList.current?.querySelectorAll<HTMLElement>('.lang-item') ?? [])];
-    const hit = rows.findIndex((row) => {
-      const box = row.getBoundingClientRect();
-      return clientY < box.top + box.height / 2;
-    });
-    return hit < 0 ? rows.length : hit;
-  }
-
-  function dragOverUsed(event: DragEvent<HTMLElement>): void {
-    event.preventDefault();
-    setOver('used');
-    setDropIndex(insertionIndex(event.clientY));
-  }
-
-  function dropOnUsed(event: DragEvent<HTMLElement>): void {
-    event.preventDefault();
-    const code = draggedCode(event);
-    const at = insertionIndex(event.clientY);
-    endDrag();
-    if (code === null) {
+  function drop(source: Source, target: LanguageDropTarget): void {
+    const plan = languageDropPlan(source, target);
+    if (plan.kind === 'move') {
+      onChange(moveLanguage(selected, source.code, plan.at));
       return;
     }
-    if (selected.includes(code)) {
-      onChange(moveLanguage(selected, code, at));
+    if (plan.kind === 'add') {
+      add(source.code, plan.at);
       return;
     }
-    add(code, at);
+    if (plan.kind === 'remove') {
+      remove(source.code);
+    }
   }
 
-  function dragOverAvailable(event: DragEvent<HTMLElement>): void {
-    if (dragged.current?.from !== 'used') {
-      return;
-    }
-    event.preventDefault();
-    setOver('available');
-  }
+  const drag = usePointerDrag<Source, LanguageDropTarget>({ resolve, drop });
+  const active = drag.active;
+  const dropIndex = active?.target.zone === 'used' ? active.target.index : null;
+  const over = active !== null && acceptsDrop(active.source, active.target.zone) ? active.target.zone : null;
+  const draggedCode = active?.source.code ?? null;
 
-  function dropOnAvailable(event: DragEvent<HTMLElement>): void {
-    event.preventDefault();
-    const code = draggedCode(event);
-    endDrag();
-    if (code === null || !selected.includes(code)) {
-      return;
-    }
-    remove(code);
-  }
-
-  function leave(event: DragEvent<HTMLElement>): void {
-    if (!leftZone(event)) {
-      return;
-    }
-    setOver(null);
-    setDropIndex(null);
+  function zoneClass(zone: Zone): string {
+    return over === zone ? 'lang-zone over' : 'lang-zone';
   }
 
   const dropLine = <li className="lang-drop" aria-hidden="true" />;
 
   return (
-    <div className="lang-board">
-      <section className={over === 'used' ? 'lang-zone over' : 'lang-zone'} aria-label="Používané jazyky" onDragOver={dragOverUsed} onDragLeave={leave} onDrop={dropOnUsed}>
+    <div className={active === null ? 'lang-board' : 'lang-board dragging'}>
+      <section ref={usedZone} className={zoneClass('used')} aria-label="Používané jazyky">
         <div className="lang-zone-h">
           <b>Používané</b>
           <span className={full ? 'lang-count full' : 'lang-count'}>{`${selected.length} / ${MAX_SELECTED_LANGUAGES}`}</span>
@@ -223,14 +193,15 @@ function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
             <Fragment key={code}>
               {dropIndex === index && dropLine}
               <li
-                className={['lang-item', index === 0 ? 'primary' : '', dragging === code ? 'dragging' : ''].filter((name) => name !== '').join(' ')}
-                draggable
+                className={['lang-item', index === 0 ? 'primary' : '', draggedCode === code ? 'dragging' : ''].filter((name) => name !== '').join(' ')}
                 tabIndex={0}
                 data-code={code}
                 aria-label={languageRowLabel(code, index)}
                 onKeyDown={(event) => shiftByKey(event, code)}
-                onDragStart={(event) => startDrag(event, code, 'used')}
-                onDragEnd={endDrag}
+                onPointerDown={(event) => {
+                  if (startsOnRemove(event)) return;
+                  drag.begin(event, { code, from: 'used' });
+                }}
               >
                 <span className="lang-grip" aria-hidden="true">
                   {GRIP_DOTS.map((dot) => (
@@ -255,7 +226,7 @@ function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
           ))}
         </ol>
       </section>
-      <section className={over === 'available' ? 'lang-zone over' : 'lang-zone'} aria-label="Ďalšie jazyky" onDragOver={dragOverAvailable} onDragLeave={leave} onDrop={dropOnAvailable}>
+      <section ref={availableZone} className={zoneClass('available')} aria-label="Ďalšie jazyky">
         <div className="lang-zone-h">
           <b>Ďalšie jazyky</b>
           <span className="lang-count">pretiahnite hore alebo kliknite</span>
@@ -270,14 +241,15 @@ function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
             <button
               key={code}
               type="button"
-              className="lang-chip"
-              draggable
+              className={draggedCode === code ? 'lang-chip dragging' : 'lang-chip'}
               data-code={code}
               aria-disabled={full}
               aria-label={`Pridať ${LANGUAGE_NAMES[code]}`}
-              onClick={() => addFromChip(code)}
-              onDragStart={(event) => startDrag(event, code, 'available')}
-              onDragEnd={endDrag}
+              onPointerDown={(event) => drag.begin(event, { code, from: 'available' })}
+              onClick={(event) => {
+                if (!drag.allowsClick(event)) return;
+                addFromChip(code);
+              }}
             >
               <span className="lang-code">{code.toUpperCase()}</span>
               {LANGUAGE_NAMES[code]}
@@ -296,6 +268,7 @@ function LanguageBoard({ selected, activeModel, onChange }: BoardProps) {
       <p className="lang-foot" id={footId}>
         Poradie zmeníte potiahnutím alebo klávesmi <kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd>. Jazyk odoberiete krížikom alebo potiahnutím späť dole. {MEETINGS_LANGUAGE_NOTE}
       </p>
+      {active !== null && <DragPreview drag={active} />}
     </div>
   );
 }

@@ -151,6 +151,18 @@ test.describe('settings api', () => {
 
 const PALETTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+k' : 'Control+k';
 
+async function pointerDrag(source: Locator, target: Locator, position?: { x: number; y: number }): Promise<void> {
+  const from = await source.boundingBox();
+  const to = await target.boundingBox();
+  expect(from).not.toBeNull();
+  expect(to).not.toBeNull();
+  if (from === null || to === null) return;
+  await page.mouse.move(from.x + 24, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + (position?.x ?? to.width / 2), to.y + (position?.y ?? to.height / 2), { steps: 8 });
+  await page.mouse.up();
+}
+
 function row(title: string): Locator {
   return page.locator('.srow', { has: page.locator('b', { hasText: title }) });
 }
@@ -511,16 +523,17 @@ test.describe('settings page', () => {
     await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['sk'] });
 
     await expect(remove('Slovenčina')).toBeDisabled();
-    await usedRow('Slovenčina').dragTo(otherZone());
+    await pointerDrag(usedRow('Slovenčina'), otherZone());
     await expect(status()).toHaveText('Aspoň jeden jazyk musí zostať.');
     await expect(used()).toHaveText([/Slovenčina/]);
 
     await chip('Čeština').click();
     await expect(status()).toHaveText('Čeština pridaná.');
+    await expect(chips()).toHaveCount(23);
     await expect(used()).toHaveText([/Slovenčina/, /Čeština/]);
     await expect(languages()).not.toContainText('Reč v príbuznom jazyku');
 
-    await chip('Angličtina').dragTo(usedRow('Slovenčina'), { targetPosition: top });
+    await pointerDrag(chip('Angličtina'), usedRow('Slovenčina'), top);
     await expect(used()).toHaveText([/Angličtina/, /Slovenčina/, /Čeština/]);
     await expect(used().first()).toContainText('Hlavný');
 
@@ -542,7 +555,17 @@ test.describe('settings page', () => {
     await expect(status()).toHaveText('Používať môžete najviac 5 jazykov. Najprv niektorý odoberte.');
     await expect(used()).toHaveCount(5);
 
-    await usedRow('Poľština').dragTo(usedRow('Angličtina'), { targetPosition: top });
+    await pointerDrag(usedRow('Poľština'), usedRow('Angličtina'), top);
+    await expect(used()).toHaveText([/Poľština/, /Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
+    const box = await usedRow('Nemčina').boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move((box?.x ?? 0) + 24, (box?.y ?? 0) + 10);
+    await page.mouse.down();
+    await page.mouse.move((box?.x ?? 0) + 24, (box?.y ?? 0) - 120, { steps: 6 });
+    await expect(page.locator('.lang-ghost')).toContainText('Nemčina');
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.locator('.lang-ghost')).toHaveCount(0);
     await expect(used()).toHaveText([/Poľština/, /Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
     await usedRow('Slovenčina').focus();
     await page.keyboard.press('Alt+ArrowUp');
@@ -558,7 +581,7 @@ test.describe('settings page', () => {
     await remove('Angličtina').click();
     await expect(status()).toHaveText('Angličtina odobraná.');
     await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/, /Nemčina/]);
-    await usedRow('Nemčina').dragTo(otherZone());
+    await pointerDrag(usedRow('Nemčina'), otherZone());
     await expect(status()).toHaveText('Nemčina odobraná.');
     await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/]);
     await expect(usedZone()).toContainText('3 / 5');

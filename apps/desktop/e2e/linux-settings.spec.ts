@@ -57,7 +57,14 @@ test('Linux Jazyky diktovania reorders the used languages and fits narrow window
     await expect(used().first()).toContainText('Hlavný');
     await expect(used().filter({ hasText: 'Slovenčina' })).toBeFocused();
     await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.languages))).toEqual({ mode: 'selected', selected: ['cs', 'sk'] });
-    await page.getByRole('region', { name: 'Ďalšie jazyky' }).getByRole('button', { name: 'Pridať Nemčina', exact: true }).dragTo(used().filter({ hasText: 'Čeština' }), { targetPosition: { x: 24, y: 3 } });
+    const from = await page.getByRole('region', { name: 'Ďalšie jazyky' }).getByRole('button', { name: 'Pridať Nemčina', exact: true }).boundingBox();
+    const to = await used().filter({ hasText: 'Čeština' }).boundingBox();
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    await page.mouse.move((from?.x ?? 0) + 24, (from?.y ?? 0) + (from?.height ?? 0) / 2);
+    await page.mouse.down();
+    await page.mouse.move((to?.x ?? 0) + 24, (to?.y ?? 0) + 3, { steps: 8 });
+    await page.mouse.up();
     await expect(used()).toHaveText([/Nemčina/, /Čeština/, /Slovenčina/]);
     for (const width of [1000, 800]) {
       await app.evaluate(({ BrowserWindow }, width) => { BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Codevo Whisper')?.setSize(width, 760); }, width);
