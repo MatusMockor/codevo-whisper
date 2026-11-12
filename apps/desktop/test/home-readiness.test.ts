@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS, type EngineId } from '../src/shared/settings';
 const MODEL_ID = 'parakeet-tdt';
 const HOST = 'domáci-pc';
 const READY: AppStatus = { hotkeyLabel: '⌥Space', mode: 'smart', modelReady: true, pairingNeeded: false, serverRepairNeeded: false, permissionsOk: true, paused: false };
-const ONLINE: ServerStatus = { kind: 'online', connectMs: 38, serverVersion: '0.2.4' };
+const ONLINE: ServerStatus = { kind: 'online', connectMs: 38, serverVersion: '0.2.4', languages: { kind: 'outdated', minVersion: '0.3.0' } };
 const OFFLINE: ServerStatus = { kind: 'offline' };
 
 type Scenario = { engineOrder: EngineId[]; localReady: boolean; server: ServerStatus | null; status: Partial<AppStatus>; statesLoaded?: boolean; serverOff?: boolean };

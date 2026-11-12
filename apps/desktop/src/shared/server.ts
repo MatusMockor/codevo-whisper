@@ -1,11 +1,14 @@
 import type { PairingEngineChange } from './engine-routing';
+import type { ServerLanguages } from './server-languages';
+
+export type ConnectedServer = { connectMs: number; serverVersion: string; languages: ServerLanguages };
 
 export type VaultAvailability = 'available' | 'insecure' | 'unavailable';
 
 export type ServerStatus =
   | { kind: 'unknown' }
   | { kind: 'checking' }
-  | { kind: 'online'; connectMs: number; serverVersion: string }
+  | ({ kind: 'online' } & ConnectedServer)
   | { kind: 'offline' }
   | { kind: 'unavailable'; reason: 'busy' | 'failed' | 'storage' }
   | { kind: 'repair-needed'; reason: 'server-key-changed' | 'device-unknown' };

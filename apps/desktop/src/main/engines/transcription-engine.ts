@@ -14,7 +14,8 @@ export type EngineUnavailableReason =
   | 'server-busy'
   | 'server-storage'
   | 'server-disconnected'
-  | 'server-languages-outdated';
+  | 'server-languages-outdated'
+  | 'server-languages-missing';
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
@@ -51,7 +52,7 @@ export class EngineUnavailableError extends Error {
   }
 }
 
-export type EngineFailureReason = 'engine-failed' | 'busy' | 'stt-unavailable' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol' | 'disconnected';
+export type EngineFailureReason = 'engine-failed' | 'busy' | 'stt-unavailable' | 'languages-missing' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol' | 'disconnected';
 
 export class TranscriptionFailedError extends Error {
   override readonly name = 'TranscriptionFailedError';

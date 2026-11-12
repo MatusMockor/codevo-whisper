@@ -36,7 +36,7 @@ export function DictationSection({ settings, activeModel }: { settings: Settings
       <SettingsRow id="overlay" title="Zobrazenie panela" description="Živý text ukazuje prepis už počas hovorenia. Indikátor je diskrétnejší a prepis je rýchlejší.">
         <SegmentedControl label="Zobrazenie panela" options={OVERLAYS} value={settings.overlay} onChange={(overlay) => saveSettings({ overlay })} />
       </SettingsRow>
-      <DictationLanguagesRow languages={settings.languages} activeModel={activeModel} />
+      <DictationLanguagesRow languages={settings.languages} activeModel={activeModel} engineOrder={settings.engineOrder} />
       <AudioFeedbackRows settings={settings} />
     </SettingsGroup>
   );

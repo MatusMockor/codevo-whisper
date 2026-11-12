@@ -22,6 +22,7 @@ export type ServerOptions = {
   handshakeTimeoutMs?: number;
   logger?: Logger;
   beforeReady?: (deviceId: string) => Promise<void>;
+  serverVersion?: string;
 };
 
 export type RunningServer = {
@@ -54,6 +55,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     logger: options.logger ?? silentLogger,
     ...(options.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
     ...(options.beforeReady === undefined ? {} : { beforeReady: options.beforeReady }),
+    ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }),
   });
   const commands = new AdminCommands({ pairing, devices, sessions: gateway.sessions, jobs: dispatcher, keys, stt });
   const admin = await startAdminServer(config.adminSocket, commands).catch(async (error: unknown) => {

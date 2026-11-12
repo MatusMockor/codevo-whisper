@@ -5,7 +5,7 @@ import { pairingStep } from '../src/renderer/server/server-copy';
 import type { Settings } from '../src/shared/settings';
 import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
-import { startLocalGateway, type LocalGateway } from './local-gateway';
+import { startLocalGateway, type LocalGateway, type LocalGatewayOptions } from './local-gateway';
 
 type RequestEvent = { event: 'request'; deviceName: string; deviceFingerprint: string; handshakeFingerprint: string };
 type PairedEvent = { event: 'paired'; deviceId: string };
@@ -30,6 +30,17 @@ async function engineOrder(): Promise<Settings['engineOrder']> {
 
 function card(): Locator {
   return page.locator('.server-card');
+}
+
+function fact(term: string): Locator {
+  return card().locator('dl.kv dt', { hasText: term }).locator('xpath=following-sibling::dd[1]');
+}
+
+async function pairWith(options: LocalGatewayOptions): Promise<void> {
+  await gateway.close();
+  gateway = await startLocalGateway(options);
+  await openTab('Prepis');
+  await pair();
 }
 
 function connection(): Locator {
@@ -289,4 +300,36 @@ test('the current state warns about a route that cannot work and fixes it in one
 
   await expect.poll(engineOrder).toEqual(['server']);
   await expect(nowCard()).toContainText(`Prepisuje sa na: Server 127.0.0.1:${gateway.port}`);
+});
+
+test('the card shows that the server routes dictation languages and names its models', async () => {
+  await pairWith({ languageModels: true });
+
+  await expect(fact('Výber jazykov')).toHaveText('Podporovaný');
+  await expect(fact('Model prepisu')).toHaveText('Parakeet Ultra (F16)');
+  await expect(fact('Modely pre jazyky')).toHaveText('Canary 1B v2 (Q8) + VoxLingua107 (rozpoznanie jazyka)');
+});
+
+test('the card shows missing language models on a current server without them', async () => {
+  await pairWith({});
+
+  await expect(fact('Výber jazykov')).toHaveText('Chýbajú modely');
+  await expect(fact('Model prepisu')).toHaveText('-');
+  await expect(fact('Modely pre jazyky')).toHaveText('-');
+});
+
+test('the card shows an outdated server without model rows and hides the language row while the server is down', async () => {
+  await pairWith({ serverVersion: '0.2.7', languageModels: true });
+
+  await expect(fact('Verzia servera')).toHaveText('0.2.7');
+  await expect(fact('Výber jazykov')).toHaveText('Server je zastaraný');
+  await expect(card()).not.toContainText('Model prepisu');
+  await expect(card()).not.toContainText('Modely pre jazyky');
+
+  await gateway.close();
+  gateway = await startLocalGateway();
+  await card().getByRole('button', { name: 'Otestovať spojenie' }).click();
+
+  await expect(card().locator('.pill')).toHaveText('Neodpovedá');
+  await expect(card()).not.toContainText('Výber jazykov');
 });

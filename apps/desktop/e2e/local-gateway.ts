@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const runner = fileURLToPath(new URL('../test/support/run-gateway.ts', import.meta.url));
 const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
 
+export type LocalGatewayOptions = { serverVersion?: string; languageModels?: boolean };
+
 export type AdminConnection = { send(value: object): void; next(): Promise<unknown>; close(): void };
 
 export type LocalGateway = {
@@ -59,8 +61,8 @@ function firstLine(child: ChildProcessWithoutNullStreams): Promise<Started> {
   });
 }
 
-export async function startLocalGateway(): Promise<LocalGateway> {
-  const child = spawn(tsx, [runner], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
+export async function startLocalGateway(options: LocalGatewayOptions = {}): Promise<LocalGateway> {
+  const child = spawn(tsx, [runner, JSON.stringify(options)], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
   child.stderr.on('data', (chunk: Buffer) => process.stderr.write(chunk));
   const started = await firstLine(child);
   const admin = async (command: object): Promise<unknown> => {

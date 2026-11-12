@@ -1,4 +1,4 @@
-import type { ServerStatus } from '../../shared/server';
+import type { ConnectedServer, ServerStatus } from '../../shared/server';
 import { Listeners } from '../helper/listeners';
 import type { Logger } from '../logging/logger';
 import type { RemoteFailureKind } from './remote-failure';
@@ -38,8 +38,8 @@ export class ServerStatusBoard implements ConnectionObserver {
     return this.current;
   }
 
-  connected(connectMs: number, serverVersion: string): void {
-    this.set({ kind: 'online', connectMs, serverVersion });
+  connected(server: ConnectedServer): void {
+    this.set({ kind: 'online', ...server });
   }
 
   failed(kind: RemoteFailureKind): void {
@@ -69,7 +69,7 @@ export class ServerStatusBoard implements ConnectionObserver {
       isCurrent: () => epoch === this.epoch,
       onExpire: (listener) => this.whenExpired(epoch, listener),
       checking: () => whenCurrent(() => this.checking()),
-      connected: (connectMs, serverVersion) => whenCurrent(() => this.connected(connectMs, serverVersion)),
+      connected: (server) => whenCurrent(() => this.connected(server)),
       failed: (kind) => whenCurrent(() => this.failed(kind)),
     };
   }

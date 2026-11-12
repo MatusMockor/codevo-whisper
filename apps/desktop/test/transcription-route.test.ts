@@ -9,7 +9,7 @@ function server(status: ServerStatus): PairedServerView {
   return { host: 'domáci-pc', endpoint: 'wss://domaci-pc:8443', deviceId: 'dev', deviceName: 'MacBook', pairedAt: '2026-11-01', serverFingerprint: 'a', deviceFingerprint: 'b', status, enabled: true };
 }
 
-const ONLINE = server({ kind: 'online', connectMs: 38, serverVersion: '0.2.4' });
+const ONLINE = server({ kind: 'online', connectMs: 38, serverVersion: '0.2.4', languages: { kind: 'outdated', minVersion: '0.3.0' } });
 
 function input(patch: Partial<RouteInput> = {}): RouteInput {
   return { status: READY, engineOrder: ['local'], server: null, localReady: true, modelName: 'Parakeet TDT', issue: null, ...patch };

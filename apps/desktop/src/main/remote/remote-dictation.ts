@@ -26,6 +26,7 @@ const DRAIN_POLL_MS = 40;
 const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = {
   busy: 'busy',
   'stt-unavailable': 'stt-unavailable',
+  'languages-unavailable': 'stt-unavailable',
   'too-long': 'too-long',
   'device-unknown': 'repair-needed',
   'server-key-changed': 'repair-needed',
@@ -123,11 +124,14 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private startMessage(sessionId: string): ClientMessage {
-    const start: ClientMessage = { type: 'start', sessionId, language: 'auto' };
-    if (this.deps.options.partials !== true) {
-      return start;
-    }
-    return { ...start, partials: true };
+    const { partials, languages } = this.deps.options;
+    return {
+      type: 'start',
+      sessionId,
+      language: 'auto',
+      ...(partials === true ? { partials: true } : {}),
+      ...(languages.mode === 'selected' ? { languages: languages.selected } : {}),
+    };
   }
 
   private pump(): void {
@@ -395,7 +399,14 @@ export class RemoteDictation implements EngineDictation {
   private fail(failure: RemoteFailure): void {
     this.settle();
     this.ready.scope.failed(failure.kind);
-    this.result.reject(new TranscriptionFailedError(REASON_BY_KIND[failure.kind] ?? 'protocol', this.textSoFar(), { cause: failure }));
+    this.result.reject(new TranscriptionFailedError(this.failureReason(failure.kind), this.textSoFar(), { cause: failure }));
+  }
+
+  private failureReason(kind: RemoteFailureKind): EngineFailureReason {
+    if (kind === 'languages-unavailable' && this.deps.options.languages.mode === 'selected') {
+      return 'languages-missing';
+    }
+    return REASON_BY_KIND[kind] ?? 'protocol';
   }
 
   private cancel(): void {

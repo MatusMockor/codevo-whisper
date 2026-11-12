@@ -11,7 +11,7 @@ const SERVER: PairedServerView = {
   pairedAt: '2026-11-09T10:00:00.000Z',
   serverFingerprint: 'AAAA',
   deviceFingerprint: 'BBBB',
-  status: { kind: 'online', connectMs: 12, serverVersion: '1.0.0' },
+  status: { kind: 'online', connectMs: 12, serverVersion: '1.0.0', languages: { kind: 'reported', languages: ['sk'], models: { transcription: 'Parakeet', conditioned: 'Canary', languageId: 'VoxLingua107' } } },
   enabled: true,
 };
 

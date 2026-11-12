@@ -15,7 +15,6 @@ import type { Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
 import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
-import { SERVER_VERSION } from '../version';
 import { respondToPairing, respondToSession } from './handshake-responder';
 import { closeSocket } from './close-socket';
 import type { DeviceAudioBudget } from './device-audio-budget';
@@ -37,6 +36,7 @@ export type ConnectionDeps = {
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
   capabilities: RefreshableCapabilities;
+  serverVersion: string;
 };
 
 const EMPTY = new Uint8Array(0);
@@ -138,7 +138,7 @@ export class GatewayConnection {
       ingestion: this.deps.ingestion,
       capabilities: this.deps.capabilities,
     });
-    channel.send({ type: 'ready', serverVersion: SERVER_VERSION });
+    channel.send({ type: 'ready', serverVersion: this.deps.serverVersion });
   }
 
   private async revocationOf(pending: PendingSession): Promise<ErrorCode | null> {

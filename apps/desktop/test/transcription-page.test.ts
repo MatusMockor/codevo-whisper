@@ -11,7 +11,7 @@ import type { ModelState } from '../src/shared/models';
 import type { PairedServerView, ServerStatus } from '../src/shared/server';
 import type { EngineId } from '../src/shared/settings';
 
-const ONLINE: ServerStatus = { kind: 'online', connectMs: 38, serverVersion: '0.4.1' };
+const ONLINE: ServerStatus = { kind: 'online', connectMs: 38, serverVersion: '0.4.1', languages: { kind: 'reported', languages: ['sk'], models: { transcription: 'Parakeet', conditioned: 'Canary', languageId: 'VoxLingua107' } } };
 
 function server(status: ServerStatus, enabled = true): PairedServerView {
   return { host: '127.0.0.1:8787', endpoint: 'ws://127.0.0.1:8787', deviceId: 'dev', deviceName: 'Mac', pairedAt: '2026-11-01', serverFingerprint: 'a', deviceFingerprint: 'b', status, enabled };
