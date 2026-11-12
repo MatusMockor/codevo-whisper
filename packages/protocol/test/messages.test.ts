@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ProtocolError } from '../src/errors';
+import { ERROR_CODES, ProtocolError } from '../src/errors';
+import { assertOnlyKeys, readChoice } from '../src/json-fields';
 import {
+  DICTATION_LANGUAGES,
   decodeClientMessage,
   decodeServerMessage,
   encodeClientMessage,
   encodeServerMessage,
+  MAX_DICTATION_LANGUAGES,
   MessageTag,
   type ClientMessage,
   type ServerMessage,
@@ -28,9 +31,12 @@ function expectBadMessage(work: () => unknown): void {
 describe('client messages', () => {
   const messages: ClientMessage[] = [
     { type: 'hello' },
+    { type: 'capabilities' },
     { type: 'start', sessionId: '3f1c2a9e-0b4e-4d8a-a651-f03c9d6e27a4', language: 'sk' },
     { type: 'start', sessionId: 'live', language: 'cs', partials: true },
     { type: 'start', sessionId: 'quiet', language: 'en', partials: false },
+    { type: 'start', sessionId: 'routed', language: 'auto', languages: ['sk', 'cs', 'en'] },
+    { type: 'start', sessionId: 'routed-live', language: 'auto', partials: true, languages: ['uk'] },
     { type: 'audio', pcm: new Uint8Array([1, 2, 3, 4]) },
     { type: 'finish' },
     { type: 'cancel' },
@@ -127,8 +133,15 @@ describe('client messages', () => {
 describe('server messages', () => {
   const messages: ServerMessage[] = [
     { type: 'ready', serverVersion: '0.0.0' },
+    { type: 'capabilities', languages: [] },
+    { type: 'capabilities', languages: [...DICTATION_LANGUAGES] },
     { type: 'partial', sessionId: 's1', segmentId: 0, revision: 2, text: 'ahoj sv' },
+    { type: 'partial', sessionId: 's1', segmentId: 0, revision: 3, text: 'ahoj sve', language: 'sk' },
+    { type: 'partial', sessionId: 's1', segmentId: 0, revision: 4, text: 'ahoj svet', language: null },
     { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj svet' },
+    { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj svete', language: 'cs' },
+    { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj', language: null },
+    { type: 'error', code: 'languages_unavailable', message: 'models missing', sessionId: 's1' },
     { type: 'final', sessionId: 's1', segmentId: 1, text: '' },
     { type: 'done', sessionId: 's1' },
     { type: 'flow', paused: true },
@@ -159,5 +172,112 @@ describe('server messages', () => {
     expectBadMessage(() => decodeServerMessage(json({ type: 'pair-result', status: 'rejected', deviceId: 'abc' })));
     expectBadMessage(() => decodeServerMessage(json({ type: 'start', sessionId: 'abc', language: 'sk' })));
     expectBadMessage(() => decodeServerMessage(new Uint8Array([MessageTag.Audio, 1, 2])));
+  });
+});
+
+describe('dictation languages', () => {
+  function start(fields: Record<string, unknown>): Uint8Array {
+    return json({ type: 'start', sessionId: 'abc', language: 'auto', ...fields });
+  }
+
+  it('offers the 25 languages shared by Parakeet, Canary and the language ID and caps a selection at 5', () => {
+    expect(DICTATION_LANGUAGES).toEqual([
+      'bg', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'hr', 'hu', 'it',
+      'lt', 'lv', 'mt', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'uk',
+    ]);
+    expect(MAX_DICTATION_LANGUAGES).toBe(5);
+  });
+
+  it('accepts every dictation language and a selection of 5', () => {
+    DICTATION_LANGUAGES.forEach((language) => {
+      expect(decodeClientMessage(start({ languages: [language] }))).toMatchObject({ languages: [language] });
+    });
+    expect(decodeClientMessage(start({ languages: ['sk', 'cs', 'en', 'de', 'pl'] }))).toMatchObject({
+      languages: ['sk', 'cs', 'en', 'de', 'pl'],
+    });
+  });
+
+  it('keeps the order of the selection', () => {
+    expect(decodeClientMessage(start({ languages: ['en', 'sk', 'cs'] }))).toMatchObject({ languages: ['en', 'sk', 'cs'] });
+  });
+
+  it('rejects languages together with a language other than auto', () => {
+    (['sk', 'en', 'cs'] as const).forEach((language) => {
+      expectBadMessage(() => decodeClientMessage(start({ language, languages: ['sk'] })));
+    });
+  });
+
+  it('rejects an empty selection, more than 5 languages and duplicates', () => {
+    expectBadMessage(() => decodeClientMessage(start({ languages: [] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: ['sk', 'cs', 'en', 'de', 'pl', 'uk'] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: ['sk', 'cs', 'sk'] })));
+  });
+
+  it('rejects unknown codes and values that are not a list of codes', () => {
+    expectBadMessage(() => decodeClientMessage(start({ languages: ['sk', 'ja'] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: ['auto'] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: ['SK'] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: 'sk' })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: null })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: [1] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: [['sk']] })));
+    expectBadMessage(() => decodeClientMessage(start({ languages: { 0: 'sk' } })));
+  });
+
+  it('rejects fields on the capabilities request', () => {
+    expectBadMessage(() => decodeClientMessage(json({ type: 'capabilities', languages: ['sk'] })));
+  });
+
+  it('rejects malformed capabilities replies', () => {
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities' })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: null })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['sk', 'sk'] })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['xx'] })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [...DICTATION_LANGUAGES, 'sk'] })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [], routes: 1 })));
+  });
+
+  it('rejects a detected language outside the dictation languages', () => {
+    ['auto', 'ja', '', 1, false, [], {}].forEach((language) => {
+      expectBadMessage(() => decodeServerMessage(json({ type: 'final', sessionId: 's1', segmentId: 0, text: 'x', language })));
+      expectBadMessage(() => decodeServerMessage(json({ type: 'partial', sessionId: 's1', segmentId: 0, revision: 0, text: 'x', language })));
+    });
+  });
+
+  it('adds languages_unavailable after the existing error codes so their close codes stay stable', () => {
+    expect(ERROR_CODES.indexOf('server_key_changed')).toBe(9);
+    expect(ERROR_CODES.at(-1)).toBe('languages_unavailable');
+  });
+});
+
+describe('compatibility with peers that predate dictation languages', () => {
+  const LEGACY_START_KEYS = ['type', 'sessionId', 'language', 'partials'];
+  const LEGACY_FINAL_KEYS = ['type', 'sessionId', 'segmentId', 'text'];
+  const LEGACY_CLIENT_TYPES = ['hello', 'start', 'finish', 'cancel', 'pair-request'] as const;
+  const LEGACY_SERVER_TYPES = ['ready', 'partial', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
+
+  function body(frame: Uint8Array): Record<string, unknown> {
+    return JSON.parse(new TextDecoder().decode(frame.subarray(1))) as Record<string, unknown>;
+  }
+
+  it('encodes a start without languages byte for byte as before', () => {
+    expect(new TextDecoder().decode(encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'sk', partials: true }).subarray(1))).toBe(
+      '{"type":"start","sessionId":"abc","language":"sk","partials":true}',
+    );
+    expect(new TextDecoder().decode(encodeServerMessage({ type: 'final', sessionId: 's1', segmentId: 0, text: 'x' }).subarray(1))).toBe(
+      '{"type":"final","sessionId":"s1","segmentId":0,"text":"x"}',
+    );
+  });
+
+  it('would be rejected by a legacy strict decoder, so new fields need the server version gate', () => {
+    const start = body(encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'auto', languages: ['sk'] }));
+    const final = body(encodeServerMessage({ type: 'final', sessionId: 's1', segmentId: 0, text: 'x', language: 'sk' }));
+
+    expect(() => assertOnlyKeys(body(encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'sk', partials: true })), LEGACY_START_KEYS)).not.toThrow();
+    expect(() => assertOnlyKeys(body(encodeServerMessage({ type: 'final', sessionId: 's1', segmentId: 0, text: 'x' })), LEGACY_FINAL_KEYS)).not.toThrow();
+    expectBadMessage(() => assertOnlyKeys(start, LEGACY_START_KEYS));
+    expectBadMessage(() => assertOnlyKeys(final, LEGACY_FINAL_KEYS));
+    expectBadMessage(() => readChoice(body(encodeClientMessage({ type: 'capabilities' })), 'type', LEGACY_CLIENT_TYPES));
+    expectBadMessage(() => readChoice(body(encodeServerMessage({ type: 'capabilities', languages: [] })), 'type', LEGACY_SERVER_TYPES));
   });
 });

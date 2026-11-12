@@ -4,6 +4,15 @@ export const LANGUAGES = ['sk', 'en', 'cs', 'auto'] as const;
 
 export type Language = (typeof LANGUAGES)[number];
 
+export const DICTATION_LANGUAGES = [
+  'bg', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'hr', 'hu', 'it',
+  'lt', 'lv', 'mt', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'uk',
+] as const;
+
+export type DictationLanguage = (typeof DICTATION_LANGUAGES)[number];
+
+export const MAX_DICTATION_LANGUAGES = 5;
+
 export enum MessageTag {
   Json = 0x01,
   Audio = 0x02,
@@ -17,7 +26,8 @@ export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'start'; sessionId: string; language: Language; partials?: boolean }
+  | { type: 'capabilities' }
+  | { type: 'start'; sessionId: string; language: Language; partials?: boolean; languages?: readonly DictationLanguage[] }
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }
   | { type: 'cancel' }
@@ -25,8 +35,9 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
-  | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string }
-  | { type: 'final'; sessionId: string; segmentId: number; text: string }
+  | { type: 'capabilities'; languages: readonly DictationLanguage[] }
+  | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string; language?: DictationLanguage | null }
+  | { type: 'final'; sessionId: string; segmentId: number; text: string; language?: DictationLanguage | null }
   | { type: 'done'; sessionId: string }
   | { type: 'flow'; paused: boolean }
   | { type: 'error'; code: ErrorCode; message: string; sessionId?: string }

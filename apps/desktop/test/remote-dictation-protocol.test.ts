@@ -165,6 +165,17 @@ describe('RemoteDictation protocol handling', () => {
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: 'prvý' });
   });
 
+  it('reports languages_unavailable as an unavailable STT engine', async () => {
+    const engine = await scripted((session, message) => {
+      if (message.type === 'start') {
+        session.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
+      }
+    });
+    const dictation = await startDictation(engine);
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable' });
+  });
+
   it('fails with a protocol error on an unexpected message', async () => {
     const engine = await scripted((session, message) => {
       if (message.type === 'start') {

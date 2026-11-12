@@ -2,7 +2,17 @@ import fc from 'fast-check';
 import { describe, it } from 'vitest';
 import { ProtocolError } from '../src/errors';
 import { decodeOpeningFrame } from '../src/framing';
-import { decodeClientMessage, decodeServerMessage, encodeClientMessage, MessageTag } from '../src/messages';
+import {
+  DICTATION_LANGUAGES,
+  decodeClientMessage,
+  decodeServerMessage,
+  encodeClientMessage,
+  encodeServerMessage,
+  MAX_DICTATION_LANGUAGES,
+  MessageTag,
+  type ClientMessage,
+  type ServerMessage,
+} from '../src/messages';
 import { parsePairingToken } from '../src/pairing';
 
 const RUNS = 10_000;
@@ -34,6 +44,54 @@ const startWithAnyPartials = fc
   .jsonValue()
   .map((partials) => jsonFrame(JSON.stringify({ type: 'start', sessionId: 'fuzz', language: 'sk', partials })));
 
+const startWithAnyLanguages = fc
+  .tuple(fc.constantFrom('sk', 'en', 'cs', 'auto'), fc.jsonValue())
+  .map(([language, languages]) => jsonFrame(JSON.stringify({ type: 'start', sessionId: 'fuzz', language, languages })));
+
+const languageCandidates = fc.array(fc.oneof(fc.constantFrom(...DICTATION_LANGUAGES), fc.string({ maxLength: 3 })), { maxLength: 8 });
+
+function isValidSelection(languages: readonly string[]): boolean {
+  return (
+    languages.length >= 1 &&
+    languages.length <= MAX_DICTATION_LANGUAGES &&
+    new Set(languages).size === languages.length &&
+    languages.every((language) => (DICTATION_LANGUAGES as readonly string[]).includes(language))
+  );
+}
+
+function decodesStart(languages: readonly string[]): boolean {
+  try {
+    decodeClientMessage(jsonFrame(JSON.stringify({ type: 'start', sessionId: 'fuzz', language: 'auto', languages })));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const serverWithAnyLanguageFields = fc
+  .tuple(fc.constantFrom('capabilities', 'final', 'partial'), fc.jsonValue(), fc.jsonValue())
+  .map(([type, language, languages]) =>
+    jsonFrame(JSON.stringify({ type, sessionId: 'fuzz', segmentId: 0, revision: 0, text: 'x', language, languages })),
+  );
+
+const selections = fc.uniqueArray(fc.constantFrom(...DICTATION_LANGUAGES), { minLength: 1, maxLength: MAX_DICTATION_LANGUAGES });
+const detectedLanguages = fc.option(fc.constantFrom(...DICTATION_LANGUAGES), { nil: null });
+
+const routedStarts = fc
+  .tuple(selections, fc.option(fc.boolean(), { nil: undefined }))
+  .map(([languages, partials]): ClientMessage => {
+    if (partials === undefined) {
+      return { type: 'start', sessionId: 'fuzz', language: 'auto', languages };
+    }
+    return { type: 'start', sessionId: 'fuzz', language: 'auto', partials, languages };
+  });
+
+const languageReplies = fc.oneof(
+  fc.uniqueArray(fc.constantFrom(...DICTATION_LANGUAGES)).map((languages): ServerMessage => ({ type: 'capabilities', languages })),
+  detectedLanguages.map((language): ServerMessage => ({ type: 'final', sessionId: 'fuzz', segmentId: 0, text: 'x', language })),
+  detectedLanguages.map((language): ServerMessage => ({ type: 'partial', sessionId: 'fuzz', segmentId: 0, revision: 1, text: 'x', language })),
+);
+
 const decoders = [
   ['decodeOpeningFrame', decodeOpeningFrame],
   ['decodeClientMessage', decodeClientMessage],
@@ -51,6 +109,35 @@ describe('parser fuzzing', () => {
 
   it('decodeClientMessage throws only ProtocolError for any partials value on start', () => {
     fc.assert(fc.property(startWithAnyPartials, onlyProtocolErrors(decodeClientMessage)), { numRuns: RUNS });
+  });
+
+  it('decodeClientMessage throws only ProtocolError for any languages value on start', () => {
+    fc.assert(fc.property(startWithAnyLanguages, onlyProtocolErrors(decodeClientMessage)), { numRuns: RUNS });
+  });
+
+  it('accepts a languages list exactly when it is 1 to 5 unique dictation languages', () => {
+    fc.assert(
+      fc.property(languageCandidates, (languages) => decodesStart(languages) === isValidSelection(languages)),
+      { numRuns: RUNS },
+    );
+  });
+
+  it('decodeServerMessage throws only ProtocolError for any language fields', () => {
+    fc.assert(fc.property(serverWithAnyLanguageFields, onlyProtocolErrors(decodeServerMessage)), { numRuns: RUNS });
+  });
+
+  it('round-trips any routed start', () => {
+    fc.assert(
+      fc.property(routedStarts, (message) => JSON.stringify(decodeClientMessage(encodeClientMessage(message))) === JSON.stringify(message)),
+      { numRuns: 1000 },
+    );
+  });
+
+  it('round-trips any capabilities reply and detected language', () => {
+    fc.assert(
+      fc.property(languageReplies, (message) => JSON.stringify(decodeServerMessage(encodeServerMessage(message))) === JSON.stringify(message)),
+      { numRuns: 1000 },
+    );
   });
 
   it('round-trips start with any boolean partials flag', () => {
