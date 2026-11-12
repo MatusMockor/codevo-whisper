@@ -1,7 +1,17 @@
-import type { Language } from '@codevo-whisper/protocol';
+import type { JobKind } from '@codevo-whisper/audio';
+import type { DictationLanguage, Language } from '@codevo-whisper/protocol';
+
+export type SttRequest = {
+  pcm: Uint8Array;
+  language: Language;
+  languages: readonly DictationLanguage[] | null;
+  kind: JobKind;
+};
+
+export type SttTranscript = { text: string; language: DictationLanguage | null; route: string | null };
 
 export interface SttClient {
-  transcribe(pcm: Uint8Array, language: Language, signal: AbortSignal): Promise<string>;
+  transcribe(request: SttRequest, signal: AbortSignal): Promise<SttTranscript>;
 }
 
 export type SttHealth = 'UP' | 'DOWN' | 'BUSY';

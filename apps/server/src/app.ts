@@ -10,11 +10,12 @@ import { ServerKeyHolder } from './keys/server-key-holder';
 import { ServerKeyStore } from './keys/server-key-store';
 import { silentLogger, type Logger } from './logging/logger';
 import { WindowPairingService } from './pairing/window-pairing-service';
+import { refreshEvery, SttCapabilityCache } from './stt/capability-cache';
 import { HttpSttClient } from './stt/http-stt-client';
 import type { GatewayDispatcher } from './stt/gateway-context';
 import { SttSegmentTranscriber } from './stt/stt-segment-transcriber';
 import { DeviceGuardedTranscriber } from './stt/device-guarded-transcriber';
-import { ENGINE_GUARD_LIMITS } from './gateway/limits';
+import { CAPABILITY_REFRESH_MS, ENGINE_GUARD_LIMITS } from './gateway/limits';
 
 export type ServerOptions = {
   clock?: () => number;
@@ -40,6 +41,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const stt = new HttpSttClient(config.sttUrl);
   const transcriber = new DeviceGuardedTranscriber(new SttSegmentTranscriber(stt), clock, ENGINE_GUARD_LIMITS);
   const dispatcher: GatewayDispatcher = new TranscriptionDispatcher({ transcriber, clock: { now: clock } });
+  const capabilities = new SttCapabilityCache(stt);
   const pairing = new WindowPairingService({ serverKey: () => keys.current(), endpoint: config.publicEndpoint, devices, clock });
   const gateway = await startGateway({
     config,
@@ -47,6 +49,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     devices,
     dispatcher,
     pairing,
+    capabilities,
     clock,
     logger: options.logger ?? silentLogger,
     ...(options.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
@@ -57,6 +60,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     await gateway.close();
     throw error;
   });
+  const stopRefreshing = refreshEvery(capabilities, CAPABILITY_REFRESH_MS);
   return {
     config,
     gateway,
@@ -67,6 +71,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     dispatcher,
     pairing,
     close: async () => {
+      stopRefreshing();
       pairing.close();
       await admin.close();
       await gateway.close();

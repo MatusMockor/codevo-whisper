@@ -8,8 +8,11 @@ import {
   decodeServerMessage,
   encodeClientMessage,
   encodeServerMessage,
+  isModelName,
   MAX_DICTATION_LANGUAGES,
+  MAX_MODEL_NAME_CHARS,
   MessageTag,
+  UNKNOWN_MODELS,
   type ClientMessage,
   type ServerMessage,
 } from '../src/messages';
@@ -69,7 +72,9 @@ function decodesStart(languages: readonly string[]): boolean {
 }
 
 const serverWithAnyLanguageFields = fc.oneof(
-  fc.jsonValue().map((languages) => jsonFrame(JSON.stringify({ type: 'capabilities', languages }))),
+  fc.jsonValue().map((languages) => jsonFrame(JSON.stringify({ type: 'capabilities', languages, models: UNKNOWN_MODELS }))),
+  fc.jsonValue().map((models) => jsonFrame(JSON.stringify({ type: 'capabilities', languages: [], models }))),
+  fc.jsonValue().map((transcription) => jsonFrame(JSON.stringify({ type: 'capabilities', languages: [], models: { ...UNKNOWN_MODELS, transcription } }))),
   fc.jsonValue().map((language) => jsonFrame(JSON.stringify({ type: 'final', sessionId: 'fuzz', segmentId: 0, text: 'x', language }))),
   fc.jsonValue().map((language) => jsonFrame(JSON.stringify({ type: 'partial', sessionId: 'fuzz', segmentId: 0, revision: 0, text: 'x', language }))),
 );
@@ -86,8 +91,27 @@ const routedStarts = fc
     return { type: 'start', sessionId: 'fuzz', language: 'auto', partials, languages };
   });
 
+const modelNames = fc.option(fc.string({ minLength: 1, maxLength: MAX_MODEL_NAME_CHARS }).filter(isModelName), { nil: null });
+const serverModels = fc.record({ transcription: modelNames, conditioned: modelNames, languageId: modelNames });
+const modelNameCandidates = fc.oneof(fc.string({ maxLength: MAX_MODEL_NAME_CHARS + 2 }), fc.string({ unit: 'grapheme', maxLength: MAX_MODEL_NAME_CHARS + 2 }));
+
+function decodesModelName(name: string): boolean {
+  try {
+    decodeServerMessage(jsonFrame(JSON.stringify({ type: 'capabilities', languages: [], models: { ...UNKNOWN_MODELS, conditioned: name } })));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isValidModelName(name: string): boolean {
+  return name.trim().length > 0 && [...name].length <= MAX_MODEL_NAME_CHARS && !/\p{Cc}/u.test(name);
+}
+
 const languageReplies = fc.oneof(
-  fc.uniqueArray(fc.constantFrom(...DICTATION_LANGUAGES)).map((languages): ServerMessage => ({ type: 'capabilities', languages })),
+  fc
+    .tuple(fc.uniqueArray(fc.constantFrom(...DICTATION_LANGUAGES)), serverModels)
+    .map(([languages, models]): ServerMessage => ({ type: 'capabilities', languages, models })),
   detectedLanguages.map((language): ServerMessage => ({ type: 'final', sessionId: 'fuzz', segmentId: 0, text: 'x', language })),
   detectedLanguages.map((language): ServerMessage => ({ type: 'partial', sessionId: 'fuzz', segmentId: 0, revision: 1, text: 'x', language })),
 );
@@ -124,6 +148,10 @@ describe('parser fuzzing', () => {
 
   it('decodeServerMessage throws only ProtocolError for any language fields', () => {
     fc.assert(fc.property(serverWithAnyLanguageFields, onlyProtocolErrors(decodeServerMessage)), { numRuns: RUNS });
+  });
+
+  it('accepts a model name exactly when it is a non-blank printable string of at most 64 characters', () => {
+    fc.assert(fc.property(modelNameCandidates, (name) => decodesModelName(name) === isValidModelName(name)), { numRuns: RUNS });
   });
 
   it('round-trips any routed start', () => {

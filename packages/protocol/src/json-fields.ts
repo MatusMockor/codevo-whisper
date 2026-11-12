@@ -30,21 +30,48 @@ export function assertOnlyKeys(object: JsonObject, allowed: readonly string[]): 
   }
 }
 
-export function readString(object: JsonObject, key: string, rule: StringRule): string {
-  const value = object[key];
+function stringProblem(value: unknown, rule: StringRule): string | null {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw badMessage(`${key} must be a non-empty string`);
+    return 'must be a non-empty string';
   }
   if ([...value].length > rule.maxChars) {
-    throw badMessage(`${key} is longer than ${rule.maxChars} characters`);
+    return `is longer than ${rule.maxChars} characters`;
   }
   if (rule.pattern !== undefined && !rule.pattern.test(value)) {
-    throw badMessage(`${key} has an invalid format`);
+    return 'has an invalid format';
   }
   if (rule.printable === true && CONTROL_CHARACTERS.test(value)) {
-    throw badMessage(`${key} contains control characters`);
+    return 'contains control characters';
   }
-  return value;
+  return null;
+}
+
+export function matchesRule(value: unknown, rule: StringRule): value is string {
+  return stringProblem(value, rule) === null;
+}
+
+export function readString(object: JsonObject, key: string, rule: StringRule): string {
+  const value = object[key];
+  const problem = stringProblem(value, rule);
+  if (problem !== null) {
+    throw badMessage(`${key} ${problem}`);
+  }
+  return value as string;
+}
+
+export function readNullableString(object: JsonObject, key: string, rule: StringRule): string | null {
+  if (object[key] === null) {
+    return null;
+  }
+  return readString(object, key, rule);
+}
+
+export function readObject(object: JsonObject, key: string): JsonObject {
+  const value = object[key];
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw badMessage(`${key} must be an object`);
+  }
+  return value as JsonObject;
 }
 
 export function readText(object: JsonObject, key: string, maxChars: number): string {

@@ -1,4 +1,4 @@
-export type LogFields = Record<string, string | number | boolean | null>;
+export type LogFields = Record<string, string | number | boolean | null | Readonly<Record<string, number>>>;
 
 export interface Logger {
   info(event: string, fields?: LogFields): void;

@@ -15,8 +15,40 @@ fail() {
   exit 1
 }
 
+model_source() {
+  local explicit="$1" copy="$2" desktop="$3"
+  if [[ -n "$explicit" ]]; then
+    echo "$explicit"
+    return
+  fi
+  if [[ -f "$copy" ]]; then
+    echo "$copy"
+    return
+  fi
+  echo "$desktop"
+}
+
+require_explicit_model() {
+  local variable="$1" path="$2"
+  [[ -z "$path" || -f "$path" ]] || fail "Súbor modelu zadaný v $variable neexistuje: $path"
+}
+
+copy_model() {
+  local from="$1" to="$2"
+  if [[ "$from" -ef "$to" || ! -f "$from" ]]; then
+    return
+  fi
+  mkdir -p "$(dirname "$to")"
+  cp "$from" "$to.tmp"
+  chmod 644 "$to.tmp"
+  mv "$to.tmp" "$to"
+}
+
 node="$(command -v node)" || fail "node not found on PATH; install Node.js 24 or newer"
 "$node" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' || fail "Node.js 24 or newer is required, found $("$node" -v)"
+
+explicit_conditioned="${STT_CONDITIONED_MODEL_PATH:-}"
+explicit_lid="${STT_LID_MODEL_PATH:-}"
 
 if [[ -f "$env_file" ]]; then
   while IFS='=' read -r key value; do
@@ -26,6 +58,11 @@ fi
 
 worker_source="${STT_WORKER_BINARY:-/opt/Codevo Whisper/resources/bin/x64/cw-stt-worker-vulkan}"
 worker="$app_dir/bin/cw-stt-worker"
+desktop_models="$HOME/.config/Codevo Whisper/models"
+conditioned_model="$app_dir/models/canary-1b-v2-Q8_0.gguf"
+conditioned_source="$(model_source "$explicit_conditioned" "$conditioned_model" "$desktop_models/canary-1b-v2-q8.gguf")"
+lid_model="$app_dir/models/lang-id-voxlingua107-ecapa-Q8_0.gguf"
+lid_source="$(model_source "$explicit_lid" "$lid_model" "$desktop_models/langid-voxlingua107-q8.gguf")"
 
 settings=(
   "STT_HOST=127.0.0.1"
@@ -34,7 +71,9 @@ settings=(
   "STT_THREADS=${STT_THREADS:-4}"
   "STT_ENGINE=worker"
   "STT_WORKER_BINARY=$worker"
-  "STT_MODEL_PATH=${STT_MODEL_PATH:-$HOME/.config/Codevo Whisper/models/parakeet-ultra-q8.gguf}"
+  "STT_MODEL_PATH=${STT_MODEL_PATH:-$desktop_models/parakeet-ultra-q8.gguf}"
+  "STT_CONDITIONED_MODEL_PATH=$conditioned_model"
+  "STT_LID_MODEL_PATH=$lid_model"
   "CW_BIND=${CW_BIND:-127.0.0.1}"
   "CW_PORT=${CW_PORT:-8787}"
   "CW_PUBLIC_ENDPOINT=${CW_PUBLIC_ENDPOINT:-ws://127.0.0.1:8787}"
@@ -48,6 +87,8 @@ done
 
 [[ -x "$worker_source" ]] || fail "STT worker not found: $worker_source. Install the Codevo Whisper desktop app or set STT_WORKER_BINARY."
 [[ -f "$STT_MODEL_PATH" ]] || fail "model not found: $STT_MODEL_PATH. Download Parakeet Ultra in the desktop app or set STT_MODEL_PATH."
+require_explicit_model STT_CONDITIONED_MODEL_PATH "$explicit_conditioned"
+require_explicit_model STT_LID_MODEL_PATH "$explicit_lid"
 
 pnpm --dir "$root" --filter @codevo-whisper/server --filter @codevo-whisper/stt build
 
@@ -62,6 +103,8 @@ if [[ ! "$worker_source" -ef "$worker" ]]; then
   cp "$worker_source" "$worker"
   chmod 755 "$worker"
 fi
+copy_model "$conditioned_source" "$conditioned_model"
+copy_model "$lid_source" "$lid_model"
 
 mkdir -p -m 700 "$state_dir"
 chmod 700 "$state_dir"
@@ -136,4 +179,7 @@ chmod 755 "$wrapper"
 systemctl --user daemon-reload
 systemctl --user enable codevo-whisper-stt.service codevo-whisper-gateway.service
 systemctl --user restart codevo-whisper-stt.service codevo-whisper-gateway.service
+if [[ ! -f "$conditioned_model" || ! -f "$lid_model" ]]; then
+  echo "Výber jazykov nebude dostupný, stiahnite Canary 1B v2 a rozpoznávanie jazyka v aplikácii" >&2
+fi
 echo "installed; pair a device with: $wrapper pair"

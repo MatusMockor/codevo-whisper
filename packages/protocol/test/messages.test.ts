@@ -8,7 +8,9 @@ import {
   encodeClientMessage,
   encodeServerMessage,
   MAX_DICTATION_LANGUAGES,
+  MAX_MODEL_NAME_CHARS,
   MessageTag,
+  UNKNOWN_MODELS,
   type ClientMessage,
   type ServerMessage,
 } from '../src/messages';
@@ -133,8 +135,13 @@ describe('client messages', () => {
 describe('server messages', () => {
   const messages: ServerMessage[] = [
     { type: 'ready', serverVersion: '0.0.0' },
-    { type: 'capabilities', languages: [] },
-    { type: 'capabilities', languages: [...DICTATION_LANGUAGES] },
+    { type: 'capabilities', languages: [], models: UNKNOWN_MODELS },
+    {
+      type: 'capabilities',
+      languages: [...DICTATION_LANGUAGES],
+      models: { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' },
+    },
+    { type: 'capabilities', languages: [], models: { transcription: 'parakeet-ultra-F16', conditioned: null, languageId: null } },
     { type: 'partial', sessionId: 's1', segmentId: 0, revision: 2, text: 'ahoj sv' },
     { type: 'partial', sessionId: 's1', segmentId: 0, revision: 3, text: 'ahoj sve', language: 'sk' },
     { type: 'partial', sessionId: 's1', segmentId: 0, revision: 4, text: 'ahoj svet', language: null },
@@ -229,12 +236,37 @@ describe('dictation languages', () => {
   });
 
   it('rejects malformed capabilities replies', () => {
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities' })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: null })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['sk', 'sk'] })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['xx'] })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [...DICTATION_LANGUAGES, 'sk'] })));
-    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [], routes: 1 })));
+    const models = UNKNOWN_MODELS;
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', models })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: null, models })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['sk', 'sk'], models })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: ['xx'], models })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [...DICTATION_LANGUAGES, 'sk'], models })));
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [], models, routes: 1 })));
+  });
+
+  it('requires the models a server runs in the capabilities reply', () => {
+    expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [] })));
+    [null, 'Parakeet', [], ['Parakeet'], 1].forEach((models) => {
+      expectBadMessage(() => decodeServerMessage(json({ type: 'capabilities', languages: [], models })));
+    });
+  });
+
+  it('rejects models with missing or unknown roles', () => {
+    const capabilities = (models: unknown): Uint8Array => json({ type: 'capabilities', languages: [], models });
+    expectBadMessage(() => decodeServerMessage(capabilities({ transcription: null, conditioned: null })));
+    expectBadMessage(() => decodeServerMessage(capabilities({ ...UNKNOWN_MODELS, diarizer: null })));
+    expectBadMessage(() => decodeServerMessage(capabilities({})));
+  });
+
+  it('accepts a model name up to the limit and rejects empty, longer, control and non-string names', () => {
+    const capabilities = (transcription: unknown): Uint8Array => json({ type: 'capabilities', languages: [], models: { ...UNKNOWN_MODELS, transcription } });
+    const longest = 'm'.repeat(MAX_MODEL_NAME_CHARS);
+
+    expect(decodeServerMessage(capabilities(longest))).toEqual({ type: 'capabilities', languages: [], models: { ...UNKNOWN_MODELS, transcription: longest } });
+    ['', '   ', 'm'.repeat(MAX_MODEL_NAME_CHARS + 1), 'Parakeet\n', 'Canary\u0000', 1, false, {}, ['Parakeet']].forEach((name) => {
+      expectBadMessage(() => decodeServerMessage(capabilities(name)));
+    });
   });
 
   it('rejects a detected language outside the dictation languages', () => {
@@ -278,6 +310,6 @@ describe('compatibility with peers that predate dictation languages', () => {
     expectBadMessage(() => assertOnlyKeys(start, LEGACY_START_KEYS));
     expectBadMessage(() => assertOnlyKeys(final, LEGACY_FINAL_KEYS));
     expectBadMessage(() => readChoice(body(encodeClientMessage({ type: 'capabilities' })), 'type', LEGACY_CLIENT_TYPES));
-    expectBadMessage(() => readChoice(body(encodeServerMessage({ type: 'capabilities', languages: [] })), 'type', LEGACY_SERVER_TYPES));
+    expectBadMessage(() => readChoice(body(encodeServerMessage({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS })), 'type', LEGACY_SERVER_TYPES));
   });
 });

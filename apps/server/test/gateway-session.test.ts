@@ -1,4 +1,4 @@
-import { beginSession, generateKeyPair, type ServerMessage } from '@codevo-whisper/protocol';
+import { beginSession, generateKeyPair, UNKNOWN_MODELS, type ServerMessage } from '@codevo-whisper/protocol';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { connect, type Socket } from 'node:net';
@@ -80,7 +80,7 @@ describe('gateway sessions', () => {
     const device = await server.addDevice();
     const session = await connectSession(server.url, device, server.serverKey.publicKey);
 
-    expect(manifest.version).toBe('0.2.0');
+    expect(manifest.version).toBe('0.3.0');
     expect(await session.next()).toEqual({ type: 'ready', serverVersion: manifest.version });
   });
 
@@ -99,12 +99,12 @@ describe('gateway sessions', () => {
     expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
   });
 
-  it('answers a capabilities request before start with no dictation languages', async () => {
+  it('answers a capabilities request before start with no dictation languages from an stt without routing', async () => {
     const server = await start();
     const session = await readySession(server);
     session.send({ type: 'capabilities' });
 
-    expect(await session.next()).toEqual({ type: 'capabilities', languages: [] });
+    expect(await session.next()).toEqual({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS });
   });
 
   it('rejects a capabilities request during a dictation', async () => {
@@ -114,23 +114,6 @@ describe('gateway sessions', () => {
     session.send({ type: 'capabilities' });
 
     await expectBadMessageClose(session);
-  });
-
-  it('refuses a start with dictation languages and keeps the connection for an automatic dictation', async () => {
-    const server = await start();
-    const session = await readySession(server);
-    session.send({ type: 'start', sessionId: 's1', language: 'auto', languages: ['sk', 'cs'] });
-
-    expect(await session.next()).toEqual({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: 's1' });
-
-    session.send({ type: 'start', sessionId: 's2', language: 'auto' });
-    sendAudio(session, pcmSeconds(1));
-    session.send({ type: 'finish' });
-    expect(await collectUntilDone(session)).toEqual([
-      { type: 'final', sessionId: 's2', segmentId: 0, text: 'ahoj svet' },
-      { type: 'done', sessionId: 's2' },
-    ]);
-    expect(fake.requests).toEqual([{ language: 'auto', bytes: 32_000 }]);
   });
 
   it('cuts continuous speech into engine calls of at most 25 s', async () => {

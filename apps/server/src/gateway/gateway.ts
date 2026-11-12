@@ -6,6 +6,7 @@ import type { ServerConfig } from '../config';
 import type { DeviceRepository } from '../devices/device-repository';
 import { silentLogger, type Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
+import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
 import { GatewayConnection } from './connection';
 import { ClientAdmission } from './client-admission';
@@ -24,6 +25,7 @@ export type GatewayDeps = {
   devices: DeviceRepository;
   dispatcher: GatewayDispatcher;
   pairing: PairingService;
+  capabilities: RefreshableCapabilities;
   clock?: () => number;
   handshakeTimeoutMs?: number;
   logger?: Logger;
@@ -73,6 +75,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     devices: deps.devices,
     dispatcher: deps.dispatcher,
     pairing: deps.pairing,
+    capabilities: deps.capabilities,
     sessions,
     clock,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),
