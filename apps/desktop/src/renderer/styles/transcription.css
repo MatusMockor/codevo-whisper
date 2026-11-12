@@ -293,8 +293,10 @@
   color: var(--ink-2);
 }
 
-.server-card > * + * {
-  margin-top: 14px;
+.server-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .srv-panel {
