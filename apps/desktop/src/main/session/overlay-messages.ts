@@ -3,7 +3,7 @@ import type { CopyLastOutcome, InsertionOutcome, PasteLastOutcome } from '../ins
 import type { AiFailure } from '../../shared/ai';
 import { engineRemedy, type EngineConditions, type EngineProblem, type EngineRemedy } from '../../shared/engine-routing';
 import type { OverlayAction, OverlayError, OverlayState } from '../../shared/overlay-contract';
-import type { Language } from '../../shared/settings';
+import { primaryLanguage, type LanguageSelection } from '../../shared/dictation-languages';
 
 type ErrorState = OverlayError;
 type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
@@ -12,7 +12,8 @@ export const MESSAGES = Object.freeze({
   noModel: 'Lokálny model chýba',
   brokenModel: 'Model chýba alebo je poškodený',
   binaryMissing: 'Chýba program na prepis. Nainštalujte Codevo Whisper znova.',
-  languageRequired: 'Zvolený model potrebuje nastavený jazyk',
+  languagesRequired: 'Zvolený model potrebuje zvolené jazyky.',
+  languagesPackMissing: 'Pre zvolené jazyky chýbajú modely. Stiahnite ich v Nastaveniach.',
   engineUnavailable: 'Prepis teraz nie je dostupný',
   engineSwitchFailed: 'Prepis sa nepodarilo prepnúť. Skontrolujte stránku Prepis.',
   microphone: 'Mikrofón sa nepodarilo zapnúť',
@@ -29,6 +30,7 @@ export const MESSAGES = Object.freeze({
   serverBusy: 'Server je zaneprázdnený, skúste to o chvíľu',
   serverStorage: 'Párovanie servera sa nedá bezpečne uložiť ani načítať',
   serverDisconnected: 'Server je odpojený, diktovanie na ňom sa zastavilo',
+  serverLanguagesOutdated: 'Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.',
   serverSttUnavailable: 'Prepis na serveri teraz nefunguje',
   serverTooLong: 'Diktovanie je pre server príliš dlhé',
   serverConnectionLost: 'Spojenie so serverom sa prerušilo',
@@ -95,7 +97,8 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'no-model': remedyError(MESSAGES.noModel, 'no-model'),
   'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
   'model-broken': () => fixError(MESSAGES.brokenModel, 'download-model'),
-  'language-required': () => settingsError(MESSAGES.languageRequired),
+  'languages-required': () => settingsError(MESSAGES.languagesRequired),
+  'languages-pack-missing': () => settingsError(MESSAGES.languagesPackMissing),
   'binary-missing': () => errorState(MESSAGES.binaryMissing),
   'server-not-paired': remedyError(MESSAGES.serverNotPaired, 'server-not-paired'),
   'server-offline': remedyError(MESSAGES.serverOffline, 'server-offline'),
@@ -103,6 +106,7 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'server-busy': () => errorState(MESSAGES.serverBusy),
   'server-storage': () => errorState(MESSAGES.serverStorage),
   'server-disconnected': disconnectedError,
+  'server-languages-outdated': () => serverError(MESSAGES.serverLanguagesOutdated),
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
@@ -189,6 +193,14 @@ export function copyLastState(outcome: CopyLastOutcome): OverlayState {
   return COPY_LAST_STATES[outcome];
 }
 
-export function languageChip(language: Language): string {
-  return language.toUpperCase();
+export function languageChip(selection: LanguageSelection): string {
+  const primary = primaryLanguage(selection);
+  if (selection.mode === 'auto' || primary === null) {
+    return 'AUTO';
+  }
+  const others = selection.selected.length - 1;
+  if (others === 0) {
+    return primary.toUpperCase();
+  }
+  return `${primary.toUpperCase()} +${others}`;
 }

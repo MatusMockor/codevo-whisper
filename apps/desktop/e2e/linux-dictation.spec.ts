@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { mainWindow } from './app-windows';
 import { createUserDataDir, launchApp, ONBOARDED, FAKE_MEDIA_ARGS } from './launch-app';
 
@@ -12,6 +13,8 @@ test('Linux catalog model transcribes file-backed microphone capture through the
   const app = await launchApp(dir, [...FAKE_MEDIA_ARGS, `--use-file-for-fake-audio-capture=${resolve(process.env['CW_NATIVE_AUDIO']!)}`]);
   try {
     const page = await mainWindow(app);
+    await expect.poll(async () => JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8')) as Record<string, unknown>).toMatchObject({ languages: { mode: 'auto', selected: ['en'] } });
+    expect(JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8'))).not.toHaveProperty('language');
     await page.evaluate(() => window.codevo.downloadModel('parakeet-ultra-q4'));
     await expect.poll(() => page.evaluate(() => window.codevo.getModelStates()), { timeout: 480_000, intervals: [500, 1000, 2000] }).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'parakeet-ultra-q4', status: 'ready' })]));
     await page.evaluate(() => window.codevo.activateModel('parakeet-ultra-q4'));

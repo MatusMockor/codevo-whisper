@@ -1,4 +1,5 @@
 import { CODEX_EFFORTS, isAiBaseUrl, isAiModel, isCodexModel } from '../../shared/ai';
+import { isDictationLanguage, MAX_SELECTED_LANGUAGES } from '../../shared/dictation-languages';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords, isEngineOrder, type Settings } from '../../shared/settings';
 
@@ -46,6 +47,20 @@ function isMicrophone(value: unknown): value is Settings['microphone'] {
   return isNullableText(value['deviceId']) && isNullableText(value['label']);
 }
 
+function isSelectedLanguages(value: unknown): value is Settings['languages']['selected'] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SELECTED_LANGUAGES) {
+    return false;
+  }
+  return value.every(isDictationLanguage) && new Set(value).size === value.length;
+}
+
+function isLanguages(value: unknown): value is Settings['languages'] {
+  if (!isPlainRecord(value) || !hasExactKeys(value, ['mode', 'selected'])) {
+    return false;
+  }
+  return oneOf(['auto', 'selected'])(value['mode']) && isSelectedLanguages(value['selected']);
+}
+
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   muteWhileRecording: isBoolean,
   audioFeedback: isBoolean,
@@ -56,7 +71,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   appendTrailingSpace: isBoolean,
   hotkey: isHotkey,
   mode: oneOf(['hold', 'toggle', 'smart']),
-  language: oneOf(['sk', 'en', 'cs', 'auto']),
+  languages: isLanguages,
   microphone: isMicrophone,
   engineOrder: isEngineOrder,
   serverEnabled: isBoolean,

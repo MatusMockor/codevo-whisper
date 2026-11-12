@@ -123,7 +123,7 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private startMessage(sessionId: string): ClientMessage {
-    const start: ClientMessage = { type: 'start', sessionId, language: this.deps.options.language };
+    const start: ClientMessage = { type: 'start', sessionId, language: 'auto' };
     if (this.deps.options.partials !== true) {
       return start;
     }

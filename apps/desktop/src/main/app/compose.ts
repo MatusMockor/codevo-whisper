@@ -47,7 +47,7 @@ import { createMeetings, type Meetings } from './meeting-wiring';
 import { createInputHelper } from './input-helper-factory';
 import { createModels } from './model-wiring';
 import { createServerServices } from './server-wiring';
-import { createSettingsServices } from './settings-wiring';
+import { createSettingsServices, migrateLanguageSettings } from './settings-wiring';
 import { QuitGate, type QuitEvent } from './quit-gate';
 import { startInput } from './start-input';
 import { isE2eMode } from './test-mode';
@@ -133,6 +133,7 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
+    await migrateLanguageSettings({ settings, models: models.manager, logger });
     const aiServices = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
     ai = aiServices;
     meetings = createMeetings({ captureWindow, capture, models: models.manager, diarizer: models.diarizer, settings, window: mainWindow, provider: () => aiServices.provider(), logger });

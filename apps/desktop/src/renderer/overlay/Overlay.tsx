@@ -88,7 +88,7 @@ function Recording({ state, levels }: { state: RecordingState; levels: readonly 
           </span>
           <Waveform levels={levels} />
           <span className="ov-time">{formatElapsed(state.elapsedMs)}</span>
-          <span className="chip">{state.language}</span>
+          <span className="chip">{state.languageChip}</span>
           <span className="ov-lock" title="Prepis beží v tomto Macu">
             <LockIcon />
           </span>

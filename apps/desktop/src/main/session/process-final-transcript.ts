@@ -1,12 +1,10 @@
 import type { Settings } from '../../shared/settings';
 import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
+import { fillerWords } from './filler-words';
 
-export type TranscriptSettings = Readonly<Pick<Settings, 'language' | 'customWords' | 'removeFillerWords' | 'appendTrailingSpace'>>;
+export type TranscriptSettings = Readonly<Pick<Settings, 'languages' | 'customWords' | 'removeFillerWords' | 'appendTrailingSpace'>>;
 
 const FILLERS = /(?<![\p{L}\p{M}\p{N}'’_./:@\\-])(ehm|eee|hmm|um|uh)(?![\p{L}\p{M}\p{N}'’_/@\\-]|\.[\p{L}\p{M}\p{N}])[,;:.!?…]*/giu;
-const FILLER_WORDS: Readonly<Record<Settings['language'], readonly string[]>> = {
-  sk: ['ehm', 'eee', 'hmm'], cs: ['ehm', 'eee', 'hmm'], en: ['um', 'uh', 'hmm'], auto: ['ehm', 'eee', 'hmm', 'um', 'uh'],
-};
 const WORD_CHUNK = /^([("'“‘«[{]*)([\p{L}\p{M}\p{N}]+(?:['’.-][\p{L}\p{M}\p{N}]+)*)([)"'”’»\]},;:!?.…]*)$/u;
 const LETTER_WORD = /^\p{L}+$/u;
 
@@ -55,7 +53,8 @@ function correctWords(text: string, customWords: readonly string[]): string {
 export function processFinalTranscript({ text, settings }: { text: string; settings: TranscriptSettings }): string {
   let result = sanitizeInsertionText(text);
   if (settings.removeFillerWords) {
-    const removed = result.replace(FILLERS, (matched, word: string) => FILLER_WORDS[settings.language].includes(word.toLowerCase()) ? '' : matched);
+    const fillers = fillerWords(settings.languages);
+    const removed = result.replace(FILLERS, (matched, word: string) => fillers.has(word.toLowerCase()) ? '' : matched);
     result = removed !== result && /^[\p{P}\s]*$/u.test(removed) ? '' : removed;
   }
   return sanitizeInsertionText(correctWords(result, settings.customWords), settings);

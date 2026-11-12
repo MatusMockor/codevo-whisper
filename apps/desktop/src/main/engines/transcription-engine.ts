@@ -1,17 +1,20 @@
-import type { EngineId, Language } from '../../shared/settings';
+import type { LanguageSelection } from '../../shared/dictation-languages';
+import type { EngineId } from '../../shared/settings';
 
 export type EngineUnavailableReason =
   | 'no-model'
   | 'model-missing'
   | 'model-broken'
   | 'binary-missing'
-  | 'language-required'
+  | 'languages-required'
+  | 'languages-pack-missing'
   | 'server-not-paired'
   | 'server-offline'
   | 'server-repair-needed'
   | 'server-busy'
   | 'server-storage'
-  | 'server-disconnected';
+  | 'server-disconnected'
+  | 'server-languages-outdated';
 
 export type EngineReadiness = { ready: boolean; reason?: EngineUnavailableReason };
 
@@ -20,7 +23,7 @@ export type TranscriptUpdate =
   | { type: 'final'; segmentId: number; text: string }
   | { type: 'restart' };
 
-export type DictationOptions = { language: Language; vocabulary?: readonly string[]; signal: AbortSignal; partials?: boolean; onTranscript?: (update: TranscriptUpdate) => void };
+export type DictationOptions = { languages: LanguageSelection; vocabulary?: readonly string[]; signal: AbortSignal; partials?: boolean; onTranscript?: (update: TranscriptUpdate) => void };
 
 export interface EngineDictation {
   push(pcm: Uint8Array): void;

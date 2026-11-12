@@ -23,7 +23,9 @@ function electronEnv(userDataDir: string, options: LaunchOptions): Record<string
   return { ...Object.fromEntries(entries), CW_USER_DATA_DIR: userDataDir, CW_E2E_HOOKS: '1', ...fake, ...updates };
 }
 
-export async function createUserDataDir(settings?: Partial<Settings>): Promise<string> {
+export type LegacySettingsFile = Omit<Partial<Settings>, 'languages'> & { language: 'sk' | 'cs' | 'en' | 'auto' };
+
+export async function createUserDataDir(settings?: Partial<Settings> | LegacySettingsFile): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'cw-e2e-'));
   if (settings !== undefined) {
     await writeFile(join(dir, 'settings.json'), JSON.stringify(settings));

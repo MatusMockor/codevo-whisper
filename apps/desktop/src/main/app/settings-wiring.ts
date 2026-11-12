@@ -5,6 +5,7 @@ import { MicrophoneSettings } from '../audio/microphone-settings';
 import type { Logger } from '../logging/logger';
 import { ModelActions } from '../models/model-actions';
 import type { ModelManager } from '../models/model-manager';
+import { migrateLegacyLanguage } from '../settings/language-migration';
 import type { SettingsStore } from '../settings/settings-store';
 import { electronLoginItem, syncLoginItem, unpackagedLoginItem } from '../system/login-item';
 import type { MainWindowEvents } from '../windows/main-window-controller';
@@ -19,6 +20,16 @@ export type SettingsWiringDeps = {
 };
 
 export type SettingsServices = { actions: ModelActions; microphones: MicrophoneSettings; dispose(): void };
+
+export type LanguageMigrationWiring = { settings: SettingsStore; models: Pick<ModelManager, 'activeLanguageHint'>; logger: Logger };
+
+export async function migrateLanguageSettings({ settings, models, logger }: LanguageMigrationWiring): Promise<void> {
+  try {
+    await migrateLegacyLanguage({ legacy: settings, settings, activeLanguageHint: () => models.activeLanguageHint() });
+  } catch (error) {
+    logger.error('The dictation languages could not be migrated', error);
+  }
+}
 
 export function createSettingsServices({ capture, models, settings, window, isPackaged, logger }: SettingsWiringDeps): SettingsServices {
   const actions = new ModelActions({ models, settings });

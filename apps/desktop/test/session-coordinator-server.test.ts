@@ -35,6 +35,8 @@ import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
 import { createServerService } from './support/server-service';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
@@ -81,7 +83,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     await server.pairings.save(pairing);
   }
   const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, scope: () => server.status.scope(), clock: Date.now, timeoutMs: 2000 });
-  const remote = new RemoteEngine({ connector });
+  const remote = new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => settings.get().languages });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
   await hotkey.start();
@@ -131,12 +133,12 @@ describe('SessionCoordinator with the server engine', () => {
     harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.recording).toBe(true);
     harness.capture.speak(stampedPcm(4));
-    await harness.settings.update({ language: 'en', customWords: ['Other'], removeFillerWords: false, appendTrailingSpace: false });
+    await harness.settings.update({ languages: { mode: 'selected', selected: ['en'] }, customWords: ['Other'], removeFillerWords: false, appendTrailingSpace: false });
     harness.helper.emitHotkey('up');
     await expect.poll(() => harness.helper.pasted).toEqual(['Kumiba ']);
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
     expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'Kumiba ' }] });
-    expect(gateway.stt.requests).toEqual([{ language: 'sk', bytes: 32000 }]);
+    expect(gateway.stt.requests).toEqual([{ language: 'auto', bytes: 32000 }]);
     coordinator?.act('copy-last');
     await expect.poll(() => harness.helper.clipboard).toBe('Kumiba ');
     await expect.poll(() => harness.stats.days()).toMatchObject([{ words: 1, dictations: 1 }]);
@@ -168,7 +170,7 @@ describe('SessionCoordinator with the server engine', () => {
     await dictate(harness, stampedPcm(4));
 
     await expect.poll(() => harness.helper.pasted).toEqual(['zo servera']);
-    expect(gateway.stt.requests).toEqual([{ language: 'sk', bytes: 32000 }]);
+    expect(gateway.stt.requests).toEqual([{ language: 'auto', bytes: 32000 }]);
   });
 
   it('falls back to the local engine when the server is down and never sends audio', async () => {
@@ -201,6 +203,24 @@ describe('SessionCoordinator with the server engine', () => {
     await dictate(harness, stampedPcm(2));
 
     await expect.poll(() => harness.helper.pasted).toEqual(['záložný server']);
+  });
+
+  it('refuses selected languages on a server that cannot honour them and never sends audio', async () => {
+    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['sk', 'cs'] } });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesOutdated, action: 'open-server' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('transcribes in automatic mode on the server exactly as before', async () => {
+    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'auto', selected: ['sk', 'cs'] } }, { respond: () => ({ status: 200, body: { text: 'automaticky' } }) });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['automaticky']);
   });
 
   it('never sends audio to the server with the local order even without a model', async () => {

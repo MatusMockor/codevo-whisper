@@ -2,14 +2,14 @@ import { systemClock, TranscriptionDispatcher, type Clock, type SegmentConfig } 
 import { ResidentTranscriber } from '@codevo-whisper/stt-runner';
 import { access, constants } from 'node:fs/promises';
 import type { SettingsStore } from '../settings/settings-store';
-import type { Settings } from '../../shared/settings';
 import { PCM_BYTES_PER_SECOND } from '../../shared/pcm';
 import { consoleLogger } from '../logging/logger';
 import type { ActiveModel } from './active-model';
 import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
 import { LocalDictation } from './local-dictation';
+import { localLanguagePlan } from './local-language';
 import { ResidentSegmentTranscriber, type LocalContext } from './resident-segment-transcriber';
-import { notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
+import { EngineUnavailableError, notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
 
 const VERIFICATION_REASON = { missing: 'model-missing', broken: 'model-broken' } as const;
 export const LOCAL_CALL_TIMEOUT_MS = 60_000;
@@ -158,7 +158,8 @@ export class LocalEngine implements TranscriptionEngine {
     if ((await this.deps.models.activeModelPath()) === null) return { ready: false, reason: 'no-model' };
     const verification = await this.deps.models.verifyActive();
     if (verification !== 'ok') return { ready: false, reason: VERIFICATION_REASON[verification] };
-    if (this.needsLanguage(this.deps.settings.get().language)) return { ready: false, reason: 'language-required' };
+    const language = localLanguagePlan(this.deps.settings.get().languages, this.deps.models.activeLanguageHint());
+    if (!language.ready) return { ready: false, reason: language.reason };
     return { ready: true };
   }
 
@@ -186,11 +187,17 @@ export class LocalEngine implements TranscriptionEngine {
               }
               throw new Error('Local preparation is no longer available');
             }
+            const language = localLanguagePlan(options.languages, this.deps.models.activeLanguageHint());
+            if (!language.ready) {
+              state = 'released';
+              this.release(lease);
+              throw new EngineUnavailableError(language.reason);
+            }
             state = 'started';
             return new LocalDictation({
               dispatcher: generation.dispatcher,
               clock: this.clock,
-              context: { language: options.language, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
+              context: { hint: language.hint, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
               options: { ...options, signal: AbortSignal.any([options.signal, generation.retired.signal]) },
               onRecordingEnd: () => {
                 if (lease.revision !== this.revision) return;
@@ -237,9 +244,5 @@ export class LocalEngine implements TranscriptionEngine {
 
   private backend(): ReturnType<typeof localBackend> {
     return localBackend(this.deps.arch, this.deps.settings.get().localAcceleration, this.deps.platform);
-  }
-
-  private needsLanguage(language: Settings['language']): boolean {
-    return language === 'auto' && this.deps.models.activeLanguageHint() === 'required';
   }
 }

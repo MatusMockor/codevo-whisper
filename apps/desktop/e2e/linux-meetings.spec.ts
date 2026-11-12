@@ -102,7 +102,7 @@ async function stubSaveDialog(filePath: string): Promise<void> {
 test.skip(process.platform !== 'linux' || MODEL === undefined || AUDIO === undefined, 'Set CW_E2E_MEETING_MODEL (parakeet-ultra-q8 gguf) and CW_E2E_MEETING_AUDIO to run the meeting e2e');
 
 test.beforeEach(async () => {
-  userDataDir = await createUserDataDir({ ...ONBOARDED, localModelId: 'parakeet-ultra-q8', language: 'en', localAcceleration: 'cpu' });
+  userDataDir = await createUserDataDir({ ...ONBOARDED, localModelId: 'parakeet-ultra-q8', languages: { mode: 'auto', selected: ['en'] }, localAcceleration: 'cpu' });
   await mkdir(join(userDataDir, 'models'));
   await symlink(resolve(MODEL ?? ''), join(userDataDir, 'models', 'parakeet-ultra-q8.gguf'));
   app = await launchApp(userDataDir, [...FAKE_MEDIA_ARGS, ...OZONE], { fakeHelper: true });

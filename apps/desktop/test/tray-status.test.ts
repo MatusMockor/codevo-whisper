@@ -6,7 +6,7 @@ const ERROR: TrayActivity = { kind: 'error', message: 'Nemáte stiahnutý model'
 
 describe('tray status', () => {
   it('follows recording and processing and returns to idle after a result', () => {
-    const recording = nextActivity(IDLE, { kind: 'recording', elapsedMs: 0, level: 0, language: 'SK' });
+    const recording = nextActivity(IDLE, { kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'SK' });
     const processing = nextActivity(recording, { kind: 'processing' });
 
     expect(recording).toEqual({ kind: 'recording' });
@@ -19,7 +19,7 @@ describe('tray status', () => {
     const error = nextActivity(IDLE, { kind: 'error', message: 'Nemáte stiahnutý model', action: 'open-settings' });
 
     expect(nextActivity(error, { kind: 'hidden' })).toEqual(ERROR);
-    expect(nextActivity(error, { kind: 'recording', elapsedMs: 0, level: 0, language: 'SK' })).toEqual({ kind: 'recording' });
+    expect(nextActivity(error, { kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'SK' })).toEqual({ kind: 'recording' });
   });
 
   it('shows paused unless a session is running', () => {

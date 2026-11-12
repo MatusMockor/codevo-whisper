@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ModelInfo } from '../../shared/models';
-import type { Language, Settings } from '../../shared/settings';
+import type { DictationLanguage } from '../../shared/dictation-languages';
+import type { Settings } from '../../shared/settings';
 import { needsLanguageChoice } from './language-options';
 import type { ModelAction } from './model-rows';
 
@@ -10,7 +11,7 @@ export type ModelActionsView = {
   run: (model: ModelInfo, action: ModelAction) => void;
   errors: Readonly<Record<string, string>>;
   prompt: LanguagePrompt | null;
-  chooseLanguage: (language: Exclude<Language, 'auto'>) => void;
+  chooseLanguage: (language: DictationLanguage) => void;
   cancelPrompt: () => void;
 };
 
@@ -35,7 +36,7 @@ function invoke(id: string, action: ModelAction): Promise<void> {
   return window.codevo.downloadModel(id);
 }
 
-export function useModelActions(settings: Pick<Settings, 'language' | 'localModelId'>): ModelActionsView {
+export function useModelActions(settings: Pick<Settings, 'languages' | 'localModelId'>): ModelActionsView {
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [prompt, setPrompt] = useState<LanguagePrompt | null>(null);
 
@@ -62,7 +63,7 @@ export function useModelActions(settings: Pick<Settings, 'language' | 'localMode
         return;
       }
       setPrompt(null);
-      window.codevo.updateSettings({ language }).then(
+      window.codevo.updateSettings({ languages: { mode: 'selected', selected: [language] } }).then(
         () => perform(prompt.model, prompt.action),
         (error: unknown) => {
           console.error('Saving the language failed', error);

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../src/main/engines/local-engine';
-import type { Preparation } from '../src/main/engines/transcription-engine';
+import { EngineUnavailableError, type Preparation } from '../src/main/engines/transcription-engine';
 import type { CatalogEntry } from '../src/main/models/catalog-entry';
 import { loadCatalog } from '../src/main/models/model-catalog';
 import { ModelManager } from '../src/main/models/model-manager';
@@ -13,7 +13,7 @@ import { PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
 import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
 import { sha256Of, testEntry } from './model-fixtures';
 import { expectedText, joinSamples, pcmBytes, timelineSilence, timelineSpeech, writeTimeline } from './support/timeline-audio';
-import type { Language } from '../src/shared/settings';
+import type { LanguageSelection } from '../src/shared/dictation-languages';
 
 const MODEL_BODY = 'GGUF';
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
@@ -61,10 +61,12 @@ async function useTimeline(samples: Int16Array): Promise<void> {
   vi.stubEnv('FAKE_TIMELINE_JOBS', join(scratch, 'jobs.txt'));
 }
 
-async function dictate(local: LocalEngine, audio: Uint8Array | Int16Array, language: Language, signal = new AbortController().signal): Promise<string> {
+const AUTO: LanguageSelection = { mode: 'auto', selected: ['sk'] };
+
+async function dictate(local: LocalEngine, audio: Uint8Array | Int16Array, languages: LanguageSelection = AUTO, signal = new AbortController().signal): Promise<string> {
   const preparation = await local.prepare();
   expect(preparation.ready).toBe(true);
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language, signal });
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages, signal });
   const pcm = audio instanceof Int16Array ? pcmBytes(audio) : audio;
   for (let start = 0; start < pcm.byteLength; start += PCM_BYTES_PER_SECOND) {
     dictation.push(pcm.subarray(start, start + PCM_BYTES_PER_SECOND));
@@ -85,7 +87,7 @@ beforeEach(async () => {
   await writeFile(modelFile, MODEL_BODY);
   settings = new SettingsStore(join(scratch, 'settings.json'));
   await settings.load();
-  await settings.update({ localModelId: 'alpha', language: 'sk' });
+  await settings.update({ localModelId: 'alpha' });
   vi.stubEnv('FAKE_CLI_ARGS_FILE', argsFile);
 });
 
@@ -122,23 +124,46 @@ describe('LocalEngine', () => {
     await expect(engine().isReady()).resolves.toEqual({ ready: false, reason: 'model-broken' });
   });
 
-  it('canary with language auto is not ready with language-required', async () => {
+  it('canary in automatic mode is not ready with languages-required', async () => {
     const canary = engine({ models: await activateBundled('canary-1b-v2-q8') });
-    await settings.update({ language: 'auto' });
 
-    await expect(canary.isReady()).resolves.toEqual({ ready: false, reason: 'language-required' });
-    await expect(canary.prepare()).resolves.toEqual({ ready: false, reason: 'language-required' });
+    await expect(canary.isReady()).resolves.toEqual({ ready: false, reason: 'languages-required' });
+    await expect(canary.prepare()).resolves.toEqual({ ready: false, reason: 'languages-required' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
 
-    await settings.update({ language: 'sk' });
+    await settings.update({ languages: { mode: 'selected', selected: ['sk'] } });
     await expect(canary.isReady()).resolves.toEqual({ ready: true });
   });
 
   it('allows automatic language with parakeet and whisper', async () => {
-    await settings.update({ language: 'auto' });
-
     await expect(engine({ models: await activateBundled('parakeet-ultra-q8') }).isReady()).resolves.toEqual({ ready: true });
     await expect(engine({ models: await activateBundled('tc-whisper-turbo-q8') }).isReady()).resolves.toEqual({ ready: true });
+  });
+
+  it.each(['parakeet-ultra-q8', 'tc-whisper-turbo-q8'])('refuses selected languages with %s instead of transcribing in auto', async (id) => {
+    await settings.update({ languages: { mode: 'selected', selected: ['sk'] } });
+    const local = engine({ models: await activateBundled(id) });
+
+    await expect(local.isReady()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
+    await expect(local.prepare()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+  });
+
+  it('refuses a session whose languages changed after the preparation instead of ignoring them', async () => {
+    const local = engine({ models: await activateBundled('parakeet-ultra-q8') });
+    const preparation = await local.prepare();
+    expect(preparation.ready).toBe(true);
+    const prepared = (preparation as Extract<Preparation, { ready: true }>).engine;
+
+    expect(() => prepared.start({ languages: { mode: 'selected', selected: ['sk'] }, signal: new AbortController().signal })).toThrow(new EngineUnavailableError('languages-pack-missing'));
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+    await expect(dictate(local, secondStampedPcm(1))).resolves.toEqual(expect.any(String));
+  });
+
+  it('refuses canary with a primary language the worker cannot force yet', async () => {
+    await settings.update({ languages: { mode: 'selected', selected: ['de', 'sk'] } });
+
+    await expect(engine({ models: await activateBundled('canary-1b-v2-q8') }).isReady()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
   });
 
   it('reports a missing or non-executable binary', async () => {
@@ -154,31 +179,35 @@ describe('LocalEngine', () => {
     const samples = joinSamples(timelineSpeech(30), timelineSilence(30, 1), timelineSpeech(20, 2));
     await useTimeline(samples);
 
-    const text = await dictate(engine({ binary: FAKE_TIMELINE_CLI }), samples, 'sk');
+    const text = await dictate(engine({ binary: FAKE_TIMELINE_CLI }), samples);
 
     expect(text).toBe(expectedText(samples));
     const calls = await readRecordedCalls(argsFile);
     expect(calls.length).toBeGreaterThanOrEqual(3);
-    expect(calls.every((call) => argValue(call, '--model') === modelFile && argValue(call, '--language') === 'sk')).toBe(true);
+    expect(calls.every((call) => argValue(call, '--model') === modelFile && argValue(call, '--language') === 'auto')).toBe(true);
     const jobs = (await readFile(join(scratch, 'jobs.txt'), 'utf8')).trim().split('\n').map((line) => Number(line.split(' ')[1]));
     expect(jobs.every((samplesInJob) => samplesInJob <= 25 * PCM_SAMPLE_RATE)).toBe(true);
   });
 
   it('returns an empty transcript for audio too short to transcribe', async () => {
-    await expect(dictate(engine(), new Uint8Array(100), 'sk')).resolves.toBe('');
+    await expect(dictate(engine(), new Uint8Array(100))).resolves.toBe('');
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
   });
 
-  it('passes the language through', async () => {
-    await dictate(engine(), secondStampedPcm(1), 'cs');
+  it('passes the primary selected language to canary', async () => {
+    const languages: LanguageSelection = { mode: 'selected', selected: ['cs', 'sk'] };
+    await settings.update({ languages });
+    const canary = engine({ models: await activateBundled('canary-1b-v2-q8') });
+
+    await dictate(canary, secondStampedPcm(1), languages);
 
     const [call] = await readRecordedCalls(argsFile);
     expect(argValue(call, '--language')).toBe('cs');
   });
 
   it('uses metal on arm64 and cpu on x64', async () => {
-    await dictate(engine({ arch: 'arm64' }), secondStampedPcm(1), 'sk');
-    await dictate(engine({ arch: 'x64' }), secondStampedPcm(1), 'sk');
+    await dictate(engine({ arch: 'arm64' }), secondStampedPcm(1));
+    await dictate(engine({ arch: 'x64' }), secondStampedPcm(1));
 
     const calls = await readRecordedCalls(argsFile);
     expect(calls.map((call) => argValue(call, '--backend'))).toEqual(['metal', 'cpu']);
@@ -193,7 +222,7 @@ describe('LocalEngine', () => {
   it('applies the desktop call timeout while the resident is still loading', async () => {
     vi.stubEnv('CW_WORKER_LOAD_MS', '400');
     const startedAt = performance.now();
-    await expect(dictate(engine({ callTimeoutMs: 100 }), secondStampedPcm(1), 'sk')).rejects.toMatchObject({ reason: 'engine-failed' });
+    await expect(dictate(engine({ callTimeoutMs: 100 }), secondStampedPcm(1))).rejects.toMatchObject({ reason: 'engine-failed' });
     expect(performance.now() - startedAt).toBeLessThan(350);
   });
 
@@ -202,7 +231,7 @@ describe('LocalEngine', () => {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 300);
 
-    await expect(dictate(engine(), secondStampedPcm(3), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(dictate(engine(), secondStampedPcm(3), AUTO, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
 
     await expect(readRecordedCalls(argsFile)).resolves.toHaveLength(1);
   });
@@ -211,7 +240,7 @@ describe('LocalEngine', () => {
     const controller = new AbortController();
     controller.abort();
 
-    await expect(dictate(engine(), secondStampedPcm(30), 'sk', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(dictate(engine(), secondStampedPcm(30), AUTO, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
   });
 });

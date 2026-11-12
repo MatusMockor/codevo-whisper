@@ -2,9 +2,12 @@ import { writeFileAtomic } from '../fs/atomic-write';
 import { readOptionalFile } from '../fs/read-optional-file';
 import { consoleLogger, type Logger } from '../logging/logger';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings';
+import { readLegacyLanguage, type LegacyLanguage, type LegacySettingsReader } from './legacy-settings';
 import { sanitizeSettings } from './sanitize-settings';
 
 export type SettingsListener = (next: Settings, previous: Settings) => void;
+
+export type SettingsPatch = Partial<Settings> | ((current: Settings) => Partial<Settings>);
 
 function parseJson(text: string | null): unknown {
   if (text === null) {
@@ -26,11 +29,14 @@ function freezeSettings(settings: Settings): Settings {
   Object.freeze(copy.engineOrder);
   Object.freeze(copy.serverRestoreOrder);
   Object.freeze(copy.customWords);
+  Object.freeze(copy.languages.selected);
+  Object.freeze(copy.languages);
   return Object.freeze(copy);
 }
 
-export class SettingsStore {
+export class SettingsStore implements LegacySettingsReader {
   private current: Settings = DEFAULT_SETTINGS;
+  private legacy: LegacyLanguage | null = null;
   private readonly listeners = new Set<SettingsListener>();
   private pending: Promise<unknown> = Promise.resolve();
 
@@ -41,15 +47,20 @@ export class SettingsStore {
 
   async load(): Promise<Settings> {
     const raw = parseJson(await this.readStoredText());
+    this.legacy = readLegacyLanguage(raw);
     this.current = freezeSettings(sanitizeSettings(raw));
     return this.current;
+  }
+
+  legacyLanguage(): LegacyLanguage | null {
+    return this.legacy;
   }
 
   get(): Settings {
     return this.current;
   }
 
-  update(patch: Partial<Settings>): Promise<Settings> {
+  update(patch: SettingsPatch): Promise<Settings> {
     const run = this.pending.then(() => this.apply(patch));
     this.pending = run.catch(() => undefined);
     return run;
@@ -71,10 +82,14 @@ export class SettingsStore {
     }
   }
 
-  private async apply(patch: Partial<Settings>): Promise<Settings> {
+  private async apply(patch: SettingsPatch): Promise<Settings> {
     const previous = this.current;
-    const next = freezeSettings({ ...previous, ...patch });
-    await writeFileAtomic(this.file, `${JSON.stringify(next, null, 2)}\n`);
+    const changes = typeof patch === 'function' ? patch(previous) : patch;
+    const next = freezeSettings({ ...previous, ...changes });
+    const legacy = Object.hasOwn(changes, 'languages') ? null : this.legacy;
+    const stored = legacy === null ? next : { ...next, language: legacy };
+    await writeFileAtomic(this.file, `${JSON.stringify(stored, null, 2)}\n`);
+    this.legacy = legacy;
     this.current = next;
     this.notify(next, previous);
     return next;

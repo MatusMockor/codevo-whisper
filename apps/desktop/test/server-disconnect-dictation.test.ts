@@ -10,6 +10,10 @@ import { RecordingLogger } from './recording-logger';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
 import { createServerService, tinyModels, type ServerServiceHarness } from './support/server-service';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
+
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const CHUNK = new Uint8Array(3200);
 const QUIET_MS = 600;
@@ -56,12 +60,12 @@ async function pair(): Promise<string> {
 }
 
 function engine(connector: Pick<ServerConnector, 'connect' | 'reconnect'> = harness.connector): RemoteEngine {
-  return new RemoteEngine({ connector, options: { reconnectDelaysMs: [50], reconnectWindowMs: 2000 } });
+  return new RemoteEngine({ connector, ...AUTO_ONLY, options: { reconnectDelaysMs: [50], reconnectWindowMs: 2000 } });
 }
 
 function started(preparation: Preparation): EngineDictation {
   expect(preparation.ready).toBe(true);
-  const dictation = preparation.ready ? preparation.engine.start({ language: 'sk', signal: new AbortController().signal }) : null;
+  const dictation = preparation.ready ? preparation.engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal }) : null;
   expect(dictation).not.toBeNull();
   return dictation ?? { push: () => undefined, finish: () => Promise.resolve('') };
 }
@@ -162,7 +166,7 @@ describe('disconnecting the server during remote dictation', () => {
     await pair();
     const updates: string[] = [];
     const preparation = await engine().prepare();
-    const dictation = preparation.ready ? preparation.engine.start({ language: 'sk', signal: new AbortController().signal, onTranscript: (update) => updates.push(update.type) }) : null;
+    const dictation = preparation.ready ? preparation.engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal, onTranscript: (update) => updates.push(update.type) }) : null;
     expect(dictation).not.toBeNull();
     dictation?.push(new Uint8Array(32_000));
     proxy.holdRepliesAfter(0);

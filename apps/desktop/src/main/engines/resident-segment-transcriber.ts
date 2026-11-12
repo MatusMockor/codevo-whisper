@@ -1,9 +1,8 @@
 import type { SegmentTranscriber, TranscriptionJob } from '@codevo-whisper/audio';
-import type { ResidentTranscriber } from '@codevo-whisper/stt-runner';
-import type { Language } from '../../shared/settings';
+import type { ResidentTranscriber, TranscribeLanguage } from '@codevo-whisper/stt-runner';
 
 export const MIN_JOB_BYTES = 640;
-export type LocalContext = { language: Language; vocabulary?: readonly string[] };
+export type LocalContext = { hint: TranscribeLanguage; vocabulary?: readonly string[] };
 
 export class ResidentSegmentTranscriber implements SegmentTranscriber<LocalContext> {
   constructor(private readonly resident: ResidentTranscriber, private readonly startup: Promise<void> = Promise.resolve()) {}
@@ -15,6 +14,6 @@ export class ResidentSegmentTranscriber implements SegmentTranscriber<LocalConte
     if (job.pcm.byteLength < MIN_JOB_BYTES) {
       return Promise.resolve('');
     }
-    return this.startup.then(() => this.resident.transcribe({ pcm: job.pcm, language: job.context.language, ...(job.context.vocabulary === undefined ? {} : { vocabulary: job.context.vocabulary }), signal }));
+    return this.startup.then(() => this.resident.transcribe({ pcm: job.pcm, language: job.context.hint, ...(job.context.vocabulary === undefined ? {} : { vocabulary: job.context.vocabulary }), signal }));
   }
 }

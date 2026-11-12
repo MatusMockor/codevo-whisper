@@ -558,7 +558,7 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
     const [first] = harness.states;
-    expect(first).toEqual({ kind: 'recording', elapsedMs: expect.any(Number) as number, level: 0, language: 'SK' });
+    expect(first).toEqual({ kind: 'recording', elapsedMs: expect.any(Number) as number, level: 0, languageChip: 'AUTO' });
     expect(first?.kind === 'recording' && first.elapsedMs < 100).toBe(true);
     expect(harness.states.some((state) => state.kind === 'recording' && state.level === 0.2)).toBe(true);
     expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
@@ -567,7 +567,7 @@ describe('SessionCoordinator', () => {
     expect(harness.capture.recording).toBe(false);
     expect(harness.capture.starts).toEqual([{ deviceId: null, label: null }]);
     const [call] = await readRecordedCalls(argsFile);
-    expect(call?.[call.indexOf('--language') + 1]).toBe('sk');
+    expect(call?.[call.indexOf('--language') + 1]).toBe('auto');
     await expect.poll(() => harness.states.at(-1), { timeout: 3000 }).toEqual({ kind: 'hidden' });
   });
 

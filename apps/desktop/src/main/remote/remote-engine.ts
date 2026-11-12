@@ -1,7 +1,9 @@
-import { notReady, type EngineUnavailableReason, type Preparation, type TranscriptionEngine } from '../engines/transcription-engine';
+import { EngineUnavailableError, notReady, type EngineUnavailableReason, type Preparation, type TranscriptionEngine } from '../engines/transcription-engine';
+import type { LanguageSelection } from '../../shared/dictation-languages';
 import { RemoteDictation } from './remote-dictation';
 import { asRemoteFailure, type RemoteFailureKind } from './remote-failure';
 import type { ServerConnector } from './server-connector';
+import type { ServerLanguageSupport } from './server-language-support';
 
 export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number; reconnectDelaysMs: readonly number[]; reconnectWindowMs: number };
 
@@ -14,6 +16,8 @@ export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({
 
 export type RemoteEngineDeps = {
   connector: Pick<ServerConnector, 'connect' | 'reconnect'>;
+  languages: ServerLanguageSupport;
+  selection: () => LanguageSelection;
   options?: Partial<RemoteEngineOptions>;
 };
 
@@ -35,6 +39,10 @@ export class RemoteEngine implements TranscriptionEngine {
   }
 
   async prepare(): Promise<Preparation> {
+    const language = this.deps.languages.unavailableReason(this.deps.selection());
+    if (language !== null) {
+      return notReady(language);
+    }
     try {
       const ready = await this.deps.connector.connect();
       if (!ready.scope.isCurrent()) {
@@ -48,6 +56,11 @@ export class RemoteEngine implements TranscriptionEngine {
           id: this.id,
           start: (options) => {
             stopWatching();
+            const refused = this.deps.languages.unavailableReason(options.languages);
+            if (refused !== null) {
+              ready.connection.close();
+              throw new EngineUnavailableError(refused);
+            }
             return new RemoteDictation(ready, {
               options,
               finishIdleMs: this.options.finishIdleMs,

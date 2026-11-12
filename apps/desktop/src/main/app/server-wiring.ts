@@ -11,6 +11,7 @@ import { PairingEngineSwitch } from '../remote/pairing-engine-switch';
 import { EncryptedPairingFile } from '../remote/pairing-repository';
 import { RemoteEngine } from '../remote/remote-engine';
 import { SafeStorageVault } from '../remote/safe-storage-vault';
+import { AutoOnlyServerLanguages } from '../remote/server-language-support';
 import type { SecretVault } from '../remote/secret-vault';
 import { vaultKind, type VaultContext } from '../remote/vault-choice';
 import { ServerConnector } from '../remote/server-connector';
@@ -59,7 +60,7 @@ export function createServerServices({ settings, order, local, window, power, e2
   reconnect.start();
   void service.check();
   return {
-    engine: new RemoteEngine({ connector }),
+    engine: new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => settings.get().languages }),
     service,
     dispose: () => {
       for (const unsubscribe of unsubscribers.splice(0)) {

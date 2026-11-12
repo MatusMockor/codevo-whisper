@@ -52,7 +52,7 @@ async function realEngine(model: string): Promise<LocalEngine> {
 async function start(partials: boolean, updates: TranscriptUpdate[]): Promise<EngineDictation> {
   const preparation = await engine.prepare();
   expect(preparation.ready).toBe(true);
-  const options = { language: 'sk' as const, signal: new AbortController().signal, partials, onTranscript: (update: TranscriptUpdate) => updates.push(update) };
+  const options = { languages: { mode: 'auto', selected: ['sk'] } as const, signal: new AbortController().signal, partials, onTranscript: (update: TranscriptUpdate) => updates.push(update) };
   return (preparation as Extract<Preparation, { ready: true }>).engine.start(options);
 }
 

@@ -8,6 +8,7 @@ import { MeetingTranscriber } from '../src/main/meetings/meeting-transcriber';
 import type { ModelVerification } from '../src/main/engines/active-model';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 import { RecordingLogger } from './recording-logger';
+import type { LanguageHint } from '../src/shared/models';
 
 const FAKE_CLI = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-transcribe-cli.sh', import.meta.url));
 
@@ -15,6 +16,7 @@ let dir: string;
 let cliDir: string;
 let store: MeetingStore;
 let verification: ModelVerification;
+let languageHint: LanguageHint | null;
 let settings: Settings;
 let diarizer: string | null;
 let logger: RecordingLogger;
@@ -23,7 +25,7 @@ function transcriber(): MeetingTranscriber {
   return new MeetingTranscriber({
     store,
     binary: FAKE_CLI,
-    models: { activeModelPath: () => Promise.resolve('/models/parakeet.gguf'), verifyActive: () => Promise.resolve(verification) },
+    models: { activeModelPath: () => Promise.resolve('/models/parakeet.gguf'), verifyActive: () => Promise.resolve(verification), activeLanguageHint: () => languageHint },
     settings: { get: () => settings },
     backend: () => 'cpu',
     diarizer: () => Promise.resolve(diarizer),
@@ -63,7 +65,8 @@ beforeEach(async () => {
   store = new MeetingStore(join(dir, 'meetings'), new RecordingLogger());
   await store.load();
   verification = 'ok';
-  settings = { ...DEFAULT_SETTINGS, language: 'sk' };
+  languageHint = 'ignored';
+  settings = { ...DEFAULT_SETTINGS, languages: { mode: 'selected', selected: ['sk'] } };
   diarizer = null;
   logger = new RecordingLogger();
   vi.stubEnv('FAKE_CLI_MODE', 'words-per-wav');
@@ -98,8 +101,46 @@ it('transcribes each track with word timestamps and stores a speaker-attributed 
   expect(micWav.readUInt32LE(40)).toBe(3200);
   expect(micWav.byteLength).toBe(44 + 3200);
   const args = (await readFile(join(dir, 'args.txt'), 'utf8')).split('--\n')[0]?.trim().split('\n');
-  expect(args?.slice(0, -1)).toEqual(['--model', '/models/parakeet.gguf', '--backend', 'cpu', '--language', 'sk', '--threads', '3', '--timestamps', 'word', '--quiet']);
+  expect(args?.slice(0, -1)).toEqual(['--model', '/models/parakeet.gguf', '--backend', 'cpu', '--threads', '3', '--timestamps', 'word', '--quiet']);
   expect(await readdir(join(dir, 'meetings', id))).not.toContain('mic.wav');
+});
+
+it('keeps the language of the meeting start for every track when settings change midway', async () => {
+  languageHint = 'optional';
+  settings = { ...DEFAULT_SETTINGS, languages: { mode: 'selected', selected: ['cs'] } };
+  const id = await stoppedMeeting({ mic: { startOffsetMs: 0 }, system: { startOffsetMs: 0 } }, { mic: 3201, system: 3201 });
+  await cliPrints('mic', ['  [   0.00 ->    0.40] Ahoj']);
+  await cliPrints('system', ['  [   0.00 ->    0.40] Ahoj']);
+  store.onChange((list) => {
+    if (JSON.stringify(list[0]?.phase) !== '{"kind":"transcribing","step":"system"}') return;
+    languageHint = 'ignored';
+    settings = { ...DEFAULT_SETTINGS, languages: { mode: 'auto', selected: ['cs'] } };
+  });
+
+  await transcriber().transcribe(id);
+
+  const calls = (await readFile(join(dir, 'args.txt'), 'utf8')).split('--\n').filter((call) => call.trim() !== '').map((call) => call.trim().split('\n'));
+  expect(calls).toHaveLength(2);
+  expect(calls.map((args) => args.slice(args.indexOf('--language'), args.indexOf('--language') + 2))).toEqual([['--language', 'cs'], ['--language', 'cs']]);
+});
+
+it.each([
+  ['optional', { mode: 'selected', selected: ['cs'] }, ['--language', 'cs']],
+  ['optional', { mode: 'selected', selected: ['cs', 'sk'] }, []],
+  ['optional', { mode: 'auto', selected: ['cs'] }, []],
+  ['ignored', { mode: 'selected', selected: ['cs'] }, []],
+  ['required', { mode: 'selected', selected: ['cs'] }, []],
+] as const)('passes a language hint only to a %s model with exactly one selected language: %j', async (hint, languages, expected) => {
+  languageHint = hint;
+  settings = { ...DEFAULT_SETTINGS, languages };
+  const id = await stoppedMeeting({ mic: { startOffsetMs: 0 }, system: null }, { mic: 3201 });
+  await cliPrints('mic', ['  [   0.00 ->    0.40] Ahoj']);
+
+  await transcriber().transcribe(id);
+
+  const args = (await readFile(join(dir, 'args.txt'), 'utf8')).split('--\n')[0]?.trim().split('\n') ?? [];
+  const at = args.indexOf('--language');
+  expect(at < 0 ? [] : args.slice(at, at + 2)).toEqual(expected);
 });
 
 it('labels remote speakers with the diarizer on the system track once it is downloaded', async () => {

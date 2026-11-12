@@ -8,6 +8,10 @@ import { continuousSpeech } from '../../server/test/support/speech';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
 import { pcmBytes, timelineSpeech } from './support/timeline-audio';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
+
+const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const FRAME = 3200;
 const SECOND = 32000;
@@ -37,11 +41,11 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
   const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: extra.timeoutMs ?? 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
-  const preparation = await new RemoteEngine({ connector, options }).prepare();
+  const preparation = await new RemoteEngine({ connector, ...AUTO_ONLY, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
   const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal, ...transcript });
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: controller.signal, ...transcript });
   return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
@@ -71,7 +75,7 @@ describe('RemoteDictation retry', () => {
 
     expect(await dictation.finish()).toBe('úsek64000');
     expect(relay.connections()).toBe(2);
-    expect(server.stt.requests).toEqual([{ language: 'sk', bytes: 64000 }]);
+    expect(server.stt.requests).toEqual([{ language: 'auto', bytes: 64000 }]);
   });
 
   it('retries a dictation that dropped while the server was transcribing, without duplicating text', async () => {

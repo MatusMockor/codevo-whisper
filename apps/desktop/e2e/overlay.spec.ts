@@ -56,13 +56,13 @@ function panelFlags(): Promise<PanelFlags> {
 
 test('overlay window preserves platform presentation and shows the injected recording state', async () => {
   const mainFocusedBefore = (await panelFlags()).mainFocused;
-  await inject({ kind: 'recording', elapsedMs: 4200, level: 0.5, language: 'SK' });
+  await inject({ kind: 'recording', elapsedMs: 4200, level: 0.5, languageChip: 'AUTO' });
   const overlay = await overlayPage();
 
   const pill = overlay.getByRole('status', { name: 'Nahrávam' });
   await expect(pill).toBeVisible();
   await expect(pill).toContainText('0:04');
-  await expect(pill).toContainText('SK');
+  await expect(pill.locator('.chip')).toHaveText('AUTO');
   await expect.poll(panelFlags).toMatchObject({ focusable: !MAC, visible: true, alwaysOnTop: !REDUCED, allWorkspaces: MAC });
   if (!REDUCED) expect((await panelFlags()).focused).toBe(false);
   await inject({ kind: 'processing' });
@@ -75,7 +75,7 @@ test('overlay window preserves platform presentation and shows the injected reco
 
 test('Živý text shows confirmed words solid and tentative words lighter, grows upward and never takes focus', async () => {
   const mainFocusedBefore = (await panelFlags()).mainFocused;
-  const recording = { kind: 'recording', elapsedMs: 4200, level: 0.6, language: 'SK' } as const;
+  const recording = { kind: 'recording', elapsedMs: 4200, level: 0.6, languageChip: 'SK' } as const;
   await inject({ ...recording, live: { confirmed: '', tentative: '' } });
   const overlay = await overlayPage();
   const card = overlay.getByRole('status', { name: 'Nahrávam' });
@@ -117,7 +117,7 @@ test('Živý text shows confirmed words solid and tentative words lighter, grows
 
 test('Živý text keeps the fallback notice inside the panel', async () => {
   const long = Array.from({ length: 40 }, (_value, index) => `slovo${index}`).join(' ');
-  await inject({ kind: 'recording', elapsedMs: 1000, level: 0.2, language: 'SK', fallbackDevice: 'AirPods Pro', live: { confirmed: long, tentative: 'a ďalej' } });
+  await inject({ kind: 'recording', elapsedMs: 1000, level: 0.2, languageChip: 'SK', fallbackDevice: 'AirPods Pro', live: { confirmed: long, tentative: 'a ďalej' } });
   const overlay = await overlayPage();
 
   const notice = overlay.getByText('Mikrofón AirPods Pro nie je pripojený, používam predvolený');
@@ -137,10 +137,11 @@ test('hiding clears the rendered state so the next show never flashes the previo
 });
 
 test('overlay shows the fallback notice, the processing and the result states', async () => {
-  await inject({ kind: 'recording', elapsedMs: 65_000, level: 0.1, language: 'EN', fallbackDevice: 'AirPods Pro' });
+  await inject({ kind: 'recording', elapsedMs: 65_000, level: 0.1, languageChip: 'SK +2', fallbackDevice: 'AirPods Pro' });
   const overlay = await overlayPage();
   await expect(overlay.getByText('Mikrofón AirPods Pro nie je pripojený, používam predvolený')).toBeVisible();
   await expect(overlay.getByRole('status', { name: 'Nahrávam' })).toContainText('1:05');
+  await expect(overlay.getByRole('status', { name: 'Nahrávam' }).locator('.chip')).toHaveText('SK +2');
 
   await inject({ kind: 'processing', notice: 'limit-reached' });
   await expect(overlay.getByText('Spracúvam')).toBeVisible();

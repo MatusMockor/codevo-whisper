@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { processFinalTranscript } from '../src/main/session/process-final-transcript';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 
+type Languages = Settings['languages'];
+
+const AUTO: Languages = { mode: 'auto', selected: ['sk'] };
+
+function only(...selected: Languages['selected']): Languages {
+  return { mode: 'selected', selected };
+}
+
 function process(text: string, settings: Partial<Settings> = {}): string {
   return processFinalTranscript({ text, settings: { ...DEFAULT_SETTINGS, ...settings } });
 }
@@ -9,7 +17,7 @@ function process(text: string, settings: Partial<Settings> = {}): string {
 describe('processFinalTranscript', () => {
   it('applies spacing after removing fillers and correcting words', () => {
     expect(process('ehm, Kumba\n', { customWords: ['Kumiba'], removeFillerWords: true, appendTrailingSpace: true })).toBe('Kumiba ');
-    expect(process('um.', { language: 'en', removeFillerWords: true, appendTrailingSpace: true })).toBe('');
+    expect(process('um.', { languages: only('en'), removeFillerWords: true, appendTrailingSpace: true })).toBe('');
   });
   it('canonicalizes exact and unique one-edit words while preserving punctuation and diacritics', () => {
     expect(process('kumiba, Kumiba! Kumiba? Kumba. Žilina Zilina.', { customWords: ['Kumiba', 'Žilina'] }))
@@ -30,23 +38,31 @@ describe('processFinalTranscript', () => {
   });
 
   it('keeps filler substrings inside identifiers and domain-like tokens', () => {
-    expect(process('hmming album umbilical foo_hmm_bar eee.com hmm/path', { language: 'auto', removeFillerWords: true }))
+    expect(process('hmming album umbilical foo_hmm_bar eee.com hmm/path', { languages: AUTO, removeFillerWords: true }))
       .toBe('hmming album umbilical foo_hmm_bar eee.com hmm/path');
   });
 
-  it('uses the selected language list and the union for auto', () => {
-    expect(process('ehm eee um uh hmm', { language: 'en', removeFillerWords: true })).toBe('ehm eee');
-    expect(process('ehm eee um uh hmm', { language: 'sk', removeFillerWords: true })).toBe('um uh');
-    expect(process('ehm eee um uh hmm', { language: 'cs', removeFillerWords: true })).toBe('um uh');
-    expect(process('ehm eee um uh hmm', { language: 'auto', removeFillerWords: true })).toBe('');
+  it('uses the union of the lists of the selected languages and the auto list only in automatic mode', () => {
+    expect(process('ehm eee um uh hmm', { languages: only('en'), removeFillerWords: true })).toBe('ehm eee');
+    expect(process('ehm eee um uh hmm', { languages: only('sk'), removeFillerWords: true })).toBe('um uh');
+    expect(process('ehm eee um uh hmm', { languages: only('cs'), removeFillerWords: true })).toBe('um uh');
+    expect(process('ehm eee um uh hmm', { languages: only('sk', 'cs'), removeFillerWords: true })).toBe('um uh');
+    expect(process('ehm eee um uh hmm', { languages: only('sk', 'en'), removeFillerWords: true })).toBe('');
+    expect(process('ehm eee um uh hmm', { languages: only('sk', 'de'), removeFillerWords: true })).toBe('um uh');
+    expect(process('ehm eee um uh hmm', { languages: { mode: 'auto', selected: ['en'] }, removeFillerWords: true })).toBe('');
+  });
+
+  it('keeps words of a language without its own filler list', () => {
+    expect(process('Ich komme um acht Uhr.', { languages: only('de'), removeFillerWords: true })).toBe('Ich komme um acht Uhr.');
+    expect(process('Ich komme um acht Uhr.', { languages: AUTO, removeFillerWords: true })).toBe('Ich komme acht Uhr.');
   });
 
   it.each([
-    ['sk', 'Ehm, eee; HMM!'], ['en', 'UM, uh; HMM!'], ['cs', 'Ehm, eee; HMM!'], ['auto', 'Ehm, eee; HMM! um uh.'],
-  ] as const)('removes only whole hesitation tokens in %s', (language, fillers) => {
-    expect(process(`${fillers} Dobrý deň, like well ako no hummus album.`, { language, removeFillerWords: true }))
+    ['sk', only('sk'), 'Ehm, eee; HMM!'], ['en', only('en'), 'UM, uh; HMM!'], ['cs', only('cs'), 'Ehm, eee; HMM!'], ['auto', AUTO, 'Ehm, eee; HMM! um uh.'],
+  ] as const)('removes only whole hesitation tokens in %s', (_name, languages, fillers) => {
+    expect(process(`${fillers} Dobrý deň, like well ako no hummus album.`, { languages, removeFillerWords: true }))
       .toBe('Dobrý deň, like well ako no hummus album.');
-    expect(process(fillers, { language, removeFillerWords: true })).toBe('');
-    expect(process('Ahoj, hmm, svet!', { language, removeFillerWords: true })).toBe('Ahoj, svet!');
+    expect(process(fillers, { languages, removeFillerWords: true })).toBe('');
+    expect(process('Ahoj, hmm, svet!', { languages, removeFillerWords: true })).toBe('Ahoj, svet!');
   });
 });
