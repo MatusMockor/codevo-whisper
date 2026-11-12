@@ -14,7 +14,6 @@
   --radius-lg: 10px;
   --radius-xl: 12px;
   --radius-2xl: 18px;
-  --radius-overlay: 22px;
   --radius-pill: 999px;
 
   --page-max: 1280px;
@@ -31,12 +30,27 @@
 
   --amber-base: #F0A23A;
   --lamp: #F0A23A;
-  --lamp-hi: #FFD08A;
-  --lamp-deep: #C46F12;
   --logo-cyan: #0891B2;
-  --ov-ink: #F2F4F7;
-  --ov-ink-2: rgba(242, 244, 247, .66);
-  --ov-ink-t: rgba(242, 244, 247, .46);
+  --ov-bg: #141517;
+  --ov-line: #2C2E33;
+  --ov-line-2: #393C42;
+  --ov-raise: #202226;
+  --ov-raise-2: #2A2C31;
+  --ov-orb: #24262A;
+  --ov-ink: #EFECE6;
+  --ov-ink-2: #A7A39B;
+  --ov-ink-t: #8A867E;
+  --ov-amber: #F0A23A;
+  --ov-amber-hi: #FFBD5E;
+  --ov-amber-press: #DC8E26;
+  --ov-amber-ink: #1C1204;
+  --ov-amber-wash: rgba(240, 162, 58, .15);
+  --ov-amber-line: rgba(240, 162, 58, .4);
+  --ov-ok: #6BDCA0;
+  --ov-ok-wash: rgba(82, 209, 141, .16);
+  --ov-err: #FF8080;
+  --ov-err-wash: rgba(255, 99, 99, .15);
+  --ov-err-line: rgba(255, 99, 99, .35);
 
   --win: #F4F2ED;
   --rail: #EAE7E0;

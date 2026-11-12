@@ -97,6 +97,8 @@ async function recordHotkeyAndOpenEngineStep(): Promise<void> {
   await next();
   await next();
   await expect(heading()).toHaveText('Klávesová skratka');
+  await expect(page.locator('.ob-mode')).toContainText('Krátke stlačenie zapne diktovanie, ďalšie ho ukončí.');
+  await expect(page.getByRole('list', { name: 'Kroky nastavenia' }).locator('[aria-current="step"]')).toHaveText('3Skratka');
   await app.evaluate(() => {
     (globalThis as unknown as FakeHelperGlobal).codevoE2e.helper.recordedHotkey = { kind: 'modifiers', keycodes: [62], label: 'Pravý ⌃ Control' };
   });
@@ -109,6 +111,10 @@ async function recordHotkeyAndOpenEngineStep(): Promise<void> {
 test('is shown on the first run instead of the main window', async () => {
   await expect(page.getByText('Krok 1 z 5')).toBeVisible();
   await expect(heading()).toHaveText('Prístup k mikrofónu');
+  await expect(page.locator('.ob-lead')).toContainText('Mikrofón sa zapne, až keď stlačíte skratku, a po skončení diktovania sa vypne.');
+  const stepper = page.getByRole('list', { name: 'Kroky nastavenia' });
+  await expect(stepper.getByRole('listitem')).toHaveCount(5);
+  await expect(stepper.locator('[aria-current="step"]')).toHaveText('1Mikrofón');
   await expect(page.locator('.perm', { hasText: 'Mikrofón' })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Sekcie aplikácie' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Späť' })).toHaveCount(0);
@@ -187,6 +193,8 @@ test('the engine step offers three choices, preselects none and moves on without
   await recordHotkeyAndOpenEngineStep();
   await expect(page.locator('.ob-lead')).toContainText('na vlastnom serveri');
   await expect(engines().getByRole('radio')).toHaveCount(3);
+  await expect(engines().getByRole('radio', { name: /\(odporúčané\)$/ })).toHaveCount(1);
+  await expect(engines().getByRole('radio', { name: /^Na tomto zariadení.*\(odporúčané\)$/ })).toHaveCount(1);
   await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).not.toBeChecked();
   await expect(engines().getByRole('radio', { name: /^Na vlastnom serveri/ })).not.toBeChecked();
   await expect(engines().getByRole('radio', { name: /^Nastavím neskôr/ })).not.toBeChecked();
@@ -248,6 +256,7 @@ test('choosing this Mac shows the preselected recommended model, then onboarding
   await next();
   await expect(heading()).toHaveText('Vyskúšajte to');
   await expect(page.locator('.ob-try')).toHaveText('Stlačte Pravý ⌃ Control a povedzte niečo.');
+  await expect(page.locator('.ob-finish')).toHaveText('Ďalším stlačením diktovanie ukončíte. Ak skratku podržíte, diktovanie skončí, keď ju pustíte.');
   await expect(page.getByText('Model sa ešte sťahuje alebo nie je vybraný.')).toBeVisible();
   await page.getByRole('button', { name: 'Späť' }).click();
   await expect(engines().getByRole('radio', { name: /^Na tomto zariadení/ })).toBeChecked();
