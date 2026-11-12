@@ -560,7 +560,7 @@ test.describe('settings page', () => {
     await expect(usedZone().locator('.lang-count')).toHaveText('5 / 5');
     await expect(usedZone().locator('.lang-count')).toHaveClass(/full/);
     await expect(chip('Maďarčina')).toHaveAttribute('aria-disabled', 'true');
-    await chip('Maďarčina').click();
+    await chip('Maďarčina').click({ force: true });
     await expect(status()).toHaveText('Používať môžete najviac 5 jazykov. Najprv niektorý odoberte.');
     await expect(used()).toHaveCount(5);
 
