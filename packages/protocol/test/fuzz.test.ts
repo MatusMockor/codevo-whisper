@@ -68,11 +68,11 @@ function decodesStart(languages: readonly string[]): boolean {
   }
 }
 
-const serverWithAnyLanguageFields = fc
-  .tuple(fc.constantFrom('capabilities', 'final', 'partial'), fc.jsonValue(), fc.jsonValue())
-  .map(([type, language, languages]) =>
-    jsonFrame(JSON.stringify({ type, sessionId: 'fuzz', segmentId: 0, revision: 0, text: 'x', language, languages })),
-  );
+const serverWithAnyLanguageFields = fc.oneof(
+  fc.jsonValue().map((languages) => jsonFrame(JSON.stringify({ type: 'capabilities', languages }))),
+  fc.jsonValue().map((language) => jsonFrame(JSON.stringify({ type: 'final', sessionId: 'fuzz', segmentId: 0, text: 'x', language }))),
+  fc.jsonValue().map((language) => jsonFrame(JSON.stringify({ type: 'partial', sessionId: 'fuzz', segmentId: 0, revision: 0, text: 'x', language }))),
+);
 
 const selections = fc.uniqueArray(fc.constantFrom(...DICTATION_LANGUAGES), { minLength: 1, maxLength: MAX_DICTATION_LANGUAGES });
 const detectedLanguages = fc.option(fc.constantFrom(...DICTATION_LANGUAGES), { nil: null });
