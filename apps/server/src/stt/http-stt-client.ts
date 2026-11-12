@@ -18,11 +18,11 @@ function unavailable(message: string, cause?: unknown): ProtocolError {
   return new ProtocolError('stt_unavailable', message, { cause });
 }
 
-function refusal(status: number): ProtocolError {
+function refusal(status: number, request: SttRequest): ProtocolError {
   if (status === 503) {
     return new ProtocolError('busy', 'the STT engine is busy');
   }
-  if (status === 409) {
+  if (status === 409 && request.languages !== null) {
     return new ProtocolError('languages_unavailable', 'the STT engine cannot route dictation languages');
   }
   return unavailable(`the STT engine answered ${status}`);
@@ -54,7 +54,7 @@ export class HttpSttClient implements SttClient, SttHealthCheck, SttCapabilities
     const response = await this.post(request, signal);
     if (!response.ok) {
       await discard(response);
-      throw refusal(response.status);
+      throw refusal(response.status, request);
     }
     return parseSttTranscript(await readLimitedJson(response, MAX_STT_RESPONSE_BYTES), request);
   }

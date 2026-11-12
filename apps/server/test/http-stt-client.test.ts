@@ -174,6 +174,26 @@ describe('HttpSttClient with dictation languages', () => {
     await expect(new HttpSttClient(fake.url).transcribe(routed(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'languages_unavailable' });
   });
 
+  it('maps 409 to stt_unavailable for a legacy request so an old client never sees the new error code', async () => {
+    fake = await startFakeSttServer({ respond: () => ({ status: 409, body: { error: 'languages unavailable' } }) });
+
+    await expect(new HttpSttClient(fake.url).transcribe(legacy(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+  });
+
+  it('keeps every known route and drops any other route string', async () => {
+    const known = ['auto', 'verbatim-short', 'verbatim-foreign', 'verbatim-unsure', 'conditioned-fix', 'verbatim-guard', 'conditioned', 'verbatim-fallback'];
+    let route = '';
+    fake = await startFakeSttServer({ capabilities: ROUTING_STT, respond: () => ({ status: 200, body: { text: 'ahoj', language: 'sk', route } }) });
+    const client = new HttpSttClient(fake.url);
+
+    for (route of known) {
+      expect((await client.transcribe(routed(pcmSeconds(0.1)), signal())).route).toBe(route);
+    }
+    for (route of ['secret', 'conditioned-', 'Conditioned', 'auto ', '']) {
+      expect((await client.transcribe(routed(pcmSeconds(0.1)), signal())).route).toBeNull();
+    }
+  });
+
   it('treats a missing language as unattributed and a malformed route as unknown', async () => {
     fake = await startFakeSttServer({ capabilities: ROUTING_STT, respond: () => ({ status: 200, body: { text: 'ahoj', route: 'Conditioned!' } }) });
 

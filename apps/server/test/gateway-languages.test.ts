@@ -229,7 +229,7 @@ describe('dictation languages on the gateway', () => {
   });
 
   it('logs empty route counts for an automatic dictation and ignores malformed routes', async () => {
-    const server = await start({ capabilities: ROUTING_STT, respond: (_pcm, _language, request) => ({ status: 200, body: { text: 'x', language: null, route: request.languages === undefined ? 'conditioned' : 'Route 7' } }) });
+    const server = await start({ capabilities: ROUTING_STT, respond: (_pcm, _language, request) => ({ status: 200, body: { text: 'x', language: null, route: request.languages === undefined ? 'conditioned' : 'secret' } }) });
     const session = await readySession(server);
     session.send({ type: 'start', sessionId: 's1', language: 'sk' });
     sendAudio(session, speech(2));
@@ -242,6 +242,19 @@ describe('dictation languages on the gateway', () => {
     await waitUntil(() => dictationLines().length === 2);
 
     expect(dictationLines().map((line) => line.routes)).toEqual([{}, {}]);
+    expect(lines.join('')).not.toContain('secret');
+  });
+
+  it('reports stt_unavailable, never languages_unavailable, when the stt answers 409 to a legacy dictation', async () => {
+    const session = await readySession(await start({ capabilities: ROUTING_STT, respond: () => ({ status: 409, body: { error: 'languages unavailable' } }) }));
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    sendAudio(session, speech(2));
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toStrictEqual([
+      { type: 'final', sessionId: 's1', segmentId: 0, text: '' },
+      { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 's1' },
+    ]);
   });
 
   it('logs no route counts for a skipped silent segment and sends it with a null language', async () => {

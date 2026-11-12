@@ -1,7 +1,7 @@
 import { DICTATION_LANGUAGES, MAX_TEXT_CHARS, ProtocolError, type DictationLanguage } from '@codevo-whisper/protocol';
 import type { SttRequest, SttTranscript } from './stt-client';
 
-const ROUTE_PATTERN = /^[a-z][a-z-]{0,31}$/;
+const ROUTES: readonly string[] = ['auto', 'verbatim-short', 'verbatim-foreign', 'verbatim-unsure', 'conditioned-fix', 'verbatim-guard', 'conditioned', 'verbatim-fallback'];
 
 type Reply = { text: string; language?: unknown; route?: unknown };
 
@@ -25,10 +25,7 @@ function detectedLanguage(value: unknown): DictationLanguage | null {
 }
 
 function routeOf(value: unknown): string | null {
-  if (typeof value !== 'string' || !ROUTE_PATTERN.test(value)) {
-    return null;
-  }
-  return value;
+  return ROUTES.find((route) => route === value) ?? null;
 }
 
 export function parseSttTranscript(body: unknown, request: SttRequest): SttTranscript {
