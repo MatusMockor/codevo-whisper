@@ -213,6 +213,9 @@ test('explains an unreachable server, offers a retry and never shows placeholder
   await expect(panel).toContainText('ws://127.0.0.1:');
   await expect(panel).toContainText('SSH tunel');
   await expect(panel.getByRole('button', { name: 'Skúsiť znova' })).toBeVisible();
+  const headerBottom = await card().locator('.srv-top').evaluate((header) => header.getBoundingClientRect().bottom);
+  const panelTop = await panel.evaluate((element) => element.getBoundingClientRect().top);
+  expect(panelTop - headerBottom).toBeGreaterThanOrEqual(12);
   await expect(card()).not.toContainText('–');
   await expect(card()).not.toContainText('Verzia servera');
   await expect(nowCard()).toContainText('Server neodpovedá');
