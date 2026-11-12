@@ -39,6 +39,11 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
   disconnected: 'disconnected',
 };
 
+const FAILURE_BY_REFUSAL: Partial<Record<EngineUnavailableReason, EngineFailureReason>> = {
+  'server-languages-outdated': 'languages-outdated',
+  'server-languages-missing': 'languages-missing',
+};
+
 const RETRYABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline', 'timeout']);
 
 const RECONNECTABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline']);
@@ -411,8 +416,13 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private refuse(reason: EngineUnavailableReason): void {
+    const textSoFar = this.textSoFar();
     this.settle();
-    this.result.reject(new EngineUnavailableError(reason));
+    if (textSoFar === '') {
+      this.result.reject(new EngineUnavailableError(reason));
+      return;
+    }
+    this.result.reject(new TranscriptionFailedError(FAILURE_BY_REFUSAL[reason] ?? 'protocol', textSoFar));
   }
 
   private failureReason(kind: RemoteFailureKind): EngineFailureReason {

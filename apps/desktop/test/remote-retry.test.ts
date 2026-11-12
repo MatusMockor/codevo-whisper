@@ -235,6 +235,28 @@ describe('RemoteDictation retry', () => {
     expect(server.stt.requests).toEqual([{ language: 'auto', languages: ['sk', 'cs'], kind: 'final', bytes: SECOND }]);
   });
 
+  it('keeps the text received before the drop when the gateway came back older than 0.3.0', async () => {
+    const updates: TranscriptUpdate[] = [];
+    const stt: FakeSttBehaviour = {
+      capabilities: ROUTING_STT,
+      respond: (pcm) => ({ status: 200, body: { text: pcm.length === 25 * SECOND ? 'prvá časť textu' : 'textu a koniec', language: 'sk', route: 'conditioned' } }),
+      delayFor: (pcm) => (pcm.length === 25 * SECOND ? 0 : 2000),
+    };
+    const { server, relay, dictation, source } = await setup(stt, {}, undefined, { selection: { mode: 'selected', selected: ['sk'] }, onTranscript: (update) => updates.push(update) });
+    talk(dictation, continuousSpeech(26));
+    const finished = dictation.finish();
+    await expect.poll(() => updates.some((update) => update.type === 'final' && update.text !== '')).toBe(true);
+    const reconnecting = Promise.withResolvers<void>();
+    source.gate = reconnecting.promise;
+
+    relay.dropAll();
+    await server.restart({ serverVersion: '0.2.7' });
+    reconnecting.resolve();
+
+    await expect(finished).rejects.toMatchObject({ name: 'TranscriptionFailedError', reason: 'languages-outdated', textSoFar: 'prvá časť' });
+    expect(relay.connections()).toBe(2);
+  });
+
   it('stops reconnecting when the dictation is cancelled during the backoff and opens no further connection', async () => {
     const { server, relay, dictation, controller } = await setup({ ...bySize, delayMs: 2000 }, { reconnectDelaysMs: [400, 400, 400] });
     speak(dictation, SECOND);

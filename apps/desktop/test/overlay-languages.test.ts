@@ -24,5 +24,7 @@ describe('overlay language readiness errors', () => {
   it('points a language session the server refused to the server page, or to the text recognised so far', () => {
     expect(failureState('languages-missing', false)).toEqual({ kind: 'error', message: 'Na serveri chýbajú modely pre zvolené jazyky.', action: 'open-server' });
     expect(failureState('languages-missing', true)).toEqual({ kind: 'error', message: 'Na serveri chýbajú modely pre zvolené jazyky.', action: 'copy-last' });
+    expect(failureState('languages-outdated', false)).toEqual({ kind: 'error', message: 'Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.', action: 'open-server' });
+    expect(failureState('languages-outdated', true)).toEqual({ kind: 'error', message: 'Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.', action: 'copy-last' });
   });
 });

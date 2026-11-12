@@ -115,6 +115,7 @@ const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.f
   'engine-failed': MESSAGES.transcriptionFailed,
   busy: MESSAGES.serverBusy,
   'stt-unavailable': MESSAGES.serverSttUnavailable,
+  'languages-outdated': MESSAGES.serverLanguagesOutdated,
   'languages-missing': MESSAGES.serverLanguagesMissing,
   'too-long': MESSAGES.serverTooLong,
   'connection-lost': MESSAGES.serverConnectionLost,
@@ -123,7 +124,7 @@ const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.f
   disconnected: MESSAGES.serverDisconnected,
 });
 
-const SERVER_FIXED_FAILURES: ReadonlySet<EngineFailureReason> = new Set(['repair-needed', 'languages-missing']);
+const SERVER_FIXED_FAILURES: ReadonlySet<EngineFailureReason> = new Set(['repair-needed', 'languages-outdated', 'languages-missing']);
 
 export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean): ErrorState {
   if (hasTextSoFar) {

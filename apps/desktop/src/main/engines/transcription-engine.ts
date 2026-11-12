@@ -52,7 +52,7 @@ export class EngineUnavailableError extends Error {
   }
 }
 
-export type EngineFailureReason = 'engine-failed' | 'busy' | 'stt-unavailable' | 'languages-missing' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol' | 'disconnected';
+export type EngineFailureReason = 'engine-failed' | 'busy' | 'stt-unavailable' | 'languages-outdated' | 'languages-missing' | 'too-long' | 'connection-lost' | 'repair-needed' | 'protocol' | 'disconnected';
 
 export class TranscriptionFailedError extends Error {
   override readonly name = 'TranscriptionFailedError';
