@@ -42,14 +42,19 @@ describe('processFinalTranscript', () => {
       .toBe('hmming album umbilical foo_hmm_bar eee.com hmm/path');
   });
 
-  it('uses the lists of the selected languages, their union for several, and the auto list otherwise', () => {
+  it('uses the union of the lists of the selected languages and the auto list only in automatic mode', () => {
     expect(process('ehm eee um uh hmm', { languages: only('en'), removeFillerWords: true })).toBe('ehm eee');
     expect(process('ehm eee um uh hmm', { languages: only('sk'), removeFillerWords: true })).toBe('um uh');
     expect(process('ehm eee um uh hmm', { languages: only('cs'), removeFillerWords: true })).toBe('um uh');
     expect(process('ehm eee um uh hmm', { languages: only('sk', 'cs'), removeFillerWords: true })).toBe('um uh');
     expect(process('ehm eee um uh hmm', { languages: only('sk', 'en'), removeFillerWords: true })).toBe('');
-    expect(process('ehm eee um uh hmm', { languages: only('sk', 'de'), removeFillerWords: true })).toBe('');
+    expect(process('ehm eee um uh hmm', { languages: only('sk', 'de'), removeFillerWords: true })).toBe('um uh');
     expect(process('ehm eee um uh hmm', { languages: { mode: 'auto', selected: ['en'] }, removeFillerWords: true })).toBe('');
+  });
+
+  it('keeps words of a language without its own filler list', () => {
+    expect(process('Ich komme um acht Uhr.', { languages: only('de'), removeFillerWords: true })).toBe('Ich komme um acht Uhr.');
+    expect(process('Ich komme um acht Uhr.', { languages: AUTO, removeFillerWords: true })).toBe('Ich komme acht Uhr.');
   });
 
   it.each([

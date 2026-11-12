@@ -1,4 +1,7 @@
 import type { MenuItemConstructorOptions } from 'electron';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 
@@ -26,6 +29,23 @@ vi.mock('electron', () => ({
 }));
 
 const { TrayMenu } = await import('../src/main/tray/tray-menu');
+const { SettingsStore } = await import('../src/main/settings/settings-store');
+
+function trayDeps(settings: ConstructorParameters<typeof TrayMenu>[0]['settings']): ConstructorParameters<typeof TrayMenu>[0] {
+  return {
+    platform: 'linux',
+    coordinator: { pasteLast: () => Promise.resolve(), copyLast: () => Promise.resolve(), pause: () => undefined, resume: () => undefined, isPaused: () => false } as never,
+    capture: { listDevices: () => Promise.resolve([]) },
+    settings,
+    lastTranscript: { get: () => null, onChange: () => () => undefined },
+    models: { activeLanguageHint: () => 'optional' } as never,
+    updates: { status: () => ({ currentVersion: '0.2.1', mode: 'auto', phase: { kind: 'idle' } }) as never, install: () => Promise.resolve('restarting' as never), check: () => Promise.resolve(undefined as never), onChange: () => () => undefined },
+    openApp: () => undefined,
+    openSettings: () => undefined,
+    quit: () => undefined,
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+  };
+}
 
 function linuxTray() {
   let settings: Settings = { ...DEFAULT_SETTINGS, hotkey: { label: 'Pravý Ctrl' } as Settings['hotkey'] };
@@ -45,7 +65,7 @@ function linuxTray() {
       get: () => settings,
       update: (patch) => {
         const previous = settings;
-        settings = { ...settings, ...patch };
+        settings = { ...settings, ...(typeof patch === 'function' ? patch(settings) : patch) };
         settingsListeners.forEach((listener) => listener(settings, previous));
         return Promise.resolve(settings);
       },
@@ -101,5 +121,26 @@ describe('TrayMenu on Linux', () => {
     submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
     await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Automaticky'));
     expect(current().languages).toEqual({ mode: 'auto', selected: ['sk'] });
+  });
+
+  it('switches the mode on top of a languages write that is still queued', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cw-tray-languages-'));
+    try {
+      const store = new SettingsStore(join(dir, 'settings.json'));
+      await store.load();
+      await store.update({ languages: { mode: 'selected', selected: ['sk'] } });
+      const tray = new TrayMenu(trayDeps(store));
+      tray.create();
+      const pending = store.update({ languages: { mode: 'selected', selected: ['sk', 'cs', 'en'] } });
+
+      submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
+      await pending;
+
+      await vi.waitFor(() => expect(store.get().languages).toEqual({ mode: 'auto', selected: ['sk', 'cs', 'en'] }));
+      expect((await new SettingsStore(join(dir, 'settings.json')).load()).languages).toEqual({ mode: 'auto', selected: ['sk', 'cs', 'en'] });
+      tray.destroy();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

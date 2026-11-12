@@ -7,6 +7,8 @@ import { sanitizeSettings } from './sanitize-settings';
 
 export type SettingsListener = (next: Settings, previous: Settings) => void;
 
+export type SettingsPatch = Partial<Settings> | ((current: Settings) => Partial<Settings>);
+
 function parseJson(text: string | null): unknown {
   if (text === null) {
     return null;
@@ -58,7 +60,7 @@ export class SettingsStore implements LegacySettingsReader {
     return this.current;
   }
 
-  update(patch: Partial<Settings>): Promise<Settings> {
+  update(patch: SettingsPatch): Promise<Settings> {
     const run = this.pending.then(() => this.apply(patch));
     this.pending = run.catch(() => undefined);
     return run;
@@ -80,9 +82,10 @@ export class SettingsStore implements LegacySettingsReader {
     }
   }
 
-  private async apply(patch: Partial<Settings>): Promise<Settings> {
+  private async apply(patch: SettingsPatch): Promise<Settings> {
     const previous = this.current;
-    const next = freezeSettings({ ...previous, ...patch });
+    const changes = typeof patch === 'function' ? patch(previous) : patch;
+    const next = freezeSettings({ ...previous, ...changes });
     await writeFileAtomic(this.file, `${JSON.stringify(next, null, 2)}\n`);
     this.legacy = null;
     this.current = next;

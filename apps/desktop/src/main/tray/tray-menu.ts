@@ -147,7 +147,7 @@ export class TrayMenu {
       pasteLast: () => void coordinator.pasteLast().catch(report('Pasting the last transcript from the tray failed')),
       togglePause: () => this.togglePause(),
       chooseMicrophone: (microphone) => void settings.update({ microphone }).catch(report('The microphone could not be saved')),
-      chooseLanguageMode: (mode) => void settings.update({ languages: { ...settings.get().languages, mode } }).catch(report('The language mode could not be saved')),
+      chooseLanguageMode: (mode) => void settings.update((current) => ({ languages: { ...current.languages, mode } })).catch(report('The language mode could not be saved')),
       editLanguages: () => this.deps.openSettings(),
       openApp: () => this.deps.openApp(),
       openSettings: () => this.deps.openSettings(),

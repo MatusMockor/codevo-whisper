@@ -14,12 +14,5 @@ export function fillerWords(selection: LanguageSelection): ReadonlySet<string> {
   if (selection.mode === 'auto') {
     return AUTO_FILLERS;
   }
-  const lists = selection.selected.flatMap((language) => {
-    const list = FILLERS_BY_LANGUAGE[language];
-    return list === undefined ? [] : [list];
-  });
-  if (lists.length < selection.selected.length) {
-    return AUTO_FILLERS;
-  }
-  return new Set(lists.flat());
+  return new Set(selection.selected.flatMap((language) => FILLERS_BY_LANGUAGE[language] ?? []));
 }

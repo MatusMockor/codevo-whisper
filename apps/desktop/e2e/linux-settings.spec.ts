@@ -42,19 +42,23 @@ test('Linux paste shortcut settings persist and reject invalid values', async ()
   } finally { await app.close(); }
 });
 
-test('Linux Jazyky diktovania reorders the chosen languages and fits narrow windows', async () => {
+test('Linux Jazyky diktovania reorders the used languages and fits narrow windows', async () => {
   test.skip(process.platform !== 'linux');
   const dir = await createUserDataDir({ ...ONBOARDED, languages: { mode: 'selected', selected: ['sk', 'cs'] } });
   const app = await launchApp(dir);
   try {
     const page = await mainWindow(app);
     await page.getByRole('tab', { name: 'Nastavenia', exact: true }).click();
-    const chosen = page.getByRole('list', { name: 'Zvolené jazyky' }).getByRole('listitem');
-    await expect(chosen).toHaveText([/Slovenčina/, /Čeština/]);
-    await page.getByRole('button', { name: 'Nižšie: Slovenčina' }).click();
-    await expect(chosen).toHaveText([/Čeština/, /Slovenčina/]);
-    await expect(chosen.first()).toContainText('Hlavný');
+    const used = () => page.getByRole('region', { name: 'Používané jazyky' }).getByRole('listitem');
+    await expect(used()).toHaveText([/Slovenčina/, /Čeština/]);
+    await used().filter({ hasText: 'Slovenčina' }).focus();
+    await page.keyboard.press('Alt+ArrowDown');
+    await expect(used()).toHaveText([/Čeština/, /Slovenčina/]);
+    await expect(used().first()).toContainText('Hlavný');
+    await expect(used().filter({ hasText: 'Slovenčina' })).toBeFocused();
     await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.languages))).toEqual({ mode: 'selected', selected: ['cs', 'sk'] });
+    await page.getByRole('region', { name: 'Ďalšie jazyky' }).getByRole('button', { name: 'Pridať Nemčina', exact: true }).dragTo(used().filter({ hasText: 'Čeština' }), { targetPosition: { x: 24, y: 3 } });
+    await expect(used()).toHaveText([/Nemčina/, /Čeština/, /Slovenčina/]);
     for (const width of [1000, 800]) {
       await app.evaluate(({ BrowserWindow }, width) => { BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Codevo Whisper')?.setSize(width, 760); }, width);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

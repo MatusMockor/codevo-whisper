@@ -238,6 +238,18 @@ describe('SettingsStore', () => {
     expect(await new SettingsStore(file).load()).toEqual(expected);
   });
 
+  it('computes a function update from the settings left by the writes queued before it', async () => {
+    const store = new SettingsStore(file);
+    await store.load();
+
+    const queued = store.update({ languages: CZECH });
+    const derived = store.update((current) => ({ languages: { ...current.languages, mode: 'auto' } }));
+    await Promise.all([queued, derived]);
+
+    expect(store.get().languages).toEqual({ mode: 'auto', selected: ['cs', 'sk'] });
+    expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'auto', selected: ['cs', 'sk'] });
+  });
+
   it('survives a stray temp file', async () => {
     await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, languages: ENGLISH }));
     await writeFile(`${file}.tmp`, '{ half written');

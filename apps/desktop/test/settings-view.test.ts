@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hotkeyRecordMessage } from '../src/renderer/settings/hotkey-record-message';
-import { languageModeOptions, needsLanguageChoice, requiredLanguageNote, showsSingleLanguageHint } from '../src/renderer/settings/language-options';
+import { languageChangeNotice, languageModeOptions, languageRowLabel, needsLanguageChoice, requiredLanguageNote } from '../src/renderer/settings/language-options';
 import { levelBars } from '../src/renderer/settings/level-bars';
 import { bluetoothHint, microphoneOptions, SYSTEM_DEFAULT_VALUE } from '../src/renderer/settings/microphone-options';
 import { formatSize, modelRow } from '../src/renderer/settings/model-rows';
@@ -37,10 +37,11 @@ describe('languageModeOptions', () => {
     expect(requiredLanguageNote(null)).toBeNull();
   });
 
-  it('shows the related language hint only for a single selected language', () => {
-    expect(showsSingleLanguageHint({ mode: 'selected', selected: ['sk'] })).toBe(true);
-    expect(showsSingleLanguageHint({ mode: 'selected', selected: ['sk', 'cs'] })).toBe(false);
-    expect(showsSingleLanguageHint({ mode: 'auto', selected: ['sk'] })).toBe(false);
+  it('names the used rows with their rank and announces changes', () => {
+    expect(languageRowLabel('sk', 0)).toBe('Slovenčina, hlavný jazyk, poradie 1');
+    expect(languageRowLabel('cs', 2)).toBe('Čeština, poradie 3');
+    expect(languageChangeNotice('de', 'added')).toBe('Nemčina pridaná.');
+    expect(languageChangeNotice('uk', 'removed')).toBe('Ukrajinčina odobraná.');
   });
 });
 

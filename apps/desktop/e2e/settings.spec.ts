@@ -481,62 +481,104 @@ test.describe('settings page', () => {
     await expect(page.getByRole('switch', { name: 'Spustiť po prihlásení' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('Jazyky diktovania switches the mode, selects and orders languages and keeps them across a relaunch', async () => {
+  test('Jazyky diktovania switches the mode, adds, orders and removes languages and keeps them across a relaunch', async () => {
     const languages = () => row('Jazyky diktovania');
     const modes = () => languages().getByRole('group', { name: 'Jazyky diktovania' });
-    const chosen = () => languages().getByRole('list', { name: 'Zvolené jazyky' }).getByRole('listitem');
+    const usedZone = () => languages().getByRole('region', { name: 'Používané jazyky' });
+    const used = () => usedZone().getByRole('listitem');
+    const usedRow = (name: string) => used().filter({ hasText: name });
+    const otherZone = () => languages().getByRole('region', { name: 'Ďalšie jazyky' });
+    const chip = (name: string) => otherZone().getByRole('button', { name: `Pridať ${name}`, exact: true });
+    const chips = () => otherZone().getByRole('button', { name: /^Pridať / });
+    const status = () => otherZone().getByRole('status');
+    const search = () => otherZone().getByRole('textbox', { name: 'Hľadať jazyk' });
+    const remove = (name: string) => usedZone().getByRole('button', { name: `Odobrať ${name}`, exact: true });
     const onDisk = async () => (JSON.parse(await readFile(join(userDataDir, 'settings.json'), 'utf8')) as Settings).languages;
+    const top = { x: 24, y: 3 };
     await expect(modes().getByRole('button', { name: 'Automaticky' })).toHaveAttribute('aria-pressed', 'true');
     await expect(languages()).toContainText('Jazyk rozpozná model sám.');
-    await expect(languages().getByRole('checkbox')).toHaveCount(0);
+    await expect(usedZone()).toHaveCount(0);
 
     await modes().getByRole('button', { name: 'Zvolené jazyky' }).click();
-    await expect(languages()).toContainText('Prepíše sa len v zvolených jazykoch. Prvý jazyk je hlavný.');
-    await expect(languages().getByRole('checkbox')).toHaveCount(25);
-    await expect(chosen()).toHaveText([/Slovenčina/]);
-    await expect(chosen().first()).toContainText('Hlavný');
+    await expect(languages()).toContainText('Prepíše sa len v jazykoch, ktoré používate. Prvý jazyk je hlavný.');
+    await expect(used()).toHaveText([/Slovenčina/]);
+    await expect(used().first()).toContainText('Hlavný');
+    await expect(usedZone()).toContainText('1 / 5');
+    await expect(usedZone()).toContainText('Pretiahnite sem jazyk');
+    await expect(chips()).toHaveCount(24);
     await expect(languages()).toContainText('Reč v príbuznom jazyku, napríklad v češtine, sa prepíše v zvolenom jazyku.');
-    await expect(languages()).toContainText('Výber jazykov platí pre diktovanie. Stretnutia sa prepisujú s automatickým rozpoznaním jazyka.');
+    await expect(languages()).toContainText('Výber jazykov platí pre diktovanie. Stretnutia sa prepisujú s automatickým rozpoznaním jazyka, okrem modelu Whisper s jedným zvoleným jazykom.');
     await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['sk'] });
 
-    await languages().getByRole('checkbox', { name: 'Slovenčina' }).click();
-    await expect(languages().getByRole('alert')).toHaveText('Aspoň jeden jazyk musí zostať zvolený.');
-    await expect(languages().getByRole('checkbox', { name: 'Slovenčina' })).toBeChecked();
+    await expect(remove('Slovenčina')).toBeDisabled();
+    await usedRow('Slovenčina').dragTo(otherZone());
+    await expect(status()).toHaveText('Aspoň jeden jazyk musí zostať.');
+    await expect(used()).toHaveText([/Slovenčina/]);
 
-    for (const name of ['Čeština', 'Angličtina', 'Nemčina', 'Poľština']) {
-      await languages().getByRole('checkbox', { name }).click();
-      await expect(languages().getByRole('checkbox', { name })).toBeChecked();
-    }
+    await chip('Čeština').click();
+    await expect(status()).toHaveText('Čeština pridaná.');
+    await expect(used()).toHaveText([/Slovenčina/, /Čeština/]);
     await expect(languages()).not.toContainText('Reč v príbuznom jazyku');
-    await languages().getByRole('checkbox', { name: 'Maďarčina' }).click();
-    await expect(languages().getByRole('alert')).toHaveText('Zvoliť môžete najviac 5 jazykov.');
-    await expect(languages().getByRole('checkbox', { name: 'Maďarčina' })).not.toBeChecked();
-    await expect(languages().getByRole('button', { name: 'Vyššie: Slovenčina' })).toBeDisabled();
-    await expect(languages().getByRole('button', { name: 'Nižšie: Poľština' })).toBeDisabled();
 
-    await languages().getByRole('button', { name: 'Vyššie: Čeština' }).click();
-    await expect(chosen()).toHaveText([/Čeština/, /Slovenčina/, /Angličtina/, /Nemčina/, /Poľština/]);
-    await expect(chosen().first()).toContainText('Hlavný');
-    await expect(languages().getByRole('button', { name: 'Nižšie: Čeština' })).toBeFocused();
-    await languages().getByRole('button', { name: 'Nižšie: Angličtina' }).click();
-    await expect(chosen()).toHaveText([/Čeština/, /Slovenčina/, /Nemčina/, /Angličtina/, /Poľština/]);
-    await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['cs', 'sk', 'de', 'en', 'pl'] });
+    await chip('Angličtina').dragTo(usedRow('Slovenčina'), { targetPosition: top });
+    await expect(used()).toHaveText([/Angličtina/, /Slovenčina/, /Čeština/]);
+    await expect(used().first()).toContainText('Hlavný');
+
+    await search().fill('nem');
+    await expect(chips()).toHaveText([/Nemčina/]);
+    await search().fill('xyz');
+    await expect(otherZone()).toContainText('Žiadny jazyk nezodpovedá hľadaniu.');
+    await search().fill('');
+    await chip('Nemčina').focus();
+    await page.keyboard.press('Enter');
+    await expect(used()).toHaveText([/Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
+    await chip('Poľština').focus();
+    await page.keyboard.press('Space');
+    await expect(used()).toHaveText([/Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/, /Poľština/]);
+    await expect(usedZone().locator('.lang-count')).toHaveText('5 / 5');
+    await expect(usedZone().locator('.lang-count')).toHaveClass(/full/);
+    await expect(chip('Maďarčina')).toHaveAttribute('aria-disabled', 'true');
+    await chip('Maďarčina').click();
+    await expect(status()).toHaveText('Používať môžete najviac 5 jazykov. Najprv niektorý odoberte.');
+    await expect(used()).toHaveCount(5);
+
+    await usedRow('Poľština').dragTo(usedRow('Angličtina'), { targetPosition: top });
+    await expect(used()).toHaveText([/Poľština/, /Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
+    await usedRow('Slovenčina').focus();
+    await page.keyboard.press('Alt+ArrowUp');
+    await page.keyboard.press('Alt+ArrowUp');
+    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Angličtina/, /Čeština/, /Nemčina/]);
+    await expect(usedRow('Slovenčina')).toBeFocused();
+    await expect(usedRow('Slovenčina')).toHaveAccessibleName('Slovenčina, hlavný jazyk, poradie 1');
+    await page.keyboard.press('Alt+ArrowDown');
+    await expect(used()).toHaveText([/Poľština/, /Slovenčina/, /Angličtina/, /Čeština/, /Nemčina/]);
+    await expect(usedRow('Slovenčina')).toBeFocused();
+    await page.keyboard.press('Alt+ArrowUp');
+
+    await remove('Angličtina').click();
+    await expect(status()).toHaveText('Angličtina odobraná.');
+    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/, /Nemčina/]);
+    await usedRow('Nemčina').dragTo(otherZone());
+    await expect(status()).toHaveText('Nemčina odobraná.');
+    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/]);
+    await expect(usedZone()).toContainText('3 / 5');
+    await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['sk', 'pl', 'cs'] });
 
     await app.close();
     await start();
     await openSettings();
     await expect(modes().getByRole('button', { name: 'Zvolené jazyky' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(chosen()).toHaveText([/Čeština/, /Slovenčina/, /Nemčina/, /Angličtina/, /Poľština/]);
+    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/]);
 
     await modes().getByRole('button', { name: 'Automaticky' }).click();
-    await expect(languages().getByRole('checkbox')).toHaveCount(0);
-    await expect.poll(onDisk).toEqual({ mode: 'auto', selected: ['cs', 'sk', 'de', 'en', 'pl'] });
+    await expect(usedZone()).toHaveCount(0);
+    await expect.poll(onDisk).toEqual({ mode: 'auto', selected: ['sk', 'pl', 'cs'] });
     await app.close();
     await start();
     await openSettings();
     await expect(modes().getByRole('button', { name: 'Automaticky' })).toHaveAttribute('aria-pressed', 'true');
     await modes().getByRole('button', { name: 'Zvolené jazyky' }).click();
-    await expect(chosen()).toHaveText([/Čeština/, /Slovenčina/, /Nemčina/, /Angličtina/, /Poľština/]);
+    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/]);
   });
 
   test('the hotkey recorder shows the recorded key and explains an unsupported one', async () => {

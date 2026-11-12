@@ -105,6 +105,25 @@ it('transcribes each track with word timestamps and stores a speaker-attributed 
   expect(await readdir(join(dir, 'meetings', id))).not.toContain('mic.wav');
 });
 
+it('keeps the language of the meeting start for every track when settings change midway', async () => {
+  languageHint = 'optional';
+  settings = { ...DEFAULT_SETTINGS, languages: { mode: 'selected', selected: ['cs'] } };
+  const id = await stoppedMeeting({ mic: { startOffsetMs: 0 }, system: { startOffsetMs: 0 } }, { mic: 3201, system: 3201 });
+  await cliPrints('mic', ['  [   0.00 ->    0.40] Ahoj']);
+  await cliPrints('system', ['  [   0.00 ->    0.40] Ahoj']);
+  store.onChange((list) => {
+    if (JSON.stringify(list[0]?.phase) !== '{"kind":"transcribing","step":"system"}') return;
+    languageHint = 'ignored';
+    settings = { ...DEFAULT_SETTINGS, languages: { mode: 'auto', selected: ['cs'] } };
+  });
+
+  await transcriber().transcribe(id);
+
+  const calls = (await readFile(join(dir, 'args.txt'), 'utf8')).split('--\n').filter((call) => call.trim() !== '').map((call) => call.trim().split('\n'));
+  expect(calls).toHaveLength(2);
+  expect(calls.map((args) => args.slice(args.indexOf('--language'), args.indexOf('--language') + 2))).toEqual([['--language', 'cs'], ['--language', 'cs']]);
+});
+
 it.each([
   ['optional', { mode: 'selected', selected: ['cs'] }, ['--language', 'cs']],
   ['optional', { mode: 'selected', selected: ['cs', 'sk'] }, []],
