@@ -57,7 +57,11 @@ test('Linux Jazyky diktovania reorders the used languages and fits narrow window
     await expect(used().first()).toContainText('Hlavný');
     await expect(used().filter({ hasText: 'Slovenčina' })).toBeFocused();
     await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.languages))).toEqual({ mode: 'selected', selected: ['cs', 'sk'] });
-    const from = await page.getByRole('region', { name: 'Ďalšie jazyky' }).getByRole('button', { name: 'Pridať Nemčina', exact: true }).boundingBox();
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Codevo Whisper')?.setSize(1280, 1150); });
+    await expect.poll(() => page.evaluate(() => window.innerHeight)).toBeGreaterThan(950);
+    const german = page.getByRole('region', { name: 'Ďalšie jazyky' }).getByRole('button', { name: 'Pridať Nemčina', exact: true });
+    await german.scrollIntoViewIfNeeded();
+    const from = await german.boundingBox();
     const to = await used().filter({ hasText: 'Čeština' }).boundingBox();
     expect(from).not.toBeNull();
     expect(to).not.toBeNull();

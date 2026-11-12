@@ -22,3 +22,34 @@ export function insertionIndex(rows: readonly Box[], y: number): number {
   const hit = rows.findIndex((row) => y < row.top + (row.bottom - row.top) / 2);
   return hit < 0 ? rows.length : hit;
 }
+
+export type Span = { readonly top: number; readonly bottom: number };
+
+export const EDGE_SCROLL_PX = 48;
+
+export const MAX_EDGE_SCROLL_STEP = 20;
+
+export function edgeScrollStep(y: number, span: Span, edge: number = EDGE_SCROLL_PX, max: number = MAX_EDGE_SCROLL_STEP): number {
+  const fromTop = y - span.top;
+  if (fromTop < edge) {
+    return -Math.ceil(max * Math.min(1, (edge - fromTop) / edge));
+  }
+  const fromBottom = span.bottom - y;
+  if (fromBottom < edge) {
+    return Math.ceil(max * Math.min(1, (edge - fromBottom) / edge));
+  }
+  return 0;
+}
+
+export function visibleSpan(box: Span | null, viewportHeight: number): Span {
+  if (box === null) {
+    return { top: 0, bottom: viewportHeight };
+  }
+  return { top: Math.max(box.top, 0), bottom: Math.min(box.bottom, viewportHeight) };
+}
+
+const SCROLLING_OVERFLOW: ReadonlySet<string> = new Set(['auto', 'scroll', 'overlay']);
+
+export function scrollsVertically(overflowY: string, scrollHeight: number, clientHeight: number): boolean {
+  return SCROLLING_OVERFLOW.has(overflowY) && scrollHeight > clientHeight;
+}

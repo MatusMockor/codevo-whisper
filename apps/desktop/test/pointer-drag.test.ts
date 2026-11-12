@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contains, exceedsThreshold, insertionIndex, regionAt, DRAG_THRESHOLD_PX } from '../src/renderer/components/pointer-drag';
+import { contains, DRAG_THRESHOLD_PX, edgeScrollStep, EDGE_SCROLL_PX, exceedsThreshold, insertionIndex, MAX_EDGE_SCROLL_STEP, regionAt, scrollsVertically, visibleSpan } from '../src/renderer/components/pointer-drag';
 import { acceptsDrop, languageDropPlan } from '../src/renderer/settings/language-drop';
 
 const ROWS = [
@@ -38,6 +38,45 @@ describe('pointer drag geometry', () => {
     expect(regionAt({ x: 150, y: 300 }, regions)).toBe('available');
     expect(regionAt({ x: 150, y: 205 }, regions)).toBeNull();
     expect(regionAt({ x: 350, y: 100 }, regions)).toBeNull();
+  });
+});
+
+describe('edge auto-scroll', () => {
+  const span = { top: 100, bottom: 600 };
+
+  it('does not scroll away from the edges', () => {
+    expect(EDGE_SCROLL_PX).toBe(48);
+    expect(edgeScrollStep(148, span)).toBe(0);
+    expect(edgeScrollStep(350, span)).toBe(0);
+    expect(edgeScrollStep(552, span)).toBe(0);
+  });
+
+  it('scrolls up near the top and down near the bottom, faster the closer the pointer is', () => {
+    expect(edgeScrollStep(147, span)).toBe(-1);
+    expect(edgeScrollStep(124, span)).toBe(-10);
+    expect(edgeScrollStep(100, span)).toBe(-MAX_EDGE_SCROLL_STEP);
+    expect(edgeScrollStep(553, span)).toBe(1);
+    expect(edgeScrollStep(576, span)).toBe(10);
+    expect(edgeScrollStep(600, span)).toBe(MAX_EDGE_SCROLL_STEP);
+  });
+
+  it('caps the speed when the pointer leaves the scrolling area', () => {
+    expect(edgeScrollStep(2, span)).toBe(-MAX_EDGE_SCROLL_STEP);
+    expect(edgeScrollStep(900, span)).toBe(MAX_EDGE_SCROLL_STEP);
+  });
+
+  it('measures the edges on the visible part of the scroll container or the window', () => {
+    expect(visibleSpan({ top: -300, bottom: 1400 }, 680)).toEqual({ top: 0, bottom: 680 });
+    expect(visibleSpan({ top: 56, bottom: 640 }, 680)).toEqual({ top: 56, bottom: 640 });
+    expect(visibleSpan(null, 680)).toEqual({ top: 0, bottom: 680 });
+  });
+
+  it('treats only overflowing auto or scroll containers as scrollable', () => {
+    expect(scrollsVertically('auto', 2000, 600)).toBe(true);
+    expect(scrollsVertically('scroll', 2000, 600)).toBe(true);
+    expect(scrollsVertically('auto', 600, 600)).toBe(false);
+    expect(scrollsVertically('visible', 2000, 600)).toBe(false);
+    expect(scrollsVertically('hidden', 2000, 600)).toBe(false);
   });
 });
 
