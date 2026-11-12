@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { LanguageCode } from './languages';
 import { readTranscript } from './read-transcript';
 import { runProcess } from './run-process';
 import { withTempDir } from './temp-dir';
@@ -10,7 +11,7 @@ export const MAX_OUTPUT_BYTES = 16_000;
 
 export type TranscribeBackend = 'metal' | 'cpu' | 'vulkan' | 'auto';
 
-export type TranscribeLanguage = 'sk' | 'en' | 'cs' | 'auto';
+export type TranscribeLanguage = LanguageCode | 'auto';
 
 export type TranscribeCliOptions = {
   binary: string;

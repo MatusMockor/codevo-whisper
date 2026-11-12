@@ -10,6 +10,8 @@ const slowMs = Number(process.env.FAKE_WORKER_SLOW_MS ?? '5000');
 const loadDelayMs = Number(process.env.FAKE_WORKER_LOAD_DELAY_MS ?? '0');
 const replyText = process.env.FAKE_WORKER_REPLY_TEXT;
 const backend = process.argv[process.argv.indexOf('--backend') + 1];
+const model = process.argv[process.argv.indexOf('--model') + 1] ?? '';
+const role = /lang-?id/i.test(model) ? 'langid' : 'asr';
 const primaryFailure = backend !== 'cpu' && process.env.FAKE_WORKER_PRIMARY;
 let readySent = false;
 
@@ -36,10 +38,31 @@ if (process.env.FAKE_WORKER_LOAD === 'fail' || primaryFailure === 'fail') {
 let buffer = Buffer.alloc(0);
 let busy = Promise.resolve();
 
+function nextLanguageIdRequest() {
+  if (buffer.length < 2) return null;
+  const count = buffer[1];
+  let end = 2;
+  const allowed = [];
+  for (let index = 0; index < count; index++) {
+    if (buffer.length < end + 1) return null;
+    const length = buffer[end++];
+    if (buffer.length < end + length) return null;
+    allowed.push(buffer.subarray(end, end + length).toString('ascii'));
+    end += length;
+  }
+  if (buffer.length < end + 4) return null;
+  const samples = buffer.readUInt32LE(end);
+  const total = end + 4 + samples * 2;
+  if (buffer.length < total) return null;
+  buffer = buffer.subarray(total);
+  return { role: 'langid', allowed, samples };
+}
+
 function nextRequest() {
   if (buffer.length < 1) {
     return null;
   }
+  if (buffer[0] === 254) return nextLanguageIdRequest();
   const extended = buffer[0] === 255;
   const base = extended ? 1 : 0;
   if (buffer.length < base + 1) return null;
@@ -68,11 +91,26 @@ function nextRequest() {
     return null;
   }
   buffer = buffer.subarray(total);
-  return { language, samples, vocabulary };
+  return { role: 'asr', language, samples, vocabulary };
+}
+
+function formatG(value) {
+  const rounded = Number(value.toPrecision(9));
+  if (rounded === 0 || Math.abs(rounded) >= 1e-4) return String(rounded);
+  return rounded.toExponential().replace(/e([+-])(\d)$/, 'e$10$2');
+}
+
+function languageScores(allowed) {
+  const top = process.env.FAKE_WORKER_LID_TOP;
+  const ranked = allowed.includes(top) ? [top, ...allowed.filter((code) => code !== top)] : allowed;
+  const first = ranked.length === 1 ? 1 : Number(process.env.FAKE_WORKER_LID_P ?? '0.9');
+  const rest = ranked.length === 1 ? 0 : (1 - first) / (ranked.length - 1);
+  return ranked.map((code, index) => `${code} ${formatG(index === 0 ? first : rest)}\n`).join('');
 }
 
 async function handle(request) {
   if (process.env.FAKE_WORKER_REQUIRE_READY === '1' && !readySent) process.exit(83);
+  if (request.role !== role) return reply(1, 'wrong role');
   if (process.env.FAKE_WORKER_VOCABULARY === '1') return reply(0, JSON.stringify(request.vocabulary));
   await sleep(request.samples === slowSamples ? slowMs : delayMs);
   if (request.samples === crashSamples) {
@@ -80,6 +118,14 @@ async function handle(request) {
   }
   if (replyText !== undefined) {
     reply(0, replyText);
+    return;
+  }
+  if (request.role === 'langid' && request.samples < Number(process.env.FAKE_WORKER_LID_MIN_SAMPLES ?? '0')) {
+    reply(1, 'input audio too short');
+    return;
+  }
+  if (request.role === 'langid') {
+    reply(0, languageScores(request.allowed));
     return;
   }
   reply(0, `${process.pid}:${request.language || 'auto'}:${request.samples}`);
