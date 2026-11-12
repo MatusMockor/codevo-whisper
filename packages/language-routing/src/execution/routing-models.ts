@@ -20,6 +20,12 @@ export class RoutingModels {
     return { text, language, route };
   }
 
+  verbatimFallback(pcm: Uint8Array, signal: AbortSignal, conditionedError: unknown): Promise<RoutedTranscript> {
+    return this.verbatim(pcm, 'verbatim-fallback', signal).catch((error: unknown) => {
+      throw signal.aborted ? error : conditionedError;
+    });
+  }
+
   async both(pcm: Uint8Array, language: SupportedLanguage, signal: AbortSignal): Promise<ParallelOutcome> {
     const [conditioned, verbatim] = await Promise.allSettled([
       this.conditionedModel.transcribe({ pcm, language, signal }),

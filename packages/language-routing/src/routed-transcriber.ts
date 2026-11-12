@@ -2,9 +2,9 @@ import { FinalDecisionExecutor } from './execution/final-decision-executor';
 import { PartialDecisionExecutor } from './execution/partial-decision-executor';
 import type { DecisionExecutor } from './execution/routed-segment';
 import { RoutingModels } from './execution/routing-models';
-import { nullUnlessAborted } from './execution/unless-aborted';
+import { recoverUnlessAborted } from './execution/recover-unless-aborted';
 import { LanguageScores } from './language-scores';
-import { SUPPORTED_LANGUAGES } from './languages';
+import { SUPPORTED_LANGUAGES, type LanguageScore } from './languages';
 import { ConfidentRoutePolicy } from './policy/confident-route-policy';
 import type { RoutePolicy, RouteSelection } from './policy/route-policy';
 import type { ConditionedTranscriber, LanguageIdentifier, VerbatimTranscriber } from './ports';
@@ -47,7 +47,7 @@ export class RoutedTranscriber {
     if (screening.kind === 'verbatim') {
       return this.models.verbatim(pcm, screening.route, signal);
     }
-    const rows = await nullUnlessAborted(this.identifier.identify({ pcm, allowed: SUPPORTED_LANGUAGES, signal }), signal);
+    const rows = await recoverUnlessAborted<readonly LanguageScore[] | null>(this.identifier.identify({ pcm, allowed: SUPPORTED_LANGUAGES, signal }), signal, () => Promise.resolve(null));
     if (rows === null) {
       return this.models.verbatim(pcm, 'verbatim-fallback', signal);
     }

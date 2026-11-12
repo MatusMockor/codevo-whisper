@@ -53,7 +53,16 @@ describe('TranslationGuard', () => {
 
   it.each([LanguageSelection.of(['sk']), SK_CS, SK_CS_EN])('never lets Cyrillic verbatim text win over Latin Canary text', (selection) => {
     expect(guard.accepts(SK_GREETING, UK_DRIFT, selection)).toBe(true);
-    expect(guard.accepts('', UK_DRIFT, selection)).toBe(true);
+  });
+
+  it('never accepts an empty conditioned text over a non-empty verbatim text', () => {
+    expect(guard.accepts('', SK_GIBSON.parakeet, SK_EN)).toBe(false);
+    expect(guard.accepts('  \n', SK_GIBSON.parakeet, SK_EN)).toBe(false);
+    expect(guard.accepts('', UK_DRIFT, SK_CS)).toBe(false);
+  });
+
+  it('accepts an empty conditioned text when the verbatim text is empty too', () => {
+    expect(guard.accepts('', ' ', SK_EN)).toBe(true);
   });
 
   it('never lets verbatim text with letters outside the selection win', () => {

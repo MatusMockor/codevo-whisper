@@ -241,6 +241,35 @@ describe('RoutedTranscriber fallbacks', () => {
     expect(result).toEqual({ text: UK_DRIFT, language: null, route: 'verbatim-fallback' });
   });
 
+  it('returns the conditioned text when the verbatim model fails on unsure speech', async () => {
+    await startWith(rig.identifier, UNSURE_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_REPLY_TEXT: SK_GIBSON.canarySk });
+    await startWith(rig.verbatim, CRASH_TWO_SECONDS);
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: SK_GIBSON.canarySk, language: 'sk', route: 'conditioned' });
+  });
+
+  it('rejects with the conditioned error when both models fail on unsure speech', async () => {
+    rig = createRig({ verbatim: { timeoutMs: 200 } });
+    await startWith(rig.identifier, UNSURE_SK);
+    await startWith(rig.conditioned, CRASH_TWO_SECONDS);
+    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
+
+    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' })).rejects.toMatchObject({ reason: 'exit' });
+  });
+
+  it('keeps the verbatim text when the conditioned model returns nothing', async () => {
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_REPLY_TEXT: '' });
+    await startWith(rig.verbatim, { FAKE_WORKER_REPLY_TEXT: SK_GIBSON.parakeet });
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: SK_GIBSON.parakeet, language: null, route: 'verbatim-guard' });
+  });
+
   it('transcribes verbatim when language ID fails', async () => {
     await startWith(rig.identifier, CRASH_TWO_SECONDS);
 
@@ -289,6 +318,46 @@ describe('RoutedTranscriber partials', () => {
 
     expect(result).toEqual({ text: UK_DRIFT, language: null, route: 'verbatim-unsure' });
     expect(rig.conditioned.ready()).toBe(false);
+  });
+
+  it('returns the verbatim text when the conditioned model fails on a confident partial', async () => {
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) });
+    await startWith(rig.verbatim, { FAKE_WORKER_REPLY_TEXT: SK_GIBSON.parakeet });
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial' });
+
+    expect(result).toEqual({ text: SK_GIBSON.parakeet, language: null, route: 'verbatim-fallback' });
+  });
+
+  it('rejects a confident partial with the conditioned error when both models fail', async () => {
+    rig = createRig({ verbatim: { timeoutMs: 200 } });
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) });
+    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
+
+    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial' })).rejects.toMatchObject({ reason: 'exit' });
+  });
+
+  it('returns the conditioned text when the verbatim model fails on an unsure partial', async () => {
+    await startWith(rig.identifier, UNSURE_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_REPLY_TEXT: SK_GIBSON.canarySk });
+    await startWith(rig.verbatim, { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) });
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial' });
+
+    expect(result).toEqual({ text: SK_GIBSON.canarySk, language: 'sk', route: 'conditioned' });
+  });
+
+  it('still rejects a partial with the abort when the caller aborts after the conditioned model failed', async () => {
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) });
+    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
+    const controller = new AbortController();
+    const reason = new DOMException('partial cancelled', 'AbortError');
+    setTimeout(() => controller.abort(reason), 400);
+
+    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial', signal: controller.signal })).rejects.toBe(reason);
   });
 
   it('keeps short and foreign partials verbatim', async () => {

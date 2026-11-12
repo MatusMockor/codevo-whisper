@@ -21,14 +21,14 @@ const TABLE: AlphabetRow[] = [
   { code: 'es', sentence: 'El niño come una manzana pequeña.', rejectedBy: 'it' },
   { code: 'et', sentence: 'Õhtul läks ta jõe äärde.', rejectedBy: 'fi' },
   { code: 'fi', sentence: 'Hyvää päivää, mitä kuuluu?', rejectedBy: 'en' },
-  { code: 'fr', sentence: 'Le garçon a mangé une crème brûlée.', rejectedBy: 'de' },
+  { code: 'fr', sentence: 'Le garçon a mangé une crème brûlée.', rejectedBy: 'pl' },
   { code: 'hr', sentence: 'Đak je pročitao knjigu o ćevapima.', rejectedBy: 'sl' },
   { code: 'hu', sentence: 'Az őszi szél fújja a fűzfát.', rejectedBy: 'de' },
-  { code: 'it', sentence: 'Perché la città è così bella?', rejectedBy: 'de' },
+  { code: 'it', sentence: 'Perché la città è così bella?', rejectedBy: 'pl' },
   { code: 'lt', sentence: 'Ąžuolas auga prie ežero kranto.', rejectedBy: 'lv' },
   { code: 'lv', sentence: 'Ķēniņš dzīvoja lielā pilī.', rejectedBy: 'lt' },
   { code: 'mt', sentence: 'Il-ħobż huwa tajjeb ħafna.', rejectedBy: 'pl' },
-  { code: 'nl', sentence: 'De ideeën van de coöperatie zijn één.', rejectedBy: 'en' },
+  { code: 'nl', sentence: 'De ideeën van de coöperatie zijn één.', rejectedBy: 'pl' },
   { code: 'pl', sentence: 'Zażółć gęślą jaźń.', rejectedBy: 'cs' },
   { code: 'pt', sentence: 'A educação não é só para crianças.', rejectedBy: 'es' },
   { code: 'ro', sentence: 'Știința și țara românească.', rejectedBy: 'it' },
@@ -75,9 +75,22 @@ describe('OrthographyCheck', () => {
     { code: 'sv', sentence: 'Jag äter müsli 3 à 4 gånger i veckan.' },
     { code: 'de', sentence: 'Wir treffen uns im Café.' },
     { code: 'el', sentence: 'ΤΟ ΦΕΣΤΙΒΑΛ ΞΕΚΙΝΑ ΣΤΙΣ 3 ΜΑΐΟΥ.' },
+    { code: 'de', sentence: 'Crème fraîche gehört auf den Flammkuchen.' },
+    { code: 'nl', sentence: 'De façade van het hotel is gerenoveerd.' },
+    { code: 'en', sentence: 'The café on the façade side serves crème brûlée.' },
+    { code: 'sv', sentence: 'Vi åt crème brûlée på caféet.' },
+    { code: 'da', sentence: 'Vi drak en café au lait på hjørnet.' },
+    { code: 'fi', sentence: 'Söimme crème brûléeta kahvilassa.' },
+    { code: 'et', sentence: 'Sõime kohvikus crème brûlée’d.' },
   ])('accepts common $code spelling with loan accents or capitals', ({ code, sentence }) => {
     expect(check.isConsistent(sentence, only(code as SupportedLanguage))).toBe(true);
     expect(check.isConsistent(sentence.toUpperCase(), only(code as SupportedLanguage))).toBe(true);
+  });
+
+  it('keeps the letters that tell Slovak and Czech apart', () => {
+    expect(check.isConsistent('Pán poslanec povedal, že přijde zajtra.', only('sk'))).toBe(false);
+    ['ř', 'ě', 'ů'].forEach((letter) => expect(check.isConsistent(`slovo ${letter}`, only('sk'))).toBe(false));
+    ['ä', 'ľ', 'ĺ', 'ŕ', 'ô'].forEach((letter) => expect(check.isConsistent(`slovo ${letter}`, only('cs'))).toBe(false));
   });
 
   it('ignores digits, punctuation and spacing', () => {

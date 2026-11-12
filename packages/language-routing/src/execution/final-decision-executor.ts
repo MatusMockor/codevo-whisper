@@ -4,7 +4,7 @@ import type { OrthographyCheck } from '../text/orthography-check';
 import type { TranslationGuard } from '../text/translation-guard';
 import type { DecisionExecutor, RoutedSegment } from './routed-segment';
 import type { RoutingModels } from './routing-models';
-import { nullUnlessAborted } from './unless-aborted';
+import { recoverUnlessAborted } from './recover-unless-aborted';
 
 export class FinalDecisionExecutor implements DecisionExecutor {
   constructor(
@@ -14,12 +14,16 @@ export class FinalDecisionExecutor implements DecisionExecutor {
   ) {}
 
   async unsure(segment: RoutedSegment): Promise<RoutedTranscript> {
-    const verbatim = await this.models.verbatim(segment.pcm, 'verbatim-unsure', segment.signal);
+    const { pcm, language, signal } = segment;
+    const verbatim = await recoverUnlessAborted<RoutedTranscript | null>(this.models.verbatim(pcm, 'verbatim-unsure', signal), signal, () => Promise.resolve(null));
+    if (verbatim === null) {
+      return this.models.conditioned(pcm, language, 'conditioned', signal);
+    }
     if (this.orthography.isConsistent(verbatim.text, segment.selection)) {
       return verbatim;
     }
-    const fixed = await nullUnlessAborted(this.models.conditioned(segment.pcm, segment.language, 'conditioned-fix', segment.signal), segment.signal);
-    return fixed ?? { text: verbatim.text, language: null, route: 'verbatim-fallback' };
+    const fallback: RoutedTranscript = { text: verbatim.text, language: null, route: 'verbatim-fallback' };
+    return recoverUnlessAborted(this.models.conditioned(pcm, language, 'conditioned-fix', signal), signal, () => Promise.resolve(fallback));
   }
 
   async confident(segment: RoutedSegment): Promise<RoutedTranscript> {

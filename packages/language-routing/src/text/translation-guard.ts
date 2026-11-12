@@ -21,6 +21,9 @@ export class TranslationGuard {
   ) {}
 
   accepts(conditioned: string, verbatim: string, selection: LanguageSelection): boolean {
+    if (conditioned.trim() === '' && verbatim.trim() !== '') {
+      return false;
+    }
     if (!this.orthography.isConsistent(verbatim, selection)) {
       return true;
     }
