@@ -2,7 +2,8 @@
 
 #include <string.h>
 
-static const char * const LANGUAGES[] = { "sk", "en", "cs" };
+static const char * const LANGUAGES[] = { "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it",
+                                          "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk" };
 
 static uint32_t decode_u32(const uint8_t * bytes) {
     return (uint32_t) bytes[0] | ((uint32_t) bytes[1] << 8) | ((uint32_t) bytes[2] << 16) | ((uint32_t) bytes[3] << 24);
@@ -91,6 +92,54 @@ enum cw_parse_status cw_parse_header(const uint8_t * data, size_t size, struct c
     out->header_bytes = header_bytes;
     out->samples      = samples;
     return base == 0 ? CW_PARSE_OK : read_vocabulary(data, size, header_bytes, out);
+}
+
+static int lowercase_ascii(const uint8_t * bytes, size_t length) {
+    for (size_t index = 0; index < length; ++index) {
+        if (bytes[index] < 'a' || bytes[index] > 'z') return 0;
+    }
+    return 1;
+}
+
+static int duplicate_code(const struct cw_langid_header * header, uint8_t count, const char * code) {
+    for (uint8_t index = 0; index < count; ++index) {
+        if (strcmp(header->codes[index], code) == 0) return 1;
+    }
+    return 0;
+}
+
+static enum cw_parse_status read_code(const uint8_t * data, size_t size, size_t * offset, uint8_t index, struct cw_langid_header * out) {
+    if (size <= *offset) return CW_PARSE_INCOMPLETE;
+    const size_t length = data[(*offset)++];
+    if (length < CW_MIN_CODE_BYTES || length > CW_MAX_CODE_BYTES) return CW_PARSE_INVALID;
+    if (size - *offset < length) return CW_PARSE_INCOMPLETE;
+    if (!lowercase_ascii(data + *offset, length)) return CW_PARSE_INVALID;
+    memcpy(out->codes[index], data + *offset, length);
+    out->codes[index][length] = '\0';
+    *offset += length;
+    if (duplicate_code(out, index, out->codes[index])) return CW_PARSE_INVALID;
+    out->allowed[index] = out->codes[index];
+    return CW_PARSE_OK;
+}
+
+enum cw_parse_status cw_parse_langid_header(const uint8_t * data, size_t size, struct cw_langid_header * out) {
+    if (data == NULL || size < 1) return CW_PARSE_INCOMPLETE;
+    if (data[0] != CW_LANGID_TAG) return CW_PARSE_INVALID;
+    if (size < 2) return CW_PARSE_INCOMPLETE;
+    const uint8_t count = data[1];
+    if (count < 1 || count > CW_MAX_ALLOWED) return CW_PARSE_INVALID;
+    size_t offset = 2;
+    for (uint8_t index = 0; index < count; ++index) {
+        const enum cw_parse_status status = read_code(data, size, &offset, index, out);
+        if (status != CW_PARSE_OK) return status;
+    }
+    if (size - offset < 4) return CW_PARSE_INCOMPLETE;
+    const uint32_t samples = decode_u32(data + offset);
+    if (samples > CW_MAX_SAMPLES) return CW_PARSE_INVALID;
+    out->n_allowed    = count;
+    out->samples      = samples;
+    out->header_bytes = offset + 4;
+    return CW_PARSE_OK;
 }
 
 void cw_decode_samples(const uint8_t * data, uint32_t count, float * out) {
