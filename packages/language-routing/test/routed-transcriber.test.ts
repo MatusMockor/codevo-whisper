@@ -80,6 +80,16 @@ describe('RoutedTranscriber on resident workers', () => {
     expect(result.text).toMatch(/:sk:32000$/);
   });
 
+  it('keeps the unsure verbatim text when the conditioned fix comes back empty', async () => {
+    await startWith(rig.identifier, UNSURE_SK);
+    await startWith(rig.verbatim, { FAKE_WORKER_REPLY_TEXT: UK_DRIFT });
+    await startWith(rig.conditioned, { FAKE_WORKER_REPLY_TEXT: '' });
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: UK_DRIFT, language: null, route: 'verbatim-fallback' });
+  });
+
   it('uses the conditioned model when the language is confident and the guard agrees', async () => {
     await startWith(rig.identifier, CONFIDENT_SK);
     await startWith(rig.conditioned, { FAKE_WORKER_REPLY_TEXT: SK_GIBSON.canarySk });

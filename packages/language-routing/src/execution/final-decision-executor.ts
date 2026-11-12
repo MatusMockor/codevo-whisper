@@ -23,7 +23,11 @@ export class FinalDecisionExecutor implements DecisionExecutor {
       return verbatim;
     }
     const fallback: RoutedTranscript = { text: verbatim.text, language: null, route: 'verbatim-fallback' };
-    return recoverUnlessAborted(this.models.conditioned(pcm, language, 'conditioned-fix', signal), signal, () => Promise.resolve(fallback));
+    const fixed = await recoverUnlessAborted(this.models.conditioned(pcm, language, 'conditioned-fix', signal), signal, () => Promise.resolve(fallback));
+    if (fixed.text.trim() === '' && verbatim.text.trim() !== '') {
+      return fallback;
+    }
+    return fixed;
   }
 
   async confident(segment: RoutedSegment): Promise<RoutedTranscript> {
