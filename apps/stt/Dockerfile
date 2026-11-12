@@ -34,6 +34,8 @@ WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY scripts ./scripts
+COPY packages/protocol ./packages/protocol
+COPY packages/language-routing ./packages/language-routing
 COPY packages/stt-runner ./packages/stt-runner
 COPY apps/stt ./apps/stt
 RUN pnpm install --frozen-lockfile --filter "@codevo-whisper/stt..." --filter codevo-whisper
@@ -53,7 +55,10 @@ ENV NODE_ENV=production \
   STT_WORKER_BINARY=/opt/transcribe/bin/cw-stt-worker \
   STT_BINARY=/opt/transcribe/bin/transcribe-cli \
   STT_MODEL_PATH=/models/parakeet-ultra-F16.gguf \
+  STT_CONDITIONED_MODEL_PATH=/models/canary-1b-v2-Q8_0.gguf \
+  STT_LID_MODEL_PATH=/models/lang-id-voxlingua107-ecapa-Q8_0.gguf \
   STT_BACKEND=vulkan \
+  STT_LID_BACKEND=cpu \
   STT_THREADS=4 \
   STT_PORT=8001
 USER node

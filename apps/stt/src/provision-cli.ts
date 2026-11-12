@@ -1,19 +1,25 @@
 import { loadSttConfig } from './config';
-import { MODEL_SHA256, MODEL_URL, provision } from './provision';
+import { ServerModelManifest, type ModelFile } from './model-manifest';
+import { provisionManifest } from './provision';
 
-const { model } = loadSttConfig(process.env);
-let lastPercent = -1;
-const onProgress = (bytes: number, total: number | null): void => {
+const GIGABYTE = 1_000_000_000;
+
+const manifest = ServerModelManifest.pinned(loadSttConfig(process.env));
+const lastPercent = new Map<string, number>();
+
+const onProgress = (file: ModelFile, bytes: number, total: number | null): void => {
   if (total === null) {
     return;
   }
   const percent = Math.floor((bytes / total) * 100);
-  if (percent % 5 !== 0 || percent === lastPercent) {
+  if (percent % 5 !== 0 || percent === lastPercent.get(file.target)) {
     return;
   }
-  lastPercent = percent;
-  process.stdout.write(`${percent} %\n`);
+  lastPercent.set(file.target, percent);
+  process.stdout.write(`${file.target}: ${percent} %\n`);
 };
 
-const result = await provision({ url: MODEL_URL, sha256: MODEL_SHA256, target: model, onProgress });
-process.stdout.write(`${result === 'present' ? 'Model already present and verified' : 'Model downloaded and verified'}: ${model}\n`);
+process.stdout.write(`Language models add ${(manifest.extraBytes() / GIGABYTE).toFixed(2)} GB\n`);
+for (const { file, result } of await provisionManifest(manifest, onProgress)) {
+  process.stdout.write(`${result === 'present' ? 'Model already present and verified' : 'Model downloaded and verified'}: ${file.target}\n`);
+}

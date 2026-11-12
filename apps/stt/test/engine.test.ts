@@ -4,14 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CliTranscriber } from '../src/cli-transcriber';
 import { loadSttConfig } from '../src/config';
-import { createTranscriber } from '../src/create-transcriber';
+import { createEngine } from '../src/create-engine';
+import type { Engine } from '../src/engine';
 import { startSttServer, type SttServer } from '../src/server';
-import type { Transcriber } from '../src/transcriber';
 
 const FAKE_WORKER = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-worker.js', import.meta.url));
 
 let server: SttServer | undefined;
-let transcriber: Transcriber | undefined;
+let engine: Engine | undefined;
 
 function get(path: string): Promise<{ status: number; body: unknown }> {
   const { port } = server?.address() as AddressInfo;
@@ -44,15 +44,15 @@ function post(path: string, body: Uint8Array): Promise<{ status: number; text: s
 
 afterEach(async () => {
   await server?.stop();
-  await transcriber?.close();
+  await engine?.close();
   server = undefined;
-  transcriber = undefined;
+  engine = undefined;
 });
 
 describe('engine selection', () => {
   it('serves every request from one resident worker by default', async () => {
-    transcriber = createTranscriber({ ...loadSttConfig({}), workerBinary: FAKE_WORKER });
-    server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
+    engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER }, { routing: false });
+    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
 
     const first = await post('/transcribe?language=sk', new Uint8Array(32_000));
     const second = await post('/transcribe?language=auto', new Uint8Array(6_400));
@@ -63,17 +63,17 @@ describe('engine selection', () => {
   });
 
   it('reports DOWN until the resident worker answered ready', async () => {
-    transcriber = createTranscriber({ ...loadSttConfig({}), workerBinary: FAKE_WORKER });
-    server = await startSttServer({ transcriber, port: 0, host: '127.0.0.1' });
+    engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER }, { routing: false });
+    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
 
     expect(await get('/health')).toEqual({ status: 503, body: { status: 'DOWN', busy: false } });
-    await transcriber.warmUp();
+    await engine.transcriber.warmUp();
     expect(await get('/health')).toEqual({ status: 200, body: { status: 'UP', busy: false } });
   });
 
   it('keeps the per-call CLI engine available', () => {
-    transcriber = createTranscriber(loadSttConfig({ STT_ENGINE: 'cli' }));
+    engine = createEngine(loadSttConfig({ STT_ENGINE: 'cli' }), { routing: false });
 
-    expect(transcriber).toBeInstanceOf(CliTranscriber);
+    expect(engine.transcriber).toBeInstanceOf(CliTranscriber);
   });
 });

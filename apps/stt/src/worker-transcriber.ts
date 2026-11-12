@@ -1,5 +1,5 @@
-import { ResidentTranscriber, type ResidentTranscriberOptions, type TranscribeLanguage } from '@codevo-whisper/stt-runner';
-import type { Transcriber } from './transcriber';
+import { ResidentTranscriber, type ResidentTranscriberOptions } from '@codevo-whisper/stt-runner';
+import type { Transcriber, TranscriberCall } from './transcriber';
 
 export class WorkerTranscriber implements Transcriber {
   private readonly worker: ResidentTranscriber;
@@ -8,8 +8,8 @@ export class WorkerTranscriber implements Transcriber {
     this.worker = new ResidentTranscriber(options);
   }
 
-  transcribe(pcm: Uint8Array, language: TranscribeLanguage, signal: AbortSignal): Promise<string> {
-    return this.worker.transcribe({ pcm, language, signal });
+  transcribe(call: TranscriberCall): Promise<string> {
+    return this.worker.transcribe(call);
   }
 
   ready(): boolean {

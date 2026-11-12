@@ -9,6 +9,7 @@
     "build": "node ../../scripts/bundle.js main=src/main.ts provision=src/provision-cli.ts"
   },
   "dependencies": {
+    "@codevo-whisper/language-routing": "workspace:*",
     "@codevo-whisper/stt-runner": "workspace:*"
   },
   "devDependencies": {
