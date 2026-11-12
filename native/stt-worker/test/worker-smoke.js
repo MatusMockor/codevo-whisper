@@ -29,11 +29,11 @@ function langidFrame(codes, samples, body = Buffer.alloc(samples * 2)) {
 function ranked(reply, codes) {
   if (reply?.status !== 0 || !reply.text.endsWith('\n')) return false;
   const rows = reply.text.slice(0, -1).split('\n').map((line) => line.split(' '));
-  const probabilities = rows.map(([, p]) => Number(p));
+  const probabilities = rows.map(([, p]) => (p === undefined || p.trim() === '' ? Number.NaN : Number(p)));
   const sum = probabilities.reduce((total, p) => total + p, 0);
   const descending = probabilities.every((p, index) => index === 0 || p <= probabilities[index - 1]);
   const sameCodes = rows.map(([code]) => code).sort().join() === [...codes].sort().join();
-  return rows.every((row) => row.length === 2) && sameCodes && descending && Math.abs(sum - 1) < 1e-3;
+  return rows.every((row) => row.length === 2) && probabilities.every(Number.isFinite) && sameCodes && descending && Math.abs(sum - 1) < 1e-3;
 }
 
 function run(args, input) {
