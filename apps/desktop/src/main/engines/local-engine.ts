@@ -8,7 +8,7 @@ import type { ActiveModel } from './active-model';
 import { DirectGeneration } from './direct-generation';
 import { localBackend, type LocalEngineArch } from './local-backend';
 import { sameSpec, type GenerationSpec, type LocalGeneration } from './local-generation';
-import { localLanguagePlan, needsLanguagePack, type LocalLanguagePlan } from './local-language';
+import { localLanguagePlan, needsLanguagePack, sameSelection, type LocalLanguagePlan } from './local-language';
 import { LocalResidents } from './local-residents';
 import { RoutedGeneration } from './routed-generation';
 import { EngineUnavailableError, notReady, type EngineReadiness, type EngineUnavailableReason, type Preparation, type TranscriptionEngine } from './transcription-engine';
@@ -34,6 +34,10 @@ type Lease = { released: boolean; revision: number };
 type LanguageTarget = { plan: LocalLanguagePlan; pack: LanguagePackPaths | null };
 
 type Target = { ready: false; reason: EngineUnavailableReason } | { ready: true; spec: GenerationSpec };
+
+type Claim = { lease: Lease; selection: LanguageSelection };
+
+type Resolution = { ready: false; reason: EngineUnavailableReason } | { ready: true; generation: LocalGeneration };
 
 const NO_LANGUAGE_PACK: LanguagePackFiles = Object.freeze({ paths: () => Promise.resolve(null) });
 
@@ -104,17 +108,31 @@ export class LocalEngine implements TranscriptionEngine {
     return new DirectGeneration(spec.model, residents, this.clock);
   }
 
-  private isCurrent(lease: Lease): boolean {
+  private isLive(lease: Lease): boolean {
     return !this.disposed && lease.revision === this.revision;
   }
 
-  private async settle(spec: GenerationSpec, lease: Lease): Promise<LocalGeneration | null> {
-    if (!this.isCurrent(lease)) return null;
+  private holds(claim: Claim): boolean {
+    return this.isLive(claim.lease) && sameSelection(claim.selection, this.deps.settings.get().languages);
+  }
+
+  private async settle(spec: GenerationSpec, claim: Claim): Promise<LocalGeneration | null> {
+    if (!this.holds(claim)) return null;
     if (this.generation !== undefined && !sameSpec(this.generation.spec, spec)) await this.close();
     await this.shutdown;
-    if (!this.isCurrent(lease)) return null;
-    if (this.generation !== undefined && !sameSpec(this.generation.spec, spec)) return this.settle(spec, lease);
+    if (!this.holds(claim)) return null;
+    if (this.generation !== undefined && !sameSpec(this.generation.spec, spec)) return this.settle(spec, claim);
     return this.acquire(spec);
+  }
+
+  private async resolve(lease: Lease): Promise<Resolution> {
+    const selection = this.deps.settings.get().languages;
+    const target = await this.target(selection);
+    if (!target.ready) return target;
+    const generation = await this.settle(target.spec, { lease, selection });
+    if (generation !== null) return { ready: true, generation };
+    if (this.isLive(lease)) return this.resolve(lease);
+    return { ready: false, reason: 'no-model' };
   }
 
   dispose(): Promise<void> {
@@ -176,13 +194,13 @@ export class LocalEngine implements TranscriptionEngine {
     return { ready: true };
   }
 
-  private async target(): Promise<Target> {
+  private async target(selection: LanguageSelection = this.deps.settings.get().languages): Promise<Target> {
     if (!(await isExecutable(this.deps.binary))) return { ready: false, reason: 'binary-missing' };
     const model = await this.deps.models.activeModelPath();
     if (model === null) return { ready: false, reason: 'no-model' };
     const verification = await this.deps.models.verifyActive();
     if (verification !== 'ok') return { ready: false, reason: VERIFICATION_REASON[verification] };
-    const language = await this.languageTarget(this.deps.settings.get().languages);
+    const language = await this.languageTarget(selection);
     if (language.plan.kind === 'unavailable') return { ready: false, reason: language.plan.reason };
     return { ready: true, spec: generationSpec(model, language) };
   }
@@ -197,10 +215,9 @@ export class LocalEngine implements TranscriptionEngine {
     const lease = this.reserve();
     let transferred = false;
     try {
-      const target = await this.target();
-      if (!target.ready) return notReady(target.reason);
-      const generation = await this.settle(target.spec, lease);
-      if (generation === null) return notReady('no-model');
+      const resolution = await this.resolve(lease);
+      if (!resolution.ready) return notReady(resolution.reason);
+      const { generation } = resolution;
       let state: 'prepared' | 'started' | 'released' = 'prepared';
       transferred = true;
       return {
@@ -257,8 +274,9 @@ export class LocalEngine implements TranscriptionEngine {
       if (this.disposed || !(await isExecutable(this.deps.binary)) || (await this.deps.models.activeModelPath()) !== modelPath || (await this.deps.models.verifyActive()) !== 'ok') {
         throw new Error('Warm-up model is unavailable');
       }
-      const spec = generationSpec(modelPath, await this.languageTarget(this.deps.settings.get().languages));
-      const generation = await this.settle(spec, lease);
+      const selection = this.deps.settings.get().languages;
+      const spec = generationSpec(modelPath, await this.languageTarget(selection));
+      const generation = await this.settle(spec, { lease, selection });
       if (generation === null) throw new Error('Warm-up selection changed');
       await generation.warmUp();
       const selectedPath = await this.deps.models.activeModelPath();

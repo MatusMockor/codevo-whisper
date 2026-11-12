@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localLanguagePlan, needsLanguagePack } from '../src/main/engines/local-language';
+import { localLanguagePlan, needsLanguagePack, sameSelection } from '../src/main/engines/local-language';
 import type { LanguageSelection } from '../src/shared/dictation-languages';
 
 const AUTO: LanguageSelection = { mode: 'auto', selected: ['sk'] };
@@ -26,5 +26,12 @@ describe('local language plan', () => {
     expect(localLanguagePlan(SK_CS, 'ignored', false)).toEqual({ kind: 'unavailable', reason: 'languages-pack-missing' });
     expect(localLanguagePlan(SK_CS, 'optional', true)).toEqual({ kind: 'routed', selected: ['sk', 'cs'] });
     expect(localLanguagePlan(SK_CS, 'ignored', true)).toEqual({ kind: 'routed', selected: ['sk', 'cs'] });
+  });
+
+  it('treats a selection as the same only with the same mode and the same languages in order', () => {
+    expect(sameSelection(SK_CS, { mode: 'selected', selected: ['sk', 'cs'] })).toBe(true);
+    expect(sameSelection(SK_CS, { mode: 'auto', selected: ['sk', 'cs'] })).toBe(false);
+    expect(sameSelection(SK_CS, { mode: 'selected', selected: ['cs', 'sk'] })).toBe(false);
+    expect(sameSelection(SK_CS, { mode: 'selected', selected: ['sk'] })).toBe(false);
   });
 });

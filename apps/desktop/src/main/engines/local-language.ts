@@ -10,6 +10,10 @@ export type LocalLanguagePlan =
 
 export type ReadyLanguagePlan = Exclude<LocalLanguagePlan, { kind: 'unavailable' }>;
 
+export function sameSelection(left: LanguageSelection, right: LanguageSelection): boolean {
+  return left.mode === right.mode && left.selected.length === right.selected.length && left.selected.every((code, index) => right.selected[index] === code);
+}
+
 export function needsLanguagePack(selection: LanguageSelection, modelHint: LanguageHint | null): boolean {
   return selection.mode === 'selected' && modelHint !== 'required';
 }

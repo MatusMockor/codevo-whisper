@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import type { Preparation } from '../src/main/engines/transcription-engine';
-import { createLanguagePack } from '../src/main/models/language-pack';
+import { createLanguagePack, type LanguagePack } from '../src/main/models/language-pack';
 import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import type { LanguageSelection } from '../src/shared/dictation-languages';
@@ -31,8 +31,8 @@ let models: ModelManager;
 let local: LocalEngine;
 let now = 0;
 
-function engine(overrides: Partial<ConstructorParameters<typeof LocalEngine>[0]> = {}): LocalEngine {
-  const languagePack = createLanguagePack({
+function languagePack(): LanguagePack {
+  return createLanguagePack({
     dir: join(dir, 'models'),
     conditioned: CANARY,
     languageId: LANGUAGE_ID,
@@ -42,7 +42,10 @@ function engine(overrides: Partial<ConstructorParameters<typeof LocalEngine>[0]>
     settings,
     logger: new RecordingLogger(),
   });
-  return new LocalEngine({ binary: BINARY, models, languagePack, settings, arch: 'arm64', platform: 'darwin', clock: { now: () => now }, ...overrides });
+}
+
+function engine(overrides: Partial<ConstructorParameters<typeof LocalEngine>[0]> = {}): LocalEngine {
+  return new LocalEngine({ binary: BINARY, models, languagePack: languagePack(), settings, arch: 'arm64', platform: 'darwin', clock: { now: () => now }, ...overrides });
 }
 
 async function writeModel(id: string, body: string): Promise<void> {
@@ -306,5 +309,33 @@ describe('LocalEngine routed generation', () => {
     if (first.ready) first.engine.release();
     const spawned = await starts();
     await expect.poll(() => modelsOf(spawned.filter((start) => alive(start.pid)))).toEqual(['canary', 'langid', 'parakeet']);
+  });
+
+  it('lets a selected preparation that waited for the pack follow a switch to Automaticky without closing the direct dictation', async () => {
+    const pack = languagePack();
+    const gate = Promise.withResolvers<void>();
+    let lookups = 0;
+    await local.dispose();
+    local = engine({
+      languagePack: {
+        paths: async () => {
+          lookups += 1;
+          if (lookups === 1) await gate.promise;
+          return pack.paths();
+        },
+      },
+    });
+    const selected = local.prepare();
+    await expect.poll(() => lookups).toBe(1);
+    await settings.update({ languages: AUTO });
+    const recording = prepared(await local.prepare()).start({ languages: AUTO, signal: new AbortController().signal });
+    recording.push(new Uint8Array(PCM_BYTES_PER_SECOND));
+
+    gate.resolve();
+    const late = prepared(await selected);
+
+    await expect(recording.finish()).resolves.toMatch(/^\d+:auto:16000$/);
+    late.release();
+    expect(modelsOf(await starts())).toEqual(['parakeet']);
   });
 });
