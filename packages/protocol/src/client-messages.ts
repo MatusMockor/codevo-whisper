@@ -4,20 +4,24 @@ import {
   parseJsonObject,
   readBoolean,
   readChoice,
+  readChoiceList,
   readString,
   type JsonObject,
 } from './json-fields';
 import {
+  DICTATION_LANGUAGES,
   IDENTIFIER_PATTERN,
   LANGUAGES,
   MAX_DEVICE_NAME_CHARS,
+  MAX_DICTATION_LANGUAGES,
   MAX_IDENTIFIER_CHARS,
   MessageTag,
   type ClientMessage,
+  type Language,
 } from './message-types';
 import { jsonFrame, splitTag, tagged } from './tagged-frame';
 
-const JSON_TYPES = ['hello', 'start', 'finish', 'cancel', 'pair-request'] as const;
+const JSON_TYPES = ['hello', 'capabilities', 'start', 'finish', 'cancel', 'pair-request'] as const;
 
 type JsonClientMessage = Exclude<ClientMessage, { type: 'audio' }>;
 
@@ -37,17 +41,33 @@ function decodeAudio(body: Uint8Array): ClientMessage {
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
 
+function readPartials(object: JsonObject): Pick<StartMessage, 'partials'> {
+  if (object.partials === undefined) {
+    return {};
+  }
+  return { partials: readBoolean(object, 'partials') };
+}
+
+function readLanguageSet(object: JsonObject, language: Language): Pick<StartMessage, 'languages'> {
+  if (object.languages === undefined) {
+    return {};
+  }
+  if (language !== 'auto') {
+    throw badMessage('languages require language auto');
+  }
+  return { languages: readChoiceList(object, 'languages', DICTATION_LANGUAGES, { minItems: 1, maxItems: MAX_DICTATION_LANGUAGES }) };
+}
+
 function decodeStart(object: JsonObject): StartMessage {
-  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials']);
-  const start: StartMessage = {
+  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials', 'languages']);
+  const language = readChoice(object, 'language', LANGUAGES);
+  return {
     type: 'start',
     sessionId: readString(object, 'sessionId', { maxChars: MAX_IDENTIFIER_CHARS, pattern: IDENTIFIER_PATTERN }),
-    language: readChoice(object, 'language', LANGUAGES),
+    language,
+    ...readPartials(object),
+    ...readLanguageSet(object, language),
   };
-  if (object.partials === undefined) {
-    return start;
-  }
-  return { ...start, partials: readBoolean(object, 'partials') };
 }
 
 function decodeJson(object: JsonObject): JsonClientMessage {

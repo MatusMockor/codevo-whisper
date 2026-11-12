@@ -99,6 +99,40 @@ describe('gateway sessions', () => {
     expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
   });
 
+  it('answers a capabilities request before start with no dictation languages', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'capabilities' });
+
+    expect(await session.next()).toEqual({ type: 'capabilities', languages: [] });
+  });
+
+  it('rejects a capabilities request during a dictation', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'sk' });
+    session.send({ type: 'capabilities' });
+
+    await expectBadMessageClose(session);
+  });
+
+  it('refuses a start with dictation languages and keeps the connection for an automatic dictation', async () => {
+    const server = await start();
+    const session = await readySession(server);
+    session.send({ type: 'start', sessionId: 's1', language: 'auto', languages: ['sk', 'cs'] });
+
+    expect(await session.next()).toEqual({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: 's1' });
+
+    session.send({ type: 'start', sessionId: 's2', language: 'auto' });
+    sendAudio(session, pcmSeconds(1));
+    session.send({ type: 'finish' });
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 's2', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 's2' },
+    ]);
+    expect(fake.requests).toEqual([{ language: 'auto', bytes: 32_000 }]);
+  });
+
   it('cuts continuous speech into engine calls of at most 25 s', async () => {
     const server = await start();
     const session = await readySession(server);

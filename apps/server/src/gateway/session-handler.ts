@@ -45,6 +45,7 @@ export class SessionHandler {
   private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
+    capabilities: () => this.onCapabilities(),
     start: (message) => this.onStart(message),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),
@@ -82,9 +83,21 @@ export class SessionHandler {
     handler(message);
   }
 
+  private onCapabilities(): void {
+    if (this.state.kind !== 'idle') {
+      this.channel.fail('bad_message');
+      return;
+    }
+    this.channel.send({ type: 'capabilities', languages: [] });
+  }
+
   private onStart(message: StartMessage): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
+      return;
+    }
+    if (message.languages !== undefined) {
+      this.channel.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
       return;
     }
     const dictation = new Dictation({

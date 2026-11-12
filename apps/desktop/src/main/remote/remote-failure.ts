@@ -39,6 +39,7 @@ const KIND_BY_CODE: Readonly<Record<ErrorCode, RemoteFailureKind>> = Object.free
   pairing_closed: 'pairing-closed',
   pairing_rejected: 'pairing-rejected',
   server_key_changed: 'server-key-changed',
+  languages_unavailable: 'stt-unavailable',
 });
 
 export function failureForCode(code: ErrorCode): RemoteFailureKind {
