@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const [binary, model, pcmPath, backend = 'cpu'] = process.argv.slice(2);
-if (binary === undefined || model === undefined || pcmPath === undefined) {
-  process.stderr.write('usage: node worker-smoke.js <cw-stt-worker> <model.gguf> <audio.pcm> [backend]\n');
+const [binary, model, pcmPath, backend = 'cpu', role = 'asr'] = process.argv.slice(2);
+if (binary === undefined || model === undefined || pcmPath === undefined || !['asr', 'langid'].includes(role)) {
+  process.stderr.write('usage: node worker-smoke.js <cw-stt-worker> <model.gguf> <audio.pcm> [backend] [asr|langid]\n');
   process.exit(2);
 }
 const pcm = readFileSync(pcmPath);
@@ -14,6 +14,26 @@ function frame(language, samples, body = Buffer.alloc(samples * 2)) {
   header.write(language, 1, 'latin1');
   header.writeUInt32LE(samples, 1 + language.length);
   return Buffer.concat([header, body]);
+}
+
+const SUPPORTED = 'bg cs da de el en es et fi fr hr hu it lt lv mt nl pl pt ro ru sk sl sv uk'.split(' ');
+
+function langidFrame(codes, samples, body = Buffer.alloc(samples * 2)) {
+  const parts = [Buffer.from([0xfe, codes.length])];
+  for (const code of codes) parts.push(Buffer.from([code.length]), Buffer.from(code, 'latin1'));
+  const count = Buffer.alloc(4);
+  count.writeUInt32LE(samples);
+  return Buffer.concat([...parts, count, body]);
+}
+
+function ranked(reply, codes) {
+  if (reply?.status !== 0 || !reply.text.endsWith('\n')) return false;
+  const rows = reply.text.slice(0, -1).split('\n').map((line) => line.split(' '));
+  const probabilities = rows.map(([, p]) => Number(p));
+  const sum = probabilities.reduce((total, p) => total + p, 0);
+  const descending = probabilities.every((p, index) => index === 0 || p <= probabilities[index - 1]);
+  const sameCodes = rows.map(([code]) => code).sort().join() === [...codes].sort().join();
+  return rows.every((row) => row.length === 2) && sameCodes && descending && Math.abs(sum - 1) < 1e-3;
 }
 
 function run(args, input) {
@@ -42,10 +62,22 @@ function parseReplies(buffer) {
 }
 
 const base = ['--model', model, '--backend', backend, '--threads', '4'];
-const cases = [
+const speech = pcm.length / 2;
+const langidCases = [
+  ['ranks the 25 supported codes for real speech', base, langidFrame(SUPPORTED, speech, pcm), (r) => r.code === 0 && r.replies.length === 2 && ranked(r.replies[1], SUPPORTED)],
+  ['ranks a restricted set', base, langidFrame(['sk', 'cs', 'en'], speech, pcm), (r) => r.code === 0 && ranked(r.replies[1], ['sk', 'cs', 'en'])],
+  ['fails under 500 ms and keeps serving', base, Buffer.concat([langidFrame(['sk'], 7999), langidFrame(['sk'], speech, pcm)]), (r) => r.code === 0 && r.replies[1]?.status === 1 && ranked(r.replies[2], ['sk'])],
+  ['fails an unknown code and keeps serving', base, Buffer.concat([langidFrame(['sk', 'qqq'], speech, pcm), langidFrame(['sk'], speech, pcm)]), (r) => r.code === 0 && r.replies[1]?.status === 1 && ranked(r.replies[2], ['sk'])],
+  ['answers an ASR frame with wrong role', base, Buffer.concat([frame('sk', 10), langidFrame(['sk'], speech, pcm)]), (r) => r.code === 0 && r.replies[1]?.status === 1 && r.replies[1].text === 'wrong role' && ranked(r.replies[2], ['sk'])],
+  ['rejects an empty allowed list', base, langidFrame([], 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
+  ['rejects a duplicate code', base, langidFrame(['sk', 'sk'], 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
+  ['rejects 480001 samples', base, langidFrame(['sk'], 480_001, Buffer.alloc(0)), (r) => r.code === 3 && r.replies[1]?.status === 1],
+  ['exits 3 on a truncated frame', base, langidFrame(['sk'], 1000).subarray(0, 50), (r) => r.code === 3 && r.replies.length === 1],
+];
+const asrCases = [
   ['transcribes and exits 0 at end of input', base, frame('sk', pcm.length / 2, pcm), (r) => r.code === 0 && r.replies.length === 2 && r.replies[1].status === 0 && r.replies[1].text.length > 0],
   ['auto language', base, frame('', pcm.length / 2, pcm), (r) => r.code === 0 && r.replies[1]?.status === 0],
-  ['rejects a language outside the whitelist', base, frame('de', 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
+  ['rejects a language outside the whitelist', base, frame('xx', 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
   ['rejects an embedded NUL', base, frame('s\0', 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
   ['rejects a 255 byte language', base, frame('a'.repeat(255), 10), (r) => r.code === 3 && r.replies[1]?.status === 1],
   ['rejects 480001 samples', base, frame('sk', 480_001, Buffer.alloc(0)), (r) => r.code === 3 && r.replies[1]?.status === 1],
@@ -55,7 +87,9 @@ const cases = [
   ['rejects --threads 4x', ['--model', model, '--threads', '4x'], Buffer.alloc(0), (r) => r.code === 2],
   ['rejects an unknown backend', ['--model', model, '--backend', 'cuda'], Buffer.alloc(0), (r) => r.code === 2],
   ['serves two concatenated frames', base, Buffer.concat([frame('sk', pcm.length / 2, pcm), frame('cs', 8000)]), (r) => r.code === 0 && r.replies.length === 3],
+  ['answers a language ID frame with wrong role', base, Buffer.concat([langidFrame(['sk'], 8000), frame('de', 8000)]), (r) => r.code === 0 && r.replies[1]?.text === 'wrong role' && r.replies[2]?.status === 0],
 ];
+const cases = role === 'langid' ? langidCases : asrCases;
 
 let failed = 0;
 for (const [name, args, input, check] of cases) {

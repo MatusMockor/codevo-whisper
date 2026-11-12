@@ -1,4 +1,5 @@
 #include "stt-worker-request.h"
+#include "stt-worker-role.h"
 #include "transcribe.h"
 
 #include <errno.h>
@@ -11,8 +12,6 @@
 #define EXIT_USAGE 2
 #define EXIT_BAD_REQUEST 3
 
-enum reply_status { REPLY_OK = 0, REPLY_FAILED = 1, REPLY_READY = 2 };
-
 enum read_result { READ_OK, READ_END, READ_TRUNCATED, READ_INVALID };
 
 struct options {
@@ -22,9 +21,25 @@ struct options {
 };
 
 struct request {
-    struct cw_request_header header;
+    enum cw_frame_kind       kind;
+    struct cw_request_header asr;
+    struct cw_langid_header  langid;
+    uint32_t                 n_samples;
     uint8_t *                pcm;
     float *                  samples;
+};
+
+struct worker {
+    struct transcribe_model * model;
+    struct cw_role            role;
+};
+
+static const struct {
+    uint32_t        role;
+    cw_role_factory open;
+} ROLES[] = {
+    { TRANSCRIBE_ROLE_ASR, cw_asr_role_open },
+    { TRANSCRIBE_ROLE_LANGID, cw_langid_role_open },
 };
 
 static FILE * replies = NULL;
@@ -106,33 +121,55 @@ static int parse_options(int argc, char ** argv, struct options * out) {
     return out->model == NULL ? -1 : 0;
 }
 
-static struct transcribe_session * open_session(const struct options * options) {
+static transcribe_status open_role(struct transcribe_model * model, int threads, struct cw_role * out) {
+    const uint32_t roles = transcribe_model_roles(model);
+    for (size_t index = 0; index < sizeof ROLES / sizeof ROLES[0]; ++index) {
+        if ((roles & ROLES[index].role) != 0) {
+            return ROLES[index].open(model, threads, out);
+        }
+    }
+    return TRANSCRIBE_ERR_UNSUPPORTED_ROLE;
+}
+
+static transcribe_status open_worker(const struct options * options, transcribe_backend_request backend, struct worker * out) {
     struct transcribe_model_load_params load;
-    struct transcribe_session_params    params;
-    struct transcribe_session *         session = NULL;
     transcribe_model_load_params_init(&load);
-    transcribe_session_params_init(&params);
-    load.backend     = options->backend;
-    params.n_threads = options->threads;
-    transcribe_status status = transcribe_open(options->model, &load, &params, &session);
+    load.backend                   = backend;
+    out->model                     = NULL;
+    const transcribe_status loaded = transcribe_model_load_file(options->model, &load, &out->model);
+    if (loaded != TRANSCRIBE_OK) {
+        return loaded;
+    }
+    const transcribe_status opened = open_role(out->model, options->threads, &out->role);
+    if (opened != TRANSCRIBE_OK) {
+        transcribe_model_free(out->model);
+        out->model = NULL;
+    }
+    return opened;
+}
+
+static int start_worker(const struct options * options, struct worker * out) {
+    transcribe_status status = open_worker(options, options->backend, out);
 #if defined(__APPLE__)
-    if (status != TRANSCRIBE_OK && load.backend == TRANSCRIBE_BACKEND_METAL) {
-        load.backend = TRANSCRIBE_BACKEND_CPU;
-        status = transcribe_open(options->model, &load, &params, &session);
+    if (status != TRANSCRIBE_OK && options->backend == TRANSCRIBE_BACKEND_METAL) {
+        status = open_worker(options, TRANSCRIBE_BACKEND_CPU, out);
     }
 #endif
-    return status == TRANSCRIBE_OK ? session : NULL;
+    return status == TRANSCRIBE_OK ? 0 : -1;
+}
+
+static void stop_worker(struct worker * worker) {
+    worker->role.release(worker->role.state);
+    transcribe_model_free(worker->model);
 }
 
 static size_t read_bytes(uint8_t * buffer, size_t size) {
     return fread(buffer, 1, size, stdin);
 }
 
-static enum read_result read_request(struct request * request) {
+static enum read_result read_asr_header(uint8_t first, struct request * request) {
     uint8_t header[CW_MAX_HEADER_BYTES];
-    if (read_bytes(header, 1) != 1) {
-        return READ_END;
-    }
+    header[0] = first;
     const size_t base = header[0] == 0xff ? 1 : 0;
     if (base != 0 && read_bytes(header + 1, 1) != 1) return READ_TRUNCATED;
     const size_t rest = (size_t) header[base] + 4;
@@ -153,53 +190,73 @@ static enum read_result read_request(struct request * request) {
             length += term_bytes;
         }
     }
-    if (cw_parse_header(header, length, &request->header) != CW_PARSE_OK) {
+    if (cw_parse_header(header, length, &request->asr) != CW_PARSE_OK) {
         return READ_INVALID;
     }
-    const size_t pcm_bytes = (size_t) request->header.samples * 2;
-    if (read_bytes(request->pcm, pcm_bytes) != pcm_bytes) {
-        return READ_TRUNCATED;
-    }
-    cw_decode_samples(request->pcm, request->header.samples, request->samples);
+    request->kind      = CW_FRAME_ASR;
+    request->n_samples = request->asr.samples;
     return READ_OK;
 }
 
-static int answer(struct transcribe_session * session, const struct request * request) {
-    struct transcribe_run_params run;
-    transcribe_run_params_init(&run);
-    run.language                   = request->header.language[0] == '\0' ? NULL : request->header.language;
-    if (request->header.n_vocabulary > 0 && transcribe_model_supports(transcribe_get_model(session), TRANSCRIBE_FEATURE_VOCABULARY)) {
-        run.vocabulary = request->header.vocabulary;
-        run.n_vocabulary = request->header.n_vocabulary;
+static enum read_result read_langid_header(struct request * request) {
+    uint8_t header[CW_MAX_LANGID_HEADER_BYTES] = { CW_LANGID_TAG };
+    size_t  length = 1;
+    enum cw_parse_status status = cw_parse_langid_header(header, length, &request->langid);
+    while (status == CW_PARSE_INCOMPLETE && length < sizeof header) {
+        if (read_bytes(header + length, 1) != 1) {
+            return READ_TRUNCATED;
+        }
+        length += 1;
+        status = cw_parse_langid_header(header, length, &request->langid);
     }
-    const transcribe_status status = transcribe_run(session, request->samples, (int) request->header.samples, &run);
-    if (status != TRANSCRIBE_OK) {
-        return write_reply(REPLY_FAILED, transcribe_status_string(status));
+    if (status != CW_PARSE_OK) {
+        return READ_INVALID;
     }
-    const char * text = transcribe_full_text(session);
-    if (text == NULL) {
-        return write_reply(REPLY_OK, "");
-    }
-    if (strlen(text) > CW_MAX_OUTPUT_BYTES) {
-        return write_reply(REPLY_FAILED, "transcript too large");
-    }
-    return write_reply(REPLY_OK, text);
+    request->kind      = CW_FRAME_LANGID;
+    request->n_samples = request->langid.samples;
+    return READ_OK;
 }
 
-static int serve(struct transcribe_session * session, struct request * request) {
+static enum read_result read_request(struct request * request) {
+    uint8_t first = 0;
+    if (read_bytes(&first, 1) != 1) {
+        return READ_END;
+    }
+    const enum read_result header = first == CW_LANGID_TAG ? read_langid_header(request) : read_asr_header(first, request);
+    if (header != READ_OK) {
+        return header;
+    }
+    const size_t pcm_bytes = (size_t) request->n_samples * 2;
+    if (read_bytes(request->pcm, pcm_bytes) != pcm_bytes) {
+        return READ_TRUNCATED;
+    }
+    cw_decode_samples(request->pcm, request->n_samples, request->samples);
+    return READ_OK;
+}
+
+static int answer(const struct cw_role * role, const struct request * request) {
+    if (request->kind != role->kind) {
+        return write_reply(CW_REPLY_FAILED, "wrong role");
+    }
+    const struct cw_frame frame = { &request->asr, &request->langid, request->samples, request->n_samples };
+    const struct cw_reply reply = role->answer(role->state, &frame);
+    return write_reply(reply.status, reply.text);
+}
+
+static int serve(const struct cw_role * role, struct request * request) {
     for (;;) {
         const enum read_result result = read_request(request);
         if (result == READ_END) {
             return EXIT_SUCCESS;
         }
         if (result == READ_INVALID) {
-            write_reply(REPLY_FAILED, "invalid request");
+            write_reply(CW_REPLY_FAILED, "invalid request");
             return EXIT_BAD_REQUEST;
         }
         if (result == READ_TRUNCATED) {
             return EXIT_BAD_REQUEST;
         }
-        if (answer(session, request) != 0) {
+        if (answer(role, request) != 0) {
             return EXIT_FAILURE;
         }
     }
@@ -217,16 +274,16 @@ int main(int argc, char ** argv) {
     }
     struct request request = { .pcm = malloc((size_t) CW_MAX_SAMPLES * 2), .samples = malloc(sizeof(float) * CW_MAX_SAMPLES) };
     if (request.pcm == NULL || request.samples == NULL) {
-        write_reply(REPLY_FAILED, "out of memory");
+        write_reply(CW_REPLY_FAILED, "out of memory");
         return EXIT_FAILURE;
     }
-    struct transcribe_session * session = open_session(&options);
-    if (session == NULL) {
-        write_reply(REPLY_FAILED, "model load failed");
+    struct worker worker;
+    if (start_worker(&options, &worker) != 0) {
+        write_reply(CW_REPLY_FAILED, "model load failed");
         return EXIT_FAILURE;
     }
-    const int exit_code = write_reply(REPLY_READY, "") == 0 ? serve(session, &request) : EXIT_FAILURE;
-    transcribe_session_free(session);
+    const int exit_code = write_reply(CW_REPLY_READY, "") == 0 ? serve(&worker.role, &request) : EXIT_FAILURE;
+    stop_worker(&worker);
     free(request.pcm);
     free(request.samples);
     return exit_code;
