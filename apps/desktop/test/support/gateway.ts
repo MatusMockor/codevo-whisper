@@ -25,7 +25,7 @@ export type TestGateway = {
   openPairingWindow(ttlMs?: number): Promise<PairingWindow>;
   admin(command: object): Promise<unknown>;
   stop(): Promise<void>;
-  restart(): Promise<void>;
+  restart(server?: ServerOptions): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -82,9 +82,9 @@ export async function startTestGateway(options: TestGatewayOptions = {}): Promis
       running = false;
       await server.close();
     },
-    restart: async () => {
+    restart: async (restarted = options.server) => {
       await gateway.stop();
-      server = await startServer(config, options.server);
+      server = await startServer(config, restarted);
       running = true;
     },
     close: async () => {

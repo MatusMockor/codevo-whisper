@@ -1,14 +1,17 @@
-import { beginSession, type ServerMessage } from '@codevo-whisper/protocol';
+import { beginSession } from '@codevo-whisper/protocol';
+import type { ConnectedServer } from '../../shared/server';
+import { expectedMessage } from './expected-message';
 import type { PairingRepository, ServerPairing } from './pairing-repository';
-import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
+import { asRemoteFailure, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { SecureConnection } from './secure-connection';
+import { queryServerLanguages } from './server-language-query';
 
-export type ReadyConnection = { connection: SecureConnection; serverVersion: string; connectMs: number; pairing: ServerPairing; scope: ConnectionScope };
+export type ReadyConnection = ConnectedServer & { connection: SecureConnection; pairing: ServerPairing; scope: ConnectionScope };
 
 type OpenedConnection = Omit<ReadyConnection, 'scope'>;
 
 export interface ConnectionObserver {
-  connected(connectMs: number, serverVersion: string): void;
+  connected(server: ConnectedServer): void;
   failed(kind: RemoteFailureKind): void;
 }
 
@@ -26,19 +29,9 @@ export type ConnectorDeps = {
   keepAliveMs?: number;
 };
 
-function readyVersion(message: ServerMessage): string {
-  if (message.type === 'ready') {
-    return message.serverVersion;
-  }
-  if (message.type === 'error') {
-    throw new RemoteFailure(failureForCode(message.code), message.code);
-  }
-  throw new RemoteFailure('protocol', `expected ready, got ${message.type}`);
-}
-
 function lasting(observer: ConnectionObserver): ConnectionScope {
   return {
-    connected: (connectMs, serverVersion) => observer.connected(connectMs, serverVersion),
+    connected: (server) => observer.connected(server),
     failed: (kind) => observer.failed(kind),
     isCurrent: () => true,
     onExpire: () => () => undefined,
@@ -98,7 +91,7 @@ export class ServerConnector {
       assertCurrent(scope);
       const opened = await this.open(pairing, cancel.signal);
       this.keepIfCurrent(opened, scope);
-      scope.connected(opened.connectMs, opened.serverVersion);
+      scope.connected({ connectMs: opened.connectMs, serverVersion: opened.serverVersion, languages: opened.languages });
       return { ...opened, scope };
     } catch (error) {
       const failure = failureIn(scope, error);
@@ -128,8 +121,10 @@ export class ServerConnector {
     signal.addEventListener('abort', close, { once: true });
     try {
       connection.send({ type: 'hello' });
-      const serverVersion = readyVersion(await connection.next(this.deps.timeoutMs));
-      return { connection, serverVersion, connectMs: this.deps.clock() - startedAt, pairing };
+      const { serverVersion } = expectedMessage(await connection.next(this.deps.timeoutMs), 'ready');
+      const connectMs = this.deps.clock() - startedAt;
+      const languages = await queryServerLanguages(connection, serverVersion, this.deps.timeoutMs);
+      return { connection, serverVersion, connectMs, languages, pairing };
     } catch (error) {
       connection.close();
       throw error;

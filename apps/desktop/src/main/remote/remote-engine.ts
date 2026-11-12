@@ -39,15 +39,17 @@ export class RemoteEngine implements TranscriptionEngine {
   }
 
   async prepare(): Promise<Preparation> {
-    const language = this.deps.languages.unavailableReason(this.deps.selection());
-    if (language !== null) {
-      return notReady(language);
-    }
+    const selection = this.deps.selection();
     try {
       const ready = await this.deps.connector.connect();
       if (!ready.scope.isCurrent()) {
         ready.connection.close();
         return notReady('server-disconnected');
+      }
+      const language = this.deps.languages.unavailableReason(selection, ready.languages);
+      if (language !== null) {
+        ready.connection.close();
+        return notReady(language);
       }
       const stopWatching = ready.scope.onExpire(() => ready.connection.close());
       return {
@@ -56,7 +58,7 @@ export class RemoteEngine implements TranscriptionEngine {
           id: this.id,
           start: (options) => {
             stopWatching();
-            const refused = this.deps.languages.unavailableReason(options.languages);
+            const refused = this.deps.languages.unavailableReason(options.languages, ready.languages);
             if (refused !== null) {
               ready.connection.close();
               throw new EngineUnavailableError(refused);
@@ -68,6 +70,7 @@ export class RemoteEngine implements TranscriptionEngine {
               reconnectDelaysMs: this.options.reconnectDelaysMs,
               reconnectWindowMs: this.options.reconnectWindowMs,
               reconnect: (previous) => this.deps.connector.reconnect(previous),
+              languages: this.deps.languages,
             });
           },
           release: () => {

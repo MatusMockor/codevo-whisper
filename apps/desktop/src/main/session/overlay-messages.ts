@@ -31,6 +31,7 @@ export const MESSAGES = Object.freeze({
   serverStorage: 'Párovanie servera sa nedá bezpečne uložiť ani načítať',
   serverDisconnected: 'Server je odpojený, diktovanie na ňom sa zastavilo',
   serverLanguagesOutdated: 'Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.',
+  serverLanguagesMissing: 'Na serveri chýbajú modely pre zvolené jazyky.',
   serverSttUnavailable: 'Prepis na serveri teraz nefunguje',
   serverTooLong: 'Diktovanie je pre server príliš dlhé',
   serverConnectionLost: 'Spojenie so serverom sa prerušilo',
@@ -107,12 +108,15 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'server-storage': () => errorState(MESSAGES.serverStorage),
   'server-disconnected': disconnectedError,
   'server-languages-outdated': () => serverError(MESSAGES.serverLanguagesOutdated),
+  'server-languages-missing': () => serverError(MESSAGES.serverLanguagesMissing),
 });
 
 const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.freeze({
   'engine-failed': MESSAGES.transcriptionFailed,
   busy: MESSAGES.serverBusy,
   'stt-unavailable': MESSAGES.serverSttUnavailable,
+  'languages-outdated': MESSAGES.serverLanguagesOutdated,
+  'languages-missing': MESSAGES.serverLanguagesMissing,
   'too-long': MESSAGES.serverTooLong,
   'connection-lost': MESSAGES.serverConnectionLost,
   'repair-needed': MESSAGES.serverRepair,
@@ -120,11 +124,13 @@ const FAILURE_MESSAGES: Readonly<Record<EngineFailureReason, string>> = Object.f
   disconnected: MESSAGES.serverDisconnected,
 });
 
+const SERVER_FIXED_FAILURES: ReadonlySet<EngineFailureReason> = new Set(['repair-needed', 'languages-outdated', 'languages-missing']);
+
 export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean): ErrorState {
   if (hasTextSoFar) {
     return { kind: 'error', message: FAILURE_MESSAGES[reason], action: 'copy-last' };
   }
-  if (reason === 'repair-needed') {
+  if (SERVER_FIXED_FAILURES.has(reason)) {
     return serverError(FAILURE_MESSAGES[reason]);
   }
   return errorState(FAILURE_MESSAGES[reason]);

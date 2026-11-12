@@ -18,6 +18,7 @@ import { PreAuthLimiter } from './pre-auth-limiter';
 import { TcpAdmission } from './tcp-admission';
 import { SessionRegistry } from './session-registry';
 import { closeClients } from './shutdown';
+import { SERVER_VERSION } from '../version';
 
 export type GatewayDeps = {
   config: ServerConfig;
@@ -30,6 +31,7 @@ export type GatewayDeps = {
   handshakeTimeoutMs?: number;
   logger?: Logger;
   beforeReady?: (deviceId: string) => Promise<void>;
+  serverVersion?: string;
 };
 
 export type Gateway = {
@@ -79,6 +81,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     sessions,
     clock,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),
+    serverVersion: deps.serverVersion ?? SERVER_VERSION,
     budget: new DeviceAudioBudget(MAX_AUDIO_SECONDS * BYTES_PER_SECOND),
     ingestion: new IngestionLimiter(clock, INGESTION_LIMITS),
     logger: deps.logger ?? silentLogger,

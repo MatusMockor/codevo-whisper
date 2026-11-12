@@ -2,6 +2,8 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DICTATION_LANGUAGES, UNKNOWN_MODELS } from '@codevo-whisper/protocol';
+import { ROUTING_MODELS, ROUTING_STT } from '../../server/test/support/fake-stt-server';
 import { EngineRouting } from '../src/main/engines/engine-routing';
 import { ActiveModelReadiness } from '../src/main/models/local-model-readiness';
 import type { PairingRepository } from '../src/main/remote/pairing-repository';
@@ -107,6 +109,19 @@ describe('ServerService', () => {
     expect(view.pairing).toEqual({ kind: 'paired', deviceId, engine: { kind: 'switched', previous: ['local'], current: ['server'] } });
     expect(view.server).toMatchObject({ host: `127.0.0.1:${gateway.port}`, endpoint: gateway.url, deviceId, deviceName: 'Test Mac', status: { kind: 'online' } });
     expect(view.server?.serverFingerprint).toMatch(/^([0-9A-F]{4} ){7}[0-9A-F]{4}$/);
+  });
+
+  it('shows the dictation languages and models the server reports and refreshes them on the next check', async () => {
+    const { service: target, views } = await create();
+    await pairThroughService(target);
+    expect((await target.view()).server?.status).toMatchObject({ kind: 'online', languages: { kind: 'reported', languages: [], models: UNKNOWN_MODELS } });
+
+    gateway.stt.setCapabilities(ROUTING_STT);
+    await target.check();
+
+    const languages = { kind: 'reported', languages: [...DICTATION_LANGUAGES], models: ROUTING_MODELS };
+    expect((await target.view()).server?.status).toMatchObject({ kind: 'online', languages });
+    await expect.poll(() => views.at(-1)?.server?.status).toMatchObject({ kind: 'online', languages });
   });
 
   it('switches transcription to the server after pairing when no local model is downloaded', async () => {

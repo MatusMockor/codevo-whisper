@@ -3,15 +3,15 @@ import type { EngineDictation, Preparation, TranscriptUpdate } from '../src/main
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import { RemoteEngine, type RemoteEngineOptions } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
-import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import { ROUTING_STT, type FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import { EngineUnavailableError } from '../src/main/engines/transcription-engine';
+import type { LanguageSelection } from '../src/shared/dictation-languages';
 import { continuousSpeech } from '../../server/test/support/speech';
 import { startDropProxy, type DropProxy } from './support/drop-proxy';
 import { pcmBytes, timelineSpeech } from './support/timeline-audio';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
-import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { ServerLanguageGate } from '../src/main/remote/server-language-support';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
-
-const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
 
 const FRAME = 3200;
 const SECOND = 32000;
@@ -30,7 +30,7 @@ afterEach(async () => {
 
 type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource; controller: AbortController };
 
-type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void };
+type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void; selection?: LanguageSelection };
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
@@ -41,11 +41,12 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   const source: PairingSource = { current: await gateway.addDevice(), gate: Promise.resolve() };
   const pairings = { load: () => source.gate.then(() => source.current) };
   const connector = new ServerConnector({ pairings, observer: silentObserver, clock: Date.now, timeoutMs: extra.timeoutMs ?? 2000, ...(keepAliveMs === undefined ? {} : { keepAliveMs }) });
-  const preparation = await new RemoteEngine({ connector, ...AUTO_ONLY, options }).prepare();
+  const selection = extra.selection ?? LANGUAGE_DEFAULTS.languages;
+  const preparation = await new RemoteEngine({ connector, languages: new ServerLanguageGate(), selection: () => selection, options }).prepare();
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
   const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: controller.signal, ...transcript });
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: selection, signal: controller.signal, ...transcript });
   return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
@@ -209,6 +210,51 @@ describe('RemoteDictation retry', () => {
 
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each([
+    { name: 'came back older than 0.3.0', restart: (server: TestGateway) => server.restart({ serverVersion: '0.2.7' }), reason: 'server-languages-outdated' },
+    {
+      name: 'came back without the language models',
+      restart: (server: TestGateway) => {
+        server.stt.setCapabilities({ status: 404, body: { error: 'not found' } });
+        return server.restart();
+      },
+      reason: 'server-languages-missing',
+    },
+  ] as const)('never replays a language dictation to a gateway that $name', async ({ restart, reason }) => {
+    const { server, relay, dictation } = await setup({ ...bySize, capabilities: ROUTING_STT, delayMs: 300 }, {}, undefined, { selection: { mode: 'selected', selected: ['sk', 'cs'] } });
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await expect.poll(() => server.stt.requests.length).toBe(1);
+
+    await restart(server);
+
+    await expect(finished).rejects.toEqual(new EngineUnavailableError(reason));
+    expect(relay.connections()).toBeGreaterThanOrEqual(2);
+    expect(server.stt.requests).toEqual([{ language: 'auto', languages: ['sk', 'cs'], kind: 'final', bytes: SECOND }]);
+  });
+
+  it('keeps the text received before the drop when the gateway came back older than 0.3.0', async () => {
+    const updates: TranscriptUpdate[] = [];
+    const stt: FakeSttBehaviour = {
+      capabilities: ROUTING_STT,
+      respond: (pcm) => ({ status: 200, body: { text: pcm.length === 25 * SECOND ? 'prvá časť textu' : 'textu a koniec', language: 'sk', route: 'conditioned' } }),
+      delayFor: (pcm) => (pcm.length === 25 * SECOND ? 0 : 2000),
+    };
+    const { server, relay, dictation, source } = await setup(stt, {}, undefined, { selection: { mode: 'selected', selected: ['sk'] }, onTranscript: (update) => updates.push(update) });
+    talk(dictation, continuousSpeech(26));
+    const finished = dictation.finish();
+    await expect.poll(() => updates.some((update) => update.type === 'final' && update.text !== '')).toBe(true);
+    const reconnecting = Promise.withResolvers<void>();
+    source.gate = reconnecting.promise;
+
+    relay.dropAll();
+    await server.restart({ serverVersion: '0.2.7' });
+    reconnecting.resolve();
+
+    await expect(finished).rejects.toMatchObject({ name: 'TranscriptionFailedError', reason: 'languages-outdated', textSoFar: 'prvá časť' });
+    expect(relay.connections()).toBe(2);
   });
 
   it('stops reconnecting when the dictation is cancelled during the backoff and opens no further connection', async () => {

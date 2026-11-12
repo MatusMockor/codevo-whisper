@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { revokeCommand, type PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
 import { Glyph } from '../components/Glyph';
@@ -6,6 +6,7 @@ import { Led } from '../components/Led';
 import type { SignalState } from '../home/transcription-route';
 import { CommandBox } from './CommandBox';
 import { pairedOn, statusPill, type PillTone } from './server-copy';
+import { serverLanguageFacts } from './server-language-facts';
 import { ServerStatePanel } from './ServerStatePanel';
 import { useServerToggle } from './ServerToggle';
 
@@ -98,6 +99,12 @@ function Details({ server }: { server: PairedServerView }) {
           <dd>{server.status.serverVersion}</dd>
         </>
       )}
+      {serverLanguageFacts(server).map((fact) => (
+        <Fragment key={fact.term}>
+          <dt>{fact.term}</dt>
+          <dd>{fact.value}</dd>
+        </Fragment>
+      ))}
     </dl>
   );
 }

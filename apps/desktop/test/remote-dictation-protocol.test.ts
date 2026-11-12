@@ -1,14 +1,21 @@
-import { generateKeyPair, type ClientMessage } from '@codevo-whisper/protocol';
+import { generateKeyPair, UNKNOWN_MODELS, type ClientMessage, type DictationLanguage } from '@codevo-whisper/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DictationOptions, EngineDictation, Preparation, TranscriptUpdate } from '../src/main/engines/transcription-engine';
 import { MAX_SEGMENT_ID } from '../src/main/remote/remote-dictation';
 import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import { acceptSession, startResponder, type ResponderSession, type ScriptedResponder } from './support/scripted-responder';
-import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { ServerLanguageGate } from '../src/main/remote/server-language-support';
+import type { LanguageSelection } from '../src/shared/dictation-languages';
 import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
 
-const AUTO_ONLY = { languages: new AutoOnlyServerLanguages(), selection: () => LANGUAGE_DEFAULTS.languages };
+type ScriptedServer = { serverVersion: string; languages: readonly DictationLanguage[] };
+
+const OLD_SERVER: ScriptedServer = { serverVersion: 'test', languages: [] };
+
+const ROUTING_SERVER: ScriptedServer = { serverVersion: '0.3.0', languages: ['sk', 'cs', 'en'] };
+
+const SLOVAK_AND_CZECH: LanguageSelection = { mode: 'selected', selected: ['sk', 'cs'] };
 
 let responder: ScriptedResponder | undefined;
 
@@ -19,13 +26,17 @@ afterEach(async () => {
 
 const silentObserver = { connected: () => undefined, failed: () => undefined };
 
-async function scripted(script: (session: ResponderSession, message: ClientMessage) => void): Promise<RemoteEngine> {
+async function scripted(script: (session: ResponderSession, message: ClientMessage) => void, server = OLD_SERVER, selection = LANGUAGE_DEFAULTS.languages): Promise<RemoteEngine> {
   const serverKey = generateKeyPair();
   responder = await startResponder((socket, opening) => {
     const session = acceptSession(socket, opening, serverKey);
     session.onMessage((message) => {
       if (message.type === 'hello') {
-        session.send({ type: 'ready', serverVersion: 'test' });
+        session.send({ type: 'ready', serverVersion: server.serverVersion });
+        return;
+      }
+      if (message.type === 'capabilities') {
+        session.send({ type: 'capabilities', languages: server.languages, models: UNKNOWN_MODELS });
         return;
       }
       script(session, message);
@@ -33,7 +44,7 @@ async function scripted(script: (session: ResponderSession, message: ClientMessa
   });
   const pairing = { deviceKey: generateKeyPair(), serverPublicKey: serverKey.publicKey, endpoint: responder.url, deviceId: 'abcdef01', deviceName: 'Mac', pairedAt: '2026-10-26T08:00:00.000Z' };
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector, ...AUTO_ONLY });
+  return new RemoteEngine({ connector, languages: new ServerLanguageGate(), selection: () => selection });
 }
 
 async function startDictation(engine: RemoteEngine, extra: Partial<DictationOptions> = {}): Promise<EngineDictation> {
@@ -171,7 +182,53 @@ describe('RemoteDictation protocol handling', () => {
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: 'prvý' });
   });
 
-  it('reports languages_unavailable as an unavailable STT engine', async () => {
+  it('sends the selected languages with language auto and keeps finals that carry the detected language', async () => {
+    const starts: Array<Record<string, unknown>> = [];
+    const updates: TranscriptUpdate[] = [];
+    const engine = await scripted(
+      (session, message) => {
+        if (message.type === 'start') {
+          starts.push(JSON.parse(new TextDecoder().decode(session.plaintexts.at(-1)?.subarray(1))) as Record<string, unknown>);
+          session.send({ type: 'partial', sessionId: message.sessionId, segmentId: 0, revision: 1, text: 'ahoj', language: 'sk' });
+          session.send({ type: 'final', sessionId: message.sessionId, segmentId: 0, text: 'ahoj, ako sa máš', language: 'sk' });
+          session.send({ type: 'final', sessionId: message.sessionId, segmentId: 1, text: 'dobře', language: null });
+          session.send({ type: 'done', sessionId: message.sessionId });
+        }
+      },
+      ROUTING_SERVER,
+      SLOVAK_AND_CZECH,
+    );
+
+    const dictation = await startDictation(engine, { languages: SLOVAK_AND_CZECH, partials: true, onTranscript: (update) => updates.push(update) });
+
+    expect(await dictation.finish()).toBe('ahoj, ako sa máš dobře');
+    expect(starts).toEqual([{ type: 'start', sessionId: starts[0]?.sessionId, language: 'auto', partials: true, languages: ['sk', 'cs'] }]);
+    expect(typeof starts[0]?.sessionId).toBe('string');
+    expect(updates).toEqual([
+      { type: 'partial', segmentId: 0, revision: 1, text: 'ahoj' },
+      { type: 'final', segmentId: 0, text: 'ahoj, ako sa máš' },
+      { type: 'final', segmentId: 1, text: 'dobře' },
+    ]);
+  });
+
+  it('reports languages_unavailable in a language session as missing server models, keeping the earlier text', async () => {
+    const engine = await scripted(
+      (session, message) => {
+        if (message.type === 'start') {
+          session.send({ type: 'final', sessionId: message.sessionId, segmentId: 0, text: 'prvá veta', language: 'sk' });
+          session.send({ type: 'final', sessionId: message.sessionId, segmentId: 1, text: '', language: null });
+          session.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
+        }
+      },
+      ROUTING_SERVER,
+      SLOVAK_AND_CZECH,
+    );
+    const dictation = await startDictation(engine, { languages: SLOVAK_AND_CZECH });
+
+    await expect(dictation.finish()).rejects.toMatchObject({ reason: 'languages-missing', textSoFar: 'prvá veta' });
+  });
+
+  it('reports languages_unavailable outside a language session as an unavailable STT engine', async () => {
     const engine = await scripted((session, message) => {
       if (message.type === 'start') {
         session.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });

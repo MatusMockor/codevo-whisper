@@ -4,7 +4,7 @@ import { PAIR_COMMAND, revokeCommand } from '../src/shared/server';
 
 describe('server copy', () => {
   it('labels every server status and a disconnected server', () => {
-    expect(statusPill({ enabled: true, status: { kind: 'online', connectMs: 38, serverVersion: '0.1.0' } })).toEqual({ label: 'Online', tone: 'ok' });
+    expect(statusPill({ enabled: true, status: { kind: 'online', connectMs: 38, serverVersion: '0.1.0', languages: { kind: 'outdated', minVersion: '0.3.0' } } })).toEqual({ label: 'Online', tone: 'ok' });
     expect(statusPill({ enabled: true, status: { kind: 'offline' } })).toEqual({ label: 'Neodpovedá', tone: 'err' });
     expect(statusPill({ enabled: true, status: { kind: 'repair-needed', reason: 'server-key-changed' } })).toEqual({ label: 'Treba znova spárovať', tone: 'err' });
     expect(statusPill({ enabled: true, status: { kind: 'checking' } })).toEqual({ label: 'Overujem…', tone: 'muted' });

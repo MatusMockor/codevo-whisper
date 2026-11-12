@@ -1,10 +1,11 @@
 import type { ClientMessage, ServerMessage } from '@codevo-whisper/protocol';
-import { TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason, type TranscriptUpdate } from '../engines/transcription-engine';
+import { EngineUnavailableError, TranscriptionFailedError, type DictationOptions, type EngineDictation, type EngineFailureReason, type EngineUnavailableReason, type TranscriptUpdate } from '../engines/transcription-engine';
 import { AudioOutbox } from './audio-outbox';
 import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { RetryBuffer } from './retry-buffer';
 import type { SecureConnection } from './secure-connection';
 import type { ReadyConnection } from './server-connector';
+import type { ServerLanguageSupport } from './server-language-support';
 
 export type RemoteDictationDeps = {
   options: DictationOptions;
@@ -13,6 +14,7 @@ export type RemoteDictationDeps = {
   reconnect: (previous: ReadyConnection) => Promise<ReadyConnection>;
   reconnectDelaysMs: readonly number[];
   reconnectWindowMs: number;
+  languages: ServerLanguageSupport;
   newSessionId?: () => string;
 };
 
@@ -26,6 +28,7 @@ const DRAIN_POLL_MS = 40;
 const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = {
   busy: 'busy',
   'stt-unavailable': 'stt-unavailable',
+  'languages-unavailable': 'stt-unavailable',
   'too-long': 'too-long',
   'device-unknown': 'repair-needed',
   'server-key-changed': 'repair-needed',
@@ -34,6 +37,11 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
   timeout: 'connection-lost',
   'not-paired': 'connection-lost',
   disconnected: 'disconnected',
+};
+
+const FAILURE_BY_REFUSAL: Partial<Record<EngineUnavailableReason, EngineFailureReason>> = {
+  'server-languages-outdated': 'languages-outdated',
+  'server-languages-missing': 'languages-missing',
 };
 
 const RETRYABLE: ReadonlySet<RemoteFailureKind> = new Set(['connection-lost', 'offline', 'timeout']);
@@ -123,11 +131,14 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private startMessage(sessionId: string): ClientMessage {
-    const start: ClientMessage = { type: 'start', sessionId, language: 'auto' };
-    if (this.deps.options.partials !== true) {
-      return start;
-    }
-    return { ...start, partials: true };
+    const { partials, languages } = this.deps.options;
+    return {
+      type: 'start',
+      sessionId,
+      language: 'auto',
+      ...(partials === true ? { partials: true } : {}),
+      ...(languages.mode === 'selected' ? { languages: languages.selected } : {}),
+    };
   }
 
   private pump(): void {
@@ -335,6 +346,12 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private resume(ready: ReadyConnection): void {
+    const refused = this.deps.languages.unavailableReason(this.deps.options.languages, ready.languages);
+    if (refused !== null) {
+      ready.connection.close();
+      this.refuse(refused);
+      return;
+    }
     if (!this.retry.canRetry()) {
       ready.connection.close();
       this.fail(new RemoteFailure('connection-lost', 'the recording outgrew the retry buffer during the reconnect'));
@@ -395,7 +412,24 @@ export class RemoteDictation implements EngineDictation {
   private fail(failure: RemoteFailure): void {
     this.settle();
     this.ready.scope.failed(failure.kind);
-    this.result.reject(new TranscriptionFailedError(REASON_BY_KIND[failure.kind] ?? 'protocol', this.textSoFar(), { cause: failure }));
+    this.result.reject(new TranscriptionFailedError(this.failureReason(failure.kind), this.textSoFar(), { cause: failure }));
+  }
+
+  private refuse(reason: EngineUnavailableReason): void {
+    const textSoFar = this.textSoFar();
+    this.settle();
+    if (textSoFar === '') {
+      this.result.reject(new EngineUnavailableError(reason));
+      return;
+    }
+    this.result.reject(new TranscriptionFailedError(FAILURE_BY_REFUSAL[reason] ?? 'protocol', textSoFar));
+  }
+
+  private failureReason(kind: RemoteFailureKind): EngineFailureReason {
+    if (kind === 'languages-unavailable' && this.deps.options.languages.mode === 'selected') {
+      return 'languages-missing';
+    }
+    return REASON_BY_KIND[kind] ?? 'protocol';
   }
 
   private cancel(): void {

@@ -26,7 +26,8 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { StatsStore } from '../src/main/stats/stats-store';
 import type { OverlayState } from '../src/shared/overlay-contract';
 import type { Settings } from '../src/shared/settings';
-import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
+import type { ServerOptions } from '../../server/src/app';
+import { ROUTING_STT, type FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { continuousSpeech } from '../../server/test/support/speech';
 import { FAKE_WORKER } from './support/resident-fixture';
 import { FakePowerEvents } from './fake-power-events';
@@ -35,7 +36,7 @@ import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
 import { createServerService } from './support/server-service';
-import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { ServerLanguageGate } from '../src/main/remote/server-language-support';
 
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
@@ -64,8 +65,8 @@ afterEach(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}, gate: Promise<void> = Promise.resolve(), paired = true) {
-  gateway = await startTestGateway({ stt });
+async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour = {}, gate: Promise<void> = Promise.resolve(), paired = true, serverOptions: ServerOptions = {}) {
+  gateway = await startTestGateway({ stt, server: serverOptions });
   const pairing: ServerPairing = await gateway.addDevice();
   const logger = new RecordingLogger();
   const settings = new SettingsStore(join(scratch, 'settings.json'), logger);
@@ -83,7 +84,7 @@ async function prepared(settingsPatch: Partial<Settings>, stt: FakeSttBehaviour 
     await server.pairings.save(pairing);
   }
   const connector = new ServerConnector({ pairings: { load: () => gate.then(() => server.pairings.load()) }, observer: silentObserver, scope: () => server.status.scope(), clock: Date.now, timeoutMs: 2000 });
-  const remote = new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(), selection: () => settings.get().languages });
+  const remote = new RemoteEngine({ connector, languages: new ServerLanguageGate(), selection: () => settings.get().languages });
   const helper = new FakeInputHelper({ clipboard: 'original' });
   const hotkey = new HotkeyService(helper, settings, new FakePowerEvents(), () => Date.now(), logger);
   await hotkey.start();
@@ -205,14 +206,45 @@ describe('SessionCoordinator with the server engine', () => {
     await expect.poll(() => harness.helper.pasted).toEqual(['záložný server']);
   });
 
-  it('refuses selected languages on a server that cannot honour them and never sends audio', async () => {
+  it('refuses selected languages on a server without the language models and never sends audio', async () => {
     const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['sk', 'cs'] } });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesMissing, action: 'open-server' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('refuses selected languages on an outdated server and never sends audio', async () => {
+    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['sk', 'cs'] } }, { capabilities: ROUTING_STT }, Promise.resolve(), true, { serverVersion: '0.2.7' });
 
     await dictate(harness, stampedPcm(2));
 
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesOutdated, action: 'open-server' });
     expect(harness.helper.pasted).toEqual([]);
     expect(gateway.stt.requests).toEqual([]);
+  });
+
+  it('dictates in the selected languages on a server with the language models', async () => {
+    const harness = await prepared(
+      { engineOrder: ['server'], languages: { mode: 'selected', selected: ['sk', 'cs'] } },
+      { capabilities: ROUTING_STT, respond: (_pcm, _language, request) => ({ status: 200, body: { text: `v jazykoch ${request.languages?.join(', ') ?? ''}`, language: 'sk', route: 'conditioned' } }) },
+    );
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['v jazykoch sk, cs']);
+    expect(gateway.stt.requests).toEqual([{ language: 'auto', languages: ['sk', 'cs'], kind: 'final', bytes: 32000 }]);
+  });
+
+  it('shows missing server models when the STT refuses the languages during the dictation', async () => {
+    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['sk'] } }, { capabilities: ROUTING_STT, respond: () => ({ status: 409, body: { error: 'languages unavailable' } }) });
+
+    await dictate(harness, stampedPcm(2));
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesMissing, action: 'open-server' });
+    expect(harness.helper.pasted).toEqual([]);
   });
 
   it('transcribes in automatic mode on the server exactly as before', async () => {
