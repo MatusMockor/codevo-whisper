@@ -8,7 +8,7 @@ import { huggingFaceUrl, loadCatalog } from '../src/main/models/model-catalog';
 
 const BUNDLED = fileURLToPath(new URL('../resources/model-catalog.json', import.meta.url));
 
-type RawCatalog = { schema: number; defaults: Record<string, { model: string; backend: string }>; models: Array<Record<string, unknown>>; diarizer?: Record<string, unknown> };
+type RawCatalog = { schema: number; defaults: Record<string, { model: string; backend: string }>; models: Array<Record<string, unknown>>; diarizer?: Record<string, unknown>; languageId?: Record<string, unknown> };
 
 let scratch: string;
 
@@ -62,6 +62,34 @@ describe('loadCatalog', () => {
     expect(catalog.models.map((model) => model.id)).not.toContain(catalog.diarizer.id);
   });
 
+  it('loads the language ID model as its own pinned entry, never as a dictation model', () => {
+    const catalog = loadCatalog(BUNDLED);
+
+    expect(catalog.languageId).toMatchObject({
+      id: 'langid-voxlingua107-q8',
+      name: 'VoxLingua107 ECAPA',
+      quantization: 'Q8_0',
+      sizeBytes: 26693632,
+      license: 'Apache-2.0',
+      sha256: '063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a',
+      roles: ['language-id'],
+    });
+    expect(huggingFaceUrl(catalog.languageId.source)).toBe(
+      'https://huggingface.co/handy-computer/lang-id-voxlingua107-ecapa-gguf/resolve/e59f0f3847e77723b7d58447ef9456fa0c7e9436/lang-id-voxlingua107-ecapa-Q8_0.gguf',
+    );
+    expect(catalog.models.map((model) => model.id)).not.toContain(catalog.languageId.id);
+  });
+
+  it('pins the Canary file the server routes with, so local and server routing give the same text', () => {
+    const canary = loadCatalog(BUNDLED).models.find((model) => model.id === 'canary-1b-v2-q8');
+
+    expect(canary).toMatchObject({
+      sizeBytes: 1144290016,
+      sha256: '224f83d1bc487b3303b495a7d6874912fdece93de19d1a04b550829c30a5d289',
+      source: { repo: 'handy-computer/canary-1b-v2-gguf', revision: '692af661b140183b60e44f55ad03c59e1e77d078', file: 'canary-1b-v2-Q8_0.gguf' },
+    });
+  });
+
   it('builds the Hugging Face URL', () => {
     const [parakeet] = loadCatalog(BUNDLED).models;
 
@@ -110,6 +138,8 @@ describe('loadCatalog', () => {
       [(raw) => void (raw.defaults['linux-cpu'] = { model: 'sortformer-4spk-v2-1-q8', backend: 'cpu' }), /linux-cpu/],
       [(raw) => void (raw.diarizer = { ...raw.diarizer, sha256: 'ABC' }), /sortformer-4spk-v2-1-q8.*sha256/],
       [(raw) => void delete raw.diarizer, /diarizer/],
+      [(raw) => void (raw.languageId = { ...raw.languageId, sha256: 'ABC' }), /langid-voxlingua107-q8.*sha256/],
+      [(raw) => void delete raw.languageId, /languageId/],
     ];
     for (const [change, message] of variants) {
       const file = await writeVariant(change);

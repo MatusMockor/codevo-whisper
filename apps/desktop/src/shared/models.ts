@@ -21,4 +21,12 @@ export type ModelInfo = {
 
 export type ModelCatalogView = { models: ModelInfo[]; defaultModelId: string };
 
-export type DiarizerView = { model: ModelInfo; state: ModelState };
+export type AuxiliaryModelView = { model: ModelInfo; state: ModelState };
+
+export type DiarizerView = AuxiliaryModelView;
+
+export type LanguagePackView = { conditioned: AuxiliaryModelView; languageId: AuxiliaryModelView; requiredRamBytes: number; enoughMemory: boolean };
+
+export function isLanguagePackReady(pack: LanguagePackView): boolean {
+  return pack.conditioned.state.status === 'ready' && pack.languageId.state.status === 'ready';
+}

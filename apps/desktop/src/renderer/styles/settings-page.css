@@ -781,3 +781,13 @@
     animation: none;
   }
 }
+
+.lang-pack {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.lang-pack .progress {
+  width: min(100%, 52ch);
+}

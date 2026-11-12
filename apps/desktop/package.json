@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@codevo-whisper/audio": "workspace:*",
+    "@codevo-whisper/language-routing": "workspace:*",
     "@codevo-whisper/protocol": "workspace:*",
     "@codevo-whisper/stt-runner": "workspace:*",
     "@electron/fuses": "1.8.0",

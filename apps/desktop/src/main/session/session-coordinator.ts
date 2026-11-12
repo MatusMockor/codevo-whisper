@@ -36,6 +36,7 @@ export type SessionCoordinatorDeps = {
   pause: PauseState;
   overlay: (state: OverlayState) => void;
   openSettings?: () => void;
+  openLanguageSettings?: () => void;
   openServer?: () => void;
   openModelSettings?: () => void;
   enableServer?: () => Promise<void>;
@@ -49,6 +50,7 @@ export class SessionCoordinator {
   private readonly logger: Logger;
   private readonly actions: Readonly<Record<OverlayAction, () => void>> = {
     'open-settings': () => this.deps.openSettings?.(),
+    'open-languages': () => this.deps.openLanguageSettings?.(),
     'open-server': () => this.deps.openServer?.(),
     'pair-server': () => this.deps.openServer?.(),
     'download-model': () => this.deps.openModelSettings?.(),

@@ -1,20 +1,32 @@
 import type { TranscribeLanguage } from '@codevo-whisper/stt-runner';
-import { primaryLanguage, type LanguageSelection } from '../../shared/dictation-languages';
+import { primaryLanguage, type DictationLanguage, type LanguageSelection } from '../../shared/dictation-languages';
 import type { LanguageHint } from '../../shared/models';
 import type { EngineUnavailableReason } from './transcription-engine';
 
-export type LocalLanguagePlan = { ready: true; hint: TranscribeLanguage } | { ready: false; reason: EngineUnavailableReason };
+export type LocalLanguagePlan =
+  | { kind: 'direct'; hint: TranscribeLanguage }
+  | { kind: 'routed'; selected: readonly DictationLanguage[] }
+  | { kind: 'unavailable'; reason: EngineUnavailableReason };
 
-const WORKER_LANGUAGES: readonly TranscribeLanguage[] = ['sk', 'cs', 'en'];
+export type ReadyLanguagePlan = Exclude<LocalLanguagePlan, { kind: 'unavailable' }>;
 
-export function localLanguagePlan(selection: LanguageSelection, modelHint: LanguageHint | null): LocalLanguagePlan {
+export function needsLanguagePack(selection: LanguageSelection, modelHint: LanguageHint | null): boolean {
+  return selection.mode === 'selected' && modelHint !== 'required';
+}
+
+export function localLanguagePlan(selection: LanguageSelection, modelHint: LanguageHint | null, packReady: boolean): LocalLanguagePlan {
   if (selection.mode === 'auto') {
-    return modelHint === 'required' ? { ready: false, reason: 'languages-required' } : { ready: true, hint: 'auto' };
+    return modelHint === 'required' ? { kind: 'unavailable', reason: 'languages-required' } : { kind: 'direct', hint: 'auto' };
   }
   const primary = primaryLanguage(selection);
-  const hint = WORKER_LANGUAGES.find((language) => language === primary);
-  if (modelHint !== 'required' || hint === undefined) {
-    return { ready: false, reason: 'languages-pack-missing' };
+  if (primary === null) {
+    return { kind: 'unavailable', reason: 'languages-required' };
   }
-  return { ready: true, hint };
+  if (modelHint === 'required') {
+    return { kind: 'direct', hint: primary };
+  }
+  if (!packReady) {
+    return { kind: 'unavailable', reason: 'languages-pack-missing' };
+  }
+  return { kind: 'routed', selected: selection.selected };
 }

@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { totalmem } from 'node:os';
 import { join } from 'node:path';
 import type { LocalEngineArch } from '../engines/local-backend';
 import { LocalEngine } from '../engines/local-engine';
@@ -7,6 +8,7 @@ import type { Logger } from '../logging/logger';
 import { resolveModelCatalog } from '../models/catalog-path';
 import { catalogView } from '../models/catalog-view';
 import { createDiarizer, type Diarizer } from '../models/diarizer';
+import { createLanguagePack, languagePackMemory, type LanguagePack } from '../models/language-pack';
 import { loadCatalog, type CatalogPlatform } from '../models/model-catalog';
 import { ModelManager } from '../models/model-manager';
 import type { WarmUp } from '../models/warm-up';
@@ -18,7 +20,7 @@ import { desktopAppRoot } from './app-root';
 const MODELS_DIR = 'models';
 const WARM_UP_STAMP_FILE = 'warm-up.json';
 
-export type Models = { manager: ModelManager; engine: LocalEngine; catalog: ModelCatalogView; diarizer: Diarizer; checkInBackground(): void; dispose(): Promise<void> };
+export type Models = { manager: ModelManager; engine: LocalEngine; catalog: ModelCatalogView; diarizer: Diarizer; languagePack: LanguagePack; checkInBackground(): void; dispose(): Promise<void> };
 
 function localArch(arch: string): LocalEngineArch {
   return arch === 'arm64' ? 'arm64' : 'x64';
@@ -54,13 +56,25 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
     warmUp,
     logger,
   });
-  const engine = new LocalEngine({ binary, acceleratorBinary: resolveWorkerBinary({ ...location, arch, variant: 'vulkan' }), models: manager, settings, arch });
+  const conditioned = catalog.conditionedModel();
+  const languagePack = createLanguagePack({
+    dir,
+    conditioned,
+    languageId: catalog.languageId,
+    models: manager,
+    requiredRamBytes: languagePackMemory(catalog.models, conditioned, catalog.languageId),
+    totalMemory: totalmem,
+    settings,
+    logger,
+  });
+  const engine = new LocalEngine({ binary, acceleratorBinary: resolveWorkerBinary({ ...location, arch, variant: 'vulkan' }), models: manager, languagePack, settings, arch });
   return {
     manager,
     engine,
     dispose: () => engine.dispose(),
     catalog: catalogView(catalog, catalogPlatform(arch)),
     diarizer: createDiarizer({ dir, entry: catalog.diarizer, settings, logger }),
+    languagePack,
     checkInBackground: () => {
       checkModels(manager, warmUp, logger).catch((error: unknown) => {
         logger.error('The background model check failed', error);

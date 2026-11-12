@@ -334,5 +334,57 @@
     "roleLabels": [
       "Voliteľný"
     ]
+  },
+  "languageId": {
+    "id": "langid-voxlingua107-q8",
+    "name": "VoxLingua107 ECAPA",
+    "engine": "transcribe.cpp",
+    "quantization": "Q8_0",
+    "languages": [
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hr",
+      "hu",
+      "it",
+      "lt",
+      "lv",
+      "mt",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "uk"
+    ],
+    "languageHint": "ignored",
+    "sizeBytes": 26693632,
+    "minRamBytes": 268435456,
+    "license": "Apache-2.0",
+    "licenseUrl": "https://www.apache.org/licenses/LICENSE-2.0",
+    "attribution": "VoxLingua107 ECAPA-TDNN spoken language identification by SpeechBrain (speechbrain/lang-id-voxlingua107-ecapa). GGUF conversion and Q8_0 quantization by handy-computer (transcribe.cpp). Licensed under the Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0. Changes: converted to GGUF and quantized to Q8_0.",
+    "upstream": "https://huggingface.co/speechbrain/lang-id-voxlingua107-ecapa",
+    "source": {
+      "repo": "handy-computer/lang-id-voxlingua107-ecapa-gguf",
+      "revision": "e59f0f3847e77723b7d58447ef9456fa0c7e9436",
+      "file": "lang-id-voxlingua107-ecapa-Q8_0.gguf"
+    },
+    "sha256": "063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a",
+    "roles": [
+      "language-id"
+    ],
+    "roleLabels": [
+      "Rozpoznávanie jazyka"
+    ]
   }
 }

@@ -119,6 +119,7 @@ async function prepared(setup: Setup = {}) {
     pause,
     overlay: (state) => states.push(state),
     openSettings: () => settingsOpened.push('settings'),
+    openLanguageSettings: () => settingsOpened.push('languages'),
     openServer: () => settingsOpened.push('server'),
     openModelSettings: () => settingsOpened.push('local-model'),
     ...(setup.polish === undefined ? {} : { polish: setup.polish }),
@@ -600,6 +601,17 @@ describe('SessionCoordinator', () => {
     expect(harness.settingsOpened).toEqual(['local-model', 'server']);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.engineSwitchFailed, action: 'pair-server', alternative: 'download-model' });
     expect(harness.settings.get().engineOrder).toEqual(['local']);
+  });
+
+  it('sends selected languages without the local language pack to the Jazyky diktovania row', async () => {
+    const harness = await prepared({ settings: { languages: { mode: 'selected', selected: ['sk', 'cs'] } } });
+
+    await dictate(harness, 5);
+
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.languagesPackMissing, action: 'open-languages' });
+    await expect(readRecordedCalls(argsFile)).resolves.toEqual([]);
+    harness.coordinator.act('open-languages');
+    expect(harness.settingsOpened).toEqual(['languages']);
   });
 
   it('offers the ready local engine and pairing after a refused switch to an unpaired server', async () => {

@@ -6,10 +6,10 @@ export type { LocalContext } from './resident-segment-transcriber';
 
 export const LOCAL_DEVICE_ID = 'local';
 
-export type LocalDictationDeps = {
-  dispatcher: TranscriptionDispatcher<LocalContext>;
+export type LocalDictationDeps<TContext = LocalContext> = {
+  dispatcher: TranscriptionDispatcher<TContext>;
   clock: Clock;
-  context: LocalContext;
+  context: TContext;
   options: DictationOptions;
   segment?: Partial<SegmentConfig>;
   onRecordingEnd?: () => void;
@@ -29,15 +29,15 @@ function toUpdate(event: TranscriptEvent): TranscriptUpdate {
   return { type: 'final', segmentId: event.segmentId, text: event.text };
 }
 
-export class LocalDictation implements EngineDictation {
-  private readonly session: RollingSession<LocalContext>;
+export class LocalDictation<TContext = LocalContext> implements EngineDictation {
+  private readonly session: RollingSession<TContext>;
   private state: State = 'recording';
   private released = false;
   private readonly onAbort = () => this.cancel();
 
-  constructor(private readonly deps: LocalDictationDeps) {
+  constructor(private readonly deps: LocalDictationDeps<TContext>) {
     const { dispatcher, options } = deps;
-    this.session = new RollingSession<LocalContext>({
+    this.session = new RollingSession<TContext>({
       deviceId: LOCAL_DEVICE_ID,
       partials: options.partials === true,
       context: deps.context,

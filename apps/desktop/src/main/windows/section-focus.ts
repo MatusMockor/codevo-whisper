@@ -1,23 +1,31 @@
 import type { PageId } from '../../shared/pages';
-import { sectionPage, type SectionId } from '../../shared/section-focus';
+import { focusPage, type FocusRequest, type FocusSetting, type SectionId } from '../../shared/section-focus';
 import type { MainWindowEvents } from './main-window-controller';
 
 export type SectionWindow = Pick<MainWindowEvents, 'send'> & { open(page?: PageId): void };
 
 export class SectionFocus {
-  private pending: SectionId | null = null;
+  private pending: FocusRequest | null = null;
 
   constructor(private readonly window: SectionWindow) {}
 
   reveal(section: SectionId): void {
-    this.pending = section;
-    this.window.open(sectionPage(section));
-    this.window.send('section-focus-requested', section);
+    this.request({ kind: 'section', section });
   }
 
-  take(): SectionId | null {
-    const section = this.pending;
+  revealSetting(setting: FocusSetting): void {
+    this.request({ kind: 'setting', setting });
+  }
+
+  take(): FocusRequest | null {
+    const request = this.pending;
     this.pending = null;
-    return section;
+    return request;
+  }
+
+  private request(request: FocusRequest): void {
+    this.pending = request;
+    this.window.open(focusPage(request));
+    this.window.send('section-focus-requested', request);
   }
 }

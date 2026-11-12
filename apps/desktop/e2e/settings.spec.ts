@@ -527,6 +527,8 @@ test.describe('settings page', () => {
     await expect(usedZone()).toContainText('1 / 5');
     await expect(usedZone()).toContainText('Pretiahnite sem jazyk');
     await expect(chips()).toHaveCount(24);
+    await expect(languages().getByTestId('language-pack')).toContainText('Pre výber jazykov treba stiahnuť Canary 1B v2 (1,1 GB) a rozpoznávanie jazyka (27 MB).');
+    await expect(languages().getByTestId('language-pack').getByRole('button', { name: 'Stiahnuť' })).toBeEnabled();
     await expect(languages()).toContainText('Reč v príbuznom jazyku, napríklad v češtine, sa prepíše v zvolenom jazyku.');
     await expect(languages()).toContainText('Výber jazykov platí pre diktovanie. Stretnutia sa prepisujú s automatickým rozpoznaním jazyka, okrem modelu Whisper s jedným zvoleným jazykom.');
     await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['sk'] });

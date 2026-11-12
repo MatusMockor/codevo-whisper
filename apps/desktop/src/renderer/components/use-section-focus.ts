@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { sectionPage } from '../../shared/section-focus';
+import { focusTarget } from '../focus-target';
 import type { NavTarget } from '../navigation';
 
 export function useSectionFocusRequests(navigate: (target: NavTarget) => void): void {
   useEffect(() => {
     const take = (): void => {
       window.codevo.takeSectionFocus().then(
-        (section) => {
-          if (section === null) {
+        (request) => {
+          if (request === null) {
             return;
           }
-          navigate({ page: sectionPage(section), section });
+          navigate(focusTarget(request));
         },
         (error: unknown) => console.error('Reading the requested section failed', error),
       );

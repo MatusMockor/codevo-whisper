@@ -160,10 +160,16 @@ describe('LocalEngine', () => {
     await expect(dictate(local, secondStampedPcm(1))).resolves.toEqual(expect.any(String));
   });
 
-  it('refuses canary with a primary language the worker cannot force yet', async () => {
-    await settings.update({ languages: { mode: 'selected', selected: ['de', 'sk'] } });
+  it('passes any supported primary language to canary without the language pack', async () => {
+    const languages: LanguageSelection = { mode: 'selected', selected: ['de', 'sk'] };
+    await settings.update({ languages });
+    const canary = engine({ models: await activateBundled('canary-1b-v2-q8') });
 
-    await expect(engine({ models: await activateBundled('canary-1b-v2-q8') }).isReady()).resolves.toEqual({ ready: false, reason: 'languages-pack-missing' });
+    await expect(canary.isReady()).resolves.toEqual({ ready: true });
+    await dictate(canary, secondStampedPcm(1), languages);
+
+    const [call] = await readRecordedCalls(argsFile);
+    expect(argValue(call, '--language')).toBe('de');
   });
 
   it('reports a missing or non-executable binary', async () => {

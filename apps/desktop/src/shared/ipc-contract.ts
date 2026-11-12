@@ -6,12 +6,12 @@ import type { HotkeyRecordResult } from './hotkey-record';
 import type { Meeting, MeetingSummary } from './meetings';
 import type { EngineSwitch } from './engine-routing';
 import type { AudioDevice } from './microphones';
-import type { DiarizerView, ModelCatalogView, ModelState } from './models';
+import type { DiarizerView, LanguagePackView, ModelCatalogView, ModelState } from './models';
 import type { PageId } from './pages';
 import type { PermissionGuide, PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
 import type { EngineId, MicrophoneSetting, Settings } from './settings';
-import type { SectionId } from './section-focus';
+import type { FocusRequest } from './section-focus';
 import type { DayStats } from './stats';
 import type { InstallOutcome, UpdateStatus } from './updates';
 
@@ -42,6 +42,8 @@ export type IpcInvokeApi = {
   pauseModel(id: string): Promise<void>;
   deleteModel(id: string): Promise<void>;
   activateModel(id: string): Promise<void>;
+  getLanguagePack(): Promise<LanguagePackView>;
+  downloadLanguagePack(): Promise<void>;
   getMicrophones(): Promise<AudioDevice[]>;
   startMicrophoneMeter(microphone: MicrophoneSetting): Promise<void>;
   stopMicrophoneMeter(): Promise<void>;
@@ -52,7 +54,7 @@ export type IpcInvokeApi = {
   disconnectServer(): Promise<DisconnectResult>;
   setServerEnabled(enabled: boolean): Promise<void>;
   preferEngine(engine: EngineId): Promise<EngineSwitch>;
-  takeSectionFocus(): Promise<SectionId | null>;
+  takeSectionFocus(): Promise<FocusRequest | null>;
   getUpdateStatus(): Promise<UpdateStatus>;
   checkForUpdates(): Promise<UpdateStatus>;
   installUpdate(): Promise<InstallOutcome>;
@@ -79,11 +81,12 @@ export type IpcEvents = {
   'history-changed': HistoryView;
   'settings-changed': Settings;
   'open-page': PageId;
-  'section-focus-requested': SectionId;
+  'section-focus-requested': FocusRequest;
   'stats-changed': DayStats[];
   'status-changed': AppStatus;
   'last-transcript-changed': string | null;
   'model-states-changed': ModelState[];
+  'language-pack-changed': LanguagePackView;
   'microphones-changed': AudioDevice[];
   'microphone-level': number;
   'server-changed': ServerView;
@@ -127,6 +130,8 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   pauseModel: 'models:pause',
   deleteModel: 'models:delete',
   activateModel: 'models:activate',
+  getLanguagePack: 'language-pack:get',
+  downloadLanguagePack: 'language-pack:download',
   getMicrophones: 'microphones:list',
   startMicrophoneMeter: 'microphones:meter-start',
   stopMicrophoneMeter: 'microphones:meter-stop',
@@ -169,6 +174,7 @@ export const EVENT_CHANNELS: { readonly [E in IpcEventName]: string } = Object.f
   'status-changed': 'status:changed',
   'last-transcript-changed': 'last-transcript:changed',
   'model-states-changed': 'models:states-changed',
+  'language-pack-changed': 'language-pack:changed',
   'microphones-changed': 'microphones:changed',
   'microphone-level': 'microphones:level',
   'server-changed': 'server:changed',

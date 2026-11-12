@@ -221,6 +221,18 @@ test('Stiahnuť model opens Prepis at the Lokálny model section', async () => {
   await expect(main.getByRole('region', { name: 'Lokálny model' })).toBeInViewport();
 });
 
+test('the missing language pack action opens Settings at Jazyky diktovania', async () => {
+  await inject({ kind: 'error', message: 'Pre zvolené jazyky chýbajú modely. Stiahnite ich v Nastaveniach.', action: 'open-languages' });
+  const overlay = await overlayPage();
+
+  await overlay.getByRole('button', { name: 'Otvoriť nastavenia' }).click();
+
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Nastavenia');
+  const row = main.locator('[data-setting="languages"]');
+  await expect(row).toBeInViewport();
+  await expect(row.getByRole('group', { name: 'Jazyky diktovania' }).getByRole('button').first()).toBeFocused();
+});
+
 test('Spárovať server opens Prepis at the server section', async () => {
   await inject({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
   const overlay = await overlayPage();
