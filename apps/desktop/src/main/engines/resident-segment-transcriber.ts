@@ -4,15 +4,23 @@ import type { ResidentTranscriber, TranscribeLanguage } from '@codevo-whisper/st
 export const MIN_JOB_BYTES = 640;
 export type LocalContext = { hint: TranscribeLanguage; vocabulary?: readonly string[] };
 
+export function skippedJob(pcm: Uint8Array, signal: AbortSignal): Promise<string> | null {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('The dictation was cancelled', 'AbortError'));
+  }
+  if (pcm.byteLength < MIN_JOB_BYTES) {
+    return Promise.resolve('');
+  }
+  return null;
+}
+
 export class ResidentSegmentTranscriber implements SegmentTranscriber<LocalContext> {
   constructor(private readonly resident: ResidentTranscriber, private readonly startup: Promise<void> = Promise.resolve()) {}
 
   transcribe(job: TranscriptionJob<LocalContext>, signal: AbortSignal): Promise<string> {
-    if (signal.aborted) {
-      return Promise.reject(new DOMException('The dictation was cancelled', 'AbortError'));
-    }
-    if (job.pcm.byteLength < MIN_JOB_BYTES) {
-      return Promise.resolve('');
+    const skipped = skippedJob(job.pcm, signal);
+    if (skipped !== null) {
+      return skipped;
     }
     return this.startup.then(() => this.resident.transcribe({ pcm: job.pcm, language: job.context.hint, ...(job.context.vocabulary === undefined ? {} : { vocabulary: job.context.vocabulary }), signal }));
   }

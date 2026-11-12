@@ -99,7 +99,7 @@ const READINESS_ERRORS: Readonly<Record<EngineUnavailableReason, (conditions: En
   'model-missing': remedyError(MESSAGES.noModel, 'no-model'),
   'model-broken': () => fixError(MESSAGES.brokenModel, 'download-model'),
   'languages-required': () => settingsError(MESSAGES.languagesRequired),
-  'languages-pack-missing': () => settingsError(MESSAGES.languagesPackMissing),
+  'languages-pack-missing': () => fixError(MESSAGES.languagesPackMissing, 'open-languages'),
   'binary-missing': () => errorState(MESSAGES.binaryMissing),
   'server-not-paired': remedyError(MESSAGES.serverNotPaired, 'server-not-paired'),
   'server-offline': remedyError(MESSAGES.serverOffline, 'server-offline'),

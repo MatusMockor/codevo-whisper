@@ -133,6 +133,7 @@ export function composeApplication(logger: Logger): Application {
     await history.view();
     disposers.push(history.onChange((view) => mainWindow.send('history-changed', view)));
     const models = createModels(settings, logger);
+    disposers.push(models.languagePack.onChange((view) => mainWindow.send('language-pack-changed', view)));
     await migrateLanguageSettings({ settings, models: models.manager, logger });
     const aiServices = createAiServices({ settings, e2e, isPackaged: app.isPackaged, logger });
     ai = aiServices;
@@ -180,6 +181,7 @@ export function composeApplication(logger: Logger): Application {
       catalog: models.catalog,
       models: models.manager,
       actions: settingsServices.actions,
+      languagePack: models.languagePack,
       microphones: settingsServices.microphones,
       server: server.service,
       order,
@@ -210,6 +212,7 @@ export function composeApplication(logger: Logger): Application {
       pause,
       overlay: (state) => views.emit(state),
       openSettings: () => mainWindow.open('settings'),
+      openLanguageSettings: () => sectionFocus.revealSetting('languages'),
       openServer: () => sectionFocus.reveal('server'),
       openModelSettings: () => sectionFocus.reveal('local-model'),
       enableServer: () => server.service.setEnabled(true),

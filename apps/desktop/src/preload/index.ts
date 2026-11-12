@@ -8,11 +8,11 @@ import type { OutputAudioView } from '../shared/recording-audio';
 import type { HotkeyRecordResult } from '../shared/hotkey-record';
 import type { Meeting, MeetingSummary } from '../shared/meetings';
 import type { AudioDevice } from '../shared/microphones';
-import type { DiarizerView, ModelCatalogView, ModelState } from '../shared/models';
+import type { DiarizerView, LanguagePackView, ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
 import type { Settings } from '../shared/settings';
-import type { SectionId } from '../shared/section-focus';
+import type { FocusRequest } from '../shared/section-focus';
 import type { DayStats } from '../shared/stats';
 import type { InstallOutcome, UpdateStatus } from '../shared/updates';
 
@@ -60,6 +60,8 @@ const api: IpcApi = {
   pauseModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.pauseModel, id) as Promise<void>,
   deleteModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteModel, id) as Promise<void>,
   activateModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.activateModel, id) as Promise<void>,
+  getLanguagePack: () => ipcRenderer.invoke(INVOKE_CHANNELS.getLanguagePack) as Promise<LanguagePackView>,
+  downloadLanguagePack: () => ipcRenderer.invoke(INVOKE_CHANNELS.downloadLanguagePack) as Promise<void>,
   getMicrophones: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMicrophones) as Promise<AudioDevice[]>,
   startMicrophoneMeter: (microphone) => ipcRenderer.invoke(INVOKE_CHANNELS.startMicrophoneMeter, microphone) as Promise<void>,
   stopMicrophoneMeter: () => ipcRenderer.invoke(INVOKE_CHANNELS.stopMicrophoneMeter) as Promise<void>,
@@ -70,7 +72,7 @@ const api: IpcApi = {
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
   setServerEnabled: (enabled) => ipcRenderer.invoke(INVOKE_CHANNELS.setServerEnabled, enabled) as Promise<void>,
   preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<EngineSwitch>,
-  takeSectionFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSectionFocus) as Promise<SectionId | null>,
+  takeSectionFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSectionFocus) as Promise<FocusRequest | null>,
   getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,
   checkForUpdates: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkForUpdates) as Promise<UpdateStatus>,
   installUpdate: () => ipcRenderer.invoke(INVOKE_CHANNELS.installUpdate) as Promise<InstallOutcome>,

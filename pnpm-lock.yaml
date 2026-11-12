@@ -49,6 +49,9 @@ importers:
       '@codevo-whisper/audio':
         specifier: workspace:*
         version: link:../../packages/audio
+      '@codevo-whisper/language-routing':
+        specifier: workspace:*
+        version: link:../../packages/language-routing
       '@codevo-whisper/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

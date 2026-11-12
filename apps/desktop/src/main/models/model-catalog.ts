@@ -22,10 +22,19 @@ export class ModelCatalog {
     readonly models: readonly CatalogEntry[],
     private readonly defaults: CatalogDefaults,
     readonly diarizer: CatalogEntry,
+    readonly languageId: CatalogEntry,
   ) {}
 
   defaultModelId(platform: CatalogPlatform): string {
     return this.defaults[platformKey(platform)].model;
+  }
+
+  conditionedModel(): CatalogEntry {
+    const entry = this.models.find((model) => model.languageHint === 'required');
+    if (entry === undefined) {
+      throw new CatalogError('The catalog has no language-conditioned model');
+    }
+    return entry;
   }
 
   languageHint(id: string): LanguageHint {
@@ -46,6 +55,6 @@ function readJson(file: string): unknown {
 }
 
 export function loadCatalog(file: string): ModelCatalog {
-  const { models, defaults, diarizer } = parseCatalog(readJson(file));
-  return new ModelCatalog(models, defaults, diarizer);
+  const { models, defaults, diarizer, languageId } = parseCatalog(readJson(file));
+  return new ModelCatalog(models, defaults, diarizer, languageId);
 }

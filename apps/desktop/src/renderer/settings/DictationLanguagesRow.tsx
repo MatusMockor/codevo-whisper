@@ -9,6 +9,7 @@ import { usePointerDrag, type ActiveDrag } from '../components/use-pointer-drag'
 import { liveValueOr } from '../home/live-value';
 import { useServer } from '../server/use-server';
 import { serverAvailabilityNote, type AvailabilityNote } from './language-availability';
+import { LanguagePackNote } from './LanguagePackNote';
 import { acceptsDrop, languageDropPlan, type LanguageDragSource, type LanguageDropTarget, type LanguageZone } from './language-drop';
 import {
   LANGUAGE_EDIT_ERRORS,
@@ -43,7 +44,13 @@ type Notice = { text: string; warn: boolean };
 
 type FocusTarget = { zone: Zone; code: DictationLanguage };
 
-type BoardProps = { selected: readonly DictationLanguage[]; activeModel: ModelInfo | null; availability: AvailabilityNote | null; onChange: (selected: readonly DictationLanguage[]) => void };
+type BoardProps = {
+  selected: readonly DictationLanguage[];
+  activeModel: ModelInfo | null;
+  engineOrder: readonly EngineId[];
+  availability: AvailabilityNote | null;
+  onChange: (selected: readonly DictationLanguage[]) => void;
+};
 
 const ARROWS: Readonly<Record<string, 'up' | 'down'>> = Object.freeze({ ArrowUp: 'up', ArrowDown: 'down' });
 
@@ -65,7 +72,7 @@ function startsOnRemove(event: PointerEvent<HTMLElement>): boolean {
   return event.target instanceof Element && event.target.closest('.lang-remove') !== null;
 }
 
-function LanguageBoard({ selected, activeModel, availability, onChange }: BoardProps) {
+function LanguageBoard({ selected, activeModel, engineOrder, availability, onChange }: BoardProps) {
   const footId = useId();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -270,6 +277,7 @@ function LanguageBoard({ selected, activeModel, availability, onChange }: BoardP
       {selected.length === 1 && <p className="field-note">{SINGLE_LANGUAGE_HINT}</p>}
       {requiredNote !== null && <p className="field-note">{requiredNote}</p>}
       {availability !== null && <p className={availability.warn ? 'field-note warn' : 'field-note'}>{availability.text}</p>}
+      <LanguagePackNote engineOrder={engineOrder} activeModel={activeModel} />
       <p className="lang-foot" id={footId}>
         Poradie zmeníte potiahnutím alebo klávesmi <kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd>. Jazyk odoberiete krížikom alebo potiahnutím späť dole. {MEETINGS_LANGUAGE_NOTE}
       </p>
@@ -294,7 +302,7 @@ export function DictationLanguagesRow({ languages, activeModel, engineOrder }: R
   return (
     <SettingsRow id="languages" title="Jazyky diktovania" description={LANGUAGE_MODE_DESCRIPTIONS[effective.mode]}>
       <SegmentedControl label="Jazyky diktovania" options={languageModeOptions(activeModel?.languageHint ?? null)} value={effective.mode} onChange={(mode) => save({ ...effective, mode })} />
-      {effective.mode === 'selected' && <LanguageBoard selected={effective.selected} activeModel={activeModel} availability={availability} onChange={(selected) => save({ mode: 'selected', selected })} />}
+      {effective.mode === 'selected' && <LanguageBoard selected={effective.selected} activeModel={activeModel} engineOrder={engineOrder} availability={availability} onChange={(selected) => save({ mode: 'selected', selected })} />}
     </SettingsRow>
   );
 }

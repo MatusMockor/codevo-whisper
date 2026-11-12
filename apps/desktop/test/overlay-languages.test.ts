@@ -16,7 +16,7 @@ describe('overlay language chip', () => {
 describe('overlay language readiness errors', () => {
   it('explains each language reason with its fix', () => {
     expect(readinessError('languages-required', CONDITIONS)).toEqual({ kind: 'error', message: 'Zvolený model potrebuje zvolené jazyky.', action: 'open-settings' });
-    expect(readinessError('languages-pack-missing', CONDITIONS)).toEqual({ kind: 'error', message: 'Pre zvolené jazyky chýbajú modely. Stiahnite ich v Nastaveniach.', action: 'open-settings' });
+    expect(readinessError('languages-pack-missing', CONDITIONS)).toEqual({ kind: 'error', message: 'Pre zvolené jazyky chýbajú modely. Stiahnite ich v Nastaveniach.', action: 'open-languages' });
     expect(readinessError('server-languages-outdated', CONDITIONS)).toEqual({ kind: 'error', message: 'Server nepozná výber jazykov. Aktualizujte ho alebo zapnite Automaticky.', action: 'open-server' });
     expect(readinessError('server-languages-missing', CONDITIONS)).toEqual({ kind: 'error', message: 'Na serveri chýbajú modely pre zvolené jazyky.', action: 'open-server' });
   });
