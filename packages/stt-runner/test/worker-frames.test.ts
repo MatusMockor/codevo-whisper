@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LANGUAGE_CODES } from '../src/languages';
 import { TranscribeCliError } from '../src/transcribe-cli-error';
 import type { TranscribeLanguage } from '../src/run-transcribe-cli';
 import { encodeWorkerRequest, WorkerReplyReader } from '../src/worker/worker-frames';
@@ -28,8 +29,15 @@ describe('worker frames', () => {
     expect([...encodeWorkerRequest('auto', new Uint8Array([9, 9]))]).toEqual([0, 1, 0, 0, 0, 9, 9]);
   });
 
+  it('encodes every supported dictation language', () => {
+    for (const language of LANGUAGE_CODES) {
+      expect([...encodeWorkerRequest(language, new Uint8Array(0))]).toEqual([2, ...Buffer.from(language, 'ascii'), 0, 0, 0, 0]);
+    }
+  });
+
   it('refuses a language outside the whitelist', () => {
-    expect(() => encodeWorkerRequest('de' as TranscribeLanguage, new Uint8Array(2))).toThrow(RangeError);
+    expect(() => encodeWorkerRequest('xx' as TranscribeLanguage, new Uint8Array(2))).toThrow(RangeError);
+    expect(() => encodeWorkerRequest('toString' as TranscribeLanguage, new Uint8Array(2))).toThrow(RangeError);
     expect(() => encodeWorkerRequest('s\u0000' as TranscribeLanguage, new Uint8Array(2))).toThrow(RangeError);
   });
 

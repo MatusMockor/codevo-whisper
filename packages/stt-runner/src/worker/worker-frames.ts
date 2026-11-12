@@ -1,3 +1,4 @@
+import { isLanguageCode } from '../languages';
 import type { TranscribeLanguage } from '../run-transcribe-cli';
 import { TranscribeCliError } from '../transcribe-cli-error';
 
@@ -7,16 +8,27 @@ export type WorkerReply = { status: WorkerReplyStatus; text: string };
 
 const STATUSES: readonly WorkerReplyStatus[] = ['ok', 'failed', 'ready'];
 const HEADER_BYTES = 5;
-const LANGUAGE_TAGS: Readonly<Record<string, string>> = { sk: 'sk', en: 'en', cs: 'cs', auto: '' };
 const MAX_SAMPLES = 30 * 16_000;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
+export type BoundedAudio = { samples: number; audio: Uint8Array };
+
 function languageTag(language: TranscribeLanguage): Buffer {
-  const tag = Object.hasOwn(LANGUAGE_TAGS, language) ? LANGUAGE_TAGS[language] : undefined;
-  if (tag === undefined) {
+  if (language === 'auto') {
+    return Buffer.alloc(0);
+  }
+  if (!isLanguageCode(language)) {
     throw new RangeError(`unsupported worker language ${JSON.stringify(language)}`);
   }
-  return Buffer.from(tag, 'ascii');
+  return Buffer.from(language, 'ascii');
+}
+
+export function boundedAudio(pcm: Uint8Array): BoundedAudio {
+  const samples = Math.floor(pcm.length / 2);
+  if (samples > MAX_SAMPLES) {
+    throw new RangeError(`a worker request holds at most ${MAX_SAMPLES} samples`);
+  }
+  return { samples, audio: pcm.subarray(0, samples * 2) };
 }
 
 function decodeText(bytes: Uint8Array): string {
@@ -29,15 +41,11 @@ function decodeText(bytes: Uint8Array): string {
 
 export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Array, vocabulary: readonly string[] = []): Uint8Array {
   const tag = languageTag(language);
-  const samples = Math.floor(pcm.length / 2);
-  if (samples > MAX_SAMPLES) {
-    throw new RangeError(`a worker request holds at most ${MAX_SAMPLES} samples`);
-  }
+  const { samples, audio } = boundedAudio(pcm);
   const header = Buffer.alloc(1 + tag.length + 4);
   header[0] = tag.length;
   tag.copy(header, 1);
   header.writeUInt32LE(samples, 1 + tag.length);
-  const audio = pcm.subarray(0, samples * 2);
   if (vocabulary.length === 0) return Buffer.concat([header, audio]);
   if (vocabulary.length > 100) throw new RangeError('a worker request holds at most 100 vocabulary terms');
   const terms = vocabulary.map((term) => {

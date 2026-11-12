@@ -43,6 +43,9 @@ case "${FAKE_CLI_MODE:-text}" in
   stdout)
     cat "$FAKE_CLI_STDOUT_FILE"
     ;;
+  output-file)
+    cat "$FAKE_CLI_OUTPUT_FILE" > "$output"
+    ;;
   words-per-wav)
     name="$(basename "$wav" .wav)"
     cp "$wav" "$FAKE_CLI_STDOUT_DIR/$name.seen.wav"

@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RESIDENT_DEFAULTS, ResidentTranscriber, type ResidentTranscriberOptions } from '../src/worker/resident-transcriber';
+import { ResidentTranscriber, type ResidentTranscriberOptions } from '../src/worker/resident-transcriber';
+import { RESIDENT_DEFAULTS } from '../src/worker/resident-worker';
 import { TranscribeCliError } from '../src/transcribe-cli-error';
+import { spawnTimes, waitForExit, waitForFile } from './support/process-observer';
 
 const FAKE_WORKER = fileURLToPath(new URL('./support/fake-worker.js', import.meta.url));
 
@@ -26,45 +28,6 @@ function create(overrides: Partial<ResidentTranscriberOptions> = {}): ResidentTr
 
 function pcm(samples: number): Uint8Array {
   return new Uint8Array(samples * 2);
-}
-
-async function spawnTimes(file: string): Promise<number[]> {
-  const text = await readFile(file, 'utf8').catch(() => '');
-  return text
-    .trim()
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .map(Number);
-}
-
-async function waitForFile(file: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const present = await readFile(file, 'utf8').then(
-      () => true,
-      () => false,
-    );
-    if (present) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  expect.fail(`${file} was never written`);
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function waitForExit(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 200 && isAlive(pid); attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  expect(isAlive(pid)).toBe(false);
 }
 
 function pidOf(text: string): string {
