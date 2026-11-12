@@ -182,17 +182,81 @@ describe('RoutedTranscriber on resident workers', () => {
     expect(rig.verbatim.ready()).toBe(false);
   });
 
-  it('stops the verbatim model when the conditioned model fails', async () => {
+});
+
+describe('RoutedTranscriber fallbacks', () => {
+  const CRASH_TWO_SECONDS = { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) };
+
+  it('returns the verbatim text when the conditioned model fails and lets the verbatim call finish', async () => {
     await startWith(rig.identifier, CONFIDENT_SK);
-    await startWith(rig.conditioned, { FAKE_WORKER_CRASH_SAMPLES: String(TWO_SECONDS) });
-    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
+    await startWith(rig.conditioned, CRASH_TWO_SECONDS);
+    await startWith(rig.verbatim, { FAKE_WORKER_DELAY_MS: '300' });
     const verbatimPid = pidOf(await rig.verbatim.transcribe({ pcm: pcm(1), language: 'auto' }));
-    const started = performance.now();
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: `${verbatimPid}:auto:32000`, language: null, route: 'verbatim-fallback' });
+  });
+
+  it('returns the conditioned text without a guard when the verbatim model fails', async () => {
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, { FAKE_WORKER_DELAY_MS: '300', FAKE_WORKER_REPLY_TEXT: SK_GIBSON.canaryEn });
+    await startWith(rig.verbatim, CRASH_TWO_SECONDS);
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: SK_GIBSON.canaryEn, language: 'sk', route: 'conditioned' });
+  });
+
+  it('rejects with the conditioned error when both models fail', async () => {
+    rig = createRig({ verbatim: { timeoutMs: 200 } });
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, CRASH_TWO_SECONDS);
+    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
 
     await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' })).rejects.toMatchObject({ reason: 'exit' });
+  });
 
-    expect(performance.now() - started).toBeLessThan(1_000);
-    expect(pidOf(await rig.verbatim.transcribe({ pcm: pcm(1), language: 'auto' }))).not.toBe(verbatimPid);
+  it('still rejects with the abort when the caller aborts after one model failed', async () => {
+    await startWith(rig.identifier, CONFIDENT_SK);
+    await startWith(rig.conditioned, CRASH_TWO_SECONDS);
+    await startWith(rig.verbatim, { FAKE_WORKER_SLOW_SAMPLES: String(TWO_SECONDS), FAKE_WORKER_SLOW_MS: '5000' });
+    const controller = new AbortController();
+    const reason = new DOMException('segment cancelled', 'AbortError');
+    setTimeout(() => controller.abort(reason), 400);
+    const started = performance.now();
+
+    await expect(rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final', signal: controller.signal })).rejects.toBe(reason);
+
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  it('returns the verbatim text when the conditioned fix fails', async () => {
+    await startWith(rig.identifier, UNSURE_SK);
+    await startWith(rig.conditioned, CRASH_TWO_SECONDS);
+    await startWith(rig.verbatim, { FAKE_WORKER_REPLY_TEXT: UK_DRIFT });
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toEqual({ text: UK_DRIFT, language: null, route: 'verbatim-fallback' });
+  });
+
+  it('transcribes verbatim when language ID fails', async () => {
+    await startWith(rig.identifier, CRASH_TWO_SECONDS);
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'final' });
+
+    expect(result).toMatchObject({ language: null, route: 'verbatim-fallback' });
+    expect(result.text).toMatch(/:auto:32000$/);
+    expect(rig.conditioned.ready()).toBe(false);
+  });
+
+  it('transcribes a partial verbatim when language ID fails', async () => {
+    await startWith(rig.identifier, CRASH_TWO_SECONDS);
+
+    const result = await rig.routed.transcribe({ pcm: pcm(TWO_SECONDS), selection: SK_CS, kind: 'partial' });
+
+    expect(result.route).toBe('verbatim-fallback');
   });
 });
 

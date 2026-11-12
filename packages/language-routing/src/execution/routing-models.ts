@@ -2,7 +2,7 @@ import type { SupportedLanguage } from '../languages';
 import type { ConditionedTranscriber, VerbatimTranscriber } from '../ports';
 import type { Route, RoutedTranscript } from '../route';
 
-export type ParallelTexts = { conditioned: string; verbatim: string };
+export type ParallelOutcome = { conditioned: PromiseSettledResult<string>; verbatim: PromiseSettledResult<string> };
 
 export class RoutingModels {
   constructor(
@@ -20,16 +20,10 @@ export class RoutingModels {
     return { text, language, route };
   }
 
-  async both(pcm: Uint8Array, language: SupportedLanguage, signal: AbortSignal): Promise<ParallelTexts> {
-    const sibling = new AbortController();
-    const linked = AbortSignal.any([signal, sibling.signal]);
-    const abortSibling = (error: unknown): never => {
-      sibling.abort(error);
-      throw error;
-    };
-    const [conditioned, verbatim] = await Promise.all([
-      this.conditionedModel.transcribe({ pcm, language, signal: linked }).catch(abortSibling),
-      this.verbatimModel.transcribe({ pcm, language: 'auto', signal: linked }).catch(abortSibling),
+  async both(pcm: Uint8Array, language: SupportedLanguage, signal: AbortSignal): Promise<ParallelOutcome> {
+    const [conditioned, verbatim] = await Promise.allSettled([
+      this.conditionedModel.transcribe({ pcm, language, signal }),
+      this.verbatimModel.transcribe({ pcm, language: 'auto', signal }),
     ]);
     return { conditioned, verbatim };
   }

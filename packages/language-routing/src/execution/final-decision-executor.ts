@@ -1,8 +1,10 @@
+import type { SupportedLanguage } from '../languages';
 import type { RoutedTranscript } from '../route';
 import type { OrthographyCheck } from '../text/orthography-check';
 import type { TranslationGuard } from '../text/translation-guard';
 import type { DecisionExecutor, RoutedSegment } from './routed-segment';
 import type { RoutingModels } from './routing-models';
+import { nullUnlessAborted } from './unless-aborted';
 
 export class FinalDecisionExecutor implements DecisionExecutor {
   constructor(
@@ -16,14 +18,35 @@ export class FinalDecisionExecutor implements DecisionExecutor {
     if (this.orthography.isConsistent(verbatim.text, segment.selection)) {
       return verbatim;
     }
-    return this.models.conditioned(segment.pcm, segment.language, 'conditioned-fix', segment.signal);
+    const fixed = await nullUnlessAborted(this.models.conditioned(segment.pcm, segment.language, 'conditioned-fix', segment.signal), segment.signal);
+    return fixed ?? { text: verbatim.text, language: null, route: 'verbatim-fallback' };
   }
 
   async confident(segment: RoutedSegment): Promise<RoutedTranscript> {
-    const texts = await this.models.both(segment.pcm, segment.language, segment.signal);
-    if (!this.guard.accepts(texts.conditioned, texts.verbatim, segment.selection)) {
-      return { text: texts.verbatim, language: null, route: 'verbatim-guard' };
+    const { conditioned, verbatim } = await this.models.both(segment.pcm, segment.language, segment.signal);
+    if (segment.signal.aborted && (conditioned.status === 'rejected' || verbatim.status === 'rejected')) {
+      throw segment.signal.reason;
     }
-    return { text: texts.conditioned, language: segment.language, route: 'conditioned' };
+    if (conditioned.status === 'rejected') {
+      return this.withoutConditioned(conditioned.reason, verbatim);
+    }
+    if (verbatim.status === 'rejected') {
+      return this.conditionedResult(conditioned.value, segment.language);
+    }
+    if (!this.guard.accepts(conditioned.value, verbatim.value, segment.selection)) {
+      return { text: verbatim.value, language: null, route: 'verbatim-guard' };
+    }
+    return this.conditionedResult(conditioned.value, segment.language);
+  }
+
+  private withoutConditioned(error: unknown, verbatim: PromiseSettledResult<string>): RoutedTranscript {
+    if (verbatim.status === 'rejected') {
+      throw error;
+    }
+    return { text: verbatim.value, language: null, route: 'verbatim-fallback' };
+  }
+
+  private conditionedResult(text: string, language: SupportedLanguage): RoutedTranscript {
+    return { text, language, route: 'conditioned' };
   }
 }

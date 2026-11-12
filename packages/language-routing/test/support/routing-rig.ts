@@ -18,10 +18,12 @@ function options(model: string, backend: ResidentWorkerOptions['backend']): Resi
   return { binary: FAKE_WORKER, model, backend, threads: 1, abortGraceMs: 100, backoff: { initialMs: 20, maxMs: 100 } };
 }
 
-export function createRig(): RoutingRig {
+export type RigOverrides = { verbatim?: Partial<ResidentWorkerOptions> };
+
+export function createRig(overrides: RigOverrides = {}): RoutingRig {
   const identifier = new ResidentLanguageIdentifier(options('/models/lang-id-voxlingua107-ecapa-Q8_0.gguf', 'cpu'));
   const conditioned = new ResidentTranscriber(options('/models/canary-1b-v2-Q8_0.gguf', 'vulkan'));
-  const verbatim = new ResidentTranscriber(options('/models/parakeet-ultra-F16.gguf', 'vulkan'));
+  const verbatim = new ResidentTranscriber({ ...options('/models/parakeet-ultra-F16.gguf', 'vulkan'), ...overrides.verbatim });
   return { identifier, conditioned, verbatim, routed: new RoutedTranscriber({ identifier, conditioned, verbatim }) };
 }
 
