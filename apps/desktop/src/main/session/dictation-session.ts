@@ -14,7 +14,8 @@ import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { EngineConditions } from '../../shared/engine-routing';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
-import type { Language, MicrophoneSetting } from '../../shared/settings';
+import type { MicrophoneSetting } from '../../shared/settings';
+import type { LanguageSelection } from '../../shared/dictation-languages';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
@@ -72,7 +73,7 @@ const NO_CAPABILITIES: EngineConditions = Object.freeze({ localReady: false, ser
 export class DictationSession {
   private phase: Phase = 'recording';
   private readonly startedAt: number;
-  private readonly language: Language;
+  private readonly languages: LanguageSelection;
   private readonly transcriptSettings: TranscriptSettings;
   private readonly partials: boolean;
   private readonly polishing: boolean;
@@ -100,9 +101,9 @@ export class DictationSession {
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
-    const { language, microphone, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
-    this.language = language;
-    this.transcriptSettings = Object.freeze({ language, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
+    const { languages, microphone, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
+    this.languages = languages;
+    this.transcriptSettings = Object.freeze({ languages, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
     this.partials = overlay === 'live';
     this.polishing = canPolish(deps.settings.get());
     this.live = this.partials ? new LiveTranscript() : null;
@@ -250,7 +251,7 @@ export class DictationSession {
   }
 
   private dictationOptions(): DictationOptions {
-    const options: DictationOptions = { language: this.language, vocabulary: this.transcriptSettings.customWords, signal: this.controller.signal, partials: this.partials };
+    const options: DictationOptions = { languages: this.languages, vocabulary: this.transcriptSettings.customWords, signal: this.controller.signal, partials: this.partials };
     if (this.live === null) {
       return options;
     }
@@ -429,7 +430,7 @@ export class DictationSession {
   }
 
   private showRecording(): void {
-    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, language: languageChip(this.language) } as const;
+    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, languageChip: languageChip(this.languages) } as const;
     const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
     this.present(this.withLive(withDevice));
   }

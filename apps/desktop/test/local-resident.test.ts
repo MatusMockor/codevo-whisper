@@ -9,8 +9,11 @@ import { ModelManager } from '../src/main/models/model-manager';
 import { testEntry } from './model-fixtures';
 import { pcmBytes, timelineSpeech } from './support/timeline-audio';
 import type { EngineDictation } from '../src/main/engines/transcription-engine';
+import type { LanguageSelection } from '../src/shared/dictation-languages';
 
 const BINARY = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
+
+const CZECH: LanguageSelection = { mode: 'selected', selected: ['cs'] };
 let dir: string;
 let settings: SettingsStore;
 let local: LocalEngine;
@@ -24,9 +27,9 @@ beforeEach(async () => {
   await writeFile(join(dir, 'models', 'beta.gguf'), 'GGUF');
   settings = new SettingsStore(join(dir, 'settings.json'));
   await settings.load();
-  await settings.update({ localModelId: 'alpha' });
+  await settings.update({ localModelId: 'alpha', languages: CZECH });
   now = 0;
-  models = new ModelManager({ dir: join(dir, 'models'), catalog: [testEntry('alpha', 'GGUF'), testEntry('beta', 'GGUF')], settings, warmUp: () => Promise.resolve() });
+  models = new ModelManager({ dir: join(dir, 'models'), catalog: [testEntry('alpha', 'GGUF', { languageHint: 'required' }), testEntry('beta', 'GGUF', { languageHint: 'required' })], settings, warmUp: () => Promise.resolve() });
   local = new LocalEngine({ binary: BINARY, models, settings, arch: 'arm64', clock: { now: () => now } });
   vi.stubEnv('CW_WORKER_STARTS', join(dir, 'starts'));
   vi.stubEnv('CW_WORKER_CALLS', join(dir, 'calls'));
@@ -40,7 +43,7 @@ afterEach(async () => {
 async function start(): Promise<EngineDictation> {
   const result = await local.prepare();
   if (!result.ready) throw new Error(`not prepared ${result.reason}`);
-  return result.engine.start({ language: 'cs', signal: new AbortController().signal });
+  return result.engine.start({ languages: CZECH, signal: new AbortController().signal });
 }
 async function dictate(): Promise<string> {
   const dictation = await start();
@@ -91,7 +94,7 @@ it('transfers preparation without a release gap and makes released or twice-star
   const preparation = await local.prepare();
   if (!preparation.ready) throw new Error('not prepared');
   const controller = new AbortController();
-  const options = { language: 'cs' as const, signal: controller.signal };
+  const options = { languages: CZECH, signal: controller.signal };
   const dictation = preparation.engine.start(options);
   preparation.engine.release();
   expect(() => preparation.engine.start(options)).toThrow();
@@ -149,7 +152,7 @@ it('model changes stop a recording worker immediately and old handles cannot sto
   expect(pid(replacement)).not.toBe(pid(first));
   if (!unused.ready) throw new Error('not prepared');
   unused.engine.release();
-  expect(() => unused.engine.start({ language: 'sk', signal: new AbortController().signal })).toThrow();
+  expect(() => unused.engine.start({ languages: CZECH, signal: new AbortController().signal })).toThrow();
   expect(alive(pid(replacement))).toBe(true);
   await settings.update({ localModelId: null });
   await expect.poll(() => alive(pid(replacement))).toBe(false);
@@ -271,7 +274,7 @@ it('releases a failed dictation and an abort/finish race once without affecting 
   const controller = new AbortController();
   const prepared = await local.prepare();
   if (!prepared.ready) throw new Error('not prepared');
-  const cancelled = prepared.engine.start({ language: 'sk', signal: controller.signal });
+  const cancelled = prepared.engine.start({ languages: CZECH, signal: controller.signal });
   cancelled.push(pcmBytes(timelineSpeech(1)));
   const terminal = cancelled.finish().catch((error: unknown) => error);
   controller.abort();

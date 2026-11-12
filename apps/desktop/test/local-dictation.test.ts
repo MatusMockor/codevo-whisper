@@ -8,7 +8,7 @@ import { LocalDictation, type LocalContext } from '../src/main/engines/local-dic
 import { ResidentTranscriber } from '@codevo-whisper/stt-runner';
 import { ResidentSegmentTranscriber } from '../src/main/engines/resident-segment-transcriber';
 import { TranscriptionFailedError, type TranscriptUpdate } from '../src/main/engines/transcription-engine';
-import type { Language } from '../src/shared/settings';
+import type { TranscribeLanguage } from '@codevo-whisper/stt-runner';
 import { readRecordedCalls } from '../../../packages/stt-runner/test/support/fake-cli';
 import { expectedText, secondFrames, timelineSilence, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
@@ -61,14 +61,14 @@ function useDispatcher(timeoutMs: number): void {
   });
 }
 
-function start(partials: boolean, language: Language = 'sk'): Started {
+function start(partials: boolean, hint: TranscribeLanguage = 'sk'): Started {
   const updates: TranscriptUpdate[] = [];
   const controller = new AbortController();
   const dictation = new LocalDictation({
     dispatcher,
     clock,
-    context: { language },
-    options: { language, signal: controller.signal, partials, onTranscript: (update) => updates.push(update) },
+    context: { hint },
+    options: { languages: { mode: 'auto', selected: ['sk'] }, signal: controller.signal, partials, onTranscript: (update) => updates.push(update) },
   });
   return { dictation, updates, controller };
 }

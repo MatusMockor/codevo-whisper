@@ -6,6 +6,10 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 import { RecordingLogger } from './recording-logger';
 
+const ENGLISH: Settings['languages'] = { mode: 'selected', selected: ['en'] };
+const CZECH: Settings['languages'] = { mode: 'selected', selected: ['cs', 'sk'] };
+const AUTO_ENGLISH: Settings['languages'] = { mode: 'auto', selected: ['en'] };
+
 let dir: string;
 let file: string;
 
@@ -30,11 +34,11 @@ describe('SettingsStore', () => {
     expect((await new SettingsStore(file).load()).linuxPasteShortcut).toBe('ctrl-v');
   });
   it('defaults recording audio for old files and persists independent preferences', async () => {
-    await writeFile(file, JSON.stringify({ language: 'cs' }));
+    await writeFile(file, JSON.stringify({ languages: CZECH }));
     const store = new SettingsStore(file);
     expect(await store.load()).toMatchObject({ muteWhileRecording: false, audioFeedback: false, feedbackOutputId: null, feedbackVolume: 50 });
     await store.update({ muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'usb-output', feedbackVolume: 73 });
-    expect(await new SettingsStore(file).load()).toMatchObject({ language: 'cs', muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'usb-output', feedbackVolume: 73 });
+    expect(await new SettingsStore(file).load()).toMatchObject({ languages: CZECH, muteWhileRecording: true, audioFeedback: true, feedbackOutputId: 'usb-output', feedbackVolume: 73 });
   });
   it('migrates output defaults and persists direct typing preferences across reload', async () => {
     await writeFile(file, JSON.stringify({ insertion: 'paste' }));
@@ -125,13 +129,13 @@ describe('SettingsStore', () => {
   });
 
   it.each([54, 58, 61, 62, 63])('migrates legacy key %i only on load and saves canonical settings on the next update', async (keycode) => {
-    const legacy = { hotkey: { keycode, label: 'Legacy side' }, mode: 'hold', language: 'cs' };
+    const legacy = { hotkey: { keycode, label: 'Legacy side' }, mode: 'hold', languages: CZECH };
     await writeFile(file, JSON.stringify(legacy));
     const store = new SettingsStore(file);
-    expect(await store.load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', language: 'cs' });
+    expect(await store.load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', languages: CZECH });
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(legacy);
-    await store.update({ language: 'en' });
-    expect(await new SettingsStore(file).load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', language: 'en' });
+    await store.update({ languages: ENGLISH });
+    expect(await new SettingsStore(file).load()).toMatchObject({ hotkey: { kind: 'modifiers', keycodes: [keycode], label: 'Legacy side' }, mode: 'hold', languages: ENGLISH });
   });
 
   it('persists an update', async () => {
@@ -150,7 +154,7 @@ describe('SettingsStore', () => {
       file,
       JSON.stringify({
         mode: 'toggle',
-        language: 'de',
+        languages: { mode: 'selected', selected: ['de', 'xx'] },
         hotkey: { keycode: 12, label: 'Q' },
         microphone: { deviceId: 'usb-mic', label: 'USB Mic' },
         engineOrder: ['server', 'server'],
@@ -195,11 +199,11 @@ describe('SettingsStore', () => {
       calls.push({ next, previous });
     });
 
-    await store.update({ language: 'en' });
+    await store.update({ languages: ENGLISH });
     unsubscribe();
-    await store.update({ language: 'cs' });
+    await store.update({ languages: CZECH });
 
-    expect(calls).toEqual([{ next: { ...DEFAULT_SETTINGS, language: 'en' }, previous: DEFAULT_SETTINGS }]);
+    expect(calls).toEqual([{ next: { ...DEFAULT_SETTINGS, languages: ENGLISH }, previous: DEFAULT_SETTINGS }]);
   });
 
   it('keeps a saved update and the other listeners when a listener throws', async () => {
@@ -212,38 +216,38 @@ describe('SettingsStore', () => {
       throw failure;
     });
     store.onChange((next) => {
-      seen.push(next.language);
+      seen.push(next.languages.mode);
     });
 
-    const updated = await store.update({ language: 'en' });
+    const updated = await store.update({ languages: ENGLISH });
 
-    expect(updated.language).toBe('en');
-    expect(seen).toEqual(['en']);
+    expect(updated.languages).toEqual(ENGLISH);
+    expect(seen).toEqual(['selected']);
     expect(logger.errors.map((entry) => entry.error)).toEqual([failure]);
-    expect((await new SettingsStore(file).load()).language).toBe('en');
+    expect((await new SettingsStore(file).load()).languages).toEqual(ENGLISH);
   });
 
   it('applies concurrent updates in order', async () => {
     const store = new SettingsStore(file);
     await store.load();
 
-    await Promise.all([store.update({ language: 'en' }), store.update({ mode: 'toggle' }), store.update({ language: 'auto' })]);
+    await Promise.all([store.update({ languages: ENGLISH }), store.update({ mode: 'toggle' }), store.update({ languages: AUTO_ENGLISH })]);
 
-    const expected = { ...DEFAULT_SETTINGS, language: 'auto', mode: 'toggle' };
+    const expected = { ...DEFAULT_SETTINGS, languages: AUTO_ENGLISH, mode: 'toggle' };
     expect(store.get()).toEqual(expected);
     expect(await new SettingsStore(file).load()).toEqual(expected);
   });
 
   it('survives a stray temp file', async () => {
-    await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, language: 'en' }));
+    await writeFile(file, JSON.stringify({ ...DEFAULT_SETTINGS, languages: ENGLISH }));
     await writeFile(`${file}.tmp`, '{ half written');
     const store = new SettingsStore(file);
 
-    expect(await store.load()).toEqual({ ...DEFAULT_SETTINGS, language: 'en' });
+    expect(await store.load()).toEqual({ ...DEFAULT_SETTINGS, languages: ENGLISH });
     await store.update({ mode: 'toggle' });
 
     const onDisk = JSON.parse(await readFile(file, 'utf8')) as unknown;
-    expect(onDisk).toEqual({ ...DEFAULT_SETTINGS, language: 'en', mode: 'toggle' });
+    expect(onDisk).toEqual({ ...DEFAULT_SETTINGS, languages: ENGLISH, mode: 'toggle' });
   });
 
   it('keeps a stored Živý text overlay and replaces an unknown one with the indicator', async () => {

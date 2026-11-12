@@ -199,7 +199,7 @@ describe('HotkeyService', () => {
       if (phase === 'latched') {
         helper.emitHotkey('up', 299);
       }
-      await settings.update({ language: 'en' });
+      await settings.update({ languages: { mode: 'selected', selected: ['en'] } });
       expect(events).toEqual(['start']);
       service.dispose();
     });
@@ -393,7 +393,7 @@ describe('HotkeyService', () => {
     await settings.update({ hotkey: RIGHT_CONTROL });
     helper.emitHotkey('down');
     await settings.update({ mode: 'toggle' });
-    await settings.update({ language: 'en' });
+    await settings.update({ languages: { mode: 'selected', selected: ['en'] } });
 
     expect(events).toEqual(['start', 'stop:cancelled', 'start', 'stop:cancelled']);
   });

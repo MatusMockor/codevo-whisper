@@ -2,6 +2,7 @@ import { notReady, type EngineUnavailableReason, type Preparation, type Transcri
 import { RemoteDictation } from './remote-dictation';
 import { asRemoteFailure, type RemoteFailureKind } from './remote-failure';
 import type { ServerConnector } from './server-connector';
+import type { ServerLanguageSupport } from './server-language-support';
 
 export type RemoteEngineOptions = { finishIdleMs: number; retryBufferBytes: number; reconnectDelaysMs: readonly number[]; reconnectWindowMs: number };
 
@@ -14,6 +15,7 @@ export const DEFAULT_REMOTE_OPTIONS: RemoteEngineOptions = Object.freeze({
 
 export type RemoteEngineDeps = {
   connector: Pick<ServerConnector, 'connect' | 'reconnect'>;
+  languages: ServerLanguageSupport;
   options?: Partial<RemoteEngineOptions>;
 };
 
@@ -35,6 +37,10 @@ export class RemoteEngine implements TranscriptionEngine {
   }
 
   async prepare(): Promise<Preparation> {
+    const language = this.deps.languages.unavailableReason();
+    if (language !== null) {
+      return notReady(language);
+    }
     try {
       const ready = await this.deps.connector.connect();
       if (!ready.scope.isCurrent()) {

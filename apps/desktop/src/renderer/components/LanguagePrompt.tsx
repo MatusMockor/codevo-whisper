@@ -1,13 +1,9 @@
-import type { Language } from '../../shared/settings';
+import { LANGUAGE_NAMES, type DictationLanguage } from '../../shared/dictation-languages';
 import type { LanguagePrompt as Prompt } from '../settings/use-model-actions';
 
-const CHOICES: ReadonlyArray<{ id: Exclude<Language, 'auto'>; label: string }> = [
-  { id: 'sk', label: 'Slovenčina' },
-  { id: 'cs', label: 'Čeština' },
-  { id: 'en', label: 'Angličtina' },
-];
+const CHOICES: readonly DictationLanguage[] = ['sk', 'cs', 'en'];
 
-type LanguagePromptProps = { prompt: Prompt; onChoose: (language: Exclude<Language, 'auto'>) => void; onCancel: () => void };
+type LanguagePromptProps = { prompt: Prompt; onChoose: (language: DictationLanguage) => void; onCancel: () => void };
 
 export function LanguagePrompt({ prompt, onChoose, onCancel }: LanguagePromptProps) {
   return (
@@ -17,14 +13,14 @@ export function LanguagePrompt({ prompt, onChoose, onCancel }: LanguagePromptPro
       <div className="row-btns">
         {CHOICES.map((choice) => (
           <button
-            key={choice.id}
+            key={choice}
             type="button"
             className="btn primary"
             onClick={() => {
-              onChoose(choice.id);
+              onChoose(choice);
             }}
           >
-            {choice.label}
+            {LANGUAGE_NAMES[choice]}
           </button>
         ))}
         <button type="button" className="btn ghost" onClick={onCancel}>

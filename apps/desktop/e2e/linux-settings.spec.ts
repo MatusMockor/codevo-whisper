@@ -42,6 +42,27 @@ test('Linux paste shortcut settings persist and reject invalid values', async ()
   } finally { await app.close(); }
 });
 
+test('Linux Jazyky diktovania reorders the chosen languages and fits narrow windows', async () => {
+  test.skip(process.platform !== 'linux');
+  const dir = await createUserDataDir({ ...ONBOARDED, languages: { mode: 'selected', selected: ['sk', 'cs'] } });
+  const app = await launchApp(dir);
+  try {
+    const page = await mainWindow(app);
+    await page.getByRole('tab', { name: 'Nastavenia', exact: true }).click();
+    const chosen = page.getByRole('list', { name: 'Zvolené jazyky' }).getByRole('listitem');
+    await expect(chosen).toHaveText([/Slovenčina/, /Čeština/]);
+    await page.getByRole('button', { name: 'Nižšie: Slovenčina' }).click();
+    await expect(chosen).toHaveText([/Čeština/, /Slovenčina/]);
+    await expect(chosen.first()).toContainText('Hlavný');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.languages))).toEqual({ mode: 'selected', selected: ['cs', 'sk'] });
+    for (const width of [1000, 800]) {
+      await app.evaluate(({ BrowserWindow }, width) => { BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Codevo Whisper')?.setSize(width, 760); }, width);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      await page.screenshot({ path: join(dir, `linux-languages-${width}.png`), fullPage: true });
+    }
+  } finally { await app.close(); }
+});
+
 test('Linux onboarding explains keyboard access and manual paste without Mac relaunch instructions', async () => {
   test.skip(process.platform !== 'linux');
   const dir = await createUserDataDir();

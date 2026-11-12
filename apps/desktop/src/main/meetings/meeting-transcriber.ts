@@ -10,6 +10,7 @@ import type { Settings } from '../../shared/settings';
 import type { ActiveModel } from '../engines/active-model';
 import type { Logger } from '../logging/logger';
 import { attributeSpeakers, type TrackWords } from './attribute-speakers';
+import { meetingLanguageArgs } from './meeting-language';
 import { parseCliWords } from './cli-words';
 import { parseDiarization } from './diarization';
 import type { MeetingRecord, MeetingStore } from './meeting-store';
@@ -17,7 +18,7 @@ import type { MeetingRecord, MeetingStore } from './meeting-store';
 export type MeetingTranscriberDeps = {
   store: MeetingStore;
   binary: string;
-  models: Pick<ActiveModel, 'activeModelPath' | 'verifyActive'>;
+  models: Pick<ActiveModel, 'activeModelPath' | 'verifyActive' | 'activeLanguageHint'>;
   settings: { get(): Settings };
   backend: () => TranscribeBackend;
   diarizer: () => Promise<string | null>;
@@ -113,10 +114,10 @@ export class MeetingTranscriber {
     try {
       const dataBytes = await writeWav(pcm, wav);
       if (dataBytes === 0) return { words: [] };
-      const { language } = this.deps.settings.get();
+      const languageArgs = meetingLanguageArgs(this.deps.settings.get().languages, this.deps.models.activeLanguageHint());
       const timeoutMs = Math.max(MIN_TIMEOUT_MS, (dataBytes / PCM_BYTES_PER_SECOND) * 2000);
       const words = parseCliWords(
-        await this.cli(['--model', model, '--backend', this.deps.backend(), ...(language === 'auto' ? [] : ['--language', language]), '--threads', this.threads(), '--timestamps', 'word', '--quiet', wav], timeoutMs),
+        await this.cli(['--model', model, '--backend', this.deps.backend(), ...languageArgs, '--threads', this.threads(), '--timestamps', 'word', '--quiet', wav], timeoutMs),
       );
       if (track !== 'system' || words.length === 0) return { words };
       return { words, segments: await this.speakers(record.id, wav, timeoutMs) };

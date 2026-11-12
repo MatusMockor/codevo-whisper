@@ -11,7 +11,10 @@ import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import { LocalEngine } from '../src/main/engines/local-engine';
 import { ModelManager } from '../src/main/models/model-manager';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
 import { SettingsStore } from '../src/main/settings/settings-store';
+import type { LanguageHint } from '../src/shared/models';
+import { DEFAULT_SETTINGS } from '../src/shared/settings';
 import { FAKE_WORKER } from './support/resident-fixture';
 import { stampedPcm } from './in-process-capture';
 import { testEntry } from './model-fixtures';
@@ -40,14 +43,14 @@ afterEach(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function localEngine(withModel: boolean): Promise<LocalEngine> {
+async function localEngine(withModel: boolean, languageHint: LanguageHint = 'ignored'): Promise<LocalEngine> {
   const modelsDir = join(scratch, 'models');
   await mkdir(modelsDir, { recursive: true });
   if (withModel) {
     await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
     await settings.update({ localModelId: 'tiny' });
   }
-  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve() });
+  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY, { languageHint })], settings, warmUp: () => Promise.resolve() });
   const local = new LocalEngine({ binary: FAKE_WORKER, models, settings, arch: 'arm64' });
   locals.push(local);
   return local;
@@ -62,7 +65,7 @@ describe('EngineSelector', () => {
     expect(preparation.ready).toBe(true);
     const engine = preparation.ready ? preparation.engine : null;
     expect(engine?.id).toBe('local');
-    const dictation = engine?.start({ language: 'sk', signal: new AbortController().signal });
+    const dictation = engine?.start({ languages: DEFAULT_SETTINGS.languages, signal: new AbortController().signal });
     dictation?.push(stampedPcm(3, 1));
     dictation?.push(stampedPcm(3, 1));
     expect(await dictation?.finish()).toBe('3:64000');
@@ -88,6 +91,33 @@ describe('EngineSelector', () => {
     expect(await selector.prepare(['server'])).toEqual({ ready: false });
   });
 
+  describe('with selected languages', () => {
+    async function pairedRemote(): Promise<RemoteEngine> {
+      gateway = await startTestGateway();
+      const pairing = await gateway.addDevice();
+      const observer = { connected: () => undefined, failed: () => undefined };
+      const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
+      return new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(settings) });
+    }
+
+    it('falls back to a local model that honours them while the server cannot', async () => {
+      await settings.update({ languages: { mode: 'selected', selected: ['sk'] } });
+      const selector = new EngineSelector([await localEngine(true, 'required'), await pairedRemote()]);
+
+      const preparation = await selector.prepare(['server', 'local']);
+
+      expect(preparation.ready && preparation.engine.id).toBe('local');
+      if (preparation.ready) preparation.engine.release();
+    });
+
+    it('reports the server reason when no engine honours them', async () => {
+      await settings.update({ languages: { mode: 'selected', selected: ['sk', 'cs'] } });
+      const selector = new EngineSelector([await localEngine(true), await pairedRemote()]);
+
+      expect(await selector.prepare(['server', 'local'])).toEqual({ ready: false, reason: 'server-languages-outdated' });
+    });
+  });
+
   describe('with a server that needs re-pairing', () => {
     async function remoteEngine(breakPairing: (server: TestGateway, pairing: ServerPairing) => Promise<unknown>): Promise<RemoteEngine> {
       gateway = await startTestGateway();
@@ -95,7 +125,7 @@ describe('EngineSelector', () => {
       await breakPairing(gateway, pairing);
       const observer = { connected: () => undefined, failed: () => undefined };
       const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-      return new RemoteEngine({ connector });
+      return new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(settings) });
     }
 
     const revoke = (server: TestGateway, pairing: ServerPairing) => server.admin({ cmd: 'revoke', deviceId: pairing.deviceId });
@@ -160,7 +190,7 @@ describe('EngineSelector', () => {
       const observer = { connected: () => undefined, failed: () => undefined };
       const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 300 });
       const events: string[] = [];
-      const selector = new EngineSelector([timed(await localEngine(true), events), timed(new RemoteEngine({ connector }), events)]);
+      const selector = new EngineSelector([timed(await localEngine(true), events), timed(new RemoteEngine({ connector, languages: new AutoOnlyServerLanguages(settings) }), events)]);
 
       const preparation = await selector.prepare(['server', 'local']);
 

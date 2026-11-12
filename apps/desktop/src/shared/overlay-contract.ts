@@ -12,7 +12,7 @@ export type OverlayError = { kind: 'error'; message: string; action?: OverlayAct
 
 export type OverlayState =
   | { kind: 'hidden' }
-  | { kind: 'recording'; elapsedMs: number; level: number; language: string; fallbackDevice?: string; live?: LiveText }
+  | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; fallbackDevice?: string; live?: LiveText }
   | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText }
   | { kind: 'inserted'; appName: string; notice?: string }
   | { kind: 'copied'; notice?: string }

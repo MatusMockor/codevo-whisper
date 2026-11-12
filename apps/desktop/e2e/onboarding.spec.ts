@@ -265,6 +265,24 @@ test('choosing this Mac shows the preselected recommended model, then onboarding
   await expect(page.getByText('Krok 1 z 5')).toHaveCount(0);
 });
 
+test('the Canary language prompt restricts dictation to the chosen language before the download starts', async () => {
+  await app.evaluate(() => {
+    globalThis.fetch = () => Promise.reject(new Error('offline in e2e'));
+  });
+  await recordHotkeyAndOpenEngineStep();
+  await engines().getByRole('radio', { name: /^Na tomto zariadení/ }).check();
+  await modelList().getByRole('radio', { name: 'Canary 1B v2' }).check();
+  await page.locator('.ob-model-actions').getByRole('button', { name: 'Stiahnuť: Canary 1B v2' }).click();
+
+  const prompt = page.getByRole('dialog', { name: 'Vyberte jazyk diktovania' });
+  await expect(prompt).toBeVisible();
+  await expect(prompt.getByRole('button')).toHaveText(['Slovenčina', 'Čeština', 'Angličtina', 'Zrušiť']);
+  await prompt.getByRole('button', { name: 'Čeština' }).click();
+
+  await expect(prompt).toHaveCount(0);
+  await expect.poll(async () => (await savedSettings()).languages).toEqual({ mode: 'selected', selected: ['cs'] });
+});
+
 test('choosing an own server pairs it in place, saves the server order and never suggests a model download', async () => {
   const server = await startLocalGateway();
   gateway = server;

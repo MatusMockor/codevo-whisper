@@ -75,6 +75,10 @@ describe('settings catalog', () => {
     const history = filterSettings(MAC_GROUPS, searchTerms('história prepisov'), 'server');
     expect([...(history?.rows ?? [])]).toEqual(['history-enabled', 'history-limit']);
 
+    const languages = filterSettings(MAC_GROUPS, searchTerms('jazyky diktovania'), 'server');
+    expect([...(languages?.rows ?? [])]).toEqual(['languages']);
+    expect([...(filterSettings(MAC_GROUPS, searchTerms('nemcina'), 'server')?.rows ?? [])]).toEqual(['languages']);
+
     const none = filterSettings(MAC_GROUPS, searchTerms('wayland'), 'server');
     expect(none?.rows.size).toBe(0);
     expect(none?.groups.size).toBe(0);

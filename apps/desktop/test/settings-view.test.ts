@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hotkeyRecordMessage } from '../src/renderer/settings/hotkey-record-message';
-import { languageNote, languageOptions, needsLanguageChoice } from '../src/renderer/settings/language-options';
+import { languageModeOptions, needsLanguageChoice, requiredLanguageNote, showsSingleLanguageHint } from '../src/renderer/settings/language-options';
 import { levelBars } from '../src/renderer/settings/level-bars';
 import { bluetoothHint, microphoneOptions, SYSTEM_DEFAULT_VALUE } from '../src/renderer/settings/microphone-options';
 import { formatSize, modelRow } from '../src/renderer/settings/model-rows';
@@ -21,34 +21,38 @@ function state(status: ModelState['status'], receivedBytes = 0): ModelState {
   return { id: CANARY.id, status, receivedBytes, totalBytes: CANARY.sizeBytes };
 }
 
-describe('languageOptions', () => {
+describe('languageModeOptions', () => {
   it('offers Automaticky unless the active model requires a language', () => {
-    expect(languageOptions('ignored').map((option) => [option.id, option.label, option.disabled])).toEqual([
-      ['sk', 'Slovenčina', false],
-      ['cs', 'Čeština', false],
-      ['en', 'Angličtina', false],
-      ['auto', 'Automaticky', false],
+    expect(languageModeOptions('ignored')).toEqual([
+      { id: 'auto', label: 'Automaticky', disabled: false },
+      { id: 'selected', label: 'Zvolené jazyky' },
     ]);
-    expect(languageOptions('required').find((option) => option.id === 'auto')?.disabled).toBe(true);
-    expect(languageOptions(null).find((option) => option.id === 'auto')?.disabled).toBe(false);
+    expect(languageModeOptions('required')[0]?.disabled).toBe(true);
+    expect(languageModeOptions(null)[0]?.disabled).toBe(false);
   });
 
-  it('explains why Automaticky is off for a model that needs the language', () => {
-    expect(languageNote(CANARY)).toBe('Model Canary 1B v2 potrebuje vedieť jazyk, automatické rozpoznanie s ním nie je dostupné.');
-    expect(languageNote({ ...CANARY, languageHint: 'optional' })).toBe('Automatické rozpoznanie pridá k prvému slovu asi 0,1 s.');
-    expect(languageNote(null)).toBe('Automatické rozpoznanie pridá k prvému slovu asi 0,1 s.');
+  it('explains why Automaticky is off for a model that needs languages', () => {
+    expect(requiredLanguageNote(CANARY)).toBe('Model Canary 1B v2 potrebuje zvolené jazyky, automatické rozpoznanie s ním nie je dostupné.');
+    expect(requiredLanguageNote({ ...CANARY, languageHint: 'optional' })).toBeNull();
+    expect(requiredLanguageNote(null)).toBeNull();
+  });
+
+  it('shows the related language hint only for a single selected language', () => {
+    expect(showsSingleLanguageHint({ mode: 'selected', selected: ['sk'] })).toBe(true);
+    expect(showsSingleLanguageHint({ mode: 'selected', selected: ['sk', 'cs'] })).toBe(false);
+    expect(showsSingleLanguageHint({ mode: 'auto', selected: ['sk'] })).toBe(false);
   });
 });
 
 describe('needsLanguageChoice', () => {
   it('asks for a language before a model that requires one becomes active while Automaticky is set', () => {
-    const auto = { language: 'auto', localModelId: null } as const;
+    const auto = { languages: { mode: 'auto', selected: ['sk'] }, localModelId: null } as const;
 
     expect(needsLanguageChoice(CANARY, 'activate', { ...auto, localModelId: 'parakeet-ultra-q8' })).toBe(true);
     expect(needsLanguageChoice(CANARY, 'download', auto)).toBe(true);
     expect(needsLanguageChoice(CANARY, 'continue', auto)).toBe(true);
     expect(needsLanguageChoice(CANARY, 'download', { ...auto, localModelId: 'parakeet-ultra-q8' })).toBe(false);
-    expect(needsLanguageChoice(CANARY, 'activate', { ...auto, language: 'sk' })).toBe(false);
+    expect(needsLanguageChoice(CANARY, 'activate', { ...auto, languages: { mode: 'selected', selected: ['sk'] } })).toBe(false);
     expect(needsLanguageChoice({ ...CANARY, languageHint: 'ignored' }, 'activate', auto)).toBe(false);
     expect(needsLanguageChoice(CANARY, 'delete', auto)).toBe(false);
   });

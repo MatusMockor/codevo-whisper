@@ -7,7 +7,7 @@ export type SettingId =
   | 'hotkey'
   | 'mode'
   | 'overlay'
-  | 'language'
+  | 'languages'
   | 'mute'
   | 'feedback'
   | 'feedback-output'
@@ -50,7 +50,7 @@ const GROUPS: readonly GroupDefinition[] = [
       { id: 'hotkey', title: 'Klávesová skratka', keywords: 'hotkey kláves skratka nahrať' },
       { id: 'mode', title: 'Režim', keywords: 'režim klávesu inteligentný podrž prepínanie' },
       { id: 'overlay', title: 'Zobrazenie panela', keywords: 'panel overlay indikátor živý text' },
-      { id: 'language', title: 'Jazyk', keywords: 'jazyk slovenčina čeština angličtina automaticky' },
+      { id: 'languages', title: 'Jazyky diktovania', keywords: 'jazyk jazyky zvolené hlavný automaticky rozpoznanie slovenčina čeština angličtina nemčina poľština' },
       { id: 'mute', title: 'Stlmiť počas nahrávania', keywords: 'stlmiť zvuk hudba výstup' },
       { id: 'feedback', title: 'Zvuková odozva', keywords: 'zvuk odozva pípnutie' },
       { id: 'feedback-output', title: 'Výstupné zariadenie', keywords: 'reproduktory slúchadlá výstup zvuková odozva' },

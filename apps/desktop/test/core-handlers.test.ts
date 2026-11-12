@@ -45,18 +45,19 @@ describe('writeSettings', () => {
   });
 
   it('saves the engine order and the other settings of one patch', async () => {
-    const saved = await write({ engineOrder: ['server', 'local'], language: 'en' });
+    const languages = { mode: 'selected', selected: ['en'] };
+    const saved = await write({ engineOrder: ['server', 'local'], languages });
 
-    expect(saved).toMatchObject({ engineOrder: ['server', 'local'], language: 'en' });
-    expect(settings.get()).toMatchObject({ engineOrder: ['server', 'local'], language: 'en' });
-    expect(await write({ engineOrder: ['local'] })).toMatchObject({ engineOrder: ['local'], language: 'en' });
+    expect(saved).toMatchObject({ engineOrder: ['server', 'local'], languages });
+    expect(settings.get()).toMatchObject({ engineOrder: ['server', 'local'], languages });
+    expect(await write({ engineOrder: ['local'] })).toMatchObject({ engineOrder: ['local'], languages });
   });
 
   it('keeps the newest value when a later patch is sent before an earlier one with an engine order finishes', async () => {
-    const first = write({ engineOrder: ['server'], language: 'en' });
-    const second = write({ language: 'cs' });
+    const first = write({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['en'] } });
+    const second = write({ languages: { mode: 'selected', selected: ['cs', 'en'] } });
     await Promise.all([first, second]);
 
-    expect(settings.get()).toMatchObject({ engineOrder: ['server'], language: 'cs' });
+    expect(settings.get()).toMatchObject({ engineOrder: ['server'], languages: { mode: 'selected', selected: ['cs', 'en'] } });
   });
 });

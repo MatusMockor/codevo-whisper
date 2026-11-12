@@ -344,6 +344,84 @@
   justify-self: stretch;
 }
 
+.set-group .srow:has(> .lang-pick) {
+  align-items: start;
+}
+
+.set-group .srow:not(.perm) > .lang-pick {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.lang-pick {
+  display: grid;
+  gap: 10px;
+}
+
+.lang-chosen,
+.lang-more {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lang-chosen {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel-2);
+}
+
+.lang-chosen li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 12px;
+}
+
+.lang-chosen li + li {
+  border-top: 1px solid var(--line);
+}
+
+.lang-chosen label {
+  font-weight: 560;
+}
+
+.lang-move {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.lang-more {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 16px;
+  padding: 2px 0;
+}
+
+.lang-more li {
+  padding: 4px 0;
+}
+
+.lang-pick label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lang-pick input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--lamp);
+}
+
+.lang-pick .field-note {
+  max-width: 70ch;
+}
+
 .set-group .ai-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 24px;

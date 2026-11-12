@@ -63,7 +63,7 @@ function linuxTray() {
     logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
   });
   tray.create();
-  return tray;
+  return { tray, current: () => settings };
 }
 
 function attachedMenu(): MenuItemConstructorOptions[] {
@@ -89,13 +89,17 @@ describe('TrayMenu on Linux', () => {
   });
 
   it('re-attaches the menu when dictation state and settings change', async () => {
-    const tray = linuxTray();
+    const { tray, current } = linuxTray();
     await vi.waitFor(() => expect(trays.at(-1)?.contextMenu).not.toBeNull());
 
-    tray.reflect({ kind: 'recording', elapsedMs: 0, level: 0, language: 'sk' });
+    tray.reflect({ kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'SK' });
     expect(attachedMenu()[0]?.label).toBe('Nahrávam…');
 
-    submenu('Jazyk').find((item) => item.label === 'Čeština')?.click?.(undefined as never, undefined, undefined as never);
-    await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Čeština'));
+    submenu('Jazyk').find((item) => item.label === 'Zvolené: SK')?.click?.(undefined as never, undefined, undefined as never);
+    await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Zvolené: SK'));
+    expect(current().languages).toEqual({ mode: 'selected', selected: ['sk'] });
+    submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
+    await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Automaticky'));
+    expect(current().languages).toEqual({ mode: 'auto', selected: ['sk'] });
   });
 });

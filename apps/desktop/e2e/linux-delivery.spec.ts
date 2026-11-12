@@ -11,7 +11,7 @@ import type { E2eHooks } from '../src/main/app/e2e-hooks';
 test('built Linux app pastes native dictation and replays through the native shortcut into a GTK target', async () => {
   test.skip(process.platform !== 'linux' || !process.env['CW_NATIVE_AUDIO'] || !process.env['CW_NATIVE_MODEL'], 'requires the declared catalog model and file-backed audio fixture');
   test.setTimeout(180_000);
-  const dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' }, insertion: 'paste', clipboardPolicy: 'restore', localAcceleration: 'cpu', localModelId: 'parakeet-ultra-q4', localModelUnload: 'immediately', language: 'en', mode: 'hold' });
+  const dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' }, insertion: 'paste', clipboardPolicy: 'restore', localAcceleration: 'cpu', localModelId: 'parakeet-ultra-q4', localModelUnload: 'immediately', languages: { mode: 'auto', selected: ['en'] }, mode: 'hold' });
   await mkdir(join(dir, 'models'));
   await copyFile(process.env['CW_NATIVE_MODEL']!, join(dir, 'models', 'parakeet-ultra-q4.gguf'));
   const original = spawnSync('xdotool', ['getactivewindow'], { encoding: 'utf8' }).stdout?.trim() ?? '';

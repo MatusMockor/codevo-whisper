@@ -1,11 +1,10 @@
 import type { AiProvider, CodexEffort } from './ai';
+import type { LanguageSelection } from './dictation-languages';
 import type { HotkeyBinding } from './hotkey';
 
 export type HotkeySetting = (HotkeyBinding & { label: string }) | null;
 
 export type DictationMode = 'hold' | 'toggle' | 'smart';
-
-export type Language = 'sk' | 'en' | 'cs' | 'auto';
 
 export type MicrophoneSetting = { deviceId: string | null; label: string | null };
 
@@ -49,7 +48,7 @@ export type Settings = {
   appendTrailingSpace: boolean;
   hotkey: HotkeySetting;
   mode: DictationMode;
-  language: Language;
+  languages: LanguageSelection;
   microphone: MicrophoneSetting;
   engineOrder: Array<EngineId>;
   serverEnabled: boolean;
@@ -82,7 +81,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   appendTrailingSpace: false,
   hotkey: null,
   mode: 'smart',
-  language: 'sk',
+  languages: Object.freeze({ mode: 'auto', selected: Object.freeze(['sk'] as const) }),
   microphone: Object.freeze({ deviceId: null, label: null }),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,
   serverEnabled: true,

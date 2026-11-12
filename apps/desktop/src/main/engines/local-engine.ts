@@ -2,12 +2,12 @@ import { systemClock, TranscriptionDispatcher, type Clock, type SegmentConfig } 
 import { ResidentTranscriber } from '@codevo-whisper/stt-runner';
 import { access, constants } from 'node:fs/promises';
 import type { SettingsStore } from '../settings/settings-store';
-import type { Settings } from '../../shared/settings';
 import { PCM_BYTES_PER_SECOND } from '../../shared/pcm';
 import { consoleLogger } from '../logging/logger';
 import type { ActiveModel } from './active-model';
 import { localBackend, localThreads, type LocalEngineArch } from './local-backend';
 import { LocalDictation } from './local-dictation';
+import { localLanguageHint, localLanguageReason } from './local-language';
 import { ResidentSegmentTranscriber, type LocalContext } from './resident-segment-transcriber';
 import { notReady, type EngineReadiness, type Preparation, type TranscriptionEngine } from './transcription-engine';
 
@@ -158,7 +158,8 @@ export class LocalEngine implements TranscriptionEngine {
     if ((await this.deps.models.activeModelPath()) === null) return { ready: false, reason: 'no-model' };
     const verification = await this.deps.models.verifyActive();
     if (verification !== 'ok') return { ready: false, reason: VERIFICATION_REASON[verification] };
-    if (this.needsLanguage(this.deps.settings.get().language)) return { ready: false, reason: 'language-required' };
+    const language = localLanguageReason(this.deps.settings.get().languages, this.deps.models.activeLanguageHint());
+    if (language !== null) return { ready: false, reason: language };
     return { ready: true };
   }
 
@@ -179,7 +180,8 @@ export class LocalEngine implements TranscriptionEngine {
         engine: {
           id: this.id,
           start: (options) => {
-            if (state !== 'prepared' || this.disposed || generation !== this.generation) {
+            const hint = localLanguageHint(options.languages);
+            if (state !== 'prepared' || this.disposed || generation !== this.generation || hint === null) {
               if (state === 'prepared') {
                 state = 'released';
                 this.release(lease);
@@ -190,7 +192,7 @@ export class LocalEngine implements TranscriptionEngine {
             return new LocalDictation({
               dispatcher: generation.dispatcher,
               clock: this.clock,
-              context: { language: options.language, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
+              context: { hint, ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }) },
               options: { ...options, signal: AbortSignal.any([options.signal, generation.retired.signal]) },
               onRecordingEnd: () => {
                 if (lease.revision !== this.revision) return;
@@ -237,9 +239,5 @@ export class LocalEngine implements TranscriptionEngine {
 
   private backend(): ReturnType<typeof localBackend> {
     return localBackend(this.deps.arch, this.deps.settings.get().localAcceleration, this.deps.platform);
-  }
-
-  private needsLanguage(language: Settings['language']): boolean {
-    return language === 'auto' && this.deps.models.activeLanguageHint() === 'required';
   }
 }

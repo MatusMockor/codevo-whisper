@@ -8,6 +8,10 @@ import type { ServerOptions } from '../../server/src/app';
 import type { FakeSttBehaviour } from '../../server/test/support/fake-stt-server';
 import { continuousSpeech, speech } from '../../server/test/support/speech';
 import { startTestGateway, type TestGateway } from './support/gateway';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
+
+const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
 
 const FRAME = 3200;
 const SECOND = 32000;
@@ -29,7 +33,7 @@ afterEach(async () => {
 
 function engine(pairing: ServerPairing | null, options: Partial<RemoteEngineOptions> = {}, observer = new RecordingObserver()): RemoteEngine {
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector, options });
+  return new RemoteEngine({ connector, languages: AUTO_ONLY, options });
 }
 
 async function prepared(remote: RemoteEngine): Promise<PreparedEngine> {
@@ -68,14 +72,14 @@ const bySize: FakeSttBehaviour = { respond: (pcm) => ({ status: 200, body: { tex
 describe('RemoteEngine', () => {
   it('streams the recording and joins the finals in segment order without repeating the overlap', async () => {
     const { gateway: server, pairing } = await startWith({ respond: (pcm) => ({ status: 200, body: { text: pcm.length === 25 * SECOND ? 'ahoj toto je prvá časť' : 'časť a koniec diktátu' } }) });
-    const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
+    const dictation = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
 
     talk(dictation, continuousSpeech(26));
 
     expect(await dictation.finish()).toBe('ahoj toto je prvá časť a koniec diktátu');
     expect(server.stt.requests).toEqual([
-      { language: 'sk', bytes: 25 * SECOND },
-      { language: 'sk', bytes: 2 * SECOND },
+      { language: 'auto', bytes: 25 * SECOND },
+      { language: 'auto', bytes: 2 * SECOND },
     ]);
   });
 
@@ -87,12 +91,22 @@ describe('RemoteEngine', () => {
         return { status: 200, body: { text: calls === 1 ? 'prvá veta' : '' } };
       },
     });
-    const dictation = (await prepared(engine(pairing))).start({ language: 'cs', signal: new AbortController().signal });
+    const dictation = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['cs'] }, signal: new AbortController().signal });
 
     talk(dictation, speech(26));
 
     expect(await dictation.finish()).toBe('prvá veta');
     expect(server.stt.requests).toHaveLength(2);
+  });
+
+  it('refuses selected languages before connecting, because the server cannot honour them yet', async () => {
+    const { gateway: server, pairing } = await startWith(bySize);
+    const observer = new RecordingObserver();
+    const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer, clock: Date.now, timeoutMs: 2000 });
+    const languages = new AutoOnlyServerLanguages({ get: () => ({ languages: { mode: 'selected', selected: ['sk'] } }) });
+
+    expect(await new RemoteEngine({ connector, languages }).prepare()).toEqual({ ready: false, reason: 'server-languages-outdated' });
+    expect(server.stt.requests).toEqual([]);
   });
 
   it('is not ready without a pairing, while the server is down and after a revoke', async () => {
@@ -110,20 +124,20 @@ describe('RemoteEngine', () => {
 
   it('maps a busy STT to busy and a broken STT to stt-unavailable', async () => {
     const { gateway: server, pairing } = await startWith({ respond: () => ({ status: 503, body: { error: 'busy' } }) });
-    const busy = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
+    const busy = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
     speak(busy, SECOND);
     await expect(busy.finish()).rejects.toEqual(new TranscriptionFailedError('busy'));
     await server.close();
 
     const broken = await startWith({ respond: () => ({ status: 500, body: { error: 'boom' } }) });
-    const failing = (await prepared(engine(broken.pairing))).start({ language: 'sk', signal: new AbortController().signal });
+    const failing = (await prepared(engine(broken.pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
     speak(failing, SECOND);
     await expect(failing.finish()).rejects.toMatchObject({ reason: 'stt-unavailable', textSoFar: '' });
   });
 
   it('keeps the text recognised before a later segment failed', async () => {
     const { pairing } = await startWith({ respond: (pcm) => (pcm.length === 2 * SECOND ? { status: 500, body: {} } : { status: 200, body: { text: 'toto je začiatok' } }) });
-    const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
+    const dictation = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
 
     talk(dictation, continuousSpeech(26));
 
@@ -133,7 +147,7 @@ describe('RemoteEngine', () => {
   it('reports a dictation longer than the server allows', async () => {
     const clock = { now: Date.now() };
     const { pairing } = await startWith(bySize, { clock: () => clock.now });
-    const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: new AbortController().signal });
+    const dictation = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
 
     await talkInRealTime(dictation, speech(601), clock);
 
@@ -143,7 +157,7 @@ describe('RemoteEngine', () => {
   it('cancels a dictation on abort and the gateway aborts its STT call', async () => {
     const { gateway: server, pairing } = await startWith({ delayMs: 2000 });
     const controller = new AbortController();
-    const dictation = (await prepared(engine(pairing))).start({ language: 'sk', signal: controller.signal });
+    const dictation = (await prepared(engine(pairing))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: controller.signal });
     speak(dictation, SECOND);
     const finished = dictation.finish();
     await expect.poll(() => server.stt.requests.length).toBe(1);
@@ -156,7 +170,7 @@ describe('RemoteEngine', () => {
 
   it('gives up when the connected server sends nothing for the finish wait', async () => {
     const { pairing } = await startWith({ delayMs: 5000 });
-    const dictation = (await prepared(engine(pairing, { finishIdleMs: 200 }))).start({ language: 'sk', signal: new AbortController().signal });
+    const dictation = (await prepared(engine(pairing, { finishIdleMs: 200 }))).start({ languages: { mode: 'auto', selected: ['sk'] }, signal: new AbortController().signal });
     speak(dictation, SECOND);
 
     await expect(dictation.finish()).rejects.toMatchObject({ reason: 'stt-unavailable' });

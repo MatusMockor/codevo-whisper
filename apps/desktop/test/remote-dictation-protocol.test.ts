@@ -5,6 +5,10 @@ import { MAX_SEGMENT_ID } from '../src/main/remote/remote-dictation';
 import { RemoteEngine } from '../src/main/remote/remote-engine';
 import { ServerConnector } from '../src/main/remote/server-connector';
 import { acceptSession, startResponder, type ResponderSession, type ScriptedResponder } from './support/scripted-responder';
+import { AutoOnlyServerLanguages } from '../src/main/remote/server-language-support';
+import { DEFAULT_SETTINGS as LANGUAGE_DEFAULTS } from '../src/shared/settings';
+
+const AUTO_ONLY = new AutoOnlyServerLanguages({ get: () => LANGUAGE_DEFAULTS });
 
 let responder: ScriptedResponder | undefined;
 
@@ -29,13 +33,13 @@ async function scripted(script: (session: ResponderSession, message: ClientMessa
   });
   const pairing = { deviceKey: generateKeyPair(), serverPublicKey: serverKey.publicKey, endpoint: responder.url, deviceId: 'abcdef01', deviceName: 'Mac', pairedAt: '2026-10-26T08:00:00.000Z' };
   const connector = new ServerConnector({ pairings: { load: () => Promise.resolve(pairing) }, observer: silentObserver, clock: Date.now, timeoutMs: 2000 });
-  return new RemoteEngine({ connector });
+  return new RemoteEngine({ connector, languages: AUTO_ONLY });
 }
 
 async function startDictation(engine: RemoteEngine, extra: Partial<DictationOptions> = {}): Promise<EngineDictation> {
   const preparation = await engine.prepare();
   expect(preparation).toMatchObject({ ready: true });
-  return (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'en', signal: new AbortController().signal, ...extra });
+  return (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: { mode: 'auto', selected: ['en'] }, signal: new AbortController().signal, ...extra });
 }
 
 function ownAndForeignResults(session: ResponderSession, message: ClientMessage): void {
@@ -143,13 +147,15 @@ describe('RemoteDictation protocol handling', () => {
 
     for (const partials of [true, false, undefined]) {
       const preparation = await engine.prepare();
-      const options = partials === undefined ? { language: 'sk' as const, signal: new AbortController().signal } : { language: 'sk' as const, signal: new AbortController().signal, partials };
+      const options = partials === undefined ? { languages: { mode: 'auto', selected: ['sk'] } as const, signal: new AbortController().signal } : { languages: { mode: 'auto', selected: ['sk'] } as const, signal: new AbortController().signal, partials };
       const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start(options);
       await dictation.finish();
     }
 
     expect(starts.map((json) => (JSON.parse(json) as { partials?: unknown }).partials)).toEqual([true, undefined, undefined]);
     expect(starts.slice(1).every((json) => !json.includes('partials'))).toBe(true);
+    expect(starts.map((json) => (JSON.parse(json) as { language?: unknown }).language)).toEqual(['auto', 'auto', 'auto']);
+    expect(starts.every((json) => !json.includes('languages'))).toBe(true);
   });
 
   it('reports a failed segment that arrives as an empty final and an error, keeping the earlier text', async () => {
@@ -218,7 +224,7 @@ describe('RemoteDictation protocol handling', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ language: 'sk', signal: controller.signal });
+    const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: { mode: 'auto', selected: ['sk'] }, signal: controller.signal });
     dictation.push(new Uint8Array(3200));
 
     await expect(dictation.finish()).rejects.toMatchObject({ name: 'AbortError' });

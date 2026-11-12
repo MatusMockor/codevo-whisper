@@ -21,11 +21,12 @@ test('managed X11 product overlay retains focus above normal and fullscreen targ
     xdo('windowactivate', '--sync', String(targetId));
     for (const fullscreen of [false, true]) {
       await app.evaluate(({ BrowserWindow }, full) => { BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Codevo controlled overlay target')?.setFullScreen(full); }, fullscreen);
-      await app.evaluate(() => { const hooks = (globalThis as unknown as { codevoE2e: E2eHooks }).codevoE2e; hooks.overlay.show({ kind: 'recording', elapsedMs: 2000, level: 0.5, language: 'SK', live: { confirmed: 'Overený text', tentative: 'pokračuje' } }); });
+      await app.evaluate(() => { const hooks = (globalThis as unknown as { codevoE2e: E2eHooks }).codevoE2e; hooks.overlay.show({ kind: 'recording', elapsedMs: 2000, level: 0.5, languageChip: 'SK +2', live: { confirmed: 'Overený text', tentative: 'pokračuje' } }); });
       await expect.poll(() => app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))).toBeTruthy();
       const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'));
       expect(overlay).toBeTruthy();
       await expect(overlay!.getByText('Overený text')).toBeVisible();
+      await expect(overlay!.locator('.chip')).toHaveText('SK +2');
       const state = await app.evaluate(({ BrowserWindow, app }) => {
         const panel = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/overlay/overlay.html'))!;
         return { xid: panel.getNativeWindowHandle().readUInt32LE(), focused: panel.isFocused(), focusable: panel.isFocusable(), pid: panel.webContents.getOSProcessId(), noSandbox: app.commandLine.hasSwitch('no-sandbox') };

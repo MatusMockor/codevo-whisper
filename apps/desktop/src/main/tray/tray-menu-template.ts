@@ -1,6 +1,7 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { AudioDevice } from '../audio/device-resolver';
-import type { Language, MicrophoneSetting } from '../../shared/settings';
+import type { LanguageMode, LanguageSelection } from '../../shared/dictation-languages';
+import type { MicrophoneSetting } from '../../shared/settings';
 
 export type TrayMenuModel = {
   status: string;
@@ -8,7 +9,7 @@ export type TrayMenuModel = {
   paused: boolean;
   devices: readonly AudioDevice[];
   microphone: MicrophoneSetting;
-  language: Language;
+  languages: LanguageSelection;
   autoLanguageAllowed: boolean;
   readyUpdate: string | null;
   installingUpdate: boolean;
@@ -20,7 +21,8 @@ export type TrayMenuActions = {
   pasteLast(): void;
   togglePause(): void;
   chooseMicrophone(microphone: MicrophoneSetting): void;
-  chooseLanguage(language: Language): void;
+  chooseLanguageMode(mode: LanguageMode): void;
+  editLanguages(): void;
   openApp(): void;
   openSettings(): void;
   quit(): void;
@@ -29,13 +31,6 @@ export type TrayMenuActions = {
 };
 
 const EXCERPT_LENGTH = 48;
-
-const LANGUAGES: ReadonlyArray<{ id: Language; label: string }> = [
-  { id: 'sk', label: 'Slovenčina' },
-  { id: 'cs', label: 'Čeština' },
-  { id: 'en', label: 'Angličtina' },
-  { id: 'auto', label: 'Automaticky' },
-];
 
 const SEPARATOR: MenuItemConstructorOptions = { type: 'separator' };
 
@@ -93,18 +88,20 @@ function microphoneMenu(model: TrayMenuModel, actions: TrayMenuActions): MenuIte
   return { label: 'Mikrofón', submenu: [systemDefault, SEPARATOR, ...devices, ...missingDeviceItems(model)] };
 }
 
+function selectedLabel(languages: LanguageSelection): string {
+  return `Zvolené: ${languages.selected.map((language) => language.toUpperCase()).join(', ')}`;
+}
+
 function languageMenu(model: TrayMenuModel, actions: TrayMenuActions): MenuItemConstructorOptions {
+  const { languages } = model;
   return {
     label: 'Jazyk',
-    submenu: LANGUAGES.map(
-      ({ id, label }): MenuItemConstructorOptions => ({
-        label,
-        type: 'radio',
-        checked: model.language === id,
-        enabled: id !== 'auto' || model.autoLanguageAllowed,
-        click: () => actions.chooseLanguage(id),
-      }),
-    ),
+    submenu: [
+      { label: 'Automaticky', type: 'radio', checked: languages.mode === 'auto', enabled: model.autoLanguageAllowed, click: () => actions.chooseLanguageMode('auto') },
+      { label: selectedLabel(languages), type: 'radio', checked: languages.mode === 'selected', click: () => actions.chooseLanguageMode('selected') },
+      SEPARATOR,
+      { label: 'Upraviť jazyky…', click: () => actions.editLanguages() },
+    ],
   };
 }
 

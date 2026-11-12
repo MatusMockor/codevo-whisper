@@ -143,9 +143,30 @@ describe('validateSettingsPatch', () => {
     }
   });
 
+  it('accepts dictation languages in order and rejects malformed selections', () => {
+    expect(validateSettingsPatch({ languages: { mode: 'selected', selected: ['cs', 'sk', 'en', 'de', 'pl'] } })).toEqual({ languages: { mode: 'selected', selected: ['cs', 'sk', 'en', 'de', 'pl'] } });
+    expect(validateSettingsPatch({ languages: { mode: 'auto', selected: ['uk'] } })).toEqual({ languages: { mode: 'auto', selected: ['uk'] } });
+    for (const languages of [
+      { mode: 'selected', selected: [] },
+      { mode: 'selected', selected: ['sk', 'cs', 'en', 'de', 'pl', 'hu'] },
+      { mode: 'selected', selected: ['sk', 'sk'] },
+      { mode: 'selected', selected: ['sk', 'auto'] },
+      { mode: 'selected', selected: ['SK'] },
+      { mode: 'restricted', selected: ['sk'] },
+      { mode: 'auto' },
+      { mode: 'auto', selected: ['sk'], primary: 'sk' },
+      { mode: 'auto', selected: 'sk' },
+      ['sk'],
+      'sk',
+      null,
+    ]) {
+      expect(() => validateSettingsPatch({ languages })).toThrow(IpcValidationError);
+    }
+  });
+
   it('rejects values outside the allowed enums', () => {
     expect(() => validateSettingsPatch({ mode: 'press' })).toThrow(IpcValidationError);
-    expect(() => validateSettingsPatch({ language: 'de' })).toThrow(IpcValidationError);
+    expect(() => validateSettingsPatch({ language: 'sk' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ insertion: 'typing' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ overlay: 'fullscreen' })).toThrow(IpcValidationError);
     expect(() => validateSettingsPatch({ launchAtLogin: 'true' })).toThrow(IpcValidationError);

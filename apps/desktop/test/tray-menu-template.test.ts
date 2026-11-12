@@ -11,7 +11,7 @@ const MODEL: TrayMenuModel = {
     { deviceId: 'usb', label: 'Shure MV7', isBluetooth: false, isDefault: false },
   ],
   microphone: { deviceId: null, label: null },
-  language: 'sk',
+  languages: { mode: 'auto', selected: ['sk', 'cs', 'en'] },
   autoLanguageAllowed: true,
   readyUpdate: null,
   installingUpdate: false,
@@ -25,7 +25,8 @@ function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
     pasteLast: () => calls.push('paste-last'),
     togglePause: () => calls.push('toggle-pause'),
     chooseMicrophone: (microphone) => calls.push(`microphone:${microphone.deviceId ?? 'default'}`),
-    chooseLanguage: (language) => calls.push(`language:${language}`),
+    chooseLanguageMode: (mode) => calls.push(`language-mode:${mode}`),
+    editLanguages: () => calls.push('edit-languages'),
     openApp: () => calls.push('open-app'),
     openSettings: () => calls.push('open-settings'),
     quit: () => calls.push('quit'),
@@ -122,15 +123,25 @@ describe('trayMenuTemplate', () => {
     expect(item(microphones, 'Systémový predvolený').checked).toBe(false);
   });
 
-  it('switches the language and disables Automaticky when the model needs a language', () => {
+  it('switches between automatic and the selected languages and opens the language settings', () => {
     const { actions, calls } = recordingActions();
-    const languages = submenu(trayMenuTemplate({ ...MODEL, language: 'cs', autoLanguageAllowed: false }, actions), 'Jazyk');
+    const languages = submenu(trayMenuTemplate(MODEL, actions), 'Jazyk');
 
-    expect(labels(languages)).toEqual(['Slovenčina', 'Čeština', 'Angličtina', 'Automaticky']);
-    expect(item(languages, 'Čeština').checked).toBe(true);
-    expect(item(languages, 'Automaticky').enabled).toBe(false);
-    click(item(languages, 'Angličtina'));
-    expect(calls).toEqual(['language:en']);
+    expect(labels(languages)).toEqual(['Automaticky', 'Zvolené: SK, CS, EN', '---', 'Upraviť jazyky…']);
+    expect(item(languages, 'Automaticky')).toMatchObject({ type: 'radio', checked: true, enabled: true });
+    expect(item(languages, 'Zvolené: SK, CS, EN')).toMatchObject({ type: 'radio', checked: false });
+    click(item(languages, 'Zvolené: SK, CS, EN'));
+    click(item(languages, 'Automaticky'));
+    click(item(languages, 'Upraviť jazyky…'));
+    expect(calls).toEqual(['language-mode:selected', 'language-mode:auto', 'edit-languages']);
+  });
+
+  it('marks the selected mode and disables Automaticky when the model needs languages', () => {
+    const { actions } = recordingActions();
+    const languages = submenu(trayMenuTemplate({ ...MODEL, languages: { mode: 'selected', selected: ['cs'] }, autoLanguageAllowed: false }, actions), 'Jazyk');
+
+    expect(item(languages, 'Zvolené: CS').checked).toBe(true);
+    expect(item(languages, 'Automaticky')).toMatchObject({ checked: false, enabled: false });
   });
 
   it('opens the app, the settings and quits', () => {
