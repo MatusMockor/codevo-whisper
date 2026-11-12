@@ -3,6 +3,11 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   background: var(--win);
+  color: var(--ink);
+}
+
+.onboarding .btn {
+  transition: transform .1s;
 }
 
 .ob-top {
@@ -323,7 +328,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--panel-2);
-  transition: border-color .15s, background-color .15s;
+  color: var(--ink);
 }
 
 .ob-choice:has(input:checked) {
@@ -383,6 +388,7 @@
 .ob-choice-t b {
   display: block;
   font-size: 13px;
+  color: var(--ink);
 }
 
 .ob-choice-t > span {
@@ -467,11 +473,5 @@
 
   .ob-steps li + li::before {
     width: 14px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ob-choice {
-    transition: none;
   }
 }
