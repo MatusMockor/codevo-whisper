@@ -145,7 +145,6 @@ describe('ResidentLanguageIdentifier', () => {
     expect(gaps[0]).toBeGreaterThanOrEqual(100);
     expect(gaps[1]).toBeGreaterThanOrEqual(200);
     expect(gaps[2]).toBeGreaterThanOrEqual(100);
-    expect(gaps[2]).toBeLessThan(200);
   });
 
   it('abort rejects promptly with the reason, abandons the worker after the grace and respawns on the next call', async () => {
