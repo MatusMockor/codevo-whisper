@@ -10,10 +10,14 @@ test('native Wayland uses a reduced regular window and copies through the real h
   const app = await launchApp(dir, [...FAKE_MEDIA_ARGS, '--ozone-platform=wayland']);
   try {
     await mainWindow(app);
-    await app.evaluate(() => { const hooks = (globalThis as unknown as { codevoE2e: E2eHooks }).codevoE2e; hooks.overlay.show({ kind: 'recording', elapsedMs: 2300, level: 0.4, languageChip: 'SK', live: { confirmed: 'Text vo Waylande', tentative: 'pokračuje' } }); });
+    await app.evaluate(() => { const hooks = (globalThis as unknown as { codevoE2e: E2eHooks }).codevoE2e; hooks.overlay.show({ kind: 'recording', elapsedMs: 2300, level: 0.4, languageChip: 'SK', polish: true, live: { confirmed: 'Text vo Waylande', tentative: 'pokračuje' } }); });
     await expect.poll(() => app.windows().some((p) => p.url().endsWith('/overlay/overlay.html'))).toBe(true);
     const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;
     await expect(overlay.getByText('Text vo Waylande')).toBeVisible();
+    await expect(overlay.getByRole('img', { name: 'AI úprava zapnutá' })).toBeVisible();
+    await expect(overlay.getByRole('img', { name: 'Jazyk diktovania: SK' })).toBeVisible();
+    await expect(overlay.getByRole('button')).toHaveCount(0);
+    await overlay.screenshot({ path: test.info().outputPath('wayland-chips.png') });
     const policy = await app.evaluate(({ BrowserWindow, app }) => { const panel = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/overlay/overlay.html'))!; return { focusable: panel.isFocusable(), topmost: panel.isAlwaysOnTop(), pid: panel.webContents.getOSProcessId(), noSandbox: app.commandLine.hasSwitch('no-sandbox') }; });
     expect(policy).toMatchObject({ focusable: true, topmost: false, noSandbox: false });
     const kernel = readFileSync(`/proc/${policy.pid}/status`, 'utf8');

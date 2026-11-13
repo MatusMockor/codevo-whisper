@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { ElectronApplication, Page } from '@playwright/test';
 import type { FakeInputHelper } from '../src/main/helper/fake-input-helper';
 import { startLocalGateway, type LocalGateway } from './local-gateway';
@@ -41,6 +43,29 @@ async function pairServer(page: Page): Promise<LocalGateway> {
   await page.evaluate(() => window.codevo.updateSettings({ engineOrder: ['server'] }));
   await expect.poll(() => page.evaluate(() => window.codevo.isHotkeyArmed())).toBe(true);
   return gateway;
+}
+
+async function polishingServer(polished: string): Promise<{ baseUrl: string; requests: string[]; close(): Promise<void> }> {
+  const requests: string[] = [];
+  const server = createServer((incoming, outgoing) => {
+    const chunks: Buffer[] = [];
+    incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+    incoming.on('end', () => {
+      requests.push(Buffer.concat(chunks).toString('utf8'));
+      outgoing.writeHead(200, { 'content-type': 'application/json' });
+      outgoing.end(JSON.stringify({ choices: [{ index: 0, message: { role: 'assistant', content: polished }, finish_reason: 'stop' }] }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return {
+    baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+    requests,
+    close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),
+  };
+}
+
+function targetEval(app: ElectronApplication, script: string): Promise<unknown> {
+  return app.evaluate(({ BrowserWindow }, [title, code]) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript(code), [TARGET, script] as const);
 }
 
 function targetText(app: ElectronApplication): Promise<unknown> {
@@ -105,7 +130,10 @@ test('X11 overlay cancel button discards a live dictation and the target keeps f
     const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;
     const cancel = overlay.getByRole('button', { name: 'Zrušiť diktovanie (Esc)' });
     await expect(cancel).toBeVisible();
-    expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts)).toEqual([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+    expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts)).toEqual([
+      { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'cycle-language', key: 'j', modifiers: ['control', 'alt'] },
+    ]);
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     const [x, y] = await pointAt(app, overlay, '.ov-ctl');
@@ -156,6 +184,87 @@ test('X11 Esc from the real keyboard path discards a live dictation and never re
     xdo('key', 'Escape');
     await expect.poll(() => app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('window.escapes'), TARGET)).toBe(2);
     console.log(JSON.stringify({ cancelledByEsc: true, escConsumedWhileDictating: true, escReleasedAfter: true }));
+  } finally {
+    await app.close();
+    await gateway?.close();
+  }
+});
+
+test('X11 AI and language chips flip one dictation by click, keep the target focused and polish the text per the chip', async () => {
+  test.skip(process.platform !== 'linux' || process.env['XDG_SESSION_TYPE'] === 'wayland', 'requires an actual X11 desktop');
+  const llm = await polishingServer('Upravený prepis.');
+  const dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'modifiers', keycodes: [63], label: 'Fn' }, mode: 'toggle', aiBaseUrl: llm.baseUrl, aiModel: 'test-model', aiPolish: false });
+  const app = await launchApp(dir, FAKE_MEDIA_ARGS, { fakeHelper: true });
+  let gateway: LocalGateway | null = null;
+  try {
+    const page = await mainWindow(app);
+    gateway = await pairServer(page);
+    const targetId = await openTarget(app);
+
+    await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('down'));
+    await expect.poll(() => app.windows().some((p) => p.url().endsWith('/overlay/overlay.html'))).toBe(true);
+    const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;
+    await expect(overlay.locator('.ov-lock')).toHaveCount(0);
+    await expect(overlay.getByRole('button', { name: 'AI úprava vypnutá' })).toBeVisible();
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: AUTO' })).toBeVisible();
+    expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts.map(({ action }) => action))).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    const [aiX, aiY] = await pointAt(app, overlay, 'button[aria-label^="AI úprava"]');
+    xdo('mousemove', String(aiX), String(aiY), 'click', '1');
+    await expect(overlay.getByRole('button', { name: 'AI úprava zapnutá' })).toBeVisible();
+    const [langX, langY] = await pointAt(app, overlay, 'button[aria-label^="Jazyk diktovania"]');
+    xdo('mousemove', String(langX), String(langY), 'click', '1');
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: SK' })).toBeVisible();
+    xdo('mousemove', String(langX), String(langY), 'click', '1');
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: AUTO' })).toBeVisible();
+    expect(xdo('getactivewindow')).toBe(String(targetId));
+    await overlay.screenshot({ path: test.info().outputPath('x11-chips-recording.png') });
+
+    await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('down'));
+    await expect.poll(() => app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.pasted), { timeout: 30_000 }).toEqual(['Upravený prepis.']);
+    expect(llm.requests).toHaveLength(1);
+    expect(await page.evaluate(() => window.codevo.getSettings().then((settings) => [settings.aiPolish, settings.languages]))).toEqual([false, { mode: 'auto', selected: ['sk'] }]);
+    expect(xdo('getactivewindow')).toBe(String(targetId));
+    console.log(JSON.stringify({ aiChipClicked: true, languageChipCycled: ['AUTO', 'SK', 'AUTO'], targetActive: true, polishedPerChip: true, settingUnchanged: true }));
+  } finally {
+    await app.close();
+    await gateway?.close();
+    await llm.close();
+  }
+});
+
+test('X11 Ctrl+Alt+J from the real keyboard cycles the language while dictating and never reaches the target', async () => {
+  test.skip(process.platform !== 'linux' || process.env['XDG_SESSION_TYPE'] === 'wayland', 'requires an actual X11 desktop');
+  const dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' }, mode: 'toggle', insertion: 'clipboard', languages: { mode: 'auto', selected: ['sk', 'cs'] } });
+  const app = await launchApp(dir);
+  let gateway: LocalGateway | null = null;
+  try {
+    const page = await mainWindow(app);
+    gateway = await pairServer(page);
+    await openTarget(app);
+    await targetEval(app, 'window.chords = 0; document.addEventListener("keydown", (e) => { if (e.code === "KeyJ" && e.ctrlKey && e.altKey) window.chords++; })');
+    xdo('key', 'ctrl+alt+j');
+    await expect.poll(() => targetEval(app, 'window.chords')).toBe(1);
+
+    xdo('key', 'ctrl+F12');
+    await expect.poll(() => app.windows().some((p) => p.url().endsWith('/overlay/overlay.html'))).toBe(true);
+    const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: AUTO' })).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    xdo('key', 'ctrl+alt+j');
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: SK' })).toBeVisible();
+    xdo('key', 'ctrl+alt+j');
+    await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: CS' })).toBeVisible();
+    xdo('key', 'Escape');
+
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/overlay/overlay.html'))!.isVisible())).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(await targetEval(app, 'window.chords')).toBe(1);
+    expect(await page.evaluate(() => window.codevo.getSettings().then((settings) => settings.languages))).toEqual({ mode: 'auto', selected: ['sk', 'cs'] });
+    xdo('key', 'ctrl+alt+j');
+    await expect.poll(() => targetEval(app, 'window.chords')).toBe(2);
+    console.log(JSON.stringify({ cycledByKeyboard: ['AUTO', 'SK', 'CS'], consumedWhileDictating: true, releasedAfter: true }));
   } finally {
     await app.close();
     await gateway?.close();

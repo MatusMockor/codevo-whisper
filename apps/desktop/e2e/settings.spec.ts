@@ -626,6 +626,7 @@ test.describe('settings page', () => {
     await expect(status()).toHaveText('Používať môžete najviac 5 jazykov. Najprv niektorý odoberte.');
     await expect(used()).toHaveCount(5);
 
+    await usedZone().scrollIntoViewIfNeeded();
     await pointerDrag(usedRow('Poľština'), usedRow('Angličtina'), top);
     await expect(used()).toHaveText([/Poľština/, /Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
     await usedRow('Nemčina').scrollIntoViewIfNeeded();
