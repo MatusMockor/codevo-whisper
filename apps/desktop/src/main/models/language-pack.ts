@@ -3,6 +3,7 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { AuxiliaryModelView, LanguagePackView, ModelState } from '../../shared/models';
 import type { CatalogEntry } from './catalog-entry';
 import { modelInfo } from './catalog-view';
+import type { ExistingLocations } from './existing-models';
 import { ModelError } from './model-error';
 import { modelFiles, scanModelState } from './model-files';
 import { ModelManager } from './model-manager';
@@ -31,6 +32,7 @@ export type LanguagePackDeps = {
   settings: Pick<SettingsStore, 'get' | 'update'>;
   logger: Logger;
   fetchImpl?: typeof fetch;
+  existing?: ExistingLocations;
 };
 
 export function languagePackMemory(models: readonly CatalogEntry[], conditioned: CatalogEntry, languageId: CatalogEntry): number {
@@ -42,8 +44,8 @@ class ModelLanguagePack implements LanguagePack {
   private readonly identifier: ModelManager;
 
   constructor(private readonly deps: LanguagePackDeps) {
-    const { dir, languageId, settings, logger, fetchImpl } = deps;
-    this.identifier = new ModelManager({ dir, catalog: [languageId], settings, warmUp: () => Promise.resolve(), logger, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
+    const { dir, languageId, settings, logger, fetchImpl, existing } = deps;
+    this.identifier = new ModelManager({ dir, catalog: [languageId], settings, warmUp: () => Promise.resolve(), logger, ...(fetchImpl === undefined ? {} : { fetchImpl }), ...(existing === undefined ? {} : { existing }) });
   }
 
   view(): LanguagePackView {

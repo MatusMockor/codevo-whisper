@@ -1,10 +1,11 @@
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, rm, stat, symlink } from 'node:fs/promises';
 import type { ActiveModel, ModelVerification } from '../engines/active-model';
 import { consoleLogger, type Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { LanguageHint, ModelState } from '../../shared/models';
 import type { CatalogEntry } from './catalog-entry';
 import { downloadFile } from './downloader';
+import { findExisting, matchFile, type ExistingFile, type ExistingLocations } from './existing-models';
 import { hashFile } from './file-hash';
 import { huggingFaceUrl } from './model-catalog';
 import { ModelError } from './model-error';
@@ -20,6 +21,7 @@ export type ModelManagerDeps = {
   fetchImpl?: typeof fetch;
   warmUp: WarmUp;
   logger?: Logger;
+  existing?: ExistingLocations;
 };
 
 type RunningDownload = { id: string; controller: AbortController; done: Promise<void> };
@@ -91,6 +93,21 @@ export class ModelManager implements ActiveModel {
     }
   }
 
+  async useExisting(file: string): Promise<string> {
+    const match = await matchFile(file, this.deps.catalog);
+    if (match === null) {
+      throw new ModelError('no-match', 'The file matches no catalog model');
+    }
+    const { entry } = match;
+    if ((await this.verify(entry.id)) === 'ok') {
+      return entry.id;
+    }
+    await this.stopDownload(entry.id);
+    await mkdir(this.deps.dir, { recursive: true });
+    await this.link(entry, this.files(entry), match.file);
+    return entry.id;
+  }
+
   async activate(id: string): Promise<void> {
     const entry = this.entry(id);
     if ((await this.verify(id)) !== 'ok') {
@@ -152,6 +169,9 @@ export class ModelManager implements ActiveModel {
     await rm(files.model, { force: true });
     this.verified.forget(entry.id);
     this.board.set(entry.id, { status: 'downloading' });
+    if (await this.reuseExisting(entry, files, signal)) {
+      return;
+    }
     try {
       await downloadFile({
         url: huggingFaceUrl(entry.source),
@@ -167,6 +187,31 @@ export class ModelManager implements ActiveModel {
       return;
     }
     this.verified.remember(entry.id, await stat(files.model, { bigint: true }), 'ok');
+    this.board.set(entry.id, { status: 'ready', receivedBytes: entry.sizeBytes });
+  }
+
+  private async reuseExisting(entry: CatalogEntry, files: ModelFiles, signal: AbortSignal): Promise<boolean> {
+    if (this.deps.existing === undefined) {
+      return false;
+    }
+    try {
+      const found = await findExisting(entry, this.deps.existing);
+      if (found === null || signal.aborted) {
+        return false;
+      }
+      await this.link(entry, files, found);
+      return true;
+    } catch (error) {
+      this.logger.error(`Looking for model ${entry.id} on disk failed`, error);
+      return false;
+    }
+  }
+
+  private async link(entry: CatalogEntry, files: ModelFiles, file: ExistingFile): Promise<void> {
+    await rm(files.model, { force: true });
+    await rm(files.partial, { force: true });
+    await symlink(file.path, files.model);
+    this.verified.remember(entry.id, file.info, 'ok');
     this.board.set(entry.id, { status: 'ready', receivedBytes: entry.sizeBytes });
   }
 

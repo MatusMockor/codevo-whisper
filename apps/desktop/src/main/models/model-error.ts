@@ -1,4 +1,4 @@
-export type ModelErrorReason = 'unknown-model' | 'not-ready' | 'busy' | 'http' | 'size' | 'incomplete' | 'checksum';
+export type ModelErrorReason = 'unknown-model' | 'not-ready' | 'busy' | 'http' | 'size' | 'incomplete' | 'checksum' | 'no-match';
 
 export class ModelError extends Error {
   override readonly name = 'ModelError';

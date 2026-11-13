@@ -60,6 +60,7 @@ const api: IpcApi = {
   pauseModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.pauseModel, id) as Promise<void>,
   deleteModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.deleteModel, id) as Promise<void>,
   activateModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.activateModel, id) as Promise<void>,
+  useExistingModel: () => ipcRenderer.invoke(INVOKE_CHANNELS.useExistingModel) as Promise<string | null>,
   getLanguagePack: () => ipcRenderer.invoke(INVOKE_CHANNELS.getLanguagePack) as Promise<LanguagePackView>,
   downloadLanguagePack: () => ipcRenderer.invoke(INVOKE_CHANNELS.downloadLanguagePack) as Promise<void>,
   getMicrophones: () => ipcRenderer.invoke(INVOKE_CHANNELS.getMicrophones) as Promise<AudioDevice[]>,

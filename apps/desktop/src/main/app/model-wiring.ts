@@ -1,5 +1,5 @@
-import { app } from 'electron';
-import { totalmem } from 'node:os';
+import { app, BrowserWindow, dialog, type OpenDialogOptions } from 'electron';
+import { homedir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import type { LocalEngineArch } from '../engines/local-backend';
 import { LocalEngine } from '../engines/local-engine';
@@ -8,6 +8,7 @@ import type { Logger } from '../logging/logger';
 import { resolveModelCatalog } from '../models/catalog-path';
 import { catalogView } from '../models/catalog-view';
 import { createDiarizer, type Diarizer } from '../models/diarizer';
+import { existingLocations } from '../models/existing-models';
 import { createLanguagePack, languagePackMemory, type LanguagePack } from '../models/language-pack';
 import { loadCatalog, type CatalogPlatform } from '../models/model-catalog';
 import { ModelManager } from '../models/model-manager';
@@ -42,6 +43,19 @@ function checkModels(manager: ModelManager, warmUp: WarmUp, logger: Logger): Pro
   );
 }
 
+export async function pickModelFile(): Promise<string | null> {
+  const options: OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [
+      { name: 'GGUF', extensions: ['gguf'] },
+      { name: 'Všetky súbory', extensions: ['*'] },
+    ],
+  };
+  const parent = BrowserWindow.getFocusedWindow();
+  const { canceled, filePaths } = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+  return canceled ? null : (filePaths[0] ?? null);
+}
+
 export function createModels(settings: SettingsStore, logger: Logger): Models {
   const location = { isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: desktopAppRoot() };
   const arch = localArch(process.arch);
@@ -49,12 +63,14 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
   const warmUp: WarmUp = (modelPath) => engine.warmUp(modelPath);
   const catalog = loadCatalog(resolveModelCatalog(location));
   const dir = join(app.getPath('userData'), MODELS_DIR);
+  const existing = existingLocations(process.env, homedir(), process.platform);
   const manager = new ModelManager({
     dir,
     catalog: catalog.models,
     settings,
     warmUp,
     logger,
+    existing,
   });
   const conditioned = catalog.conditionedModel();
   const languagePack = createLanguagePack({
@@ -66,6 +82,7 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
     totalMemory: totalmem,
     settings,
     logger,
+    existing,
   });
   const engine = new LocalEngine({ binary, acceleratorBinary: resolveWorkerBinary({ ...location, arch, variant: 'vulkan' }), models: manager, languagePack, settings, arch });
   return {
@@ -73,7 +90,7 @@ export function createModels(settings: SettingsStore, logger: Logger): Models {
     engine,
     dispose: () => engine.dispose(),
     catalog: catalogView(catalog, catalogPlatform(arch)),
-    diarizer: createDiarizer({ dir, entry: catalog.diarizer, settings, logger }),
+    diarizer: createDiarizer({ dir, entry: catalog.diarizer, settings, logger, existing }),
     languagePack,
     checkInBackground: () => {
       checkModels(manager, warmUp, logger).catch((error: unknown) => {

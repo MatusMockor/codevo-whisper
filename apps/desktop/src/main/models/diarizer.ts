@@ -3,6 +3,7 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { DiarizerView, ModelState } from '../../shared/models';
 import type { CatalogEntry } from './catalog-entry';
 import { modelInfo } from './catalog-view';
+import type { ExistingLocations } from './existing-models';
 import { modelFiles, scanModelState } from './model-files';
 import { ModelManager } from './model-manager';
 
@@ -15,10 +16,10 @@ export type Diarizer = {
   onChange(listener: (view: DiarizerView) => void): () => void;
 };
 
-export type DiarizerDeps = { dir: string; entry: CatalogEntry; settings: Pick<SettingsStore, 'get' | 'update'>; logger: Logger; fetchImpl?: typeof fetch };
+export type DiarizerDeps = { dir: string; entry: CatalogEntry; settings: Pick<SettingsStore, 'get' | 'update'>; logger: Logger; fetchImpl?: typeof fetch; existing?: ExistingLocations };
 
-export function createDiarizer({ dir, entry, settings, logger, fetchImpl }: DiarizerDeps): Diarizer {
-  const manager = new ModelManager({ dir, catalog: [entry], settings, warmUp: () => Promise.resolve(), logger, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
+export function createDiarizer({ dir, entry, settings, logger, fetchImpl, existing }: DiarizerDeps): Diarizer {
+  const manager = new ModelManager({ dir, catalog: [entry], settings, warmUp: () => Promise.resolve(), logger, ...(fetchImpl === undefined ? {} : { fetchImpl }), ...(existing === undefined ? {} : { existing }) });
   const files = modelFiles(dir, entry);
   const model = modelInfo(entry);
   const view = (states: readonly ModelState[]): DiarizerView => ({ model, state: states[0] ?? scanModelState(entry, files) });
