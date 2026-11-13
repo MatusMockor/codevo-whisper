@@ -62,6 +62,7 @@ export class SessionCoordinator {
     cancel: () => this.discardShown(),
   };
   private readonly sessions = new Set<DictationSession>();
+  private readonly cancellable = new Set<DictationSession>();
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
   private recording: DictationSession | null = null;
@@ -83,7 +84,7 @@ export class SessionCoordinator {
       capture.onLimitReached(() => this.handleLimit()),
       bindPasteLastShortcut(helper, this, this.logger),
       helper.onSessionShortcut((action) => {
-        if (this.sessions.size > 0) this.act(action);
+        if (this.cancellable.size > 0) this.act(action);
       }),
     ];
   }
@@ -118,7 +119,7 @@ export class SessionCoordinator {
     if (this.shutdownTask !== null) return this.shutdownTask;
     this.stopped = true;
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
-    if (this.sessions.size > 0) this.armShortcuts(false);
+    if (this.cancellable.size > 0) this.armShortcuts(false);
     const closing = [...this.sessions].map((session) => session.cancel());
     this.recording = null;
     this.presenter.dispose();
@@ -219,8 +220,9 @@ export class SessionCoordinator {
     if (this.stopped) return;
     const session = new DictationSession(this.sessionDeps());
     this.recording = session;
-    if (this.sessions.size === 0) this.armShortcuts(true);
     this.sessions.add(session);
+    this.cancellable.add(session);
+    if (this.cancellable.size === 1) this.armShortcuts(true);
     this.presenter.claim(session);
     session.begin();
   }
@@ -238,20 +240,19 @@ export class SessionCoordinator {
       })
       .finally(() => {
         this.sessions.delete(session);
-        if (this.sessions.size === 0 && !this.stopped) this.armShortcuts(false);
       });
   }
 
   private discardShown(): void {
-    const session = this.recording ?? [...this.sessions].at(-1);
+    const session = this.recording ?? [...this.cancellable].at(-1);
     if (session === undefined) return;
-    if (session === this.recording) {
-      this.deps.hotkey.cancel();
-      return;
-    }
-    session.discard().catch((error: unknown) => {
-      this.logger.error('The dictation session could not be discarded', error);
-    });
+    if (session === this.recording) this.deps.hotkey.cancel();
+    session.discard();
+    this.sessions.delete(session);
+  }
+
+  private uncancellable(session: DictationSession): void {
+    if (this.cancellable.delete(session) && this.cancellable.size === 0 && !this.stopped) this.armShortcuts(false);
   }
 
   private armShortcuts(armed: boolean): void {
@@ -309,6 +310,7 @@ export class SessionCoordinator {
       settings: this.deps.settings,
       overlay: this.sessionOverlay(),
       abandon: (session) => this.handleAbandon(session),
+      uncancellable: (session) => this.uncancellable(session),
       transcribed: (text, pcm) => {
         this.recordStats(text, pcm);
         this.deps.history.record(text).catch(() => {

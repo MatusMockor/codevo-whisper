@@ -36,6 +36,12 @@ type OutputSettings = Pick<Settings, 'insertion' | 'clipboardPolicy' | 'autoSubm
 
 type CopyOutcome = 'copied-no-text-field' | 'copied-by-setting' | 'copied-unverified-target' | 'copied-posting-unavailable' | 'copied-unsupported-output';
 
+export type DeliveryGate = { readonly signal: AbortSignal; cross(): boolean };
+
+class DeliveryCancelled extends Error {}
+
+const OPEN_GATE: DeliveryGate = Object.freeze({ signal: new AbortController().signal, cross: () => true });
+
 const RESTORE_DELAY_MS = 500;
 
 const delay: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,8 +57,16 @@ export class InsertionService {
     private readonly logger: Logger = consoleLogger,
   ) {}
 
-  insert(text: string, target: AppTarget | null, options?: TextSpacing): Promise<InsertionOutcome> {
-    return this.queue.run(() => this.insertInto(sanitizeInsertionText(text, options), target));
+  async insert(text: string, target: AppTarget | null, options?: TextSpacing, gate: DeliveryGate = OPEN_GATE): Promise<InsertionOutcome | 'cancelled'> {
+    let crossed = false;
+    const tracked: DeliveryGate = { signal: gate.signal, cross: () => (crossed = gate.cross()) };
+    try {
+      const outcome = await this.queue.run(() => this.insertInto(sanitizeInsertionText(text, options), target, tracked));
+      return gate.signal.aborted && !crossed ? 'cancelled' : outcome;
+    } catch (error) {
+      if (error instanceof DeliveryCancelled) return 'cancelled';
+      throw error;
+    }
   }
 
   pasteLast(): Promise<PasteLastOutcome> {
@@ -63,23 +77,23 @@ export class InsertionService {
     return this.queue.run(() => this.copyLastTranscript());
   }
 
-  private async insertInto(text: string, target: AppTarget | null): Promise<InsertionOutcome> {
+  private async insertInto(text: string, target: AppTarget | null, gate: DeliveryGate): Promise<InsertionOutcome> {
     const output = this.settings.get();
     if (text === '') {
       return 'nothing-to-insert';
     }
     if (output.insertion === 'clipboard') {
-      return this.copy(text, 'copied-by-setting');
+      return this.copy(text, 'copied-by-setting', gate);
     }
-    if (!(await waitForShortcutRelease(this.helper, this.sleep))) {
+    if (!(await waitForShortcutRelease(this.helper, this.sleep, gate.signal))) {
       return 'blocked-modifiers-held';
     }
-    const checked = await this.checkedDelivery(text, target, output, 'automatic');
+    const checked = await this.checkedDelivery(text, target, output, 'automatic', gate);
     if (checked !== null) return checked;
     if (!isSameTarget(target, await this.helper.frontmost())) {
       return 'blocked-focus-changed';
     }
-    return this.deliver(text, target, output);
+    return this.deliver(text, target, output, gate);
   }
 
   private async pasteLastTranscript(): Promise<PasteLastOutcome> {
@@ -89,18 +103,18 @@ export class InsertionService {
       return 'no-transcript';
     }
     if (output.insertion === 'clipboard') {
-      return this.copy(text, 'copied-by-setting');
+      return this.copy(text, 'copied-by-setting', OPEN_GATE);
     }
     if (!(await waitForShortcutRelease(this.helper, this.sleep))) {
       return 'blocked-modifiers-held';
     }
-    const checked = await this.checkedDelivery(text, null, output, 'replay');
+    const checked = await this.checkedDelivery(text, null, output, 'replay', OPEN_GATE);
     if (checked !== null) return checked;
     const target = output.autoSubmit === 'off' ? null : await this.helper.frontmost();
-    return this.deliver(text, target, output);
+    return this.deliver(text, target, output, OPEN_GATE);
   }
 
-  private async checkedDelivery(text: string, expected: AppTarget | null, output: OutputSettings, intent: 'automatic' | 'replay'): Promise<InsertionOutcome | null> {
+  private async checkedDelivery(text: string, expected: AppTarget | null, output: OutputSettings, intent: 'automatic' | 'replay', gate: DeliveryGate): Promise<InsertionOutcome | null> {
     const decision = await this.helper.checkDelivery({ expected, intent, shortcut: output.linuxPasteShortcut });
     switch (decision.kind) {
       case 'legacy': return null;
@@ -108,10 +122,10 @@ export class InsertionService {
         const outcomes = { 'focus-changed': 'blocked-focus-changed', 'protected-input': 'blocked-secure-input', 'modifiers-held': 'blocked-modifiers-held' } as const;
         return outcomes[decision.reason];
       }
-      case 'copy': return this.copy(text, output.insertion === 'type' ? 'copied-unsupported-output' : `copied-${decision.reason}`);
+      case 'copy': return this.copy(text, output.insertion === 'type' ? 'copied-unsupported-output' : `copied-${decision.reason}`, gate);
       case 'allowed': {
-        if (output.insertion === 'type') return this.copy(text, 'copied-unsupported-output');
-        const outcome = await this.paste(text, output);
+        if (output.insertion === 'type') return this.copy(text, 'copied-unsupported-output', gate);
+        const outcome = await this.paste(text, output, gate);
         return outcome === 'pasted' ? this.submitAfterDelivery(outcome, decision.target, output) : outcome;
       }
     }
@@ -128,15 +142,16 @@ export class InsertionService {
     return 'copied';
   }
 
-  private async deliver(text: string, target: AppTarget | null, output: OutputSettings): Promise<InsertionOutcome> {
+  private async deliver(text: string, target: AppTarget | null, output: OutputSettings, gate: DeliveryGate): Promise<InsertionOutcome> {
     if (await this.helper.secureInput()) {
       return 'blocked-secure-input';
     }
     const element = await this.helper.focusedElement();
     if (element.editable === false) {
-      return this.copy(text, 'copied-no-text-field');
+      return this.copy(text, 'copied-no-text-field', gate);
     }
     if (output.insertion === 'type') {
+      this.cross(gate);
       if (output.clipboardPolicy === 'leave' && !(await this.writeClipboard(text))) {
         return 'failed-clipboard-write';
       }
@@ -148,18 +163,24 @@ export class InsertionService {
         return output.clipboardPolicy === 'leave' ? 'copied-type-failed' : 'failed-type';
       }
     }
-    const outcome = await this.paste(text, output);
+    const outcome = await this.paste(text, output, gate);
     return outcome === 'pasted' ? this.submitAfterDelivery(outcome, target, output) : outcome;
   }
 
-  private async copy(text: string, outcome: CopyOutcome): Promise<InsertionOutcome> {
+  private cross(gate: DeliveryGate): void {
+    if (!gate.cross()) throw new DeliveryCancelled();
+  }
+
+  private async copy(text: string, outcome: CopyOutcome, gate: DeliveryGate): Promise<InsertionOutcome> {
+    this.cross(gate);
     if (!(await this.writeClipboard(text))) {
       return 'failed-clipboard-write';
     }
     return outcome;
   }
 
-  private async paste(text: string, output: OutputSettings): Promise<InsertionOutcome> {
+  private async paste(text: string, output: OutputSettings, gate: DeliveryGate): Promise<InsertionOutcome> {
+    this.cross(gate);
     if (!(await writeClipboardOrRestore(this.helper, text, this.logger, { kind: 'paste', policy: output.clipboardPolicy }))) {
       return 'failed-clipboard-write';
     }

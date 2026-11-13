@@ -13,7 +13,7 @@ export type OverlayError = { kind: 'error'; message: string; action?: OverlayAct
 export type OverlayState =
   | { kind: 'hidden' }
   | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; fallbackDevice?: string; live?: LiveText }
-  | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText }
+  | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText; delivering?: true }
   | { kind: 'inserted'; appName: string; notice?: string }
   | { kind: 'copied'; notice?: string }
   | { kind: 'blocked'; reason: BlockedReason }
@@ -41,7 +41,7 @@ export function offeredActions(state: OverlayState): readonly OverlayAction[] {
   if (state.kind === 'blocked') {
     return ['copy-last'];
   }
-  if (state.kind === 'recording' || state.kind === 'processing') {
+  if (state.kind === 'recording' || (state.kind === 'processing' && state.delivering !== true)) {
     return ['cancel'];
   }
   if (state.kind !== 'error' || state.action === undefined) {
