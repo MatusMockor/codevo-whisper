@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,7 +6,7 @@ import { startServer } from '../../../server/src/app';
 import { ROUTING_STT, startFakeSttServer, type FakeSttRequest, type FakeSttResponse } from '../../../server/test/support/fake-stt-server';
 import { freePort } from './free-port';
 
-type GatewayOptions = { serverVersion?: string; languageModels?: boolean };
+type GatewayOptions = { serverVersion?: string; languageModels?: boolean; failWhileFile?: string };
 
 function transcript(request: FakeSttRequest): FakeSttResponse {
   if (request.languages === undefined) {
@@ -14,12 +15,13 @@ function transcript(request: FakeSttRequest): FakeSttResponse {
   return { status: 200, body: { text: `prepis v jazykoch ${request.languages.join(' ')}`, language: request.languages[0] ?? null, route: 'conditioned' } };
 }
 
+const options = JSON.parse(process.argv[2] ?? '{}') as GatewayOptions;
+
 function respond(_pcm: Uint8Array, _language: string, request: FakeSttRequest): FakeSttResponse {
   process.stdout.write(`${JSON.stringify(request)}\n`);
+  if (options.failWhileFile !== undefined && existsSync(options.failWhileFile)) return { status: 500, body: {} };
   return transcript(request);
 }
-
-const options = JSON.parse(process.argv[2] ?? '{}') as GatewayOptions;
 const dataDir = await mkdtemp(join(tmpdir(), 'cw-e2e-gw-'));
 const stt = await startFakeSttServer({ respond, ...(options.languageModels === true ? { capabilities: ROUTING_STT } : {}) });
 const port = await freePort();
