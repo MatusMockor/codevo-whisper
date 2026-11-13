@@ -87,6 +87,14 @@ test.describe('settings api', () => {
     expect(await page.evaluate(() => window.codevo.getSettings())).toEqual({ ...DEFAULTS, mode: 'toggle', languages: { mode: 'selected', selected: ['en', 'sk'] } });
   });
 
+  test('loads a stored single microphone from an older version as a one-item list', async () => {
+    await app.close();
+    await writeFile(join(userDataDir, 'settings.json'), JSON.stringify({ microphone: { deviceId: 'dock-id', label: 'Dock Mic' } }));
+    await start();
+
+    expect((await page.evaluate(() => window.codevo.getSettings())).microphones).toEqual([{ deviceId: 'dock-id', label: 'Dock Mic' }]);
+  });
+
   test('rejects an invalid patch and keeps the settings', async () => {
     const outcome = await page.evaluate(async () => {
       const patch = JSON.parse('{"engineOrder":["server","server"]}') as Partial<Settings>;
