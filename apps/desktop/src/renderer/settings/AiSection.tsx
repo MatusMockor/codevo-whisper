@@ -1,9 +1,10 @@
 import { useEffect, useId, useState } from 'react';
 import { isAiBaseUrl, isAiKey, isCodexModel, isLocalAddress, type AiCheck, type AiFailure, type AiKeyState, type AiProvider, type CodexCheck, type CodexEffort } from '../../shared/ai';
-import type { Settings } from '../../shared/settings';
+import { MAX_AI_INSTRUCTIONS, type Settings } from '../../shared/settings';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { Switch } from '../components/Switch';
 import { SettingsBlock, SettingsGroup, SettingsLead, SettingsRow } from './SettingsGroup';
+import { SearchHighlight } from './settings-search';
 import { saveSettings } from './use-settings';
 
 type CheckState<T> = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done'; result: T };
@@ -38,6 +39,8 @@ const CODEX_FAILURES: Readonly<Partial<Record<AiFailure, string>>> = {
   'too-large': 'Odpoveď Codex CLI je príliš veľká.',
   'bad-response': 'Codex CLI nevrátil žiadnu odpoveď.',
 };
+
+const SENT_WITH_TRANSCRIPT = 'Spolu s prepisom pošle vaše vlastné slová, vlastné pokyny a najviac 1 024 znakov textu okolo kurzora, ak sa dá prečítať. Polia s heslom sa nečítajú.';
 
 function checkMessage(result: AiCheck): string {
   if (!result.ok) return FAILURES[result.error];
@@ -181,7 +184,53 @@ function ApiKeyField({ state, onChange }: { state: AiKeyState | null; onChange: 
   );
 }
 
-export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'aiPolish' | 'codexModel' | 'codexEffort'> }) {
+function InstructionsField({ instructions }: { instructions: string }) {
+  const id = useId();
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function save(): void {
+    setSaving(true);
+    saveSettings({ aiInstructions: (draft ?? instructions).trim() }, (saved) => {
+      setSaving(false);
+      if (saved) setDraft(null);
+      setError(saved ? null : 'Pokyny sa nepodarilo uložiť. Skúste to znova.');
+    });
+  }
+
+  return (
+    <SettingsBlock id="ai-instructions" className="srow">
+      <div className="t">
+        <label htmlFor={id}>
+          <SearchHighlight text="Vlastné pokyny" />
+        </label>
+        <span id={`${id}-hint`}>Pridajú sa za vstavané pokyny pre AI úpravu diktátu, napríklad: Píš vykanie s veľkým V. Najviac 1 000 znakov.</span>
+      </div>
+      <div className="words-ctl">
+        <textarea
+          id={id}
+          rows={4}
+          maxLength={MAX_AI_INSTRUCTIONS}
+          value={draft ?? instructions}
+          disabled={saving}
+          aria-describedby={`${id}-hint${error === null ? '' : ` ${id}-error`}`}
+          aria-invalid={error !== null}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setError(null);
+          }}
+        />
+        {error !== null && <p id={`${id}-error`} className="field-note warn" role="alert">{error}</p>}
+        <button type="button" className="btn" disabled={saving || draft === null} onClick={save}>
+          {saving ? 'Ukladá sa…' : 'Uložiť pokyny'}
+        </button>
+      </div>
+    </SettingsBlock>
+  );
+}
+
+export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'aiPolish' | 'aiInstructions' | 'codexModel' | 'codexEffort'> }) {
   const urlId = useId();
   const modelId = useId();
   const [url, setUrl] = useState<string | null>(null);
@@ -298,8 +347,8 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' 
         title="Upraviť diktát cez AI"
         description={
           codex
-            ? 'Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak Codex CLI neodpovie do 8 sekúnd, vloží sa pôvodný prepis.'
-            : 'Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam.'
+            ? `Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak Codex CLI neodpovie do 8 sekúnd, vloží sa pôvodný prepis. ${SENT_WITH_TRANSCRIPT}`
+            : `Odstráni zaváhania, opraví interpunkciu a zachová jazyk. Ak server neodpovie do 8 sekúnd, vloží sa pôvodný prepis. Pre slovenčinu a češtinu použite model so 7B a viac parametrami, menšie modely menia význam. ${SENT_WITH_TRANSCRIPT}`
         }
       >
         <Switch
@@ -319,6 +368,7 @@ export function AiSection({ settings }: { settings: Pick<Settings, 'aiProvider' 
           }}
         />
       </SettingsRow>
+      <InstructionsField instructions={settings.aiInstructions} />
     </SettingsGroup>
   );
 }

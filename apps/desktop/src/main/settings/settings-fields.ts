@@ -5,7 +5,7 @@ import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords } from '../../shared/custom-words';
 import { REBINDABLE_ACTIONS, REBINDABLE_KEYS, SESSION_MODIFIERS, type SessionBinding } from '../../shared/session-shortcuts';
 import { shortcutsConflict } from '../session/session-shortcuts';
-import { isEngineOrder, type MicrophoneSetting, type Settings } from '../../shared/settings';
+import { isEngineOrder, MAX_AI_INSTRUCTIONS, type MicrophoneSetting, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 
@@ -119,6 +119,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   aiBaseUrl: (value: unknown): value is string | null => value === null || isAiBaseUrl(value),
   aiModel: isAiModel,
   aiPolish: isBoolean,
+  aiInstructions: (value: unknown): value is string => typeof value === 'string' && value.length <= MAX_AI_INSTRUCTIONS,
   aiProvider: oneOf(['server', 'codex']),
   codexModel: isCodexModel,
   codexEffort: oneOf(CODEX_EFFORTS),

@@ -21,6 +21,8 @@ export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted'
 
 export type TargetCapture = { captureId: string; target: AppTarget; iconPath: string | null };
 
+export type FieldContext = { before: string; after: string };
+
 export type RefocusResult = 'in-place' | 'moved' | 'failed';
 
 export type DeliveryRequest = { expected: AppTarget | null; intent: 'automatic' | 'replay'; shortcut: LinuxPasteShortcut; captureId?: string };
@@ -52,6 +54,7 @@ export interface InputHelper {
   refocusTarget(captureId: string): Promise<RefocusResult>;
   returnFocus(captureId: string): Promise<boolean>;
   releaseTarget(captureId: string): Promise<void>;
+  targetContext(captureId: string): Promise<FieldContext | null>;
   secureInput(): Promise<boolean>;
   focusedElement(): Promise<FocusedElement>;
   modifierFlags(): Promise<ModifierFlags>;

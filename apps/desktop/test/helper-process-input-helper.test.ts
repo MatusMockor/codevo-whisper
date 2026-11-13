@@ -360,6 +360,29 @@ describe('HelperProcessInputHelper', () => {
     ]);
   });
 
+  it('reads a bounded excerpt around the cursor of a captured target', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'target-context', response: { readable: true, before: 'Ahoj Peter, ', after: ' S pozdravom' } });
+    expect(await helper.targetContext('cap-1')).toEqual({ before: 'Ahoj Peter, ', after: ' S pozdravom' });
+    await channel.request('respond-next', { cmd: 'target-context', response: { readable: true, before: `${'a'.repeat(10)}${'ž'.repeat(511)}😀`, after: `😀${'ž'.repeat(511)}${'b'.repeat(10)}` } });
+    expect(await helper.targetContext('cap-2')).toEqual({ before: `${'ž'.repeat(511)}😀`, after: `😀${'ž'.repeat(511)}` });
+    await channel.request('respond-next', { cmd: 'target-context', response: { readable: true, before: '', after: 'po kurzore' } });
+    expect(await helper.targetContext('cap-3')).toEqual({ before: '', after: 'po kurzore' });
+    for (const response of [{ readable: false, reason: 'secure-field' }, { readable: true, before: '', after: '' }]) {
+      await channel.request('respond-next', { cmd: 'target-context', response });
+      expect(await helper.targetContext('cap-4')).toBeNull();
+    }
+    for (const response of [{ before: 'a', after: 'b' }, { readable: 'true', before: 'a', after: 'b' }, { readable: true, before: 1, after: 'b' }, { readable: true, before: 'a' }]) {
+      await channel.request('respond-next', { cmd: 'target-context', response });
+      await expect(helper.targetContext('cap-5')).rejects.toThrow('target-context-invalid');
+    }
+    const requested = (await channel.request('requests-state', { cmd: 'target-context' }))['requests'] as Array<{ args: unknown }>;
+    expect(requested.slice(0, 2)).toEqual([
+      { cmd: 'target-context', args: { captureId: 'cap-1' } },
+      { cmd: 'target-context', args: { captureId: 'cap-2' } },
+    ]);
+  });
+
   it('asks the macOS helper to verify a locked delivery and fails closed on anything but legacy', async () => {
     const { channel, helper } = await started();
     expect(await helper.checkDelivery({ expected: null, intent: 'automatic', shortcut: 'ctrl-v' })).toEqual({ kind: 'legacy' });

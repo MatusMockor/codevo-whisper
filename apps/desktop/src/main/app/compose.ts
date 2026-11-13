@@ -219,7 +219,7 @@ export function composeApplication(logger: Logger): Application {
       openServer: () => sectionFocus.reveal('server'),
       openModelSettings: () => sectionFocus.reveal('local-model'),
       enableServer: () => server.service.setEnabled(true),
-      polish: (text, signal) => aiServices.polish(text, signal),
+      polish: (request, signal) => aiServices.polish(request, signal),
       failedRecording,
       appIcon: (path) => app.getFileIcon(path, { size: 'normal' }).then((icon) => icon.toDataURL(), () => null),
       logger,

@@ -94,6 +94,8 @@ describe('settings catalog', () => {
     expect(rows('úroveň uvažovania', 'server')).toEqual(['ai-provider']);
     expect(rows('overit', 'codex')).toEqual(['ai-provider', 'ai-connection']);
     expect(rows('interpunkcia', 'codex')).toEqual(['ai-polish']);
+    expect(rows('vlastné pokyny', 'server')).toEqual(['ai-instructions']);
+    expect(rows('vykanie', 'codex')).toEqual(['ai-instructions']);
   });
 
   it('knows the group of every setting', () => {

@@ -25,6 +25,7 @@ export type SettingId =
   | 'ai-provider'
   | 'ai-connection'
   | 'ai-polish'
+  | 'ai-instructions'
   | 'history-enabled'
   | 'history-limit'
   | 'launch-at-login'
@@ -97,6 +98,7 @@ const GROUPS: readonly GroupDefinition[] = [
         providerKeywords: { server: 'adresa servera url api kľúč ollama lm studio', codex: 'codex úroveň uvažovania' },
       },
       { id: 'ai-polish', title: 'Upraviť diktát cez AI', keywords: 'ai úprava interpunkcia zaváhania' },
+      { id: 'ai-instructions', title: 'Vlastné pokyny', keywords: 'ai pokyny prompt štýl vykanie tykanie oslovenie preferencie' },
     ],
   },
   {

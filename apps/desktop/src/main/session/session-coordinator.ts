@@ -1,4 +1,4 @@
-import type { Polished } from '../ai/polish';
+import type { Polished, PolishRequest } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineRouting } from '../engines/engine-routing';
 import type { EngineSelector } from '../engines/engine-selector';
@@ -42,7 +42,7 @@ export type SessionCoordinatorDeps = {
   openServer?: () => void;
   openModelSettings?: () => void;
   enableServer?: () => Promise<void>;
-  polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
+  polish?: (request: PolishRequest, signal: AbortSignal) => Promise<Polished>;
   failedRecording?: FailedRecording;
   appIcon?: (path: string) => Promise<string | null>;
   clock?: () => number;
@@ -367,7 +367,7 @@ export class SessionCoordinator {
         });
       },
       failed: (pcm) => this.keepFailed(start, pcm),
-      polish: this.deps.polish ?? ((text) => Promise.resolve({ text, failure: null })),
+      polish: this.deps.polish ?? (({ text }) => Promise.resolve({ text, failure: null })),
       ...(this.deps.appIcon === undefined ? {} : { appIcon: this.deps.appIcon }),
       captureLane: this.captureLane,
       pipeline: this.pipeline,

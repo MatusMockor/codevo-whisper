@@ -61,6 +61,14 @@ describe('validateSettingsPatch', () => {
       expect(() => validateSettingsPatch(invalid)).toThrow(IpcValidationError);
     }
   });
+  it('accepts custom AI instructions up to 1000 characters', () => {
+    for (const aiInstructions of ['', 'Píš vykanie s veľkým V.', 'ž'.repeat(1000)]) {
+      expect(validateSettingsPatch({ aiInstructions })).toEqual({ aiInstructions });
+    }
+    for (const aiInstructions of ['ž'.repeat(1001), null, 7]) {
+      expect(() => validateSettingsPatch({ aiInstructions })).toThrow(IpcValidationError);
+    }
+  });
   it.each(['hold', 'toggle', 'smart'])('accepts %s dictation mode at the IPC boundary', (mode) => {
     expect(validateSettingsPatch({ mode })).toEqual({ mode });
   });

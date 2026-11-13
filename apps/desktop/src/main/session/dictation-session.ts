@@ -1,11 +1,11 @@
 import { canPolish, isAiConfigured } from '../../shared/ai';
 import { preferredSpellings } from '../../shared/custom-words';
-import type { Polished } from '../ai/polish';
+import type { Polished, PolishRequest } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
 import type { DictationOptions, EngineDictation, EngineUnavailableReason, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
 import { EngineUnavailableError, TranscriptionFailedError } from '../engines/transcription-engine';
-import type { AppTarget, InputHelper, TargetCapture } from '../helper/input-helper';
+import type { AppTarget, FieldContext, InputHelper, TargetCapture } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
 import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
@@ -38,7 +38,7 @@ export type DictationSessionDeps = {
   capabilities(): Promise<EngineConditions>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
-  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio' | 'captureTarget' | 'releaseTarget'>;
+  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio' | 'captureTarget' | 'releaseTarget' | 'targetContext'>;
   appIcon?: (path: string) => Promise<string | null>;
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
@@ -46,7 +46,7 @@ export type DictationSessionDeps = {
   uncancellable(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
   failed(pcm: Uint8Array): boolean;
-  polish(text: string, signal: AbortSignal): Promise<Polished>;
+  polish(request: PolishRequest, signal: AbortSignal): Promise<Polished>;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
   clock: () => number;
@@ -113,6 +113,7 @@ export class DictationSession {
   private flashed: TerminalState | null = null;
   private shownTarget: ShownTarget | null = null;
   private capture: Promise<TargetCapture | null> = Promise.resolve(null);
+  private fieldContext: Promise<FieldContext | null> | null = null;
   private delivery: Promise<unknown> = Promise.resolve();
   private released: Promise<void> | null = null;
 
@@ -532,8 +533,18 @@ export class DictationSession {
   private async polished(rawText: string, signal: AbortSignal): Promise<Polished> {
     const processed = processFinalTranscript({ text: rawText, settings: { ...this.transcriptSettings, appendTrailingSpace: false } });
     if (processed === '') return { text: '', failure: null };
-    const { text, failure } = await this.deps.polish(processed, signal);
+    const context = await this.readFieldContext();
+    const { text, failure } = await this.deps.polish({ text: processed, words: preferredSpellings(this.transcriptSettings.customWords), context }, signal);
     return { text: sanitizeInsertionText(text, this.transcriptSettings), failure };
+  }
+
+  private readFieldContext(): Promise<FieldContext | null> {
+    return this.fieldContext ??= this.capture
+      .then((capture) => capture && this.deps.helper.targetContext(capture.captureId))
+      .catch((error: unknown) => {
+        this.deps.logger.error('The text around the cursor could not be read', error);
+        return null;
+      });
   }
 
   private finalize(text: string): string {

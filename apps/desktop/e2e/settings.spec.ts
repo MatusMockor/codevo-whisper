@@ -39,6 +39,7 @@ const DEFAULTS: Settings = {
   aiBaseUrl: null,
   aiModel: '',
   aiPolish: false,
+  aiInstructions: '',
   aiProvider: 'server',
   codexModel: 'gpt-6-luna',
   codexEffort: 'low',

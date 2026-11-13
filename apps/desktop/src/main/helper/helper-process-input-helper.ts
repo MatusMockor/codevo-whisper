@@ -18,9 +18,10 @@ import {
   parseRefocus,
   parseShortcut,
   parseTargetCapture,
+  parseTargetContext,
   requireBoolean,
 } from './helper-responses';
-import { LockedTargetLostError, type AppTarget, type ClipboardPurpose, type DeliveryDecision, type DeliveryRequest, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
+import { LockedTargetLostError, type AppTarget, type ClipboardPurpose, type DeliveryDecision, type DeliveryRequest, type FieldContext, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
 import { Listeners } from './listeners';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import { SESSION_KEYCODES, type SessionShortcut } from '../session/session-shortcuts';
@@ -179,6 +180,10 @@ export class HelperProcessInputHelper implements InputHelper {
 
   async releaseTarget(captureId: string): Promise<void> {
     requireBoolean(await this.channel.request('target-release', { captureId }), 'released', 'target-release-invalid');
+  }
+
+  async targetContext(captureId: string): Promise<FieldContext | null> {
+    return parseTargetContext(await this.channel.request('target-context', { captureId }, FOCUSED_ELEMENT_TIMEOUT_MS));
   }
 
   async secureInput(): Promise<boolean> {
