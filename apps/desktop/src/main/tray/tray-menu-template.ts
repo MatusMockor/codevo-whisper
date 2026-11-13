@@ -14,6 +14,7 @@ export type TrayMenuModel = {
   readyUpdate: string | null;
   installingUpdate: boolean;
   updateCheckable: boolean;
+  retryable: boolean;
 };
 
 export type TrayMenuActions = {
@@ -28,6 +29,7 @@ export type TrayMenuActions = {
   quit(): void;
   installUpdate(): void;
   checkForUpdates(): void;
+  retry(): void;
 };
 
 const EXCERPT_LENGTH = 48;
@@ -113,6 +115,7 @@ export function trayMenuTemplate(model: TrayMenuModel, actions: TrayMenuActions)
   return [
     { label: model.status, enabled: false },
     ...updateItems(model, actions),
+    { label: 'Skúsiť znova', enabled: model.retryable, click: () => actions.retry() },
     SEPARATOR,
     ...lastTranscriptItems(model, actions),
     SEPARATOR,

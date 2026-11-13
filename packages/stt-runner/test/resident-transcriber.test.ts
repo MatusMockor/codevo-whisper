@@ -80,6 +80,54 @@ describe('ResidentTranscriber', () => {
     await expect(worker.transcribe({ pcm: pcm(9), language: 'sk' })).rejects.toMatchObject({ reason: 'exit' });
     expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
   });
+  it.each(['crash', 'hang'])('replays a request once on CPU after the accelerated worker %s after READY', async (mode) => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_PRIMARY', mode);
+    const worker = create({ backend: 'metal', timeoutMs: 300, runtimeFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    const first = await worker.transcribe({ pcm: pcm(3), language: 'sk' });
+    const second = await worker.transcribe({ pcm: pcm(4), language: 'sk' });
+    expect(first).toMatch(/:sk:3$/);
+    expect(second).toMatch(/:sk:4$/);
+    expect(pidOf(second)).toBe(pidOf(first));
+    const args = (await readFile(argsFile, 'utf8')).trim().split('\n');
+    expect(args).toHaveLength(2);
+    expect(args[0]).toContain('--backend metal');
+    expect(args[1]).toContain('--backend cpu');
+  });
+  it('rejects when the CPU replay fails too and does not fall back again', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_CRASH_SAMPLES', '9');
+    const worker = create({ backend: 'auto', startupFallback: { binary: FAKE_WORKER, backend: 'cpu' }, runtimeFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(9), language: 'sk' })).rejects.toMatchObject({ reason: 'exit' });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).resolves.toMatch(/:sk:3$/);
+    const args = (await readFile(argsFile, 'utf8')).trim().split('\n');
+    expect(args.map((line) => line.includes('--backend cpu'))).toEqual([false, true, true]);
+  });
+  it('does not replay an error reply on CPU', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_PRIMARY', 'error');
+    const worker = create({ backend: 'auto', runtimeFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await expect(worker.transcribe({ pcm: pcm(3), language: 'sk' })).rejects.toThrow('inference failed');
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+  it('does not replay an aborted call on CPU', async () => {
+    const argsFile = join(scratch, 'args.txt');
+    vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);
+    vi.stubEnv('FAKE_WORKER_PRIMARY', 'hang');
+    const worker = create({ backend: 'auto', runtimeFallback: { binary: FAKE_WORKER, backend: 'cpu' } });
+    await worker.warmUp();
+    const controller = new AbortController();
+    const call = worker.transcribe({ pcm: pcm(5), language: 'sk', signal: controller.signal });
+    const rejected = expect(call).rejects.toBeInstanceOf(DOMException);
+    controller.abort();
+    await rejected;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await worker.close();
+    expect((await readFile(argsFile, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
   it('reports CPU startup failure after exactly two failed attempts', async () => {
     const argsFile = join(scratch, 'args.txt');
     vi.stubEnv('FAKE_WORKER_ARGS_FILE', argsFile);

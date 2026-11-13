@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { failureState, MESSAGES, readinessError } from '../src/main/session/overlay-messages';
+import { failureState, MESSAGES, readinessError, withRetry } from '../src/main/session/overlay-messages';
 import { ACTION_LABELS, BLOCKED_BUTTONS, BLOCKED_COPY, copiedLabel, errorButtons, errorDetail, fallbackNotice, PARTIAL_TEXT_DETAIL, REROUTED_DETAIL, REROUTED_TITLES } from '../src/renderer/overlay/overlay-copy';
 import type { EngineConditions } from '../src/shared/engine-routing';
 
@@ -21,6 +21,17 @@ describe('overlay copy', () => {
       { action: 'use-server', label: 'Prepisovať na serveri', primary: true },
       { action: 'download-model', label: 'Stiahnuť model', primary: false },
     ]);
+  });
+
+  it('offers retry in the first free slot of a failure card', () => {
+    expect(errorButtons(withRetry(failureState('engine-failed', false)))).toEqual([{ action: 'retry', label: 'Skúsiť znova', primary: true }]);
+    expect(errorButtons(withRetry(failureState('connection-lost', true)))).toEqual([
+      { action: 'copy-last', label: 'Kopírovať doterajší text', primary: true },
+      { action: 'retry', label: 'Skúsiť znova', primary: false },
+    ]);
+    expect(errorDetail(withRetry(failureState('connection-lost', true)))).toBe(PARTIAL_TEXT_DETAIL);
+    const full = readinessError('no-model', PAIRED_ONLINE);
+    expect(withRetry(full)).toEqual(full);
   });
 
   it('reassures that the text so far is kept only when a failure offers copying it', () => {

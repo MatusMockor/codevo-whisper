@@ -23,6 +23,7 @@ export const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.fre
   'download-model': 'Stiahnuť model',
   'use-server': 'Prepisovať na serveri',
   'use-local': 'Prepisovať lokálne',
+  retry: 'Skúsiť znova',
 });
 
 export const REROUTED_TITLES: Readonly<Record<EngineId, string>> = Object.freeze({

@@ -28,6 +28,7 @@ import { installDisplayMediaHandler } from '../security/display-media';
 import { installPermissionHandlers } from '../security/permissions';
 import { PauseState } from '../session/pause-state';
 import { SessionCoordinator } from '../session/session-coordinator';
+import { FailedRecording } from '../session/failed-recording';
 import { SettingsStore } from '../settings/settings-store';
 import { AppReveal } from '../system/app-reveal';
 import { homeRelativePath } from '../system/home-relative-path';
@@ -199,6 +200,7 @@ export function composeApplication(logger: Logger): Application {
     const overlay = new OverlayWindow(rendererSource('overlay'), logger);
     const views = new Listeners<OverlayState>(logger, 'An overlay view failed');
     views.add((state) => overlay.show(state));
+    const failedRecording = new FailedRecording();
     const coordinator = new SessionCoordinator({
       hotkey,
       capture,
@@ -218,12 +220,14 @@ export function composeApplication(logger: Logger): Application {
       openModelSettings: () => sectionFocus.reveal('local-model'),
       enableServer: () => server.service.setEnabled(true),
       polish: (text, signal) => aiServices.polish(text, signal),
+      failedRecording,
       logger,
     });
     sessions = coordinator;
     const tray = new TrayMenu({
       platform: process.platform,
       coordinator,
+      failedRecording,
       capture,
       settings,
       lastTranscript,

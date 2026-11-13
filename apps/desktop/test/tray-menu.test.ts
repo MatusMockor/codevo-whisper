@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
+import { FailedRecording } from '../src/main/session/failed-recording';
 
 type FakeMenu = { template: MenuItemConstructorOptions[] };
 
@@ -35,6 +36,7 @@ function trayDeps(settings: ConstructorParameters<typeof TrayMenu>[0]['settings'
   return {
     platform: 'linux',
     coordinator: { pasteLast: () => Promise.resolve(), copyLast: () => Promise.resolve(), pause: () => undefined, resume: () => undefined, isPaused: () => false } as never,
+    failedRecording: new FailedRecording(),
     capture: { listDevices: () => Promise.resolve([]) },
     settings,
     lastTranscript: { get: () => null, onChange: () => () => undefined },
@@ -48,6 +50,8 @@ function trayDeps(settings: ConstructorParameters<typeof TrayMenu>[0]['settings'
 }
 
 function linuxTray(overrides: Partial<Settings> = {}) {
+  const failedRecording = new FailedRecording();
+  const acted: string[] = [];
   let settings: Settings = { ...DEFAULT_SETTINGS, hotkey: { label: 'Pravý Ctrl' } as Settings['hotkey'], ...overrides };
   const settingsListeners: Array<(next: Settings, previous: Settings) => void> = [];
   let paused = false;
@@ -59,7 +63,9 @@ function linuxTray(overrides: Partial<Settings> = {}) {
       pause: () => (paused = true),
       resume: () => (paused = false),
       isPaused: () => paused,
+      act: (action: string) => acted.push(action),
     } as never,
+    failedRecording,
     capture: { listDevices: () => Promise.resolve([{ deviceId: 'usb', label: 'Shure MV7', isBluetooth: false, isDefault: false }]) },
     settings: {
       get: () => settings,
@@ -83,7 +89,7 @@ function linuxTray(overrides: Partial<Settings> = {}) {
     logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
   });
   tray.create();
-  return { tray, current: () => settings };
+  return { tray, current: () => settings, failedRecording, acted };
 }
 
 function attachedMenu(): MenuItemConstructorOptions[] {
@@ -121,6 +127,20 @@ describe('TrayMenu on Linux', () => {
     submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
     await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Automaticky'));
     expect(current().languages).toEqual({ mode: 'auto', selected: ['sk'] });
+  });
+
+  it('enables Skúsiť znova while a failed recording is held and retries it', () => {
+    const { failedRecording, acted } = linuxTray();
+    const retry = () => attachedMenu().find((item) => item.label === 'Skúsiť znova');
+    expect(retry()?.enabled).toBe(false);
+
+    failedRecording.keep(new Uint8Array(4));
+    expect(retry()?.enabled).toBe(true);
+    retry()?.click?.(undefined as never, undefined, undefined as never);
+    expect(acted).toEqual(['retry']);
+
+    failedRecording.drop();
+    expect(retry()?.enabled).toBe(false);
   });
 
   it('moves a microphone picked in the tray to the top of the list and clears the list for the system default', async () => {

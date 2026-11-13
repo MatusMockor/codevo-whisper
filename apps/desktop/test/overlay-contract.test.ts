@@ -6,6 +6,7 @@ describe('overlay contract', () => {
     expect(offeredActions({ kind: 'error', message: 'Lokálny model chýba', action: 'use-server', alternative: 'download-model' })).toEqual(['use-server', 'download-model']);
     expect(offeredActions({ kind: 'error', message: 'Server nie je dostupný', action: 'use-local' })).toEqual(['use-local']);
     expect(offeredActions({ kind: 'error', message: 'Prepis sa nepodaril' })).toEqual([]);
+    expect(offeredActions({ kind: 'error', message: 'Prepis sa nepodaril', action: 'retry' })).toEqual(['retry']);
     expect(offeredActions({ kind: 'blocked', reason: 'focus' })).toEqual(['copy-last']);
     expect(offeredActions({ kind: 'rerouted', engine: 'server' })).toEqual([]);
     expect(offeredActions({ kind: 'hidden' })).toEqual([]);
@@ -20,6 +21,7 @@ describe('overlay contract', () => {
   it('accepts only known action names', () => {
     expect(isOverlayAction('use-server')).toBe(true);
     expect(isOverlayAction('download-model')).toBe(true);
+    expect(isOverlayAction('retry')).toBe(true);
     expect(isOverlayAction('delete-model')).toBe(false);
     expect(isOverlayAction({ action: 'use-server' })).toBe(false);
   });

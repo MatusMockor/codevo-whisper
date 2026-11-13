@@ -16,6 +16,7 @@ const MODEL: TrayMenuModel = {
   readyUpdate: null,
   installingUpdate: false,
   updateCheckable: true,
+  retryable: false,
 };
 
 function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
@@ -32,6 +33,7 @@ function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
     quit: () => calls.push('quit'),
     installUpdate: () => calls.push('install-update'),
     checkForUpdates: () => calls.push('check-for-updates'),
+    retry: () => calls.push('retry'),
   };
   return { actions, calls };
 }
@@ -63,6 +65,7 @@ describe('trayMenuTemplate', () => {
 
     expect(labels(trayMenuTemplate(MODEL, actions))).toEqual([
       'Pripravené · Pravý ⌃ Control',
+      'Skúsiť znova',
       '---',
       'Posledné diktovanie',
       'Kopírovať posledné diktovanie',
@@ -87,11 +90,21 @@ describe('trayMenuTemplate', () => {
 
     expect(item(empty, 'Kopírovať posledné diktovanie').enabled).toBe(false);
     expect(item(empty, 'Vložiť posledný prepis').enabled).toBe(false);
-    expect(labels(filled)[3]).toBe('Ahoj Peter, pozrel som si ten pull request a vy…');
+    expect(labels(filled)[4]).toBe('Ahoj Peter, pozrel som si ten pull request a vy…');
     expect(item(filled, 'Vložiť posledný prepis')).toMatchObject({ enabled: true, accelerator: 'Control+Command+V', registerAccelerator: false });
     click(item(filled, 'Kopírovať posledné diktovanie'));
     click(item(filled, 'Vložiť posledný prepis'));
     expect(calls).toEqual(['copy-last', 'paste-last']);
+  });
+
+  it('enables Skúsiť znova only while a failed recording is held', () => {
+    const { actions, calls } = recordingActions();
+
+    expect(item(trayMenuTemplate(MODEL, actions), 'Skúsiť znova').enabled).toBe(false);
+    const held = item(trayMenuTemplate({ ...MODEL, retryable: true }, actions), 'Skúsiť znova');
+    expect(held.enabled).toBe(true);
+    click(held);
+    expect(calls).toEqual(['retry']);
   });
 
   it('offers Pokračovať while paused', () => {
@@ -177,7 +190,7 @@ describe('trayMenuTemplate with a downloaded update', () => {
     const { actions, calls } = recordingActions();
     const items = trayMenuTemplate({ ...MODEL, readyUpdate: '1.2.0' }, actions);
 
-    expect(labels(items).slice(0, 4)).toEqual(['Pripravené · Pravý ⌃ Control', 'Reštartovať a aktualizovať na verziu 1.2.0', '---', 'Posledné diktovanie']);
+    expect(labels(items).slice(0, 5)).toEqual(['Pripravené · Pravý ⌃ Control', 'Reštartovať a aktualizovať na verziu 1.2.0', 'Skúsiť znova', '---', 'Posledné diktovanie']);
     click(item(items, 'Reštartovať a aktualizovať na verziu 1.2.0'));
     expect(calls).toEqual(['install-update']);
   });

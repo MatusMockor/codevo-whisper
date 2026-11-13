@@ -14,8 +14,11 @@ export type ResidentWorkerOptions = {
   startupTimeoutMs?: number;
   abortGraceMs?: number;
   backoff?: BackoffOptions;
-  startupFallback?: { binary: string; backend: 'cpu' };
+  startupFallback?: CpuFallback;
+  runtimeFallback?: CpuFallback;
 };
+
+type CpuFallback = { binary: string; backend: 'cpu' };
 
 type Outcome<Result> = { resolve: (result: Result) => void; reject: (error: Error) => void };
 
@@ -49,7 +52,7 @@ export class ResidentWorker<Request, Result> {
   private readonly timeoutMs: number;
   private readonly startupTimeoutMs: number;
   private readonly abortGraceMs: number;
-  private fallbackSelected = false;
+  private fallback: CpuFallback | undefined;
 
   constructor(
     private readonly options: ResidentWorkerOptions,
@@ -121,7 +124,10 @@ export class ResidentWorker<Request, Result> {
     if (worker === undefined || isAborted(signal)) {
       return;
     }
-    await this.infer(worker, frame, request, signal, outcome);
+    if (await this.infer(worker, frame, request, signal, outcome)) {
+      this.fallback = this.options.runtimeFallback;
+      await this.serve(request, signal, outcome);
+    }
   }
 
   private encode(request: Request, outcome: Outcome<Result>): Uint8Array | undefined {
@@ -159,8 +165,8 @@ export class ResidentWorker<Request, Result> {
     } catch (error) {
       worker.kill();
       await worker.terminated;
-      if (this.closed || isAborted(signal) || this.fallbackSelected || this.options.startupFallback === undefined) throw error;
-      this.fallbackSelected = true;
+      if (this.closed || isAborted(signal) || this.fallback !== undefined || this.options.startupFallback === undefined) throw error;
+      this.fallback = this.options.startupFallback;
       worker = this.spawn();
       this.worker = worker;
       await this.awaitReady(worker, signal);
@@ -204,13 +210,14 @@ export class ResidentWorker<Request, Result> {
     });
   }
 
-  private infer(worker: WorkerProcess, frame: Uint8Array, request: Request, signal: AbortSignal | undefined, outcome: Outcome<Result>): Promise<void> {
-    return new Promise<void>((release) => {
+  private infer(worker: WorkerProcess, frame: Uint8Array, request: Request, signal: AbortSignal | undefined, outcome: Outcome<Result>): Promise<boolean> {
+    return new Promise<boolean>((release) => {
       const timers: NodeJS.Timeout[] = [];
+      let replay = false;
       const finish = (): void => {
         timers.forEach((timer) => clearTimeout(timer));
         signal?.removeEventListener('abort', onAbort);
-        release();
+        release(replay);
       };
       const abandon = (): void => {
         this.backoff.recordFailure();
@@ -222,7 +229,8 @@ export class ResidentWorker<Request, Result> {
       };
       timers.push(
         setTimeout(() => {
-          outcome.reject(new TranscribeCliError('timeout', `transcribe worker timed out after ${this.timeoutMs} ms`));
+          replay = this.replaysOnCpu(signal);
+          if (!replay) outcome.reject(new TranscribeCliError('timeout', `transcribe worker timed out after ${this.timeoutMs} ms`));
           abandon();
         }, this.timeoutMs),
       );
@@ -234,12 +242,18 @@ export class ResidentWorker<Request, Result> {
           finish();
         },
         (error: unknown) => {
-          outcome.reject(asError(error));
+          if (replay) return;
           this.noteExit(worker);
+          replay = worker.crashed && this.replaysOnCpu(signal);
+          if (!replay) outcome.reject(asError(error));
           finish();
         },
       );
     });
+  }
+
+  private replaysOnCpu(signal: AbortSignal | undefined): boolean {
+    return !this.closed && !isAborted(signal) && this.fallback === undefined && this.options.runtimeFallback !== undefined;
   }
 
   private noteExit(worker: WorkerProcess): void {
@@ -259,7 +273,7 @@ export class ResidentWorker<Request, Result> {
 
   private spawn(): WorkerProcess {
     const { model, threads } = this.options;
-    const { binary, backend } = this.fallbackSelected && this.options.startupFallback !== undefined ? this.options.startupFallback : this.options;
+    const { binary, backend } = this.fallback ?? this.options;
     this.state = this.state === 'ready' ? 'ready' : 'starting';
     return new WorkerProcess({ binary, args: ['--model', model, '--backend', backend, '--threads', String(threads)], maxTextBytes: this.codec.maxReplyBytes });
   }

@@ -20,6 +20,7 @@ import type { ServerService } from '../src/main/remote/server-service';
 import { PauseState } from '../src/main/session/pause-state';
 import { MESSAGES } from '../src/main/session/overlay-messages';
 import { SessionCoordinator } from '../src/main/session/session-coordinator';
+import { FailedRecording } from '../src/main/session/failed-recording';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
@@ -107,6 +108,7 @@ async function prepared(setup: Setup = {}) {
   const pause = new PauseState(logger);
   const server = createServerService({ dir: scratch, settings, models, logger });
   servers.push(server.service);
+  const failedRecording = new FailedRecording();
   coordinator = new SessionCoordinator({
     hotkey,
     capture,
@@ -125,10 +127,11 @@ async function prepared(setup: Setup = {}) {
     openServer: () => settingsOpened.push('server'),
     openModelSettings: () => settingsOpened.push('local-model'),
     ...(setup.polish === undefined ? {} : { polish: setup.polish }),
+    failedRecording,
     logger,
   });
   coordinator.start();
-  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir, stats, history, pause };
+  return { settings, helper, power, hotkey, capture, lastTranscript, states, settingsOpened, logger, coordinator, modelsDir, stats, history, pause, failedRecording };
 }
 
 async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
@@ -893,7 +896,7 @@ describe('SessionCoordinator', () => {
     await setWorkerMode('fail');
     await dictate(harness, 3);
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril', action: 'retry' });
     expect(harness.helper.pasted).toEqual([]);
     expect(harness.lastTranscript.get()).toBeNull();
   });
@@ -907,13 +910,13 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Nezachytila sa žiadna reč' });
     await setWorkerMode('fail');
     await dictate(harness, 3);
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril', action: 'retry' });
     expect(await harness.stats.days()).toEqual([]);
     expect(await harness.history.view()).toMatchObject({ entries: [] });
 
     await setWorkerMode('echo-chunk');
     await dictate(harness, 7);
-    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.helper.pasted, { timeout: 5000 }).toEqual([ONE_SECOND_TEXT(7)]);
     const today = localDate(new Date());
     await expect.poll(() => harness.stats.days()).toEqual([{ date: today, words: 1, dictations: 1, seconds: 1 }]);
 
@@ -1671,6 +1674,153 @@ describe('SessionCoordinator', () => {
 
     await expect.poll(() => harness.helper.pasted).toEqual([expectedText(samples)]);
     expect(harness.states.some((state) => 'live' in state)).toBe(false);
+  });
+  describe('failed recording retry', () => {
+    const FAILED = { kind: 'error', message: MESSAGES.transcriptionFailed, action: 'retry' } as const;
+
+    async function failOnce(harness: Harness, marker: number): Promise<Uint8Array> {
+      await setWorkerMode('fail');
+      await dictate(harness, marker);
+      await expect.poll(() => lastVisible(harness.states), { timeout: 5000 }).toEqual(FAILED);
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      const held = harness.failedRecording.get();
+      expect(held).not.toBeNull();
+      return held as Uint8Array;
+    }
+
+    it('keeps a failed recording and inserts it on retry like a normal dictation', async () => {
+      const harness = await prepared();
+      await failOnce(harness, 3);
+      expect(harness.helper.pasted).toEqual([]);
+      expect(offeredActions(FAILED)).toEqual(['retry']);
+
+      await setWorkerMode('echo-chunk');
+      harness.coordinator.act('retry');
+      harness.coordinator.act('retry');
+
+      await expect.poll(() => harness.helper.pasted, { timeout: 5000 }).toEqual([ONE_SECOND_TEXT(3)]);
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      expect(harness.helper.pasted).toEqual([ONE_SECOND_TEXT(3)]);
+      expect(harness.capture.starts).toHaveLength(1);
+      expect(harness.failedRecording.get()).toBeNull();
+      expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(3));
+      expect(lastVisible(harness.states)).toMatchObject({ kind: 'inserted' });
+      await expect.poll(() => harness.history.view()).toMatchObject({ entries: [{ text: ONE_SECOND_TEXT(3) }] });
+      await expect.poll(() => harness.stats.days()).toEqual([{ date: localDate(new Date()), words: 1, dictations: 1, seconds: 1 }]);
+    });
+
+    it('keeps the recording after a failed retry and drops it when a new recording starts', async () => {
+      const harness = await prepared();
+      const held = await failOnce(harness, 3);
+      const failures = harness.states.filter((state) => state.kind === 'error').length;
+
+      harness.coordinator.act('retry');
+
+      await expect.poll(() => harness.states.filter((state) => state.kind === 'error').length, { timeout: 5000 }).toBe(failures + 1);
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      expect(lastVisible(harness.states)).toEqual(FAILED);
+      expect(harness.failedRecording.get()).toBe(held);
+
+      harness.helper.emitHotkey('down');
+      expect(harness.failedRecording.get()).toBeNull();
+      harness.coordinator.act('retry');
+      await expect.poll(() => harness.capture.recording).toBe(true);
+      harness.helper.emitHotkey('up');
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      expect(harness.helper.pasted).toEqual([]);
+    });
+
+    it.each(['escape', 'overlay button'] as const)('cancels a retry on %s and keeps the recording', async (via) => {
+      const harness = await prepared();
+      const held = await failOnce(harness, 3);
+      await setWorkerMode('hang');
+
+      harness.coordinator.act('retry');
+      await expect.poll(() => harness.states.at(-1)).toEqual({ kind: 'processing' });
+      expect(offeredActions({ kind: 'processing' })).toEqual(['cancel']);
+      cancelVia(harness, via);
+
+      await expect.poll(() => harness.coordinator.isBusy(), { timeout: 3000 }).toBe(false);
+      expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+      expect(harness.helper.sessionShortcuts).toEqual([]);
+      expect(harness.helper.pasted).toEqual([]);
+      expect(harness.failedRecording.get()).toBe(held);
+    });
+
+    it('shows the not-ready state when no engine is ready at retry and keeps the recording', async () => {
+      const harness = await prepared();
+      const held = await failOnce(harness, 3);
+      await setWorkerMode('echo-chunk');
+      await harness.settings.update({ localModelId: null });
+
+      harness.coordinator.act('retry');
+
+      await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Lokálny model chýba', action: 'download-model', alternative: 'pair-server' });
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      expect(harness.helper.pasted).toEqual([]);
+      expect(harness.failedRecording.get()).toBe(held);
+    });
+
+    it('holds nothing when a retry started before the ten-minute cap fails after it', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const harness = await prepared();
+        await failOnce(harness, 3);
+        await setWorkerMode('hang');
+        harness.coordinator.act('retry');
+        await expect.poll(() => harness.states.at(-1)).toEqual({ kind: 'processing' });
+        await setWorkerMode('fail');
+
+        vi.advanceTimersByTime(10 * 60_000);
+        expect(harness.failedRecording.get()).toBeNull();
+
+        await expect.poll(() => lastVisible(harness.states), { timeout: 5000 }).toEqual({ kind: 'error', message: MESSAGES.transcriptionFailed });
+        await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+        expect(harness.failedRecording.get()).toBeNull();
+        harness.coordinator.act('retry');
+        expect(harness.coordinator.isBusy()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    }, 20_000);
+
+    it('drops the recording when the app shuts down', async () => {
+      const harness = await prepared();
+      await failOnce(harness, 3);
+
+      await harness.coordinator.shutdown();
+
+      expect(harness.failedRecording.get()).toBeNull();
+    });
+
+    it('keeps nothing after a cancelled dictation', async () => {
+      const harness = await prepared();
+      await pressAndSpeak(harness, 3);
+
+      cancelVia(harness, 'escape');
+
+      await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+      expect(harness.failedRecording.get()).toBeNull();
+      harness.coordinator.act('retry');
+      expect(harness.coordinator.isBusy()).toBe(false);
+    });
+
+    it.each([['darwin', 'metal'], ['linux', 'auto']] as const)('retries a GPU worker crash once on CPU during a dictation on %s', async (platform, backend) => {
+      const starts = join(scratch, 'starts.jsonl');
+      vi.stubEnv('CW_WORKER_STARTS', starts);
+      await setWorkerMode('fail-accelerated');
+      const harness = await prepared({ platform });
+
+      await dictate(harness, 5);
+
+      await expect.poll(() => harness.helper.pasted, { timeout: 5000 }).toEqual([expect.stringMatching(/:auto:16000$/)]);
+      expect(harness.failedRecording.get()).toBeNull();
+      const backends = (await readFile(starts, 'utf8')).trim().split('\n').map((line) => {
+        const { args } = JSON.parse(line) as { args: string[] };
+        return args[args.indexOf('--backend') + 1];
+      });
+      expect(backends).toEqual([backend, 'cpu']);
+    });
   });
 });
 
