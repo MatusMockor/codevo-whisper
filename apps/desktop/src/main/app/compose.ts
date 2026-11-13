@@ -221,6 +221,7 @@ export function composeApplication(logger: Logger): Application {
       enableServer: () => server.service.setEnabled(true),
       polish: (text, signal) => aiServices.polish(text, signal),
       failedRecording,
+      appIcon: (path) => app.getFileIcon(path, { size: 'normal' }).then((icon) => icon.toDataURL(), () => null),
       logger,
     });
     sessions = coordinator;

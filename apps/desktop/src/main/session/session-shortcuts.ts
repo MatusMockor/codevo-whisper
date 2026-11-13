@@ -8,7 +8,12 @@ export type SessionKey = RebindableKey | 'escape';
 export type SessionShortcut = { action: OverlayAction; key: SessionKey; modifiers: readonly SessionModifier[] };
 type Platform = NodeJS.Platform;
 
-const FIXED_SESSION_SHORTCUTS: readonly SessionShortcut[] = Object.freeze([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+const FIXED_SESSION_SHORTCUTS: readonly SessionShortcut[] = Object.freeze([
+  { action: 'cancel', key: 'escape', modifiers: [] },
+  { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
+]);
+
+const YIELDS_TO_HOTKEY: ReadonlySet<OverlayAction> = new Set(['lock-target']);
 
 export const SESSION_KEYCODES: Readonly<Record<SessionKey, { darwin: number; linux: number }>> = Object.freeze({
   escape: { darwin: 53, linux: 1 },
@@ -79,13 +84,14 @@ export type ShortcutSlot = 'hotkey' | RebindableAction;
 
 export function shortcutsConflict(settings: Pick<Settings, 'hotkey' | 'sessionShortcuts'>, changed: ReadonlySet<ShortcutSlot>, platform: Platform = process.platform): boolean {
   const hotkey = hotkeyTrigger(settings.hotkey, platform);
-  const slots: Array<{ slot: ShortcutSlot | null; trigger: Trigger }> = [
+  const slots: Array<{ slot: ShortcutSlot | null; trigger: Trigger; yieldsToHotkey?: boolean }> = [
     ...(hotkey === null ? [] : [{ slot: 'hotkey' as const, trigger: hotkey }]),
-    ...FIXED_SESSION_SHORTCUTS.map((row) => ({ slot: null, trigger: shortcutTrigger(row) })),
+    ...FIXED_SESSION_SHORTCUTS.map((row) => ({ slot: null, trigger: shortcutTrigger(row), yieldsToHotkey: YIELDS_TO_HOTKEY.has(row.action) })),
     ...REBINDABLE_ACTIONS.map((action) => ({ slot: action, trigger: shortcutTrigger(settings.sessionShortcuts[action]) })),
   ];
   const touched = (slot: ShortcutSlot | null) => slot !== null && changed.has(slot);
-  return slots.some((a, index) => slots.slice(index + 1).some((b) => (touched(a.slot) || touched(b.slot)) && conflicts(a.trigger, b.trigger)));
+  const yields = (a: (typeof slots)[number], b: (typeof slots)[number]) => (a.slot === 'hotkey' && b.yieldsToHotkey === true) || (b.slot === 'hotkey' && a.yieldsToHotkey === true);
+  return slots.some((a, index) => slots.slice(index + 1).some((b) => (touched(a.slot) || touched(b.slot)) && !yields(a, b) && conflicts(a.trigger, b.trigger)));
 }
 
 export function recordedSessionBinding(recorded: NonNullable<HotkeySetting>, platform: Platform): SessionBinding | null {

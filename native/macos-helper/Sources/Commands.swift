@@ -27,6 +27,19 @@ final class Commands {
             return Permissions.request(args["kind"] as? String ?? "")
         case "frontmost":
             return Frontmost.describe()
+        case "target-capture":
+            return TargetLock.capture()
+        case "target-refocus":
+            return await TargetLock.refocus(args["captureId"] as? String ?? "")
+        case "target-return":
+            return await TargetLock.returnBack(args["captureId"] as? String ?? "")
+        case "target-release":
+            return TargetLock.release(args["captureId"] as? String ?? "")
+        case "check-delivery":
+            if outsideCapture(args, "kind") != nil {
+                return ["kind": "blocked", "reason": "focus-changed"]
+            }
+            return ["kind": "legacy"]
         case "secure-input":
             return SecureInput.describe()
         case "focused-element":
@@ -36,6 +49,9 @@ final class Commands {
         case "clipboard-save":
             return pasteboard.save()
         case "clipboard-write":
+            if let blocked = outsideCapture(args, "written") {
+                return blocked
+            }
             return pasteboard.write(text: args["text"] as? String ?? "")
         case "clipboard-restore":
             return pasteboard.restore(expectedText: args["expectedText"] as? String, force: args["force"] as? Bool ?? false)
@@ -43,10 +59,19 @@ final class Commands {
             guard let text = args["text"] as? String else {
                 return ["posted": false, "reason": "invalid-text"]
             }
+            if let blocked = outsideCapture(args, "posted") {
+                return blocked
+            }
             return Typing.typeText(text)
         case "submit":
+            if let blocked = outsideCapture(args, "posted") {
+                return blocked
+            }
             return Submit.send(args["mode"] as? String ?? "")
         case "paste":
+            if let blocked = outsideCapture(args, "posted") {
+                return blocked
+            }
             return Paste.commandV()
         case "listen-start":
             return KeyTap.shared.listen(args)
@@ -62,5 +87,12 @@ final class Commands {
         default:
             return ["error": "unknown-command", "command": name]
         }
+    }
+
+    private func outsideCapture(_ args: JSONObject, _ key: String) -> JSONObject? {
+        guard args.keys.contains("captureId") else {
+            return nil
+        }
+        return TargetLock.holdsFocus(args["captureId"] as? String ?? "") ? nil : [key: false, "reason": "focus-changed"]
     }
 }

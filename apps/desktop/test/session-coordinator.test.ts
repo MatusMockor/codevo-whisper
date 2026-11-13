@@ -25,7 +25,7 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
-import { offeredActions, type LiveText, type OverlayState } from '../src/shared/overlay-contract';
+import { offeredActions, type LiveText, type OverlayState, type OverlayTarget } from '../src/shared/overlay-contract';
 import type { Preparation } from '../src/main/engines/transcription-engine';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
@@ -46,7 +46,7 @@ const AI_SERVER: Partial<Settings> = { aiBaseUrl: 'http://127.0.0.1:11434/v1', a
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { languageHint?: 'required'; polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { languageHint?: 'required'; appIcon?: (path: string) => Promise<string | null>; polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -128,6 +128,8 @@ async function prepared(setup: Setup = {}) {
     openModelSettings: () => settingsOpened.push('local-model'),
     ...(setup.polish === undefined ? {} : { polish: setup.polish }),
     failedRecording,
+    ...(setup.appIcon === undefined ? {} : { appIcon: setup.appIcon }),
+    ...(setup.platform === undefined ? {} : { platform: setup.platform }),
     logger,
   });
   coordinator.start();
@@ -158,6 +160,220 @@ function kinds(states: OverlayState[]): string[] {
 function lastVisible(states: OverlayState[]): OverlayState | undefined {
   return states.filter((state) => state.kind !== 'hidden').at(-1);
 }
+
+function shownTarget(states: OverlayState[]): OverlayTarget | undefined {
+  const recording = states.filter((state) => state.kind === 'recording').at(-1);
+  return recording?.kind === 'recording' ? recording.target : undefined;
+}
+
+function lockVia(harness: Harness, via: 'shortcut' | 'overlay button'): void {
+  const lock = { shortcut: () => harness.helper.pressSessionShortcut('lock-target'), 'overlay button': () => harness.coordinator.act('lock-target') };
+  lock[via]();
+}
+
+describe('SessionCoordinator target lock', () => {
+  it('shows the target app with its icon while recording and leaves an unlocked dictation as before', async () => {
+    const icons: string[] = [];
+    const harness = await prepared({ appIcon: (path) => { icons.push(path); return Promise.resolve('data:image/png;base64,AAAA'); } });
+    harness.helper.iconPath = '/System/Applications/TextEdit.app';
+
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)).toEqual({ name: 'TextEdit', icon: 'data:image/png;base64,AAAA', lock: 'unlocked' });
+    const shown = harness.states.at(-1);
+    expect(shown && offeredActions(shown)).toEqual(['cycle-language', 'lock-target', 'cancel']);
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(icons).toEqual(['/System/Applications/TextEdit.app']);
+    expect(harness.helper.refocused).toEqual([]);
+    expect(harness.helper.returned).toEqual([]);
+  });
+
+  it.each([
+    ['rejects', () => Promise.reject(new Error('no icon'))],
+    ['finds none', () => Promise.resolve(null)],
+  ] as const)('shows the target without an icon when the icon lookup %s', async (_label, appIcon) => {
+    const harness = await prepared({ appIcon });
+    harness.helper.iconPath = '/System/Applications/TextEdit.app';
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)).toEqual({ name: 'TextEdit', lock: 'unlocked' });
+  });
+
+  it.each(['shortcut', 'overlay button'] as const)('locks the target via the %s and inserts there after the user moved away', async (via) => {
+    const harness = await prepared({ settings: { autoSubmit: 'enter' } });
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+
+    lockVia(harness, via);
+    expect(shownTarget(harness.states)?.lock).toBe('locked');
+    harness.helper.frontmostApp = NOTES;
+    harness.helper.refocusResult = 'moved';
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.helper.returned).toEqual(['capture-1']);
+    expect(harness.helper.refocused).toEqual(['capture-1']);
+    expect(harness.helper.submitted).toEqual([]);
+    expect(harness.helper.frontmostApp).toEqual(NOTES);
+  });
+
+  it('unlocks on a second toggle and ignores a toggle once recording stopped', async () => {
+    const harness = await prepared();
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+
+    lockVia(harness, 'overlay button');
+    lockVia(harness, 'shortcut');
+    expect(shownTarget(harness.states)?.lock).toBe('unlocked');
+    harness.helper.emitHotkey('up');
+    lockVia(harness, 'shortcut');
+    lockVia(harness, 'overlay button');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.helper.refocused).toEqual([]);
+  });
+
+  it('offers no lock when the captured field belongs to another app', async () => {
+    const harness = await prepared();
+    harness.helper.captureTarget = () => Promise.resolve({ captureId: 'capture-other', target: NOTES, iconPath: '/System/Applications/Notes.app' });
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)).toEqual({ name: 'TextEdit', lock: 'unavailable' });
+    const shown = harness.states.at(-1);
+    expect(shown && offeredActions(shown)).toEqual(['cycle-language', 'cancel']);
+
+    lockVia(harness, 'shortcut');
+    lockVia(harness, 'overlay button');
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.helper.refocused).toEqual([]);
+  });
+
+  it('still dictates when the target capture fails', async () => {
+    const harness = await prepared();
+    harness.helper.captureTarget = () => Promise.reject(new Error('capture crashed'));
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)).toEqual({ name: 'TextEdit', lock: 'unavailable' });
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.logger.errors.some((entry) => String(entry.error).includes('capture crashed'))).toBe(true);
+  });
+
+  it.each([
+    ['an unlocked insertion', async (harness: Harness) => { await dictate(harness, 7); }],
+    ['a locked insertion into a field the user left', async (harness: Harness) => {
+      await pressAndSpeak(harness, 7);
+      await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+      lockVia(harness, 'shortcut');
+      harness.helper.frontmostApp = NOTES;
+      harness.helper.refocusResult = 'moved';
+      harness.helper.emitHotkey('up');
+      await expect.poll(() => harness.helper.returned).toEqual(['capture-1']);
+    }],
+    ['a blocked locked insertion', async (harness: Harness) => {
+      await pressAndSpeak(harness, 7);
+      await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+      lockVia(harness, 'shortcut');
+      harness.helper.refocusResult = 'failed';
+      harness.helper.emitHotkey('up');
+      await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'blocked', reason: 'focus' });
+    }],
+    ['a cancelled recording', async (harness: Harness) => {
+      await pressAndSpeak(harness, 7);
+      cancelVia(harness, 'escape');
+    }],
+    ['an abandoned recording', async (harness: Harness) => {
+      await harness.settings.update({ localModelId: null });
+      harness.helper.emitHotkey('down');
+      await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: 'Lokálny model chýba' });
+    }],
+    ['a failed transcription', async (harness: Harness) => {
+      await setWorkerMode('fail');
+      await dictate(harness, 3);
+      await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: 'Prepis sa nepodaril', action: 'retry' });
+    }],
+    ['a shutdown', async (harness: Harness) => {
+      await pressAndSpeak(harness, 7);
+      await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+      await harness.coordinator.shutdown();
+    }],
+  ] as const)('releases the target capture once after %s', async (_case, run) => {
+    const harness = await prepared();
+    await run(harness);
+    await expect.poll(() => harness.helper.released).toEqual(['capture-1']);
+    await harness.coordinator.settled();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.helper.released).toEqual(['capture-1']);
+  });
+
+  it('releases a capture of another app while still recording', async () => {
+    const harness = await prepared();
+    harness.helper.captureTarget = () => Promise.resolve({ captureId: 'capture-other', target: NOTES, iconPath: null });
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => harness.helper.released).toEqual(['capture-other']);
+    expect(harness.capture.recording).toBe(true);
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.helper.released).toEqual(['capture-other']);
+  });
+
+  it('keeps the locked capture until its insertion has finished', async () => {
+    const pasteGate = Promise.withResolvers<void>();
+    const pasteEntered = Promise.withResolvers<void>();
+    class BlockedPasteHelper extends FakeInputHelper {
+      override async paste(captureId?: string): Promise<void> {
+        pasteEntered.resolve();
+        await pasteGate.promise;
+        await super.paste(captureId);
+      }
+    }
+    const harness = await prepared({ inputHelper: new BlockedPasteHelper({ clipboard: 'original' }) });
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+    lockVia(harness, 'shortcut');
+    harness.helper.emitHotkey('up');
+    await pasteEntered.promise;
+    await harness.coordinator.shutdown();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.helper.released).toEqual([]);
+    pasteGate.resolve();
+    await expect.poll(() => harness.helper.released).toEqual(['capture-1']);
+    expect(harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+  });
+
+  it('gives a recording started during a locked transcription its own capture and inserts the first with its own', async () => {
+    vi.stubEnv('FAKE_CLI_DELAY_S', '0.4');
+    const harness = await prepared();
+    await pressAndSpeak(harness, 7);
+    await expect.poll(() => shownTarget(harness.states)?.lock).toBe('unlocked');
+    lockVia(harness, 'shortcut');
+    harness.helper.frontmostApp = NOTES;
+    harness.helper.refocusResult = 'moved';
+    harness.helper.emitHotkey('up');
+    await expect.poll(() => readRecordedCalls(argsFile)).toHaveLength(1);
+    await pressAndSpeak(harness, 9);
+    await expect.poll(() => shownTarget(harness.states)).toEqual({ name: 'Notes', lock: 'unlocked' });
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7), ONE_SECOND_TEXT(9)]);
+    expect(harness.helper.refocused).toEqual(['capture-1']);
+    await expect.poll(() => [...harness.helper.released].sort()).toEqual(['capture-1', 'capture-2']);
+  });
+
+  it('leaves the target lock shortcut unarmed when the dictation hotkey is Ctrl+Shift+L', async () => {
+    const harness = await prepared({ platform: 'linux', settings: { hotkey: { kind: 'key', keycode: 0x20000 + 38, modifiers: ['control', 'shift'], label: 'Ctrl+Shift+L' } } });
+    await pressAndSpeak(harness, 7);
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+  });
+
+  it('shows no target when the frontmost app is unknown', async () => {
+    const harness = await prepared({ helper: { frontmost: null } });
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.states.filter((state) => state.kind === 'recording').every((state) => state.target === undefined)).toBe(true);
+  });
+});
 
 describe('SessionCoordinator', () => {
   it.each(['mode change', 'tray pause'] as const)('retains failed restoration after %s cancellation settles', async (action) => {
@@ -1054,6 +1270,7 @@ describe('SessionCoordinator', () => {
     await dictate(harness, 7);
     expect(harness.helper.sessionShortcuts).toEqual([
       { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
       { action: 'cycle-language', key: 'j', modifiers: ['control', 'alt'] },
     ]);
 
@@ -1068,6 +1285,7 @@ describe('SessionCoordinator', () => {
 
     expect(harness.helper.sessionShortcuts).toEqual([
       { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
       { action: 'toggle-polish', key: 'p', modifiers: ['meta'] },
       { action: 'cycle-language', key: 'f2', modifiers: ['shift'] },
     ]);
@@ -1078,11 +1296,11 @@ describe('SessionCoordinator', () => {
     const harness = await prepared({ settings: AI_SERVER });
     await dictate(harness, 7);
     await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
-    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'toggle-polish', 'cycle-language']);
 
     await harness.settings.update({ hotkey: { kind: 'key', keycode: 0x10000 + 30 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+A' } });
 
-    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'cycle-language']);
     await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7)]);
   });
 

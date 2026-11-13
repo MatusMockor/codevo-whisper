@@ -7,9 +7,10 @@ import { Chips, Controls, Notice, Recording, StatusPill } from './OverlayPanel';
 type OverlayProps = { state: OverlayState; levels: readonly number[]; controls: boolean; onAction: (action: OverlayAction) => void };
 
 function Content({ state, levels, controls, onAction }: OverlayProps) {
-  const controlBar = <Controls state={state} onAction={controls ? onAction : null} />;
+  const act = controls ? onAction : null;
+  const controlBar = <Controls state={state} onAction={act} />;
   if (state.kind === 'recording') {
-    return <Recording state={state} levels={levels} chips={<Chips state={state} onAction={controls ? onAction : null} />} controls={controlBar} />;
+    return <Recording state={state} levels={levels} chips={<Chips state={state} onAction={act} />} controls={controlBar} onAction={act} />;
   }
   if (state.kind === 'processing') {
     return (
@@ -20,7 +21,7 @@ function Content({ state, levels, controls, onAction }: OverlayProps) {
         <span className="ov-status">
           Spracúvam{state.notice === 'limit-reached' && <small>dosiahnutý limit 10 minút</small>}
         </span>
-        <Chips state={state} onAction={controls ? onAction : null} />
+        <Chips state={state} onAction={act} />
         {controlBar}
       </StatusPill>
     );

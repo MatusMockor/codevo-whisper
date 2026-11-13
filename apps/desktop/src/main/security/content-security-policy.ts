@@ -1,6 +1,6 @@
 import type { Session } from 'electron';
 
-export const CONTENT_SECURITY_POLICY = "default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
+export const CONTENT_SECURITY_POLICY = "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 export function installContentSecurityPolicy(session: Session): void {
   session.webRequest.onHeadersReceived((details, callback) => {

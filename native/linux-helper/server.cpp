@@ -44,14 +44,22 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="secure-input") { auto f=focused(frontmost());boolean(o,"enabled",!f.known || f.protectedInput); }
   else if(cmd=="modifier-flags") number(o,"flags",modifierFlags());
   else if(cmd=="check-delivery") { json_object_unref(o);return checkDelivery(args); }
+  else if(cmd=="target-capture") { json_object_unref(o);return targetCapture(); }
+  else if(cmd=="target-refocus") { json_object_unref(o);return targetRefocus(args); }
+  else if(cmd=="target-return") { json_object_unref(o);return targetReturn(args); }
+  else if(cmd=="target-release") boolean(o,"released",targetRelease(args));
   else if(cmd=="clipboard-save") { json_object_unref(o);return selectionSave(args); }
+  else if(cmd=="clipboard-write" && outsideCapture(args)) { boolean(o,"written",false);text(o,"reason","focus-changed"); }
   else if(cmd=="clipboard-write") {
     auto n=args ? json_object_get_member(args,"text"):nullptr;
     boolean(o,"written",n && json_node_get_value_type(n)==G_TYPE_STRING && selectionWrite(args));
   }
   else if(cmd=="clipboard-restore") boolean(o,"restored",selectionRestore(args));
-  else if(cmd=="paste" || cmd=="submit") boolean(o,"posted",post(args,cmd=="submit"));
-  else if(cmd=="type-text") { boolean(o,"posted",false);text(o,"reason","unsupported-output"); }
+  else if(cmd=="paste" || cmd=="submit") {
+    auto result=post(args,cmd=="submit");boolean(o,"posted",result==Post::Posted);
+    if(result==Post::FocusChanged)text(o,"reason","focus-changed");
+  }
+  else if(cmd=="type-text") { boolean(o,"posted",false);text(o,"reason",outsideCapture(args)?"focus-changed":"unsupported-output"); }
   else if(cmd=="listen-start") { json_object_unref(o);return listen(args); }
   else if(cmd=="session-shortcuts") { json_object_unref(o);return armSessionShortcuts(args); }
   else if(cmd=="listen-stop") { auto empty=object();text(empty,"kind","none");json_object_unref(o);o=listen(empty);json_object_unref(empty); }

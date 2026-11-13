@@ -18,6 +18,15 @@ describe('overlay contract', () => {
     expect(offeredActions({ kind: 'inserted', appName: 'Notes' })).toEqual([]);
   });
 
+  it('offers the target lock while recording only when the target can be locked', () => {
+    const recording = { kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'AUTO' } as const;
+    expect(offeredActions({ ...recording, target: { name: 'Notes', lock: 'unlocked' } })).toEqual(['cycle-language', 'lock-target', 'cancel']);
+    expect(offeredActions({ ...recording, target: { name: 'Notes', lock: 'locked' } })).toEqual(['cycle-language', 'lock-target', 'cancel']);
+    expect(offeredActions({ ...recording, target: { name: 'Notes', lock: 'unavailable' } })).toEqual(['cycle-language', 'cancel']);
+    expect(offeredActions({ kind: 'processing' })).toEqual(['cancel']);
+    expect(isOverlayAction('lock-target')).toBe(true);
+  });
+
   it('accepts only known action names', () => {
     expect(isOverlayAction('use-server')).toBe(true);
     expect(isOverlayAction('download-model')).toBe(true);

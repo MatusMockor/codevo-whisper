@@ -1,10 +1,12 @@
 import type { EngineId } from './settings';
 
-export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel', 'toggle-polish', 'cycle-language', 'retry'] as const;
+export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel', 'toggle-polish', 'cycle-language', 'retry', 'lock-target'] as const;
 
 export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 
 export type BlockedReason = 'focus' | 'secure';
+
+export type OverlayTarget = { name: string; icon?: string; lock: 'unlocked' | 'locked' | 'unavailable' };
 
 export type LiveText = { confirmed: string; tentative: string };
 
@@ -12,7 +14,7 @@ export type OverlayError = { kind: 'error'; message: string; action?: OverlayAct
 
 export type OverlayState =
   | { kind: 'hidden' }
-  | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; polish?: boolean; fallbackDevice?: string; live?: LiveText }
+  | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; polish?: boolean; fallbackDevice?: string; live?: LiveText; target?: OverlayTarget }
   | { kind: 'processing'; notice?: 'limit-reached'; polish?: boolean; live?: LiveText; delivering?: true }
   | { kind: 'inserted'; appName: string; notice?: string }
   | { kind: 'copied'; notice?: string }
@@ -43,7 +45,9 @@ export function offeredActions(state: OverlayState): readonly OverlayAction[] {
   }
   if (state.kind === 'recording' || (state.kind === 'processing' && state.delivering !== true)) {
     const polish: readonly OverlayAction[] = state.polish === undefined ? [] : ['toggle-polish'];
-    return state.kind === 'recording' ? [...polish, 'cycle-language', 'cancel'] : [...polish, 'cancel'];
+    if (state.kind === 'processing') return [...polish, 'cancel'];
+    const lock: readonly OverlayAction[] = state.target === undefined || state.target.lock === 'unavailable' ? [] : ['lock-target'];
+    return [...polish, 'cycle-language', ...lock, 'cancel'];
   }
   if (state.kind !== 'error' || state.action === undefined) {
     return [];

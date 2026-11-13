@@ -3,6 +3,7 @@
 #include <X11/Xatom.h>
 #include <X11/extensions/XTest.h>
 #include <X11/keysym.h>
+#include <dbus/dbus.h>
 #include <optional>
 #include <unistd.h>
 namespace cw {
@@ -12,6 +13,9 @@ static int64_t generation=0;
 static std::optional<Operation> operation;
 static AtspiEventListener* focusListener=nullptr;
 static AtspiAccessible* eventFocus=nullptr;
+static std::string awaitedFocus;
+static bool awaitedSeen=false;
+static int64_t lastFocusEvent=0;
 static GDBusConnection* systemBus=nullptr;
 static std::string sessionPath;
 static bool xtest=false;
@@ -74,9 +78,12 @@ void desktopInit() {
   if(atspi_init()==0) {
     atspi_set_timeout(200,200);
     focusListener=atspi_event_listener_new(+[](AtspiEvent* event,void*) {
-      invalidateDelivery();
+      invalidateDelivery();lastFocusEvent=g_get_monotonic_time();
       if(eventFocus) {g_object_unref(eventFocus);eventFocus=nullptr;}
-      if(event->source && event->detail1 && g_str_has_prefix(event->type,"object:state-changed:focused")) eventFocus=ATSPI_ACCESSIBLE(g_object_ref(event->source));
+      if(event->source && event->detail1 && g_str_has_prefix(event->type,"object:state-changed:focused")) {
+        eventFocus=ATSPI_ACCESSIBLE(g_object_ref(event->source));
+        if(!awaitedFocus.empty() && accessibleIdentity(eventFocus)==awaitedFocus)awaitedSeen=true;
+      }
     },nullptr,nullptr);
     atspi_event_listener_register(focusListener,"object:state-changed:focused",nullptr);
     atspi_event_listener_register(focusListener,"window:activate",nullptr);
@@ -121,20 +128,22 @@ static AtspiAccessible* findFocus(AtspiAccessible* node,int depth,int& budget,in
   }
   return nullptr;
 }
-Field focused(const Target& target) {
-  Field field;if(!target.pid || wayland || !focusListener)return field;
+static AtspiAccessible* ownedEventFocus() { return eventFocus?ATSPI_ACCESSIBLE(g_object_ref(eventFocus)):nullptr; }
+AtspiAccessible* focusedAccessible(const Target& target) {
+  if(!target.pid || wayland || !focusListener)return nullptr;
   AtspiAccessible* focus=nullptr;
   GError* error=nullptr;
-  if(eventFocus) {
-    atspi_accessible_clear_cache(eventFocus);
-    auto states=atspi_accessible_get_state_set(eventFocus);
+  if(auto candidate=ownedEventFocus()) {
+    atspi_accessible_clear_cache(candidate);
+    auto states=atspi_accessible_get_state_set(candidate);
     bool valid=states && atspi_state_set_contains(states,ATSPI_STATE_FOCUSED) && !atspi_state_set_contains(states,ATSPI_STATE_DEFUNCT);
     if(states)g_object_unref(states);
-    auto pid=atspi_accessible_get_process_id(eventFocus,&error);
-    if(valid && !error && pid==static_cast<guint>(target.pid))focus=ATSPI_ACCESSIBLE(g_object_ref(eventFocus));
+    auto pid=atspi_accessible_get_process_id(candidate,&error);
+    if(valid && !error && pid==static_cast<guint>(target.pid))focus=candidate;else g_object_unref(candidate);
     g_clear_error(&error);
   }
-  auto desktop=atspi_get_desktop(0);if(!desktop) {if(focus)g_object_unref(focus);return field;}
+  if(focus)return focus;
+  auto desktop=atspi_get_desktop(0);if(!desktop)return nullptr;
   int count=atspi_accessible_get_child_count(desktop,&error);g_clear_error(&error);
   auto deadline=g_get_monotonic_time()+1200000;
   for(int i=0;i<count && i<256 && !focus && g_get_monotonic_time()<deadline;++i) {
@@ -142,24 +151,44 @@ Field focused(const Target& target) {
     if(app && atspi_accessible_get_process_id(app,&error)==static_cast<guint>(target.pid)) {int budget=2048;focus=findFocus(app,0,budget,deadline);}
     g_clear_error(&error);if(app)g_object_unref(app);
   }
-  g_object_unref(desktop);if(!focus)return field;
-  auto role=atspi_accessible_get_role(focus,&error);if(error){g_clear_error(&error);g_object_unref(focus);return field;}
+  g_object_unref(desktop);return focus;
+}
+std::string accessibleIdentity(AtspiAccessible* element) {
+  auto obj=ATSPI_OBJECT(element);return obj->path && obj->app && obj->app->bus_name?std::string(obj->app->bus_name)+":"+obj->path:"";
+}
+Field describeField(AtspiAccessible* focus) {
+  Field field;GError* error=nullptr;
+  auto role=atspi_accessible_get_role(focus,&error);if(error){g_clear_error(&error);return field;}
   field.protectedInput=role==ATSPI_ROLE_PASSWORD_TEXT;
   bool textRole=role==ATSPI_ROLE_TEXT || role==ATSPI_ROLE_ENTRY || role==ATSPI_ROLE_PASSWORD_TEXT;
   auto states=atspi_accessible_get_state_set(focus);
   textRole=textRole || (role==ATSPI_ROLE_SECTION && states && atspi_state_set_contains(states,ATSPI_STATE_EDITABLE));
   field.known=textRole && states && atspi_state_set_contains(states,ATSPI_STATE_ENABLED) && atspi_state_set_contains(states,ATSPI_STATE_SENSITIVE);
   field.editable=states && atspi_state_set_contains(states,ATSPI_STATE_EDITABLE);
-  auto obj=ATSPI_OBJECT(focus);if(obj->path && obj->app && obj->app->bus_name)field.identity=std::string(obj->app->bus_name)+":"+obj->path;
+  field.identity=accessibleIdentity(focus);
   auto name=atspi_role_get_name(role);if(name)field.role=name;g_free(name);
   if(states)g_object_unref(states);
-  g_object_unref(focus);
   return field;
+}
+Field focused(const Target& target) {
+  auto focus=focusedAccessible(target);if(!focus)return {};
+  auto field=describeField(focus);g_object_unref(focus);return field;
+}
+void awaitFocus(const std::string& identity) { awaitedFocus=identity;awaitedSeen=false; }
+void settleFocus() {
+  auto bus=static_cast<DBusConnection*>(atspi_get_a11y_bus());
+  for(auto end=g_get_monotonic_time()+500000;bus && g_get_monotonic_time()<end;) {
+    if(awaitedSeen && g_get_monotonic_time()-lastFocusEvent>=50000)break;
+    if(!dbus_connection_read_write_dispatch(bus,10))break;
+  }
+  awaitedFocus.clear();
 }
 JsonObject* checkDelivery(JsonObject* args) {
   selectionRetire();operation.reset();auto o=object();auto t=frontmost();auto intent=string(args,"intent");auto shortcut=string(args,"shortcut");
   auto outcome=[&](const char* kind,const char* reason) {text(o,"kind",kind);text(o,"reason",reason);return o;};
   if((intent!="automatic" && intent!="replay") || (shortcut!="ctrl-v" && shortcut!="ctrl-shift-v" && shortcut!="shift-insert")) return outcome("copy","unverified-target");
+  auto captureId=string(args,"captureId");auto locked=captureId.empty()?std::string():capturedIdentity(captureId);
+  if(!captureId.empty() && locked.empty()) return outcome("copy","unverified-target");
   auto expected=child(args,"expected");
   if(!t.window || !t.pid || (intent=="automatic" && (!expected || integer(expected,"windowId")<=0 || integer(expected,"pid")<=0))) return outcome("copy","unverified-target");
   if(intent=="automatic" && (integer(expected,"windowId")!=static_cast<int64_t>(t.window) || integer(expected,"pid")!=t.pid)) return outcome("blocked","focus-changed");
@@ -168,26 +197,28 @@ JsonObject* checkDelivery(JsonObject* args) {
   if(!f.known || !f.editable || f.identity.empty())return outcome("copy","unverified-target");
   if(modifierFlags()!=0)return outcome("blocked","modifiers-held");
   if(!xtest || !seatActive())return outcome("copy","posting-unavailable");
+  if(!locked.empty() && f.identity!=locked)return outcome("blocked","focus-changed");
   gchar* id=g_uuid_string_random();Operation op;op.id=id;g_free(id);op.target=t;op.field=f;op.generation=generation;op.shortcut=shortcut;op.expires=g_get_monotonic_time()+5000000;operation=op;
   text(o,"kind","allowed");text(o,"operationId",op.id);describeTarget(o,t);return o;
 }
-bool post(JsonObject* args,bool submit) {
-  if(!operation || string(args,"operationId")!=operation->id || !display || wayland)return false;
+Post post(JsonObject* args,bool submit) {
+  if(!operation || string(args,"operationId")!=operation->id || !display || wayland)return Post::Refused;
   auto op=*operation;
-  if(g_get_monotonic_time()>op.expires || generation!=op.generation || op.pasted!=submit || !seatActive() || modifierFlags()!=0) {operation.reset();return false;}
+  if(g_get_monotonic_time()>op.expires || generation!=op.generation || op.pasted!=submit || !seatActive() || modifierFlags()!=0) {operation.reset();return Post::Refused;}
   auto target=frontmost();auto field=focused(target);
-  if(target.window!=op.target.window || target.pid!=op.target.pid || !field.known || !field.editable || field.protectedInput || field.identity!=op.field.identity || generation!=op.generation) {operation.reset();return false;}
+  if(target.window!=op.target.window || target.pid!=op.target.pid || !field.known || !field.editable || field.protectedInput || field.identity!=op.field.identity || generation!=op.generation) {operation.reset();return Post::Refused;}
   KeySym key=XK_v;std::vector<KeySym> modifiers;
   if(submit) {
-    auto mode=string(args,"mode");if(mode!="enter" && mode!="primary-enter")return false;
+    auto mode=string(args,"mode");if(mode!="enter" && mode!="primary-enter")return Post::Refused;
     key=XK_Return;if(mode=="primary-enter")modifiers.push_back(XK_Control_L);
   } else if(op.shortcut=="shift-insert") { key=XK_Insert;modifiers.push_back(XK_Shift_L); }
   else {modifiers.push_back(XK_Control_L);if(op.shortcut=="ctrl-shift-v")modifiers.push_back(XK_Shift_L);}
-  auto keycode=XKeysymToKeycode(display,key);if(!keycode)return false;
-  for(auto modifier:modifiers)if(!XKeysymToKeycode(display,modifier))return false;
+  auto keycode=XKeysymToKeycode(display,key);if(!keycode)return Post::Refused;
+  for(auto modifier:modifiers)if(!XKeysymToKeycode(display,modifier))return Post::Refused;
   XGrabServer(display);
   auto finalTarget=frontmost();
-  if(finalTarget.window!=op.target.window || finalTarget.pid!=op.target.pid || (!submit && !selectionCanPost(op.id,string(args,"transactionId")))) {XUngrabServer(display);XFlush(display);return false;}
+  if(finalTarget.window!=op.target.window || finalTarget.pid!=op.target.pid || (!submit && !selectionCanPost(op.id,string(args,"transactionId")))) {XUngrabServer(display);XFlush(display);return Post::Refused;}
+  if(outsideCapture(args)) {XUngrabServer(display);XFlush(display);return Post::FocusChanged;}
   fence(true);
   for(auto modifier:modifiers)XTestFakeKeyEvent(display,XKeysymToKeycode(display,modifier),True,CurrentTime);
   XTestFakeKeyEvent(display,keycode,True,CurrentTime);XTestFakeKeyEvent(display,keycode,False,CurrentTime);
@@ -195,7 +226,7 @@ bool post(JsonObject* args,bool submit) {
   XSync(display,False);XUngrabServer(display);XFlush(display);fence(false);
   if(!submit)selectionPosted();
   if(operation) {if(submit)operation.reset();else operation->pasted=true;}
-  return true;
+  return Post::Posted;
 }
 void shutdownDesktop() {
   if(focusListener) {atspi_event_listener_deregister(focusListener,"object:state-changed:focused",nullptr);atspi_event_listener_deregister(focusListener,"window:activate",nullptr);g_object_unref(focusListener);}

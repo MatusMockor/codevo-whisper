@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HelperProcess } from '../src/main/helper/helper-process';
 import { HelperProcessInputHelper } from '../src/main/helper/helper-process-input-helper';
-import type { InputLostReason } from '../src/main/helper/input-helper';
+import { LockedTargetLostError, type InputLostReason } from '../src/main/helper/input-helper';
 import type { HotkeyEvent } from '../src/shared/hotkey';
 import { protocolHelper } from './protocol-helper';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
+
+const SESSION_SHORTCUTS = [
+  { action: 'cancel', key: 'escape', modifiers: [] },
+  { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
+] as const;
 
 let channel: HelperProcess | null = null;
 let helper: HelperProcessInputHelper | null = null;
@@ -245,6 +250,128 @@ describe('HelperProcessInputHelper', () => {
     const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
     await linux.armSessionShortcuts([{ action: 'cancel', key: 'escape', modifiers: [] }]);
     expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([{ id: 'cancel', keycode: 1, modifiers: [] }]);
+  });
+
+  it('arms the target lock shortcut next to cancel with per-platform keycodes', async () => {
+    const { channel, helper } = await started();
+    const actions: string[] = [];
+    helper.onSessionShortcut((action) => actions.push(action));
+    await helper.armSessionShortcuts(SESSION_SHORTCUTS);
+    expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([
+      { id: 'cancel', keycode: 53, modifiers: [] },
+      { id: 'lock-target', keycode: 37, modifiers: ['control', 'shift'] },
+    ]);
+    await channel.request('emit', { event: { event: 'session-shortcut', id: 'lock-target' } });
+    expect(actions).toEqual(['lock-target']);
+    const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
+    await linux.armSessionShortcuts(SESSION_SHORTCUTS);
+    expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([
+      { id: 'cancel', keycode: 1, modifiers: [] },
+      { id: 'lock-target', keycode: 38, modifiers: ['control', 'shift'] },
+    ]);
+  });
+
+  it('captures the dictation target reports no capture for refused or malformed replies, and surfaces request errors', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'target-capture', response: { captured: true, captureId: 'cap-1', pid: 42, bundleId: 'com.apple.TextEdit', name: 'TextEdit', windowId: 7, bundlePath: '/System/Applications/TextEdit.app' } });
+    expect(await helper.captureTarget()).toEqual({ captureId: 'cap-1', target: { bundleId: 'com.apple.TextEdit', pid: 42, name: 'TextEdit', windowId: 7 }, iconPath: '/System/Applications/TextEdit.app' });
+    await channel.request('respond-next', { cmd: 'target-capture', response: { captured: true, captureId: 'cap-2', pid: 42, bundleId: 'gedit', name: 'Text Editor', windowId: null } });
+    expect(await helper.captureTarget()).toEqual({ captureId: 'cap-2', target: { bundleId: 'gedit', pid: 42, name: 'Text Editor', windowId: null }, iconPath: null });
+    for (const response of [{ captured: false, reason: 'no-focused-element' }, { captured: true, pid: 42 }, { captured: true, captureId: '', pid: 42 }, { captured: true, captureId: 'cap-3', pid: 0 }, { captured: 'true', captureId: 'cap-4', pid: 42 }]) {
+      await channel.request('respond-next', { cmd: 'target-capture', response });
+      expect(await helper.captureTarget()).toBeNull();
+    }
+    await expect(helper.captureTarget()).rejects.toThrow('helper-error:target-capture');
+  });
+
+  it('refocuses and returns from a captured target fails closed on malformed replies and surfaces request errors', async () => {
+    const { channel, helper } = await started();
+    for (const result of ['in-place', 'moved', 'failed'] as const) {
+      await channel.request('respond-next', { cmd: 'target-refocus', response: { result } });
+      expect(await helper.refocusTarget('cap-1')).toBe(result);
+    }
+    for (const response of [{ result: 'teleported' }, {}, { result: true }]) {
+      await channel.request('respond-next', { cmd: 'target-refocus', response });
+      expect(await helper.refocusTarget('cap-1')).toBe('failed');
+    }
+    await expect(helper.refocusTarget('cap-1')).rejects.toThrow('helper-error:target-refocus');
+    await channel.request('respond-next', { cmd: 'target-return', response: { returned: true } });
+    expect(await helper.returnFocus('cap-1')).toBe(true);
+    for (const response of [{ returned: false }, {}, { returned: 'yes' }]) {
+      await channel.request('respond-next', { cmd: 'target-return', response });
+      expect(await helper.returnFocus('cap-1')).toBe(false);
+    }
+    await expect(helper.returnFocus('cap-1')).rejects.toThrow('helper-error:target-return');
+    expect((await channel.request('requests-state', { cmd: 'target-refocus' }))['requests']).toContainEqual({ cmd: 'target-refocus', args: { captureId: 'cap-1' } });
+    expect((await channel.request('requests-state', { cmd: 'target-return' }))['requests']).toContainEqual({ cmd: 'target-return', args: { captureId: 'cap-1' } });
+  });
+
+  it('sends the capture with a Linux delivery check only when the request carries one', async () => {
+    const { channel } = await started();
+    const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
+    const allowed = { kind: 'allowed', operationId: 'operation', pid: 42, bundleId: 'gedit', name: 'Text Editor', windowId: 7 };
+    await channel.request('respond-next', { cmd: 'check-delivery', response: allowed });
+    await linux.checkDelivery({ expected: null, intent: 'automatic', shortcut: 'ctrl-v', captureId: 'cap-1' });
+    await channel.request('respond-next', { cmd: 'check-delivery', response: allowed });
+    await linux.checkDelivery({ expected: null, intent: 'automatic', shortcut: 'ctrl-v' });
+    expect((await channel.request('requests-state', { cmd: 'check-delivery' }))['requests']).toEqual([
+      { cmd: 'check-delivery', args: { expected: null, intent: 'automatic', shortcut: 'ctrl-v', captureId: 'cap-1' } },
+      { cmd: 'check-delivery', args: { expected: null, intent: 'automatic', shortcut: 'ctrl-v' } },
+    ]);
+  });
+
+  it.each(['darwin', 'linux'] as const)('names the capture on %s posting steps only when given and reports a lost locked field', async (platform) => {
+    const { channel } = await started();
+    const posting = new HelperProcessInputHelper(channel, undefined, platform);
+    await channel.request('respond-next', { cmd: 'paste', response: { posted: true } });
+    await posting.writeClipboard('dictated', 'cap-1');
+    await posting.paste('cap-1');
+    await posting.typeText('dictated', 'cap-1');
+    await posting.submit('enter', 'cap-1');
+    await channel.request('respond-next', { cmd: 'paste', response: { posted: true } });
+    await posting.writeClipboard('dictated');
+    await posting.paste();
+    await posting.typeText('dictated');
+    await posting.submit('enter');
+    for (const cmd of ['clipboard-write', 'paste', 'type-text', 'submit']) {
+      const captures = ((await channel.request('requests-state', { cmd }))['requests'] as Array<{ args: Record<string, unknown> }>).map(({ args }) => args['captureId']);
+      expect(captures).toEqual(['cap-1', undefined]);
+    }
+    await channel.request('respond-next', { cmd: 'clipboard-write', response: { written: false, reason: 'focus-changed' } });
+    await expect(posting.writeClipboard('dictated', 'cap-1')).rejects.toBeInstanceOf(LockedTargetLostError);
+    for (const cmd of ['paste', 'type-text', 'submit']) {
+      await channel.request('respond-next', { cmd, response: { posted: false, reason: 'focus-changed' } });
+      const operation = cmd === 'paste' ? posting.paste('cap-1') : cmd === 'type-text' ? posting.typeText('dictated', 'cap-1') : posting.submit('enter', 'cap-1');
+      await expect(operation).rejects.toBeInstanceOf(LockedTargetLostError);
+    }
+    await channel.request('respond-next', { cmd: 'submit', response: { posted: false, reason: 'post-access-denied' } });
+    await expect(posting.submit('enter', 'cap-1')).rejects.not.toBeInstanceOf(LockedTargetLostError);
+  });
+
+  it('releases a capture by id', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'target-release', response: { released: true } });
+    await helper.releaseTarget('cap-1');
+    await channel.request('respond-next', { cmd: 'target-release', response: { released: false } });
+    await helper.releaseTarget('cap-2');
+    expect((await channel.request('requests-state', { cmd: 'target-release' }))['requests']).toEqual([
+      { cmd: 'target-release', args: { captureId: 'cap-1' } },
+      { cmd: 'target-release', args: { captureId: 'cap-2' } },
+    ]);
+  });
+
+  it('asks the macOS helper to verify a locked delivery and fails closed on anything but legacy', async () => {
+    const { channel, helper } = await started();
+    expect(await helper.checkDelivery({ expected: null, intent: 'automatic', shortcut: 'ctrl-v' })).toEqual({ kind: 'legacy' });
+    expect((await channel.request('requests-state', { cmd: 'check-delivery' }))['requests']).toEqual([]);
+    const request = { expected: { bundleId: 'com.apple.TextEdit', pid: 42, name: 'TextEdit', windowId: 7 }, intent: 'automatic', shortcut: 'ctrl-v', captureId: 'cap-1' } as const;
+    await channel.request('respond-next', { cmd: 'check-delivery', response: { kind: 'legacy' } });
+    expect(await helper.checkDelivery(request)).toEqual({ kind: 'legacy' });
+    for (const response of [{ kind: 'blocked', reason: 'focus-changed' }, {}, { kind: 'allowed' }]) {
+      await channel.request('respond-next', { cmd: 'check-delivery', response });
+      expect(await helper.checkDelivery(request)).toEqual({ kind: 'blocked', reason: 'focus-changed' });
+    }
+    expect((await channel.request('requests-state', { cmd: 'check-delivery' }))['requests']).toContainEqual({ cmd: 'check-delivery', args: request });
   });
 
   it('rejects a refused arm and re-arms in-dictation shortcuts after a restart', async () => {

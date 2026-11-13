@@ -15,6 +15,7 @@ export const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.fre
   cancel: 'Zrušiť diktovanie (Esc)',
   'toggle-polish': 'Prepnúť AI úpravu',
   'cycle-language': 'Prepnúť jazyk diktovania',
+  'lock-target': 'Uzamknúť cieľ',
   'open-languages': 'Otvoriť nastavenia',
   'open-server': 'Otvoriť server',
   'enable-server': 'Pripojiť server',
@@ -25,6 +26,8 @@ export const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.fre
   'use-local': 'Prepisovať lokálne',
   retry: 'Skúsiť znova',
 });
+
+export const UNLOCK_TARGET_LABEL = 'Odomknúť cieľ';
 
 export const REROUTED_TITLES: Readonly<Record<EngineId, string>> = Object.freeze({
   server: 'Prepis teraz beží na serveri',
