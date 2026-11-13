@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { connect } from 'node:net';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import type { FakeSttRequest } from '../../server/test/support/fake-stt-server';
 
 const runner = fileURLToPath(new URL('../test/support/run-gateway.ts', import.meta.url));
 const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
@@ -15,6 +16,7 @@ export type LocalGateway = {
   url: string;
   openPairingWindow(): Promise<{ admin: AdminConnection; token: string }>;
   admin(command: object): Promise<unknown>;
+  sttRequests(): readonly FakeSttRequest[];
   close(): Promise<void>;
 };
 
@@ -53,10 +55,13 @@ function tokenOf(event: unknown): string {
   return typeof token === 'string' ? token : '';
 }
 
-function firstLine(child: ChildProcessWithoutNullStreams): Promise<Started> {
+function readOutput(child: ChildProcessWithoutNullStreams, sttRequests: FakeSttRequest[]): Promise<Started> {
   return new Promise((resolve, reject) => {
     const reader = createInterface({ input: child.stdout });
-    reader.once('line', (line) => resolve(JSON.parse(line) as Started));
+    reader.once('line', (line) => {
+      resolve(JSON.parse(line) as Started);
+      reader.on('line', (request) => sttRequests.push(JSON.parse(request) as FakeSttRequest));
+    });
     child.once('exit', (code) => reject(new Error(`the gateway exited with ${code}`)));
   });
 }
@@ -64,7 +69,8 @@ function firstLine(child: ChildProcessWithoutNullStreams): Promise<Started> {
 export async function startLocalGateway(options: LocalGatewayOptions = {}): Promise<LocalGateway> {
   const child = spawn(tsx, [runner, JSON.stringify(options)], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
   child.stderr.on('data', (chunk: Buffer) => process.stderr.write(chunk));
-  const started = await firstLine(child);
+  const sttRequests: FakeSttRequest[] = [];
+  const started = await readOutput(child, sttRequests);
   const admin = async (command: object): Promise<unknown> => {
     const connection = await connectAdmin(started.adminSocket);
     connection.send(command);
@@ -76,6 +82,7 @@ export async function startLocalGateway(options: LocalGatewayOptions = {}): Prom
     port: started.port,
     url: started.url,
     admin,
+    sttRequests: () => sttRequests,
     openPairingWindow: async () => {
       const connection = await connectAdmin(started.adminSocket);
       connection.send({ cmd: 'pair' });

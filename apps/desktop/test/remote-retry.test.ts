@@ -30,7 +30,7 @@ afterEach(async () => {
 
 type Setup = { server: TestGateway; relay: DropProxy; dictation: EngineDictation; source: PairingSource; controller: AbortController };
 
-type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void; selection?: LanguageSelection };
+type SetupOptions = { keepAliveMs?: number; timeoutMs?: number; onTranscript?: (update: TranscriptUpdate) => void; selection?: LanguageSelection; vocabulary?: readonly string[] };
 
 type PairingSource = { current: ServerPairing | null; gate: Promise<void> };
 
@@ -46,7 +46,8 @@ async function setup(stt: FakeSttBehaviour, options: Partial<RemoteEngineOptions
   expect(preparation).toMatchObject({ ready: true });
   const controller = new AbortController();
   const transcript = extra.onTranscript === undefined ? {} : { onTranscript: extra.onTranscript };
-  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: selection, signal: controller.signal, ...transcript });
+  const vocabulary = extra.vocabulary === undefined ? {} : { vocabulary: extra.vocabulary };
+  const dictation = (preparation as Extract<Preparation, { ready: true }>).engine.start({ languages: selection, signal: controller.signal, ...transcript, ...vocabulary });
   return { server: gateway, relay: proxy, dictation, source, controller };
 }
 
@@ -210,6 +211,21 @@ describe('RemoteDictation retry', () => {
 
     expect(await finished).toBe('úsek32000');
     expect(relay.connections()).toBeGreaterThanOrEqual(2);
+  });
+
+  it('replays the vocabulary only to a gateway that still understands it', async () => {
+    const { server, dictation } = await setup({ ...bySize, delayMs: 300 }, {}, undefined, { vocabulary: ['Kumiba', 'Codevo Whisper'] });
+    speak(dictation, SECOND);
+    const finished = dictation.finish();
+    await expect.poll(() => server.stt.requests.length).toBe(1);
+
+    await server.restart({ serverVersion: '0.3.0' });
+
+    expect(await finished).toBe('úsek32000');
+    expect(server.stt.requests).toEqual([
+      { language: 'auto', vocabulary: ['Kumiba', 'Codevo Whisper'], bytes: SECOND },
+      { language: 'auto', bytes: SECOND },
+    ]);
   });
 
   it.each([

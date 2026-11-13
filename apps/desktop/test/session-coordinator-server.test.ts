@@ -139,7 +139,7 @@ describe('SessionCoordinator with the server engine', () => {
     await expect.poll(() => harness.helper.pasted).toEqual(['Kumiba ']);
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
     expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'Kumiba ' }] });
-    expect(gateway.stt.requests).toEqual([{ language: 'auto', bytes: 32000 }]);
+    expect(gateway.stt.requests).toEqual([{ language: 'auto', vocabulary: ['Kumiba'], bytes: 32000 }]);
     coordinator?.act('copy-last');
     await expect.poll(() => harness.helper.clipboard).toBe('Kumiba ');
     await expect.poll(() => harness.stats.days()).toMatchObject([{ words: 1, dictations: 1 }]);
