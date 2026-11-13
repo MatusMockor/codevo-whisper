@@ -63,7 +63,7 @@ test('overlay window preserves platform presentation and shows the injected reco
   await expect(pill).toBeVisible();
   await expect(pill).toContainText('0:04');
   await expect(pill.locator('.chip')).toHaveText('AUTO');
-  await expect.poll(panelFlags).toMatchObject({ focusable: REDUCED, visible: true, alwaysOnTop: !REDUCED, allWorkspaces: MAC });
+  await expect.poll(panelFlags).toMatchObject({ focusable: REDUCED, visible: true, alwaysOnTop: MAC, allWorkspaces: MAC });
   if (!REDUCED) expect((await panelFlags()).focused).toBe(false);
   await expect(overlay.getByRole('button', { name: 'Zrušiť diktovanie (Esc)' })).toHaveCount(REDUCED ? 0 : 1);
   await inject({ kind: 'processing' });

@@ -29,6 +29,20 @@ async function openTarget(app: ElectronApplication): Promise<number> {
   return targetId;
 }
 
+async function pairServer(page: Page): Promise<LocalGateway> {
+  const gateway = await startLocalGateway();
+  const pairing = await gateway.openPairingWindow();
+  await page.evaluate((token) => window.codevo.pairServer(token), pairing.token);
+  await pairing.admin.next();
+  pairing.admin.send({ decision: 'approve' });
+  await pairing.admin.next();
+  pairing.admin.close();
+  await expect.poll(() => page.evaluate(() => window.codevo.getServer().then((view) => view.server?.status.kind))).toBe('online');
+  await page.evaluate(() => window.codevo.updateSettings({ engineOrder: ['server'] }));
+  await expect.poll(() => page.evaluate(() => window.codevo.isHotkeyArmed())).toBe(true);
+  return gateway;
+}
+
 function targetText(app: ElectronApplication): Promise<unknown> {
   return app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('document.querySelector("textarea").value'), TARGET);
 }
@@ -57,6 +71,8 @@ test('X11 product overlay takes clicks above normal and fullscreen targets witho
       expect(state.focusable).toBe(false); expect(state.focused).toBe(false); expect(state.noSandbox).toBe(false);
       const status = readFileSync(`/proc/${state.pid}/status`, 'utf8');
       expect(status).toContain('CapEff:\t0000000000000000'); expect(status).toContain('NoNewPrivs:\t1'); expect(status).toContain('Seccomp:\t2');
+      xdo('windowraise', String(targetId));
+      xdo('windowactivate', '--sync', String(targetId));
       await overlay!.evaluate(() => { document.addEventListener('pointerdown', () => { document.body.dataset['clicked'] = 'yes'; }, { once: true }); });
       const [x, y] = await pointAt(app, overlay!, '.chip');
       xdo('mousemove', String(x), String(y), 'click', '1');
@@ -81,16 +97,7 @@ test('X11 overlay cancel button discards a live dictation and the target keeps f
   let gateway: LocalGateway | null = null;
   try {
     const page = await mainWindow(app);
-    gateway = await startLocalGateway();
-    const pairing = await gateway.openPairingWindow();
-    await page.evaluate((token) => window.codevo.pairServer(token), pairing.token);
-    await pairing.admin.next();
-    pairing.admin.send({ decision: 'approve' });
-    await pairing.admin.next();
-    pairing.admin.close();
-    await expect.poll(() => page.evaluate(() => window.codevo.getServer().then((view) => view.server?.status.kind))).toBe('online');
-    await page.evaluate(() => window.codevo.updateSettings({ engineOrder: ['server'] }));
-    await expect.poll(() => page.evaluate(() => window.codevo.isHotkeyArmed())).toBe(true);
+    gateway = await pairServer(page);
     const targetId = await openTarget(app);
 
     await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.emitHotkey('down'));
@@ -114,6 +121,41 @@ test('X11 overlay cancel button discards a live dictation and the target keeps f
     expect(await page.evaluate(() => window.codevo.getLastTranscript())).toBeNull();
     expect(await page.evaluate(() => window.codevo.getStats())).toEqual([]);
     console.log(JSON.stringify({ cancelledByClick: true, targetActive: true, inserted: false }));
+  } finally {
+    await app.close();
+    await gateway?.close();
+  }
+});
+
+test('X11 Esc from the real keyboard path discards a live dictation and never reaches the target', async () => {
+  test.skip(process.platform !== 'linux' || process.env['XDG_SESSION_TYPE'] === 'wayland', 'requires an actual X11 desktop');
+  const dir = await createUserDataDir({ ...ONBOARDED, hotkey: { kind: 'key', keycode: 0x10060, modifiers: ['control'], label: 'Ctrl+F12' }, mode: 'toggle', insertion: 'clipboard' });
+  const app = await launchApp(dir);
+  let gateway: LocalGateway | null = null;
+  try {
+    const page = await mainWindow(app);
+    gateway = await pairServer(page);
+    await openTarget(app);
+    await app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('window.escapes = 0; document.addEventListener("keydown", (e) => { if (e.key === "Escape") window.escapes++; })'), TARGET);
+    xdo('key', 'Escape');
+    await expect.poll(() => app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('window.escapes'), TARGET)).toBe(1);
+    const clipboardBefore = await app.evaluate(({ clipboard }) => clipboard.readText());
+
+    xdo('key', 'ctrl+F12');
+    await expect.poll(() => app.windows().some((p) => p.url().endsWith('/overlay/overlay.html'))).toBe(true);
+    const overlay = app.windows().find((p) => p.url().endsWith('/overlay/overlay.html'))!;
+    await expect(overlay.getByRole('status', { name: 'Nahrávam' })).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    xdo('key', 'Escape');
+
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/overlay/overlay.html'))!.isVisible())).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(await app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('window.escapes'), TARGET)).toBe(1);
+    expect(await page.evaluate(() => window.codevo.getLastTranscript())).toBeNull();
+    expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(clipboardBefore);
+    xdo('key', 'Escape');
+    await expect.poll(() => app.evaluate(({ BrowserWindow }, title) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === title)!.webContents.executeJavaScript('window.escapes'), TARGET)).toBe(2);
+    console.log(JSON.stringify({ cancelledByEsc: true, escConsumedWhileDictating: true, escReleasedAfter: true }));
   } finally {
     await app.close();
     await gateway?.close();
