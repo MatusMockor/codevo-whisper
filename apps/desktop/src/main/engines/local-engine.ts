@@ -35,7 +35,7 @@ type LanguageTarget = { plan: LocalLanguagePlan; pack: LanguagePackPaths | null 
 
 type Target = { ready: false; reason: EngineUnavailableReason } | { ready: true; spec: GenerationSpec };
 
-type Claim = { lease: Lease; selection: LanguageSelection };
+type Claim = { lease: Lease; selection: LanguageSelection; pinned: boolean };
 
 type Resolution = { ready: false; reason: EngineUnavailableReason } | { ready: true; generation: LocalGeneration };
 
@@ -113,7 +113,7 @@ export class LocalEngine implements TranscriptionEngine {
   }
 
   private holds(claim: Claim): boolean {
-    return this.isLive(claim.lease) && sameSelection(claim.selection, this.deps.settings.get().languages);
+    return this.isLive(claim.lease) && (claim.pinned || sameSelection(claim.selection, this.deps.settings.get().languages));
   }
 
   private async settle(spec: GenerationSpec, claim: Claim): Promise<LocalGeneration | null> {
@@ -125,13 +125,13 @@ export class LocalEngine implements TranscriptionEngine {
     return this.acquire(spec);
   }
 
-  private async resolve(lease: Lease): Promise<Resolution> {
-    const selection = this.deps.settings.get().languages;
+  private async resolve(lease: Lease, pinned: LanguageSelection | undefined): Promise<Resolution> {
+    const selection = pinned ?? this.deps.settings.get().languages;
     const target = await this.target(selection);
     if (!target.ready) return target;
-    const generation = await this.settle(target.spec, { lease, selection });
+    const generation = await this.settle(target.spec, { lease, selection, pinned: pinned !== undefined });
     if (generation !== null) return { ready: true, generation };
-    if (this.isLive(lease)) return this.resolve(lease);
+    if (this.isLive(lease)) return this.resolve(lease, pinned);
     return { ready: false, reason: 'no-model' };
   }
 
@@ -211,11 +211,11 @@ export class LocalEngine implements TranscriptionEngine {
     return { plan: localLanguagePlan(selection, hint, pack !== null), pack };
   }
 
-  async prepare(): Promise<Preparation> {
+  async prepare(selection?: LanguageSelection): Promise<Preparation> {
     const lease = this.reserve();
     let transferred = false;
     try {
-      const resolution = await this.resolve(lease);
+      const resolution = await this.resolve(lease, selection);
       if (!resolution.ready) return notReady(resolution.reason);
       const { generation } = resolution;
       let state: 'prepared' | 'started' | 'released' = 'prepared';
@@ -276,7 +276,7 @@ export class LocalEngine implements TranscriptionEngine {
       }
       const selection = this.deps.settings.get().languages;
       const spec = generationSpec(modelPath, await this.languageTarget(selection));
-      const generation = await this.settle(spec, { lease, selection });
+      const generation = await this.settle(spec, { lease, selection, pinned: false });
       if (generation === null) throw new Error('Warm-up selection changed');
       await generation.warmUp();
       const selectedPath = await this.deps.models.activeModelPath();

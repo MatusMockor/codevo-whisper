@@ -20,7 +20,7 @@ import type { EngineId } from '../../shared/settings';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
 import { copyLastState, errorState, MESSAGES, pasteLastState, switchFailedState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
-import { SESSION_SHORTCUTS } from './session-shortcuts';
+import { armedSessionShortcuts } from './session-shortcuts';
 import type { PauseState } from './pause-state';
 
 export type SessionCoordinatorDeps = {
@@ -43,6 +43,7 @@ export type SessionCoordinatorDeps = {
   enableServer?: () => Promise<void>;
   polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
   clock?: () => number;
+  platform?: NodeJS.Platform;
   logger?: Logger;
 };
 
@@ -60,6 +61,8 @@ export class SessionCoordinator {
     'use-local': () => this.reroute('local'),
     'enable-server': () => this.enableServer(),
     cancel: () => this.discardShown(),
+    'toggle-polish': () => this.shown()?.togglePolish(),
+    'cycle-language': () => this.shown()?.cycleLanguage(),
   };
   private readonly sessions = new Set<DictationSession>();
   private readonly cancellable = new Set<DictationSession>();
@@ -243,8 +246,12 @@ export class SessionCoordinator {
       });
   }
 
+  private shown(): DictationSession | undefined {
+    return this.recording ?? [...this.cancellable].at(-1);
+  }
+
   private discardShown(): void {
-    const session = this.recording ?? [...this.cancellable].at(-1);
+    const session = this.shown();
     if (session === undefined) return;
     if (session === this.recording) this.deps.hotkey.cancel();
     session.discard();
@@ -256,7 +263,7 @@ export class SessionCoordinator {
   }
 
   private armShortcuts(armed: boolean): void {
-    this.deps.helper.armSessionShortcuts(armed ? SESSION_SHORTCUTS : []).catch((error: unknown) => {
+    this.deps.helper.armSessionShortcuts(armed ? armedSessionShortcuts(this.deps.settings.get(), this.deps.platform ?? process.platform) : []).catch((error: unknown) => {
       this.logger.error(armed ? 'The in-dictation shortcuts could not be armed' : 'The in-dictation shortcuts could not be disarmed', error);
     });
   }

@@ -1,4 +1,5 @@
 import { stopsRoute, type EngineAvailability } from '../../shared/engine-routing';
+import type { LanguageSelection } from '../../shared/dictation-languages';
 import type { EngineId } from '../../shared/settings';
 import type { EngineUnavailableReason, Preparation, TranscriptionEngine } from './transcription-engine';
 
@@ -31,11 +32,11 @@ function releaseReady(preparation: Promise<Preparation> | null): void {
 export class EngineSelector {
   constructor(private readonly engines: readonly TranscriptionEngine[]) {}
 
-  async prepare(order: readonly EngineId[]): Promise<Preparation> {
-    const candidates = this.candidates(order);
+  async prepare(order: readonly EngineId[], selection?: LanguageSelection): Promise<Preparation> {
+    const candidates = this.candidates(order, selection);
     let primary: Preparation | null = null;
     for (const [index, candidate] of candidates.entries()) {
-      const preparation = await (candidate.preparation ?? candidate.engine.prepare());
+      const preparation = await (candidate.preparation ?? candidate.engine.prepare(selection));
       if (stopsRoute(availability(preparation))) {
         candidates.slice(index + 1).forEach((rest) => releaseReady(rest.preparation));
         return preparation;
@@ -45,7 +46,7 @@ export class EngineSelector {
     return primary ?? NOT_READY;
   }
 
-  private candidates(order: readonly EngineId[]): Candidate[] {
+  private candidates(order: readonly EngineId[], selection: LanguageSelection | undefined): Candidate[] {
     return order.flatMap((id, index): Candidate[] => {
       const engine = this.engines.find((candidate) => candidate.id === id);
       if (engine === undefined) {
@@ -54,7 +55,7 @@ export class EngineSelector {
       if (index === 0 || !EAGER_ENGINES.has(id)) {
         return [{ engine, preparation: null }];
       }
-      const preparation = engine.prepare();
+      const preparation = engine.prepare(selection);
       preparation.catch(() => undefined);
       return [{ engine, preparation }];
     });

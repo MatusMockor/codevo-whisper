@@ -1,6 +1,6 @@
 import type { EngineId } from './settings';
 
-export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel'] as const;
+export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel', 'toggle-polish', 'cycle-language'] as const;
 
 export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 
@@ -12,8 +12,8 @@ export type OverlayError = { kind: 'error'; message: string; action?: OverlayAct
 
 export type OverlayState =
   | { kind: 'hidden' }
-  | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; fallbackDevice?: string; live?: LiveText }
-  | { kind: 'processing'; notice?: 'limit-reached'; live?: LiveText; delivering?: true }
+  | { kind: 'recording'; elapsedMs: number; level: number; languageChip: string; polish?: boolean; fallbackDevice?: string; live?: LiveText }
+  | { kind: 'processing'; notice?: 'limit-reached'; polish?: boolean; live?: LiveText; delivering?: true }
   | { kind: 'inserted'; appName: string; notice?: string }
   | { kind: 'copied'; notice?: string }
   | { kind: 'blocked'; reason: BlockedReason }
@@ -42,7 +42,8 @@ export function offeredActions(state: OverlayState): readonly OverlayAction[] {
     return ['copy-last'];
   }
   if (state.kind === 'recording' || (state.kind === 'processing' && state.delivering !== true)) {
-    return ['cancel'];
+    const polish: readonly OverlayAction[] = state.polish === undefined ? [] : ['toggle-polish'];
+    return state.kind === 'recording' ? [...polish, 'cycle-language', 'cancel'] : [...polish, 'cancel'];
   }
   if (state.kind !== 'error' || state.action === undefined) {
     return [];

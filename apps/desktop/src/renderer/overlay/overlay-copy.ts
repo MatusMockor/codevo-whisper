@@ -13,6 +13,8 @@ export const BLOCKED_COPY: Readonly<Record<BlockedReason, BlockedCopy>> = Object
 export const ACTION_LABELS: Readonly<Record<OverlayAction, string>> = Object.freeze({
   'open-settings': 'Otvoriť nastavenia',
   cancel: 'Zrušiť diktovanie (Esc)',
+  'toggle-polish': 'Prepnúť AI úpravu',
+  'cycle-language': 'Prepnúť jazyk diktovania',
   'open-languages': 'Otvoriť nastavenia',
   'open-server': 'Otvoriť server',
   'enable-server': 'Pripojiť server',

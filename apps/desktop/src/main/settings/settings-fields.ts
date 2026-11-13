@@ -3,6 +3,7 @@ import { isDictationLanguage, MAX_SELECTED_LANGUAGES } from '../../shared/dictat
 import { MAX_MICROPHONES } from '../../shared/microphones';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords } from '../../shared/custom-words';
+import { overlaps, REBINDABLE_ACTIONS, REBINDABLE_KEYS, SESSION_MODIFIERS, type SessionBinding } from '../../shared/session-shortcuts';
 import { isEngineOrder, type MicrophoneSetting, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
@@ -72,6 +73,22 @@ function isLanguages(value: unknown): value is Settings['languages'] {
   return oneOf(['auto', 'selected'])(value['mode']) && isSelectedLanguages(value['selected']);
 }
 
+function isSessionBinding(value: unknown): value is SessionBinding {
+  if (!isPlainRecord(value) || !hasExactKeys(value, ['key', 'modifiers'])) {
+    return false;
+  }
+  const { key, modifiers } = value;
+  return oneOf(REBINDABLE_KEYS)(key) && Array.isArray(modifiers) && modifiers.length > 0 && modifiers.every(oneOf(SESSION_MODIFIERS)) && new Set(modifiers).size === modifiers.length;
+}
+
+function isSessionShortcuts(value: unknown): value is Settings['sessionShortcuts'] {
+  if (!isPlainRecord(value) || !hasExactKeys(value, REBINDABLE_ACTIONS)) {
+    return false;
+  }
+  const [polish, language] = REBINDABLE_ACTIONS.map((action) => value[action]);
+  return isSessionBinding(polish) && isSessionBinding(language) && !overlaps(polish, language);
+}
+
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   muteWhileRecording: isBoolean,
   audioFeedback: isBoolean,
@@ -81,6 +98,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   removeFillerWords: isBoolean,
   appendTrailingSpace: isBoolean,
   hotkey: isHotkey,
+  sessionShortcuts: isSessionShortcuts,
   mode: oneOf(['hold', 'toggle', 'smart']),
   languages: isLanguages,
   microphones: isMicrophones,

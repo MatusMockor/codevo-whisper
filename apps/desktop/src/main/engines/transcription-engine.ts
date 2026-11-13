@@ -41,7 +41,7 @@ export type Preparation = { ready: true; engine: PreparedEngine } | { ready: fal
 
 export interface TranscriptionEngine {
   readonly id: EngineId;
-  prepare(): Promise<Preparation>;
+  prepare(selection?: LanguageSelection): Promise<Preparation>;
 }
 
 export class EngineUnavailableError extends Error {

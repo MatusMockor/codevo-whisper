@@ -25,6 +25,11 @@ function freezeSettings(settings: Settings): Settings {
   if (copy.hotkey?.kind === 'modifiers') Object.freeze(copy.hotkey.keycodes);
   if (copy.hotkey?.kind === 'key') Object.freeze(copy.hotkey.modifiers);
   Object.freeze(copy.hotkey);
+  for (const binding of Object.values(copy.sessionShortcuts)) {
+    Object.freeze(binding.modifiers);
+    Object.freeze(binding);
+  }
+  Object.freeze(copy.sessionShortcuts);
   copy.microphones.forEach((entry) => Object.freeze(entry));
   Object.freeze(copy.microphones);
   Object.freeze(copy.engineOrder);

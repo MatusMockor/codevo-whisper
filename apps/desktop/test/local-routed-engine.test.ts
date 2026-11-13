@@ -130,6 +130,18 @@ describe('LocalEngine readiness for selected languages', () => {
     expect(await starts()).toEqual([]);
   });
 
+  it('prepares the routed models for a language chosen for one dictation while the setting stays automatic', async () => {
+    await settings.update({ languages: AUTO });
+    await installPack();
+    const chosen: LanguageSelection = { mode: 'selected', selected: ['cs'] };
+
+    const dictation = prepared(await local.prepare(chosen)).start({ languages: chosen, signal: new AbortController().signal });
+    dictation.push(new Uint8Array(PCM_BYTES_PER_SECOND));
+
+    await expect(dictation.finish()).resolves.toMatch(/:cs:/);
+    expect(settings.get().languages).toEqual(AUTO);
+  });
+
   it('never asks for the pack in automatic mode', async () => {
     await settings.update({ languages: AUTO });
 

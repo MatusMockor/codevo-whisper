@@ -2,6 +2,7 @@ import type { AiProvider, CodexEffort } from './ai';
 import type { CustomWord } from './custom-words';
 import type { LanguageSelection } from './dictation-languages';
 import type { HotkeyBinding } from './hotkey';
+import { DEFAULT_SESSION_SHORTCUTS, type SessionShortcutSettings } from './session-shortcuts';
 
 export type HotkeySetting = (HotkeyBinding & { label: string }) | null;
 
@@ -48,6 +49,7 @@ export type Settings = {
   removeFillerWords: boolean;
   appendTrailingSpace: boolean;
   hotkey: HotkeySetting;
+  sessionShortcuts: SessionShortcutSettings;
   mode: DictationMode;
   languages: LanguageSelection;
   microphones: readonly MicrophoneSetting[];
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   removeFillerWords: false,
   appendTrailingSpace: false,
   hotkey: null,
+  sessionShortcuts: DEFAULT_SESSION_SHORTCUTS,
   mode: 'smart',
   languages: Object.freeze({ mode: 'auto', selected: Object.freeze(['sk'] as const) }),
   microphones: Object.freeze([]),
