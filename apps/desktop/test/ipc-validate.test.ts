@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IpcValidationError, rejectArguments, validateAiBaseUrl, validateAiKey, validateCodexTarget, validateMicrophone, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
+import { IpcValidationError, rejectArguments, validateAiBaseUrl, validateAiKey, validateCodexTarget, validateMicrophones, validateModelId, validatePairingToken, validatePermissionKind, validateSettingsPatch } from '../src/main/ipc/validate';
 
 describe('validateSettingsPatch', () => {
   it('accepts recording audio preferences and rejects malformed percentages and output ids', () => {
@@ -68,17 +68,31 @@ describe('validateSettingsPatch', () => {
   it('returns a valid patch', () => {
     const patch = validateSettingsPatch({
       hotkey: { kind: 'modifiers', keycodes: [61], label: 'Pravý ⌥ Option' },
-      microphone: { deviceId: null, label: null },
+      microphones: [{ deviceId: 'dock', label: 'Dock Mic' }],
       engineOrder: ['local'],
       launchAtLogin: true,
     });
 
     expect(patch).toEqual({
       hotkey: { kind: 'modifiers', keycodes: [61], label: 'Pravý ⌥ Option' },
-      microphone: { deviceId: null, label: null },
+      microphones: [{ deviceId: 'dock', label: 'Dock Mic' }],
       engineOrder: ['local'],
       launchAtLogin: true,
     });
+  });
+
+  it('rejects a microphone list with a duplicate device, an empty entry or too many devices', () => {
+    const many = Array.from({ length: 17 }, (_, index) => ({ deviceId: `mic-${index}`, label: `Mic ${index}` }));
+    for (const microphones of [
+      [{ deviceId: 'dock', label: 'Dock Mic' }, { deviceId: 'dock', label: 'Dock Mic 2' }],
+      [{ deviceId: null, label: null }],
+      [{ deviceId: 'dock', label: 'Dock Mic', extra: true }],
+      { deviceId: 'dock', label: 'Dock Mic' },
+      many,
+    ]) {
+      expect(() => validateSettingsPatch({ microphones })).toThrow(IpcValidationError);
+    }
+    expect(() => validateSettingsPatch({ microphone: { deviceId: null, label: null } })).toThrow(IpcValidationError);
   });
 
   it('canonicalizes combo members and rejects malformed or legacy IPC bindings', () => {
@@ -202,16 +216,20 @@ describe('validatePermissionKind', () => {
   });
 });
 
-describe('validateMicrophone', () => {
-  it('accepts the system default and a chosen device', () => {
-    expect(validateMicrophone({ deviceId: null, label: null })).toEqual({ deviceId: null, label: null });
-    expect(validateMicrophone({ deviceId: 'abc', label: 'AirPods Pro' })).toEqual({ deviceId: 'abc', label: 'AirPods Pro' });
+describe('validateMicrophones', () => {
+  it('accepts the system default and an ordered list of devices', () => {
+    expect(validateMicrophones([])).toEqual([]);
+    expect(validateMicrophones([{ deviceId: 'abc', label: 'AirPods Pro' }, { deviceId: 'def', label: null }])).toEqual([
+      { deviceId: 'abc', label: 'AirPods Pro' },
+      { deviceId: 'def', label: null },
+    ]);
   });
 
   it('rejects malformed microphones', () => {
-    expect(() => validateMicrophone({ deviceId: 'abc' })).toThrow(IpcValidationError);
-    expect(() => validateMicrophone({ deviceId: 1, label: null })).toThrow(IpcValidationError);
-    expect(() => validateMicrophone('default')).toThrow(IpcValidationError);
+    expect(() => validateMicrophones([{ deviceId: 'abc' }])).toThrow(IpcValidationError);
+    expect(() => validateMicrophones([{ deviceId: 1, label: null }])).toThrow(IpcValidationError);
+    expect(() => validateMicrophones({ deviceId: 'abc', label: 'AirPods Pro' })).toThrow(IpcValidationError);
+    expect(() => validateMicrophones('default')).toThrow(IpcValidationError);
   });
 });
 

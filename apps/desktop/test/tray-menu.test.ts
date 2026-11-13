@@ -47,8 +47,8 @@ function trayDeps(settings: ConstructorParameters<typeof TrayMenu>[0]['settings'
   };
 }
 
-function linuxTray() {
-  let settings: Settings = { ...DEFAULT_SETTINGS, hotkey: { label: 'Pravý Ctrl' } as Settings['hotkey'] };
+function linuxTray(overrides: Partial<Settings> = {}) {
+  let settings: Settings = { ...DEFAULT_SETTINGS, hotkey: { label: 'Pravý Ctrl' } as Settings['hotkey'], ...overrides };
   const settingsListeners: Array<(next: Settings, previous: Settings) => void> = [];
   let paused = false;
   const tray = new TrayMenu({
@@ -121,6 +121,19 @@ describe('TrayMenu on Linux', () => {
     submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
     await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Automaticky'));
     expect(current().languages).toEqual({ mode: 'auto', selected: ['sk'] });
+  });
+
+  it('moves a microphone picked in the tray to the top of the list and clears the list for the system default', async () => {
+    const dock = { deviceId: 'dock', label: 'Dock Mic' };
+    const shure = { deviceId: 'usb', label: 'Shure MV7' };
+    const { current } = linuxTray({ microphones: [dock, shure] });
+    const pick = (label: string) => submenu('Mikrofón').find((item) => item.label === label)?.click?.(undefined as never, undefined, undefined as never);
+    await vi.waitFor(() => expect(submenu('Mikrofón').map((item) => item.label)).toContain('Shure MV7'));
+
+    pick('Shure MV7');
+    await vi.waitFor(() => expect(current().microphones).toEqual([shure, dock]));
+    pick('Systémový predvolený');
+    await vi.waitFor(() => expect(current().microphones).toEqual([]));
   });
 
   it('switches the mode on top of a languages write that is still queued', async () => {

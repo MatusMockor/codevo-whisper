@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hotkeyRecordMessage } from '../src/renderer/settings/hotkey-record-message';
 import { languageChangeNotice, languageModeOptions, languageRowLabel, needsLanguageChoice, requiredLanguageNote } from '../src/renderer/settings/language-options';
 import { levelBars } from '../src/renderer/settings/level-bars';
-import { bluetoothHint, microphoneOptions, SYSTEM_DEFAULT_VALUE } from '../src/renderer/settings/microphone-options';
+import { addMicrophone, bluetoothHint, microphoneView, moveMicrophone, removeMicrophone } from '../src/renderer/settings/microphone-options';
 import { formatSize, modelRow } from '../src/renderer/settings/model-rows';
 import type { ModelInfo, ModelState } from '../src/shared/models';
 
@@ -118,38 +118,66 @@ describe('hotkeyRecordMessage', () => {
   });
 });
 
-describe('microphoneOptions', () => {
+describe('microphoneView', () => {
   const devices = [
     { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro', isBluetooth: false, isDefault: false },
     { deviceId: 'airpods', label: 'AirPods Pro', isBluetooth: true, isDefault: false },
   ];
+  const builtIn = { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro' };
+  const airPods = { deviceId: 'airpods', label: 'AirPods Pro' };
+  const mv7 = { deviceId: 'mv7', label: 'Shure MV7+' };
 
-  it('starts with the system default and lists the connected inputs', () => {
-    expect(microphoneOptions(devices, { deviceId: null, label: null })).toEqual({
-      selected: SYSTEM_DEFAULT_VALUE,
-      options: [
-        { value: SYSTEM_DEFAULT_VALUE, label: 'Systémový predvolený', microphone: { deviceId: null, label: null } },
-        { value: 'built-in', label: 'Mikrofón MacBooku Pro', microphone: { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro' } },
-        { value: 'airpods', label: 'AirPods Pro', microphone: { deviceId: 'airpods', label: 'AirPods Pro' } },
+  it('uses the system default for an empty list and offers every connected input', () => {
+    expect(microphoneView(devices, [])).toEqual({ rows: [], addable: [builtIn, airPods], usingDefault: true });
+  });
+
+  it('marks the first connected entry as used and keeps unplugged entries in order', () => {
+    expect(microphoneView(devices, [mv7, airPods, builtIn])).toEqual({
+      rows: [
+        { label: 'Shure MV7+', state: 'missing', microphone: mv7 },
+        { label: 'AirPods Pro', state: 'active', microphone: airPods },
+        { label: 'Mikrofón MacBooku Pro', state: 'connected', microphone: builtIn },
       ],
+      addable: [],
+      usingDefault: false,
     });
   });
 
-  it('keeps a chosen microphone that is not connected right now', () => {
-    const view = microphoneOptions(devices, { deviceId: 'mv7', label: 'Shure MV7+' });
-
-    expect(view.selected).toBe('mv7');
-    expect(view.options.at(-1)).toEqual({ value: 'mv7', label: 'Shure MV7+ (nepripojený)', microphone: { deviceId: 'mv7', label: 'Shure MV7+' } });
+  it('falls back to the system default when no entry is connected', () => {
+    expect(microphoneView(devices, [mv7])).toMatchObject({ rows: [{ state: 'missing' }], addable: [builtIn, airPods], usingDefault: true });
   });
 
-  it('shows the Bluetooth hint only for a Bluetooth input', () => {
-    expect(bluetoothHint(devices, { deviceId: 'airpods', label: 'AirPods Pro' })).toBe(
+  it('matches an entry that reconnected under a new id by its label', () => {
+    expect(microphoneView(devices, [{ deviceId: 'airpods-old', label: 'AirPods Pro' }])).toMatchObject({ rows: [{ label: 'AirPods Pro', state: 'active' }], addable: [builtIn] });
+  });
+
+  it('offers a second device of the same model that carries a different id', () => {
+    const twins = [
+      { deviceId: 'usb-a', label: 'USB Audio Device', isBluetooth: false, isDefault: false },
+      { deviceId: 'usb-b', label: 'USB Audio Device', isBluetooth: false, isDefault: false },
+    ];
+
+    expect(microphoneView(twins, [{ deviceId: 'usb-a', label: 'USB Audio Device' }]).addable).toEqual([{ deviceId: 'usb-b', label: 'USB Audio Device' }]);
+  });
+
+  it('moves, removes and appends entries without going past either end', () => {
+    expect(moveMicrophone([mv7, airPods, builtIn], 2, -1)).toEqual([mv7, builtIn, airPods]);
+    expect(moveMicrophone([mv7, airPods, builtIn], 0, 1)).toEqual([airPods, mv7, builtIn]);
+    expect(moveMicrophone([mv7, airPods], 0, -1)).toEqual([mv7, airPods]);
+    expect(moveMicrophone([mv7, airPods], 1, 1)).toEqual([mv7, airPods]);
+    expect(removeMicrophone([mv7, airPods, builtIn], 1)).toEqual([mv7, builtIn]);
+    expect(addMicrophone([mv7], airPods)).toEqual([mv7, airPods]);
+  });
+
+  it('shows the Bluetooth hint only when recording uses a Bluetooth input', () => {
+    expect(bluetoothHint(devices, [mv7, airPods])).toBe(
       'Bluetooth slúchadlá sa pri zapnutom mikrofóne prepnú na hovorový profil, takže sa zhorší aj zvuk hudby. Ak počúvate cez AirPods, odporúčame vstavaný mikrofón Macu.',
     );
-    expect(bluetoothHint(devices, { deviceId: 'built-in', label: 'Mikrofón MacBooku Pro' })).toBeNull();
-    expect(bluetoothHint(devices, { deviceId: null, label: null })).toBeNull();
+    expect(bluetoothHint(devices, [builtIn, airPods])).toBeNull();
+    expect(bluetoothHint(devices, [])).toBeNull();
     const airPodsDefault = devices.map((device) => ({ ...device, isDefault: device.isBluetooth }));
-    expect(bluetoothHint(airPodsDefault, { deviceId: null, label: null })).toContain('Bluetooth slúchadlá');
+    expect(bluetoothHint(airPodsDefault, [])).toContain('Bluetooth slúchadlá');
+    expect(bluetoothHint(airPodsDefault, [mv7])).toContain('Bluetooth slúchadlá');
   });
 });
 

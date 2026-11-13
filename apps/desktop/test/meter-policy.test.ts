@@ -5,7 +5,7 @@ import { Listeners } from '../src/main/helper/listeners';
 import { InProcessCapture } from './in-process-capture';
 import { RecordingLogger } from './recording-logger';
 
-const AIRPODS = { deviceId: 'airpods', label: 'AirPods Pro' };
+const AIRPODS = [{ deviceId: 'airpods', label: 'AirPods Pro' }];
 
 class MainWindowActivity implements MeterWindow {
   private readonly changes = new Listeners<boolean>(new RecordingLogger(), 'Window activity listener failed');
@@ -86,14 +86,14 @@ describe('MeterPolicy', () => {
     const { capture, window, policy } = harness();
     await policy.request(AIRPODS);
 
-    await capture.start({ deviceId: null, label: null });
+    await capture.start([]);
     expect(capture.metering).toBeNull();
     await capture.stop();
     await settle();
     expect(capture.metering).toEqual(AIRPODS);
 
     window.set(false);
-    await capture.start({ deviceId: null, label: null });
+    await capture.start([]);
     await capture.stop();
     await settle();
     expect(capture.metering).toBeNull();
@@ -103,9 +103,9 @@ describe('MeterPolicy', () => {
     const { capture, policy } = harness();
 
     await policy.request(AIRPODS);
-    await policy.request({ deviceId: null, label: null });
+    await policy.request([]);
 
-    expect(capture.metering).toEqual({ deviceId: null, label: null });
+    expect(capture.metering).toEqual([]);
   });
 
   it('forgets the request when the main window closes so a reopened window on Domov keeps the mic closed', async () => {

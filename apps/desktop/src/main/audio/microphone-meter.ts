@@ -9,7 +9,7 @@ export class MicrophoneMeter {
     private readonly send: (rms: number) => void,
   ) {}
 
-  async start(microphone: MicrophoneSetting): Promise<void> {
+  async start(microphone: readonly MicrophoneSetting[]): Promise<void> {
     this.listen();
     try {
       await this.capture.startMeter(microphone);

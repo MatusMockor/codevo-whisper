@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MicrophoneMeter } from '../src/main/audio/microphone-meter';
 import { InProcessCapture, stampedPcm } from './in-process-capture';
 
-const AIRPODS = { deviceId: 'airpods', label: 'AirPods Pro' };
+const AIRPODS = [{ deviceId: 'airpods', label: 'AirPods Pro' }];
 
 function harness() {
   const capture = new InProcessCapture();
@@ -38,10 +38,10 @@ describe('MicrophoneMeter', () => {
     const { capture, sent, meter } = harness();
 
     await meter.start(AIRPODS);
-    await meter.start({ deviceId: null, label: null });
+    await meter.start([]);
     capture.speak(stampedPcm(1, 0.1), 0.3);
 
-    expect(capture.metering).toEqual({ deviceId: null, label: null });
+    expect(capture.metering).toEqual([]);
     expect(sent).toEqual([0.3]);
   });
 

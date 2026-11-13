@@ -1,45 +1,56 @@
-import type { AudioDevice } from '../../shared/microphones';
+import { MAX_MICROPHONES, resolveDevice, type AudioDevice } from '../../shared/microphones';
 import type { MicrophoneSetting } from '../../shared/settings';
 
-export const SYSTEM_DEFAULT_VALUE = 'system-default';
+export type MicrophoneRowState = 'active' | 'connected' | 'missing';
 
-export type MicrophoneOption = { value: string; label: string; microphone: MicrophoneSetting };
+export type MicrophoneRow = { label: string; state: MicrophoneRowState; microphone: MicrophoneSetting };
 
-export type MicrophoneOptions = { selected: string; options: MicrophoneOption[] };
-
-const SYSTEM_DEFAULT: MicrophoneOption = { value: SYSTEM_DEFAULT_VALUE, label: 'Systémový predvolený', microphone: { deviceId: null, label: null } };
+export type MicrophoneView = { rows: MicrophoneRow[]; addable: MicrophoneSetting[]; usingDefault: boolean };
 
 const BLUETOOTH_HINT =
   'Bluetooth slúchadlá sa pri zapnutom mikrofóne prepnú na hovorový profil, takže sa zhorší aj zvuk hudby. Ak počúvate cez AirPods, odporúčame vstavaný mikrofón Macu.';
 
-function isSystemDefault(chosen: MicrophoneSetting): boolean {
-  return chosen.deviceId === null && chosen.label === null;
+function connectedAs(devices: readonly AudioDevice[], entry: MicrophoneSetting): AudioDevice | null {
+  return resolveDevice(devices, [entry]).device;
 }
 
-function missingOption(devices: readonly AudioDevice[], chosen: MicrophoneSetting): MicrophoneOption[] {
-  if (isSystemDefault(chosen) || devices.some((device) => device.deviceId === chosen.deviceId)) {
-    return [];
+export function microphoneView(devices: readonly AudioDevice[], list: readonly MicrophoneSetting[]): MicrophoneView {
+  const recording = resolveDevice(devices, list).device;
+  const rows = list.map((microphone): MicrophoneRow => {
+    const device = connectedAs(devices, microphone);
+    if (device === null) {
+      return { label: microphone.label ?? 'Vybraný mikrofón', state: 'missing', microphone };
+    }
+    return { label: device.label, state: device === recording ? 'active' : 'connected', microphone };
+  });
+  const listed = new Set(list.map((entry) => connectedAs(devices, entry)));
+  const addable = devices.filter((device) => !listed.has(device)).map((device) => ({ deviceId: device.deviceId, label: device.label }));
+  return { rows, addable: list.length < MAX_MICROPHONES ? addable : [], usingDefault: recording === null };
+}
+
+export function moveMicrophone(list: readonly MicrophoneSetting[], index: number, offset: -1 | 1): MicrophoneSetting[] {
+  const target = index + offset;
+  const moved = list[index];
+  if (moved === undefined || target < 0 || target >= list.length) {
+    return [...list];
   }
-  const label = chosen.label ?? 'Vybraný mikrofón';
-  return [{ value: chosen.deviceId ?? label, label: `${label} (nepripojený)`, microphone: chosen }];
+  const next = list.filter((_, at) => at !== index);
+  next.splice(target, 0, moved);
+  return next;
 }
 
-export function microphoneOptions(devices: readonly AudioDevice[], chosen: MicrophoneSetting): MicrophoneOptions {
-  const connected = devices.map((device) => ({ value: device.deviceId, label: device.label, microphone: { deviceId: device.deviceId, label: device.label } }));
-  const options = [SYSTEM_DEFAULT, ...connected, ...missingOption(devices, chosen)];
-  if (isSystemDefault(chosen)) {
-    return { selected: SYSTEM_DEFAULT_VALUE, options };
-  }
-  return { selected: chosen.deviceId ?? chosen.label ?? SYSTEM_DEFAULT_VALUE, options };
+export function removeMicrophone(list: readonly MicrophoneSetting[], index: number): MicrophoneSetting[] {
+  return list.filter((_, at) => at !== index);
 }
 
-function recordingDevice(devices: readonly AudioDevice[], chosen: MicrophoneSetting): AudioDevice | undefined {
-  if (isSystemDefault(chosen)) {
-    return devices.find((device) => device.isDefault);
-  }
-  return devices.find((device) => device.deviceId === chosen.deviceId);
+export function addMicrophone(list: readonly MicrophoneSetting[], microphone: MicrophoneSetting): MicrophoneSetting[] {
+  return [...list, microphone];
 }
 
-export function bluetoothHint(devices: readonly AudioDevice[], chosen: MicrophoneSetting): string | null {
-  return recordingDevice(devices, chosen)?.isBluetooth === true ? BLUETOOTH_HINT : null;
+function recordingDevice(devices: readonly AudioDevice[], list: readonly MicrophoneSetting[]): AudioDevice | undefined {
+  return resolveDevice(devices, list).device ?? devices.find((device) => device.isDefault);
+}
+
+export function bluetoothHint(devices: readonly AudioDevice[], list: readonly MicrophoneSetting[]): string | null {
+  return recordingDevice(devices, list)?.isBluetooth === true ? BLUETOOTH_HINT : null;
 }

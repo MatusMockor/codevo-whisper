@@ -44,7 +44,7 @@ describe('signalPathNodes', () => {
 
   it('shows the microphone and its access', () => {
     expect(node(signalPathNodes(input()), 'microphone')).toMatchObject({ value: 'Systémový predvolený', meta: 'prístup povolený' });
-    expect(node(signalPathNodes(input({ settings: { microphone: { deviceId: 'usb', label: 'Rode NT-USB' } } })), 'microphone')).toMatchObject({ value: 'Rode NT-USB' });
+    expect(node(signalPathNodes(input({ settings: { microphones: [{ deviceId: 'usb', label: 'Rode NT-USB' }] } })), 'microphone')).toMatchObject({ value: 'Rode NT-USB' });
     expect(node(signalPathNodes(input({ permissions: { ...GRANTED, microphone: 'denied' } })), 'microphone')).toMatchObject({ state: 'err', value: 'Prístup zamietnutý' });
     expect(node(signalPathNodes(input({ permissions: { ...GRANTED, microphone: 'not-determined' } })), 'microphone')).toMatchObject({ state: 'warn', meta: 'prístup ešte nepovolený' });
     expect(node(signalPathNodes(input({ permissions: null })), 'microphone')).toMatchObject({ state: 'ok' });

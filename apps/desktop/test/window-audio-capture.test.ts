@@ -1,10 +1,11 @@
+import type { MicrophoneSetting } from '../src/shared/settings';
 import { describe, expect, it } from 'vitest';
 import { WindowAudioCapture } from '../src/main/audio/window-audio-capture';
 import type { CaptureRequest } from '../src/shared/capture-contract';
 import { FakeCaptureHost } from './fake-capture-host';
 import { RecordingLogger } from './recording-logger';
 
-const SYSTEM_DEFAULT = { deviceId: null, label: null };
+const SYSTEM_DEFAULT: readonly MicrophoneSetting[] = [];
 
 function capture(maxRecordingMs: number): { host: FakeCaptureHost; capture: WindowAudioCapture } {
   const host = new FakeCaptureHost();
@@ -86,7 +87,7 @@ describe('WindowAudioCapture', () => {
     const { host, capture: audio } = capture(1000);
     host.startResult = { label: 'MacBook Pro Microphone', fallback: true };
 
-    const started = await audio.start({ deviceId: 'built-in-id', label: 'MacBook Pro Microphone' });
+    const started = await audio.start([{ deviceId: 'built-in-id', label: 'MacBook Pro Microphone' }]);
 
     expect(started).toEqual({ fallback: true, deviceLabel: 'MacBook Pro Microphone' });
     expect(host.requests).toContainEqual({ type: 'start', deviceId: 'built-in-id', mode: 'record' });

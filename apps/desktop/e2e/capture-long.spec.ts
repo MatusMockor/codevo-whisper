@@ -1,3 +1,4 @@
+import type { MicrophoneSetting } from '../src/shared/settings';
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { mainWindow } from './app-windows';
@@ -14,7 +15,7 @@ const BYTES_PER_MS = 32;
 const START_SLACK_MS = 100;
 const END_SLACK_MS = 100;
 const DELIVERY_SLACK_MS = 300;
-const SYSTEM_DEFAULT = { deviceId: null, label: null };
+const SYSTEM_DEFAULT: readonly MicrophoneSetting[] = [];
 
 let app: ElectronApplication;
 let userDataDir: string;

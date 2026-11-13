@@ -89,7 +89,7 @@ function SettingsLayout({ target, value, onNavigate, onOpenPalette }: SettingsLa
             <DictationSection settings={value} activeModel={activeModel} />
             <SettingsGroup group="microphone">
               <SettingsBlock id="microphone-input">
-                <MicrophonePicker microphone={value.microphone} onChange={(microphone) => saveSettings({ microphone })} />
+                <MicrophonePicker microphones={value.microphones} onChange={(microphones) => saveSettings({ microphones })} />
               </SettingsBlock>
             </SettingsGroup>
             <InsertionSection settings={value} />

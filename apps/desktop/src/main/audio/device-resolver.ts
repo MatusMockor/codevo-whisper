@@ -1,10 +1,5 @@
 import type { RawAudioDevice } from '../../shared/capture-contract';
 import type { AudioDevice } from '../../shared/microphones';
-import type { MicrophoneSetting } from '../../shared/settings';
-
-export type { AudioDevice };
-
-export type ResolvedDevice = { device: AudioDevice | null; fallback: boolean };
 
 const ALIAS_DEVICE_IDS: ReadonlySet<string> = new Set(['default', 'communications']);
 
@@ -35,26 +30,4 @@ export function toAudioDevices(raw: readonly RawAudioDevice[]): AudioDevice[] {
     isBluetooth: isBluetoothLabel(device.label),
     isDefault: device.deviceId === defaultId,
   }));
-}
-
-function findDevice(devices: readonly AudioDevice[], chosen: MicrophoneSetting): AudioDevice | undefined {
-  const byId = devices.find((device) => device.deviceId === chosen.deviceId);
-  if (byId !== undefined) {
-    return byId;
-  }
-  if (chosen.label === null || chosen.label === '') {
-    return undefined;
-  }
-  return devices.find((device) => device.label === chosen.label);
-}
-
-export function resolveDevice(devices: AudioDevice[], chosen: MicrophoneSetting): ResolvedDevice {
-  if (chosen.deviceId === null && chosen.label === null) {
-    return { device: null, fallback: false };
-  }
-  const device = findDevice(devices, chosen);
-  if (device === undefined) {
-    return { device: null, fallback: true };
-  }
-  return { device, fallback: false };
 }

@@ -6,7 +6,8 @@ import type { Logger } from '../logging/logger';
 import type { AudioCapture, CaptureStart } from './audio-capture';
 import type { CaptureHost } from './capture-host';
 import { parseDeviceList, parseStartResult } from './capture-payloads';
-import { resolveDevice, toAudioDevices, type AudioDevice } from './device-resolver';
+import { resolveDevice, type AudioDevice } from '../../shared/microphones';
+import { toAudioDevices } from './device-resolver';
 import { PcmRecording } from './pcm-recording';
 
 export const MAX_RECORDING_MS = 600_000;
@@ -105,7 +106,7 @@ export class WindowAudioCapture implements AudioCapture {
     };
   }
 
-  start(chosen: MicrophoneSetting): Promise<CaptureStart> {
+  start(chosen: readonly MicrophoneSetting[]): Promise<CaptureStart> {
     if (this.blocks > 0) {
       return Promise.reject(new Error(BLOCKED_MESSAGE));
     }
@@ -116,7 +117,7 @@ export class WindowAudioCapture implements AudioCapture {
     return this.serialize(() => this.stopRecording());
   }
 
-  startMeter(chosen: MicrophoneSetting): Promise<void> {
+  startMeter(chosen: readonly MicrophoneSetting[]): Promise<void> {
     if (this.blocks > 0) {
       return Promise.reject(new Error(BLOCKED_MESSAGE));
     }
@@ -141,7 +142,7 @@ export class WindowAudioCapture implements AudioCapture {
     return run;
   }
 
-  private async startRecording(chosen: MicrophoneSetting): Promise<CaptureStart> {
+  private async startRecording(chosen: readonly MicrophoneSetting[]): Promise<CaptureStart> {
     if (this.mode === 'record') {
       throw new Error('Recording is already running');
     }
@@ -166,7 +167,7 @@ export class WindowAudioCapture implements AudioCapture {
     return pcm;
   }
 
-  private async startMetering(chosen: MicrophoneSetting): Promise<void> {
+  private async startMetering(chosen: readonly MicrophoneSetting[]): Promise<void> {
     if (this.mode === 'record') {
       return;
     }
@@ -182,7 +183,7 @@ export class WindowAudioCapture implements AudioCapture {
     this.mode = 'idle';
   }
 
-  private async open(chosen: MicrophoneSetting, mode: CaptureMode): Promise<CaptureStart> {
+  private async open(chosen: readonly MicrophoneSetting[], mode: CaptureMode): Promise<CaptureStart> {
     const { device, fallback } = resolveDevice(await this.listDevices(), chosen);
     this.mode = mode;
     try {
