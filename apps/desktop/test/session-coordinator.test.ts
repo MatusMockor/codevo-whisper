@@ -141,6 +141,11 @@ async function dictate(harness: Harness, marker: number): Promise<void> {
   harness.helper.emitHotkey('up');
 }
 
+function cancelVia(harness: Harness, via: 'escape' | 'overlay button'): void {
+  const cancel = { escape: () => harness.helper.pressSessionShortcut('cancel'), 'overlay button': () => harness.coordinator.act('cancel') };
+  cancel[via]();
+}
+
 function kinds(states: OverlayState[]): string[] {
   return states.map((state) => state.kind).filter((kind, index, all) => kind !== all[index - 1]);
 }
@@ -1054,8 +1059,7 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => harness.capture.starts.length).toBe(1);
     harness.capture.speak(stampedPcm(7));
 
-    if (via === 'escape') harness.helper.pressSessionShortcut('cancel');
-    else harness.coordinator.act('cancel');
+    cancelVia(harness, via);
 
     await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
     expect(harness.capture.recording).toBe(false);
@@ -1076,8 +1080,7 @@ describe('SessionCoordinator', () => {
     await dictate(harness, 7);
     await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
 
-    if (via === 'escape') harness.helper.pressSessionShortcut('cancel');
-    else harness.coordinator.act('cancel');
+    cancelVia(harness, via);
 
     await expect.poll(() => harness.coordinator.isBusy(), { timeout: 3000 }).toBe(false);
     expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
