@@ -88,7 +88,7 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
           ))}
         </select>
       </SettingsRow>
-      <SettingsRow title="Akcelerácia" description="Auto používa GPU na Apple Silicon a CPU na Intel Macu. Zmena sa použije po dokončení aktuálneho diktovania. Na ostatných systémoch sa používa CPU.">
+      <SettingsRow title="Akcelerácia" description="Auto používa GPU na Apple Silicon a CPU na Intel Macu. Na Linuxe Auto aj GPU spúšťajú Vulkan a na CPU prejdú, iba ak sa Vulkan nespustí. Zmena sa použije po dokončení aktuálneho diktovania.">
         <SegmentedControl label="Akcelerácia" options={ACCELERATIONS} value={settings.localAcceleration} onChange={(localAcceleration) => saveSettings({ localAcceleration })} />
       </SettingsRow>
       {actions.prompt !== null && <LanguagePrompt prompt={actions.prompt} onChoose={actions.chooseLanguage} onCancel={actions.cancelPrompt} />}
