@@ -30,11 +30,11 @@ export function microphoneView(devices: readonly AudioDevice[], list: readonly M
 
 export function moveMicrophone(list: readonly MicrophoneSetting[], index: number, offset: -1 | 1): MicrophoneSetting[] {
   const target = index + offset;
-  const next = [...list];
-  const [moved] = next.splice(index, 1);
+  const moved = list[index];
   if (moved === undefined || target < 0 || target >= list.length) {
     return [...list];
   }
+  const next = list.filter((_, at) => at !== index);
   next.splice(target, 0, moved);
   return next;
 }
