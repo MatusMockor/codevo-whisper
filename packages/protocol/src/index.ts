@@ -1,4 +1,4 @@
-export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION } from './version';
+export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION, VOCABULARY_MIN_VERSION } from './version';
 
 export { CipherState, MAX_NONCE } from './noise/cipher-state';
 export {

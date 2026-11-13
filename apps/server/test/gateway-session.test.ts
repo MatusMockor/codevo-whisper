@@ -80,7 +80,7 @@ describe('gateway sessions', () => {
     const device = await server.addDevice();
     const session = await connectSession(server.url, device, server.serverKey.publicKey);
 
-    expect(manifest.version).toBe('0.3.0');
+    expect(manifest.version).toBe('0.4.0');
     expect(await session.next()).toEqual({ type: 'ready', serverVersion: manifest.version });
   });
 
@@ -97,6 +97,22 @@ describe('gateway sessions', () => {
     ]);
     expect(fake.requests).toEqual([{ language: 'sk', bytes: 64_000 }]);
     expect((await server.devices.list())[0]?.lastSeenAt).not.toBeNull();
+  });
+
+  it('passes the dictation vocabulary to the stt and keeps it out of the log', async () => {
+    const lines: string[] = [];
+    const session = await readySession(await start({ logger: streamLogger((line) => lines.push(line)) }));
+    session.send({ type: 'start', sessionId: 's1', language: 'sk', vocabulary: ['Kumiba', 'Codevo Whisper'] });
+    sendAudio(session, pcmSeconds(2));
+    session.send({ type: 'finish' });
+
+    expect(await collectUntilDone(session)).toEqual([
+      { type: 'final', sessionId: 's1', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 's1' },
+    ]);
+    expect(fake.requests).toEqual([{ language: 'sk', vocabulary: ['Kumiba', 'Codevo Whisper'], bytes: 64_000 }]);
+    await waitUntil(() => lines.some((line) => line.includes('"result":"ok"')));
+    expect(lines.join('\n')).not.toMatch(/Kumiba|Codevo/);
   });
 
   it('answers a capabilities request before start with no dictation languages from an stt without routing', async () => {

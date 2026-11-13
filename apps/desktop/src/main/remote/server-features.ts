@@ -1,4 +1,4 @@
-import { LANGUAGE_SETS_MIN_VERSION } from '@codevo-whisper/protocol';
+import { LANGUAGE_SETS_MIN_VERSION, VOCABULARY_MIN_VERSION } from '@codevo-whisper/protocol';
 import { compareVersions, parseVersion } from '../updates/version-order';
 
 function atLeast(version: string, minimum: string): boolean {
@@ -13,9 +13,12 @@ function atLeast(version: string, minimum: string): boolean {
 export class ServerFeatures {
   static readonly languageSetsMinVersion = LANGUAGE_SETS_MIN_VERSION;
 
-  private constructor(readonly languageSets: boolean) {}
+  private constructor(
+    readonly languageSets: boolean,
+    readonly vocabulary: boolean,
+  ) {}
 
   static of(serverVersion: string): ServerFeatures {
-    return new ServerFeatures(atLeast(serverVersion, ServerFeatures.languageSetsMinVersion));
+    return new ServerFeatures(atLeast(serverVersion, ServerFeatures.languageSetsMinVersion), atLeast(serverVersion, VOCABULARY_MIN_VERSION));
   }
 }

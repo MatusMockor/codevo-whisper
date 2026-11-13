@@ -29,10 +29,10 @@ describe('validateSettingsPatch', () => {
     }
   });
   it('accepts bounded custom words and rejects malformed transcript preferences', () => {
-    const patch = { customWords: ['Žilina', 'GPT-4', "O’Reilly", 'Node.js'], removeFillerWords: true, appendTrailingSpace: false };
+    const customWords = [{ word: 'Žilina', aliases: ['zilina'] }, { word: 'GPT-4', aliases: [] }, { word: "O’Reilly", aliases: [] }, { word: 'Kumiba MCP', aliases: ['kumiba em si pí'] }];
+    const patch = { customWords, removeFillerWords: true, appendTrailingSpace: false };
     expect(validateSettingsPatch(patch)).toEqual(patch);
-    expect(validateSettingsPatch({ customWords: ['a'.repeat(64)] })).toEqual({ customWords: ['a'.repeat(64)] });
-    for (const customWords of [null, 'word', [7], [''], ['two words'], ['a\u0000b'], ['a/b'], ['a@b'], ['a'.repeat(65)], Array.from({ length: 101 }, () => 'word')]) {
+    for (const customWords of [null, 'word', ['Kumiba'], [{ word: 'Kumiba' }], [{ word: 'a/b', aliases: [] }], [{ word: 'Kumiba', aliases: ['KUMIBA'] }], Array.from({ length: 101 }, (_, index) => ({ word: `word${index}`, aliases: [] }))]) {
       expect(() => validateSettingsPatch({ customWords })).toThrow(IpcValidationError);
     }
     expect(() => validateSettingsPatch({ removeFillerWords: 1 })).toThrow(IpcValidationError);

@@ -50,13 +50,26 @@ describe('SettingsStore', () => {
   it('defaults, freezes and persists transcript preferences independently', async () => {
     const store = new SettingsStore(file);
     expect(await store.load()).toMatchObject({ customWords: [], removeFillerWords: false, appendTrailingSpace: false });
-    const words = ['Kumiba', 'Žilina'];
+    const aliases = ['kumba', 'kumiba em si pí'];
+    const words = [{ word: 'Kumiba', aliases }, { word: 'Codevo Whisper', aliases: [] }];
     await store.update({ customWords: words, removeFillerWords: true, appendTrailingSpace: true });
-    words.push('changed');
-    expect(await new SettingsStore(file).load()).toMatchObject({ customWords: ['Kumiba', 'Žilina'], removeFillerWords: true, appendTrailingSpace: true });
+    aliases.push('changed');
+    words.push({ word: 'Changed', aliases: [] });
+    const saved = [{ word: 'Kumiba', aliases: ['kumba', 'kumiba em si pí'] }, { word: 'Codevo Whisper', aliases: [] }];
+    expect(store.get().customWords).toEqual(saved);
+    expect(await new SettingsStore(file).load()).toMatchObject({ customWords: saved, removeFillerWords: true, appendTrailingSpace: true });
     expect(Object.isFrozen(store.get().customWords)).toBe(true);
-    await writeFile(file, JSON.stringify({ customWords: ['two words'], removeFillerWords: true, appendTrailingSpace: 'yes' }));
+    expect(store.get().customWords.every((entry) => Object.isFrozen(entry) && Object.isFrozen(entry.aliases))).toBe(true);
+    await writeFile(file, JSON.stringify({ customWords: [{ word: 'Kumiba', aliases: ['a/b'] }], removeFillerWords: true, appendTrailingSpace: 'yes' }));
     expect(await new SettingsStore(file).load()).toMatchObject({ customWords: [], removeFillerWords: true, appendTrailingSpace: false });
+  });
+  it('loads stored plain custom words as entries without aliases', async () => {
+    await writeFile(file, JSON.stringify({ customWords: ['Kumiba', 'Žilina', 'KUMIBA'] }));
+    const store = new SettingsStore(file);
+    expect((await store.load()).customWords).toEqual([{ word: 'Kumiba', aliases: [] }, { word: 'Žilina', aliases: [] }]);
+    expect(store.get().customWords.every((entry) => Object.isFrozen(entry) && Object.isFrozen(entry.aliases))).toBe(true);
+    await writeFile(file, JSON.stringify({ customWords: ['Kumiba', 'a/b'] }));
+    expect((await new SettingsStore(file).load()).customWords).toEqual([]);
   });
   it('defaults AI polish off with no endpoint and drops a stored endpoint that is not http or https', async () => {
     const store = new SettingsStore(file);

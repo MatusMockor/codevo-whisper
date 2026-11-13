@@ -31,6 +31,7 @@ function refusal(status: number, request: SttRequest): ProtocolError {
 function transcribeUrl(baseUrl: string, request: SttRequest): URL {
   const url = new URL('/transcribe', baseUrl);
   url.searchParams.set('language', request.language);
+  request.vocabulary.forEach((term) => url.searchParams.append('vocabulary', term));
   if (request.languages === null) {
     return url;
   }

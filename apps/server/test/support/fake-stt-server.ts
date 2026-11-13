@@ -4,7 +4,7 @@ import { DICTATION_LANGUAGES, MAX_DICTATION_LANGUAGES } from '@codevo-whisper/pr
 
 export type FakeSttResponse = { status: number; body: unknown };
 
-export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string };
+export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string; vocabulary?: string[] };
 
 export type FakeSttBehaviour = {
   respond?: (pcm: Uint8Array, language: string, request: FakeSttRequest) => FakeSttResponse;
@@ -52,10 +52,12 @@ function send(response: ServerResponse, status: number, body: unknown): void {
 function requestOf(url: URL, bytes: number): FakeSttRequest {
   const language = url.searchParams.get('language') ?? '';
   const languages = url.searchParams.get('languages');
+  const terms = url.searchParams.getAll('vocabulary');
+  const vocabulary = terms.length === 0 ? {} : { vocabulary: terms };
   if (languages === null) {
-    return { language, bytes };
+    return { language, ...vocabulary, bytes };
   }
-  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', bytes };
+  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', ...vocabulary, bytes };
 }
 
 function isValidSelection(request: FakeSttRequest): boolean {

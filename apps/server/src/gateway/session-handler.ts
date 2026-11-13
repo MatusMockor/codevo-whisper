@@ -108,6 +108,7 @@ export class SessionHandler {
       deviceId: this.deviceId,
       language: message.language,
       languages: message.languages ?? null,
+      vocabulary: message.vocabulary ?? [],
       partials: message.partials === true,
       dispatcher: this.deps.dispatcher,
       clock: this.deps.clock,

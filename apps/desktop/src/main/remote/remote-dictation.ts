@@ -5,6 +5,7 @@ import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind 
 import { RetryBuffer } from './retry-buffer';
 import type { SecureConnection } from './secure-connection';
 import type { ReadyConnection } from './server-connector';
+import { ServerFeatures } from './server-features';
 import type { ServerLanguageSupport } from './server-language-support';
 
 export type RemoteDictationDeps = {
@@ -96,7 +97,7 @@ export class RemoteDictation implements EngineDictation {
       this.cancel();
       return;
     }
-    this.attempt = this.begin(ready.connection);
+    this.attempt = this.begin(ready);
     deps.options.signal.addEventListener('abort', () => this.cancel(), { once: true });
   }
 
@@ -122,22 +123,23 @@ export class RemoteDictation implements EngineDictation {
     return { connection, sessionId: '', segments: new Map(), textChars: 0, finishSent: false };
   }
 
-  private begin(connection: SecureConnection): Attempt {
+  private begin({ connection, serverVersion }: ReadyConnection): Attempt {
     const attempt: Attempt = { ...this.idle(connection), sessionId: this.deps.newSessionId?.() ?? crypto.randomUUID() };
     connection.onMessage((message) => this.receive(attempt, message));
     connection.onClose((failure) => this.dropped(attempt, failure));
-    connection.send(this.startMessage(attempt.sessionId));
+    connection.send(this.startMessage(attempt.sessionId, serverVersion));
     return attempt;
   }
 
-  private startMessage(sessionId: string): ClientMessage {
-    const { partials, languages } = this.deps.options;
+  private startMessage(sessionId: string, serverVersion: string): ClientMessage {
+    const { partials, languages, vocabulary = [] } = this.deps.options;
     return {
       type: 'start',
       sessionId,
       language: 'auto',
       ...(partials === true ? { partials: true } : {}),
       ...(languages.mode === 'selected' ? { languages: languages.selected } : {}),
+      ...(vocabulary.length > 0 && ServerFeatures.of(serverVersion).vocabulary ? { vocabulary } : {}),
     };
   }
 
@@ -358,7 +360,7 @@ export class RemoteDictation implements EngineDictation {
       return;
     }
     this.notify({ type: 'restart' });
-    this.attempt = this.begin(ready.connection);
+    this.attempt = this.begin(ready);
     this.paused = false;
     this.outbox.reset(this.retry.audio());
     this.pump();

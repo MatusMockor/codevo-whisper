@@ -1,7 +1,8 @@
 import { CODEX_EFFORTS, isAiBaseUrl, isAiModel, isCodexModel } from '../../shared/ai';
 import { isDictationLanguage, MAX_SELECTED_LANGUAGES } from '../../shared/dictation-languages';
 import { parseHotkeySetting } from '../../shared/hotkey';
-import { isCustomWords, isEngineOrder, type Settings } from '../../shared/settings';
+import { isCustomWords } from '../../shared/custom-words';
+import { isEngineOrder, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 

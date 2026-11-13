@@ -1,4 +1,5 @@
 import type { AiProvider, CodexEffort } from './ai';
+import type { CustomWord } from './custom-words';
 import type { LanguageSelection } from './dictation-languages';
 import type { HotkeyBinding } from './hotkey';
 
@@ -43,7 +44,7 @@ export type Settings = {
   audioFeedback: boolean;
   feedbackOutputId: string | null;
   feedbackVolume: number;
-  customWords: readonly string[];
+  customWords: readonly CustomWord[];
   removeFillerWords: boolean;
   appendTrailingSpace: boolean;
   hotkey: HotkeySetting;
@@ -103,9 +104,3 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   codexModel: 'gpt-6-luna',
   codexEffort: 'low',
 });
-
-export function isCustomWords(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.length <= 100 && value.every((word: unknown) =>
-    typeof word === 'string' && [...word].length <= 64 && new TextEncoder().encode(word).length <= 256 &&
-    /^[\p{L}\p{N}][\p{L}\p{M}\p{N}]*(?:['’.-][\p{L}\p{N}][\p{L}\p{M}\p{N}]*)*$/u.test(word));
-}

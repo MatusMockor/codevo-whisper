@@ -14,9 +14,14 @@ function transcript(request: FakeSttRequest): FakeSttResponse {
   return { status: 200, body: { text: `prepis v jazykoch ${request.languages.join(' ')}`, language: request.languages[0] ?? null, route: 'conditioned' } };
 }
 
+function respond(_pcm: Uint8Array, _language: string, request: FakeSttRequest): FakeSttResponse {
+  process.stdout.write(`${JSON.stringify(request)}\n`);
+  return transcript(request);
+}
+
 const options = JSON.parse(process.argv[2] ?? '{}') as GatewayOptions;
 const dataDir = await mkdtemp(join(tmpdir(), 'cw-e2e-gw-'));
-const stt = await startFakeSttServer({ respond: (_pcm, _language, request) => transcript(request), ...(options.languageModels === true ? { capabilities: ROUTING_STT } : {}) });
+const stt = await startFakeSttServer({ respond, ...(options.languageModels === true ? { capabilities: ROUTING_STT } : {}) });
 const port = await freePort();
 const url = `ws://127.0.0.1:${port}`;
 const adminSocket = join(dataDir, 'admin.sock');

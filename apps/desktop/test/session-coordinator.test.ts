@@ -538,9 +538,9 @@ describe('SessionCoordinator', () => {
   });
   it('captures native vocabulary for an active local session and clears it on the next request', async () => {
     vi.stubEnv('CW_WORKER_CALLS', join(scratch, 'vocabulary-calls'));
-    const harness = await prepared({ settings: { customWords: ['Žilina', 'Kumiba'], appendTrailingSpace: true } });
+    const harness = await prepared({ settings: { customWords: [{ word: 'Žilina', aliases: ['zilina'] }, { word: 'Kumiba MCP', aliases: ['kumiba em si pí'] }], appendTrailingSpace: true } });
     await pressAndSpeak(harness, 7);
-    await harness.settings.update({ customWords: ['Other'], appendTrailingSpace: false });
+    await harness.settings.update({ customWords: [{ word: 'Other', aliases: ['othr'] }], appendTrailingSpace: false });
     harness.helper.emitHotkey('up');
     await expect.poll(() => harness.helper.pasted).toEqual(['7:32000 ']);
     await dictate(harness, 8);
@@ -549,7 +549,7 @@ describe('SessionCoordinator', () => {
     await dictate(harness, 9);
     await expect.poll(() => harness.helper.pasted).toEqual(['7:32000 ', '8:32000', '9:32000']);
     const calls = (await readFile(join(scratch, 'vocabulary-calls'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line));
-    expect(calls).toMatchObject([{ vocabulary: ['Žilina', 'Kumiba'] }, { vocabulary: ['Other'] }, { vocabulary: [] }]);
+    expect(calls).toMatchObject([{ vocabulary: ['Žilina', 'Kumiba MCP'] }, { vocabulary: ['Other'] }, { vocabulary: [] }]);
   });
   it('records, transcribes and inserts', async () => {
     const harness = await prepared();

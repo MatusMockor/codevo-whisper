@@ -1,4 +1,5 @@
 import { canPolish } from '../../shared/ai';
+import { preferredSpellings } from '../../shared/custom-words';
 import type { Polished } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
@@ -251,7 +252,7 @@ export class DictationSession {
   }
 
   private dictationOptions(): DictationOptions {
-    const options: DictationOptions = { languages: this.languages, vocabulary: this.transcriptSettings.customWords, signal: this.controller.signal, partials: this.partials };
+    const options: DictationOptions = { languages: this.languages, vocabulary: preferredSpellings(this.transcriptSettings.customWords), signal: this.controller.signal, partials: this.partials };
     if (this.live === null) {
       return options;
     }

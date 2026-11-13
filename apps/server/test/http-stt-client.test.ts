@@ -27,9 +27,9 @@ async function closedPortUrl(): Promise<string> {
 
 const signal = (): AbortSignal => new AbortController().signal;
 
-const legacy = (pcm: Uint8Array): SttRequest => ({ pcm, language: 'sk', languages: null, kind: 'final' });
+const legacy = (pcm: Uint8Array): SttRequest => ({ pcm, language: 'sk', languages: null, kind: 'final', vocabulary: [] });
 
-const routed = (pcm: Uint8Array, kind: SttRequest['kind'] = 'final'): SttRequest => ({ pcm, language: 'auto', languages: ['sk', 'cs'], kind });
+const routed = (pcm: Uint8Array, kind: SttRequest['kind'] = 'final'): SttRequest => ({ pcm, language: 'auto', languages: ['sk', 'cs'], kind, vocabulary: [] });
 
 type RawServer = { url: string; close(): Promise<void> };
 
@@ -57,6 +57,21 @@ describe('HttpSttClient', () => {
 
     expect(await client.transcribe(legacy(pcmSeconds(0.1)), signal())).toEqual({ text: 'sk:3200', language: null, route: null });
     expect(fake.requests).toEqual([{ language: 'sk', bytes: 3200 }]);
+  });
+
+  it('sends one vocabulary parameter per term and none for an empty vocabulary', async () => {
+    fake = await startFakeSttServer({ capabilities: ROUTING_STT });
+    const client = new HttpSttClient(fake.url);
+
+    await client.transcribe({ ...legacy(pcmSeconds(0.1)), vocabulary: ['Kumiba', 'Codevo Whisper', 'Žilina'] }, signal());
+    await client.transcribe({ ...routed(pcmSeconds(0.1)), vocabulary: ['a,b&c=d'] }, signal());
+    await client.transcribe(legacy(pcmSeconds(0.1)), signal());
+
+    expect(fake.requests).toEqual([
+      { language: 'sk', vocabulary: ['Kumiba', 'Codevo Whisper', 'Žilina'], bytes: 3200 },
+      { language: 'auto', languages: ['sk', 'cs'], kind: 'final', vocabulary: ['a,b&c=d'], bytes: 3200 },
+      { language: 'sk', bytes: 3200 },
+    ]);
   });
 
   it('maps 503 to busy', async () => {

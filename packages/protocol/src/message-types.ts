@@ -28,7 +28,7 @@ export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 export type ClientMessage =
   | { type: 'hello' }
   | { type: 'capabilities' }
-  | { type: 'start'; sessionId: string; language: Language; partials?: boolean; languages?: readonly DictationLanguage[] }
+  | { type: 'start'; sessionId: string; language: Language; partials?: boolean; languages?: readonly DictationLanguage[]; vocabulary?: readonly string[] }
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }
   | { type: 'cancel' }

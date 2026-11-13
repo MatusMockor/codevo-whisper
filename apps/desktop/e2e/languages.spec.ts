@@ -110,3 +110,28 @@ test('a server without the language models shows the overlay error and the provi
   expect(await pasted()).toEqual([]);
   await expect(await languagesRow()).toContainText('Na serveri chýbajú modely pre výber jazykov. Spustite na serveri stt-provision.');
 });
+
+async function useCustomWords(): Promise<void> {
+  const customWords = [{ word: 'Prepis zo', aliases: [] }, { word: 'Kumiba MCP', aliases: ['servera'] }];
+  await page.evaluate((words) => window.codevo.updateSettings({ languages: { mode: 'auto', selected: ['sk', 'cs'] }, customWords: words }), customWords);
+}
+
+test('a current server gets the custom words as vocabulary and the transcript gets aliases and multi-word terms corrected', async () => {
+  await pair({});
+  await useCustomWords();
+
+  await dictate();
+
+  await expect.poll(pasted).toEqual(['Prepis zo Kumiba MCP']);
+  expect(gateway?.sttRequests().map((request) => request.vocabulary)).toEqual([['Prepis zo', 'Kumiba MCP']]);
+});
+
+test('an older server gets no vocabulary and the transcript is still corrected', async () => {
+  await pair({ serverVersion: '0.3.0' });
+  await useCustomWords();
+
+  await dictate();
+
+  await expect.poll(pasted).toEqual(['Prepis zo Kumiba MCP']);
+  expect(gateway?.sttRequests().map((request) => request.vocabulary)).toEqual([undefined]);
+});

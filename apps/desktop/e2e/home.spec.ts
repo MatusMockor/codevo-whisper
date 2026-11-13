@@ -177,7 +177,7 @@ test('copy replays the exact safe trailing space after transcript preferences ch
     await app.evaluate(() => {
       (globalThis as unknown as HookGlobal).codevoE2e.lastTranscript.set(' Žilina\r\n\u0000 ', { appendTrailingSpace: true });
     });
-    await page.evaluate(() => window.codevo.updateSettings({ customWords: ['Other'], appendTrailingSpace: false }));
+    await page.evaluate(() => window.codevo.updateSettings({ customWords: [{ word: 'Other', aliases: [] }], appendTrailingSpace: false }));
     await expect.poll(() => page.evaluate(() => window.codevo.getLastTranscript())).toBe('Žilina ');
     await page.getByRole('region', { name: 'Posledné diktovanie', exact: true }).getByRole('button', { name: 'Kopírovať', exact: true }).click();
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Žilina ');

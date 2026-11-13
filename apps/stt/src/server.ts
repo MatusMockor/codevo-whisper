@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { TranscribeCliError } from '@codevo-whisper/stt-runner';
+import { MAX_VOCABULARY_TERMS, TranscribeCliError } from '@codevo-whisper/stt-runner';
 import type { LanguageRouter } from './language-router';
 import type { ServerModels } from './model-names';
 import { readPcm } from './read-pcm';
@@ -19,6 +19,8 @@ export type SttServerOptions = {
 };
 
 const REQUEST_TIMEOUT_MS = 60_000;
+const PERCENT_ENCODED_TERM_BYTES = 3 * 256;
+const MAX_HEADER_BYTES = 16 * 1024 + MAX_VOCABULARY_TERMS * ('&vocabulary='.length + PERCENT_ENCODED_TERM_BYTES);
 
 function parseUrl(raw: string | undefined): URL | null {
   return URL.parse(raw ?? '/', 'http://stt');
@@ -107,7 +109,7 @@ class SingleFlightHandler {
 export async function startSttServer(options: SttServerOptions): Promise<SttServer> {
   const { router, models } = options;
   const handler = new SingleFlightHandler(new TranscriptionJobs(options.transcriber, router), options.onError);
-  const server = createServer((request, response) => {
+  const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, (request, response) => {
     request.on('error', () => request.destroy());
     response.once('finish', () => request.resume());
     response.on('error', () => response.destroy());

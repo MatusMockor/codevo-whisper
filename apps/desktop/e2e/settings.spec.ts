@@ -393,10 +393,10 @@ test.describe('settings page', () => {
     const save = page.getByRole('button', { name: 'Uložiť slová', exact: true });
     await expect(words).toHaveValue('');
     await expect(save).toBeDisabled();
-    await words.fill('two words');
+    await words.fill('Kumiba: a/b');
     await save.click();
     await expect(words).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByRole('alert')).toContainText('jedno slovo');
+    await expect(page.getByRole('alert')).toContainText('jeden výraz');
     expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual([]);
     await words.fill(' Kumiba \nŽilina\nKUMIBA\nZ\u030cilina');
     expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual([]);
@@ -410,7 +410,7 @@ test.describe('settings page', () => {
       await page.keyboard.press('Space');
       await expect(toggle).toHaveAttribute('aria-checked', 'true');
     }
-    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ customWords: ['Kumiba', 'Žilina'], removeFillerWords: true, appendTrailingSpace: true });
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ customWords: [{ word: 'Kumiba', aliases: [] }, { word: 'Žilina', aliases: [] }], removeFillerWords: true, appendTrailingSpace: true });
     await app.close();
     await start();
     await openSettings();
@@ -422,6 +422,21 @@ test.describe('settings page', () => {
       await page.getByRole('region', { name: 'Úprava prepisu' }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: test.info().outputPath(`transcript-settings-${width}.png`) });
     }
+  });
+
+  test('custom words keep aliases and multi-word terms across save and relaunch', async () => {
+    const saved = [{ word: 'Kumiba MCP', aliases: ['kumiba em si pí', 'kumba MCP'] }, { word: 'Codevo Whisper', aliases: [] }];
+    const text = 'Kumiba MCP: kumiba em si pí, kumba MCP\nCodevo Whisper';
+    const words = page.getByRole('textbox', { name: 'Vlastné slová', exact: true });
+    await words.fill(' Kumiba   MCP : kumiba em si pí ,kumba  MCP\nCodevo Whisper\nkumba mcp: duplicate');
+    await page.getByRole('button', { name: 'Uložiť slová', exact: true }).click();
+    await expect.poll(async () => (await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual(saved);
+    await expect(words).toHaveValue(text);
+    await app.close();
+    await start();
+    await openSettings();
+    expect((await page.evaluate(() => window.codevo.getSettings())).customWords).toEqual(saved);
+    await expect(page.getByRole('textbox', { name: 'Vlastné slová', exact: true })).toHaveValue(text);
   });
 
   test('smart is the default and persists after switching modes and relaunching', async () => {

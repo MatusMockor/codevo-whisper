@@ -6,7 +6,9 @@ import {
   readChoice,
   readChoiceList,
   readString,
+  readStringList,
   type JsonObject,
+  type StringRule,
 } from './json-fields';
 import {
   DICTATION_LANGUAGES,
@@ -41,6 +43,8 @@ function decodeAudio(body: Uint8Array): ClientMessage {
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
 
+const VOCABULARY_TERM: StringRule = { maxChars: 64, pattern: /^[^\p{Cc}\p{Cf}\p{Cs}]+$/u };
+
 function readPartials(object: JsonObject): Pick<StartMessage, 'partials'> {
   if (object.partials === undefined) {
     return {};
@@ -58,8 +62,15 @@ function readLanguageSet(object: JsonObject, language: Language): Pick<StartMess
   return { languages: readChoiceList(object, 'languages', DICTATION_LANGUAGES, { minItems: 1, maxItems: MAX_DICTATION_LANGUAGES }) };
 }
 
+function readVocabulary(object: JsonObject): Pick<StartMessage, 'vocabulary'> {
+  if (object.vocabulary === undefined) {
+    return {};
+  }
+  return { vocabulary: readStringList(object, 'vocabulary', VOCABULARY_TERM, { minItems: 1, maxItems: 100 }) };
+}
+
 function decodeStart(object: JsonObject): StartMessage {
-  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials', 'languages']);
+  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials', 'languages', 'vocabulary']);
   const language = readChoice(object, 'language', LANGUAGES);
   return {
     type: 'start',
@@ -67,6 +78,7 @@ function decodeStart(object: JsonObject): StartMessage {
     language,
     ...readPartials(object),
     ...readLanguageSet(object, language),
+    ...readVocabulary(object),
   };
 }
 

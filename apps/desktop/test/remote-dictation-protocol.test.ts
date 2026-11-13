@@ -169,6 +169,30 @@ describe('RemoteDictation protocol handling', () => {
     expect(starts.every((json) => !json.includes('languages'))).toBe(true);
   });
 
+  it.each([
+    { serverVersion: '0.4.0', vocabulary: ['Kumiba', 'Codevo Whisper'], sent: ['Kumiba', 'Codevo Whisper'] },
+    { serverVersion: '0.3.0', vocabulary: ['Kumiba'], sent: undefined },
+    { serverVersion: '0.4.0', vocabulary: [], sent: undefined },
+    { serverVersion: '0.4.0', vocabulary: undefined, sent: undefined },
+  ])('sends a vocabulary of $vocabulary to server $serverVersion as $sent', async ({ serverVersion, vocabulary, sent }) => {
+    const starts: Array<Record<string, unknown>> = [];
+    const engine = await scripted(
+      (session, message) => {
+        if (message.type === 'start') {
+          starts.push(JSON.parse(new TextDecoder().decode(session.plaintexts.at(-1)?.subarray(1))) as Record<string, unknown>);
+          session.send({ type: 'done', sessionId: message.sessionId });
+        }
+      },
+      { serverVersion, languages: [] },
+    );
+
+    await (await startDictation(engine, vocabulary === undefined ? {} : { vocabulary })).finish();
+
+    expect(starts).toHaveLength(1);
+    expect(starts[0]?.vocabulary).toEqual(sent);
+    expect(Object.hasOwn(starts[0] ?? {}, 'vocabulary')).toBe(sent !== undefined);
+  });
+
   it('reports a failed segment that arrives as an empty final and an error, keeping the earlier text', async () => {
     const engine = await scripted((session, message) => {
       if (message.type === 'start') {
