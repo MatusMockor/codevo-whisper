@@ -111,6 +111,9 @@ function languageScores(allowed) {
 async function handle(request) {
   if (process.env.FAKE_WORKER_REQUIRE_READY === '1' && !readySent) process.exit(83);
   if (request.role !== role) return reply(1, 'wrong role');
+  if (primaryFailure === 'crash') process.exit(3);
+  if (primaryFailure === 'hang') await sleep(60_000);
+  if (primaryFailure === 'error') return reply(1, 'inference failed');
   if (process.env.FAKE_WORKER_VOCABULARY === '1' && request.role === 'asr') return reply(0, JSON.stringify(request.vocabulary));
   await sleep(request.samples === slowSamples ? slowMs : delayMs);
   if (request.samples === crashSamples) {

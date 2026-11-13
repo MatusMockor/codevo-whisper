@@ -20,9 +20,13 @@ export class LocalResidents {
   private options(model: string, backend: TranscribeBackend): ResidentWorkerOptions {
     const { binary, acceleratorBinary, callTimeoutMs } = this.deps;
     const timeouts = { threads: localThreads(), timeoutMs: callTimeoutMs, startupTimeoutMs: callTimeoutMs };
+    const cpu = { binary, backend: 'cpu' } as const;
+    if (backend === 'metal') {
+      return { binary, model, backend, runtimeFallback: cpu, ...timeouts };
+    }
     if (backend !== 'auto') {
       return { binary, model, backend, ...timeouts };
     }
-    return { binary: acceleratorBinary ?? `${binary}-vulkan`, startupFallback: { binary, backend: 'cpu' }, model, backend, ...timeouts };
+    return { binary: acceleratorBinary ?? `${binary}-vulkan`, startupFallback: cpu, runtimeFallback: cpu, model, backend, ...timeouts };
   }
 }
