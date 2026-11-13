@@ -72,7 +72,7 @@ export class SessionCoordinator {
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
   private readonly failedRecording: FailedRecording;
-  private latest: DictationSession | null = null;
+  private starts = 0;
   private recording: DictationSession | null = null;
   private unsubscribers: Array<() => void> = [];
   private shutdownTask: Promise<void> | null = null;
@@ -253,8 +253,7 @@ export class SessionCoordinator {
   }
 
   private open(): DictationSession {
-    const session = new DictationSession(this.sessionDeps());
-    this.latest = session;
+    const session = new DictationSession(this.sessionDeps(++this.starts));
     this.sessions.add(session);
     this.cancellable.add(session);
     if (this.cancellable.size === 1) this.armShortcuts(true);
@@ -311,8 +310,8 @@ export class SessionCoordinator {
     this.deps.hotkey.cancel();
   }
 
-  private keepFailed(session: DictationSession, pcm: Uint8Array): boolean {
-    if (this.stopped || session !== this.latest) return false;
+  private keepFailed(start: number, pcm: Uint8Array): boolean {
+    if (this.stopped || start !== this.starts) return false;
     this.failedRecording.keep(pcm);
     return true;
   }
@@ -348,7 +347,7 @@ export class SessionCoordinator {
     return target?.name ?? '';
   }
 
-  private sessionDeps(): DictationSessionDeps {
+  private sessionDeps(start: number): DictationSessionDeps {
     return {
       capture: this.deps.capture,
       engines: this.deps.engines,
@@ -367,7 +366,7 @@ export class SessionCoordinator {
           this.logger.error('The completed transcript could not be saved to history', undefined);
         });
       },
-      failed: (session, pcm) => this.keepFailed(session, pcm),
+      failed: (pcm) => this.keepFailed(start, pcm),
       polish: this.deps.polish ?? ((text) => Promise.resolve({ text, failure: null })),
       captureLane: this.captureLane,
       pipeline: this.pipeline,

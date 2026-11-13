@@ -18,7 +18,7 @@ export type ResidentWorkerOptions = {
   runtimeFallback?: CpuFallback;
 };
 
-export type CpuFallback = { binary: string; backend: 'cpu' };
+type CpuFallback = { binary: string; backend: 'cpu' };
 
 type Outcome<Result> = { resolve: (result: Result) => void; reject: (error: Error) => void };
 

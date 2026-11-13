@@ -1,4 +1,4 @@
-export const FAILED_RECORDING_MS = 10 * 60_000;
+const FAILED_RECORDING_MS = 10 * 60_000;
 
 export class FailedRecording {
   private pcm: Uint8Array | null = null;

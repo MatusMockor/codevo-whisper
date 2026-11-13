@@ -43,7 +43,7 @@ export type DictationSessionDeps = {
   abandon(session: DictationSession): void;
   uncancellable(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
-  failed(session: DictationSession, pcm: Uint8Array): boolean;
+  failed(pcm: Uint8Array): boolean;
   polish(text: string, signal: AbortSignal): Promise<Polished>;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
@@ -413,7 +413,7 @@ export class DictationSession {
       this.deps.logger.error('The transcription failed', error);
       const state = await this.failure(error);
       if (this.controller.signal.aborted) return null;
-      await this.chooseTerminal({ kind: 'result', state: this.deps.failed(this, pcm) ? withRetry(state) : state });
+      await this.chooseTerminal({ kind: 'result', state: this.deps.failed(pcm) ? withRetry(state) : state });
       return null;
     }
   }
