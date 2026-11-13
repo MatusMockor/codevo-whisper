@@ -151,6 +151,15 @@ describe('microphoneView', () => {
     expect(microphoneView(devices, [{ deviceId: 'airpods-old', label: 'AirPods Pro' }])).toMatchObject({ rows: [{ label: 'AirPods Pro', state: 'active' }], addable: [builtIn] });
   });
 
+  it('offers a second device of the same model that carries a different id', () => {
+    const twins = [
+      { deviceId: 'usb-a', label: 'USB Audio Device', isBluetooth: false, isDefault: false },
+      { deviceId: 'usb-b', label: 'USB Audio Device', isBluetooth: false, isDefault: false },
+    ];
+
+    expect(microphoneView(twins, [{ deviceId: 'usb-a', label: 'USB Audio Device' }]).addable).toEqual([{ deviceId: 'usb-b', label: 'USB Audio Device' }]);
+  });
+
   it('moves, removes and appends entries without going past either end', () => {
     expect(moveMicrophone([mv7, airPods, builtIn], 2, -1)).toEqual([mv7, builtIn, airPods]);
     expect(moveMicrophone([mv7, airPods, builtIn], 0, 1)).toEqual([airPods, mv7, builtIn]);

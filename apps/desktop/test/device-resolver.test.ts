@@ -69,10 +69,18 @@ describe('promoteMicrophone', () => {
     expect(promoteMicrophone([usbEntry], airPodsEntry)).toEqual([airPodsEntry, usbEntry]);
   });
 
-  it('replaces an entry that reconnected under a new id with the same label', () => {
-    const reconnected = { deviceId: 'airpods-new-id', label: 'Matúš AirPods Pro' };
+  it('keeps two devices of the same model that carry different ids', () => {
+    const laptop = { deviceId: 'laptop', label: 'Laptop Mic' };
+    const usbA = { deviceId: 'usb-a', label: 'USB Audio Device' };
+    const usbB = { deviceId: 'usb-b', label: 'USB Audio Device' };
 
-    expect(promoteMicrophone([usbEntry, airPodsEntry], reconnected)).toEqual([reconnected, usbEntry]);
+    expect(promoteMicrophone([laptop, usbA, usbB], usbB)).toEqual([usbB, laptop, usbA]);
+  });
+
+  it('dedupes an entry without an id by its label', () => {
+    const idless = { deviceId: null, label: 'Matúš AirPods Pro' };
+
+    expect(promoteMicrophone([usbEntry, idless], airPodsEntry)).toEqual([airPodsEntry, usbEntry]);
   });
 });
 

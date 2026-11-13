@@ -29,7 +29,10 @@ export function resolveDevice(devices: readonly AudioDevice[], list: readonly Mi
 }
 
 function sameMicrophone(a: MicrophoneSetting, b: MicrophoneSetting): boolean {
-  return (a.deviceId !== null && a.deviceId === b.deviceId) || (hasLabel(a.label) && a.label === b.label);
+  if (a.deviceId !== null && b.deviceId !== null) {
+    return a.deviceId === b.deviceId;
+  }
+  return hasLabel(a.label) && a.label === b.label;
 }
 
 export function promoteMicrophone(list: readonly MicrophoneSetting[], chosen: MicrophoneSetting): MicrophoneSetting[] {
