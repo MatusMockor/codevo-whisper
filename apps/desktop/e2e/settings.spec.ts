@@ -921,6 +921,7 @@ test.describe('settings page', () => {
     const [first, second] = await add.locator('option:not([disabled])').evaluateAll((options) => options.map((option) => ({ id: (option as HTMLOptionElement).value, label: option.textContent ?? '' })));
     if (first === undefined || second === undefined) throw new Error('two fake microphones expected');
     await add.selectOption(first.id);
+    await expect.poll(stored).toEqual([first.id]);
     await add.selectOption(second.id);
     await expect.poll(stored).toEqual([first.id, second.id]);
     const items = page.locator('.mic-item');
