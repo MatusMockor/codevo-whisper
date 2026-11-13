@@ -115,7 +115,7 @@ export function readIndex(object: JsonObject, key: string): number {
 
 type ListRule = { minItems: number; maxItems: number };
 
-export function readChoiceList<T extends string>(object: JsonObject, key: string, choices: readonly T[], rule: ListRule): T[] {
+function readList(object: JsonObject, key: string, rule: ListRule): unknown[] {
   const value = object[key];
   if (!Array.isArray(value)) {
     throw badMessage(`${key} must be an array`);
@@ -123,11 +123,24 @@ export function readChoiceList<T extends string>(object: JsonObject, key: string
   if (value.length < rule.minItems || value.length > rule.maxItems) {
     throw badMessage(`${key} must have between ${rule.minItems} and ${rule.maxItems} items`);
   }
+  return value;
+}
+
+export function readChoiceList<T extends string>(object: JsonObject, key: string, choices: readonly T[], rule: ListRule): T[] {
+  const value = readList(object, key, rule);
   if (new Set(value).size !== value.length) {
     throw badMessage(`${key} must not contain duplicates`);
   }
   if (!value.every((item): item is T => isChoice(item, choices))) {
     throw badMessage(`${key} has an unsupported value`);
+  }
+  return [...value];
+}
+
+export function readStringList(object: JsonObject, key: string, item: StringRule, rule: ListRule): string[] {
+  const value = readList(object, key, rule);
+  if (!value.every((entry): entry is string => matchesRule(entry, item))) {
+    throw badMessage(`${key} has an invalid item`);
   }
   return [...value];
 }

@@ -282,6 +282,46 @@ describe('dictation languages', () => {
   });
 });
 
+describe('dictation vocabulary', () => {
+  function start(fields: Record<string, unknown>): Uint8Array {
+    return json({ type: 'start', sessionId: 'abc', language: 'sk', ...fields });
+  }
+
+  it.each<ClientMessage>([
+    { type: 'start', sessionId: 'plain', language: 'sk', vocabulary: ['Kumiba', 'Codevo Whisper'] },
+    { type: 'start', sessionId: 'routed', language: 'auto', partials: true, languages: ['sk', 'cs'], vocabulary: ['Žilina'] },
+  ])('round-trips a start with vocabulary', (message) => {
+    expect(decodeClientMessage(encodeClientMessage(message))).toEqual(message);
+  });
+
+  it('decodes a start without vocabulary exactly as before', () => {
+    const decoded = decodeClientMessage(start({ partials: true }));
+
+    expect(decoded).toStrictEqual({ type: 'start', sessionId: 'abc', language: 'sk', partials: true });
+    expect(new TextDecoder().decode(encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'sk' }).subarray(1))).toBe(
+      '{"type":"start","sessionId":"abc","language":"sk"}',
+    );
+  });
+
+  it('accepts 100 terms of 64 characters and 256 UTF-8 bytes', () => {
+    const vocabulary = Array.from({ length: 100 }, (_, index) => (index === 0 ? '𝐀'.repeat(64) : `${'a'.repeat(61)}${String(index).padStart(3, '0')}`));
+
+    expect(decodeClientMessage(start({ vocabulary }))).toMatchObject({ vocabulary });
+  });
+
+  it('rejects an empty or oversized list and values that are not a list of strings', () => {
+    [[], Array.from({ length: 101 }, (_, index) => `slovo${index}`), 'Kumiba', null, [1], [['Kumiba']], { 0: 'Kumiba' }].forEach((vocabulary) => {
+      expectBadMessage(() => decodeClientMessage(start({ vocabulary })));
+    });
+  });
+
+  it('rejects terms that are blank, longer than 64 characters or not printable', () => {
+    ['', '   ', 'a'.repeat(65), '𝐀'.repeat(65), 'Kum\u0000iba', 'Kum\niba', 'Kum​iba', 'Kum­iba', '\ud800'].forEach((term) => {
+      expectBadMessage(() => decodeClientMessage(start({ vocabulary: ['Kumiba', term] })));
+    });
+  });
+});
+
 describe('compatibility with peers that predate dictation languages', () => {
   const LEGACY_START_KEYS = ['type', 'sessionId', 'language', 'partials'];
   const LEGACY_FINAL_KEYS = ['type', 'sessionId', 'segmentId', 'text'];
