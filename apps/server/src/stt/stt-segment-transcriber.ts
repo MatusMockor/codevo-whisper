@@ -11,7 +11,8 @@ function isBusy(error: unknown): boolean {
 }
 
 function requestOf(job: TranscriptionJob<GatewayContext>): SttRequest {
-  return { pcm: job.pcm, language: job.context.language, languages: job.context.languages, kind: job.kind };
+  const { language, languages, vocabulary } = job.context;
+  return { pcm: job.pcm, language, languages, kind: job.kind, vocabulary };
 }
 
 export class SttSegmentTranscriber implements SegmentTranscriber<GatewayContext> {

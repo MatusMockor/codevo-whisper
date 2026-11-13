@@ -6,6 +6,7 @@ export type SttRequest = {
   language: Language;
   languages: readonly DictationLanguage[] | null;
   kind: JobKind;
+  vocabulary: readonly string[];
 };
 
 export type SttTranscript = { text: string; language: DictationLanguage | null; route: string | null };

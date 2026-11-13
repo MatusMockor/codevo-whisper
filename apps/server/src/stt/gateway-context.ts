@@ -11,6 +11,7 @@ export interface TranscriptObserver {
 export type GatewayContext = {
   language: Language;
   languages: readonly DictationLanguage[] | null;
+  vocabulary: readonly string[];
   observer: TranscriptObserver;
 };
 
