@@ -10,12 +10,38 @@ final class KeyTap {
     private var source: CFRunLoopSource?
     private var activeTap = false
     private var binding: HotkeyBinding?
+    private struct SessionShortcut {
+        let id: String
+        let keycode: Int64
+        let modifiers: Set<String>
+    }
+    private var sessionShortcuts: [SessionShortcut] = []
     private var listenId = 0
     private var listening = false
     private var pressed: Set<Int64> = []
     private var activeMembers: Set<Int64>?
     private var consumed: Set<Int64> = []
     private let recorder = KeyRecorder()
+
+    func armSessionShortcuts(_ args: JSONObject) -> JSONObject {
+        sessionShortcuts = []
+        defer { reconcileTap() }
+        guard let shortcuts = args["shortcuts"] as? [JSONObject], shortcuts.count <= 16 else {
+            return ["armed": false, "reason": "invalid-shortcut"]
+        }
+        var next: [SessionShortcut] = []
+        for shortcut in shortcuts {
+            guard let id = shortcut["id"] as? String, !id.isEmpty, id.count <= 64,
+                  let keycode = shortcut["keycode"] as? Int, (0...127).contains(keycode),
+                  let modifiers = shortcut["modifiers"] as? [String],
+                  modifiers.allSatisfy({ ModifierKeys.order.contains($0) }) else {
+                return ["armed": false, "reason": "invalid-shortcut"]
+            }
+            next.append(SessionShortcut(id: id, keycode: Int64(keycode), modifiers: Set(modifiers)))
+        }
+        sessionShortcuts = next
+        return ["armed": true]
+    }
 
     func listen(_ args: JSONObject) -> JSONObject {
         guard let id = args["listenId"] as? Int, id > 0 else {
@@ -72,6 +98,7 @@ final class KeyTap {
             return false
         }
         let wasConsumed = consumed.contains(keycode) && (type == .keyDown || type == .keyUp)
+        let wasPressed = pressed.contains(keycode)
         switch type {
         case .flagsChanged:
             pressed.subtract(ModifierKeys.masks.keys)
@@ -97,6 +124,17 @@ final class KeyTap {
             return true
         }
         guard listening else { return false }
+        if type == .keyDown && !autorepeat && !wasPressed {
+            let modifiers = ModifierKeys.normalized(flags: flags)
+            let matches = sessionShortcuts.filter { $0.keycode == keycode && $0.modifiers.isSubset(of: modifiers) }
+            for shortcut in matches {
+                Output.emit(["event": "session-shortcut", "id": shortcut.id, "ts": Output.nowMs()])
+            }
+            if !matches.isEmpty && activeTap {
+                consumed.insert(keycode)
+                return true
+            }
+        }
         if type == .keyDown {
             Shortcut.handleKeyDown(keycode: keycode, flags: flags, autorepeat: autorepeat)
         }
@@ -122,7 +160,9 @@ final class KeyTap {
         return false
     }
 
-    private var needsActiveTap: Bool { !consumed.isEmpty || (listening && binding?.isRegular == true) }
+    private var needsActiveTap: Bool {
+        !consumed.isEmpty || (listening && binding?.isRegular == true) || (!sessionShortcuts.isEmpty && AXIsProcessTrusted())
+    }
 
     private func beginGesture(_ members: Set<Int64>) {
         activeMembers = members

@@ -20,3 +20,19 @@ for keycode in 0...2 {
     precondition(args["text"] as? String == "hello")
 }
 print("PASS native JSON argument identity")
+
+let sessionJSON = """
+{"shortcuts":[{"id":"cancel","keycode":53,"modifiers":[]}]}
+"""
+guard let sessionRaw = try JSONSerialization.jsonObject(with: Data(sessionJSON.utf8)) as? [String: Any] else {
+    fatalError("Invalid session test JSON")
+}
+let sessionArgs = NativeArguments.convert(sessionRaw)
+let shortcuts = sessionArgs["shortcuts"] as? [JSONObject]
+precondition(shortcuts?.count == 1)
+precondition(shortcuts?.first?["id"] as? String == "cancel")
+precondition(shortcuts?.first?["keycode"] as? Int == 53)
+precondition(shortcuts?.first?["modifiers"] as? [String] == [])
+let emptyArgs = NativeArguments.convert(["shortcuts": [] as [[String: Any]]])
+precondition((emptyArgs["shortcuts"] as? [JSONObject])?.isEmpty == true)
+print("PASS native session shortcut arguments")

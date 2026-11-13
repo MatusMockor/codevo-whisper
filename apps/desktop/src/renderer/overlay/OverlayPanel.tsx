@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { LiveText, OverlayState } from '../../shared/overlay-contract';
-import { fallbackNotice } from './overlay-copy';
+import { offeredActions, type LiveText, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
+import { ACTION_LABELS, fallbackNotice } from './overlay-copy';
 import { barScale, formatElapsed, WAVE_BARS } from './level-history';
-import { LockIcon, MicIcon } from './OverlayIcons';
+import { CloseIcon, LockIcon, MicIcon } from './OverlayIcons';
 
 type RecordingState = Extract<OverlayState, { kind: 'recording' }>;
 
@@ -50,7 +50,22 @@ export function Notice({ text }: { text: string | undefined }) {
   return <p className="ov-notice">{text}</p>;
 }
 
-export function Recording({ state, levels }: { state: RecordingState; levels: readonly number[] }) {
+const CONTROL_ICONS: Partial<Readonly<Record<OverlayAction, () => ReactNode>>> = Object.freeze({
+  cancel: () => <CloseIcon />,
+});
+
+export function Controls({ state, onAction }: { state: OverlayState; onAction: ((action: OverlayAction) => void) | null }) {
+  if (onAction === null) {
+    return null;
+  }
+  return offeredActions(state).map((action) => (
+    <button key={action} type="button" className="ov-ctl" aria-label={ACTION_LABELS[action]} title={ACTION_LABELS[action]} onClick={() => onAction(action)}>
+      {CONTROL_ICONS[action]?.()}
+    </button>
+  ));
+}
+
+export function Recording({ state, levels, controls }: { state: RecordingState; levels: readonly number[]; controls: ReactNode }) {
   const orbStyle = { '--lvl': barScale(state.level) } as CSSProperties;
   return (
     <>
@@ -67,6 +82,7 @@ export function Recording({ state, levels }: { state: RecordingState; levels: re
           <span className="ov-lock" title="Zvuk sa prepisuje na tomto počítači alebo šifrovane na vašom serveri">
             <LockIcon />
           </span>
+          {controls}
         </div>
       </div>
     </>

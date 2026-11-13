@@ -16,5 +16,5 @@ export function OverlayApp() {
     });
   }, []);
 
-  return <Overlay state={view.state} levels={view.levels} onAction={(action) => window.codevoOverlay.act(action)} />;
+  return <Overlay state={view.state} levels={view.levels} controls={window.codevoOverlay.controls} onAction={(action) => window.codevoOverlay.act(action)} />;
 }

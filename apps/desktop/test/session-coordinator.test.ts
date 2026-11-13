@@ -24,7 +24,8 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
-import type { OverlayState } from '../src/shared/overlay-contract';
+import { offeredActions, type OverlayState } from '../src/shared/overlay-contract';
+import type { Preparation } from '../src/main/engines/transcription-engine';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
 import { FakeCaptureHost } from './fake-capture-host';
@@ -139,6 +140,11 @@ async function pressAndSpeak(harness: Harness, marker: number): Promise<void> {
 async function dictate(harness: Harness, marker: number): Promise<void> {
   await pressAndSpeak(harness, marker);
   harness.helper.emitHotkey('up');
+}
+
+function cancelVia(harness: Harness, via: 'escape' | 'overlay button'): void {
+  const cancel = { escape: () => harness.helper.pressSessionShortcut('cancel'), 'overlay button': () => harness.coordinator.act('cancel') };
+  cancel[via]();
 }
 
 function kinds(states: OverlayState[]): string[] {
@@ -1035,6 +1041,161 @@ describe('SessionCoordinator', () => {
     expect(harness.helper.pasted).toEqual([]);
     expect(harness.lastTranscript.get()).toBeNull();
     expect(await harness.history.view()).toMatchObject({ entries: [] });
+  });
+
+  it('arms in-dictation shortcuts only while a session is active', async () => {
+    const harness = await prepared();
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+
+    await dictate(harness, 7);
+    expect(harness.helper.sessionShortcuts).toEqual([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.helper.sessionShortcuts).toEqual([]);
+  });
+
+  it.each(['escape', 'overlay button'] as const)('discards a recording on %s without inserting, copying or remembering', async (via) => {
+    const harness = await prepared({ settings: { mode: 'toggle' } });
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.starts.length).toBe(1);
+    harness.capture.speak(stampedPcm(7));
+
+    cancelVia(harness, via);
+
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.starts.length).toBe(2);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it.each(['escape', 'overlay button'] as const)('abandons an in-flight transcription on %s', async (via) => {
+    await setWorkerMode('hang');
+    const harness = await prepared();
+    await dictate(harness, 7);
+    await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
+
+    cancelVia(harness, via);
+
+    await expect.poll(() => harness.coordinator.isBusy(), { timeout: 3000 }).toBe(false);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it('aborts AI polish and inserts nothing when the user cancels', async () => {
+    const aborted = Promise.withResolvers<void>();
+    let calls = 0;
+    const harness = await prepared({
+      settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
+      polish: (text, signal) => {
+        calls++;
+        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
+      },
+    });
+
+    await dictate(harness, 7);
+    await expect.poll(() => calls).toBe(1);
+    harness.helper.pressSessionShortcut('cancel');
+    await aborted.promise;
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+  });
+
+  it('retires the session and releases Esc at once when cancelled while engine preparation is pending', async () => {
+    const harness = await prepared();
+    await harness.coordinator.shutdown();
+    const readiness = Promise.withResolvers<Preparation>();
+    const pending = new SessionCoordinator({
+      hotkey: harness.hotkey, capture: harness.capture,
+      engines: { prepare: () => readiness.promise },
+      routing: { capabilities: () => Promise.resolve({ localReady: false, serverReady: false, serverOffline: false, serverOff: false, serverRepair: false }), prefer: () => Promise.reject(new Error('unused')) },
+      insertion: new InsertionService(harness.helper, harness.settings, harness.lastTranscript),
+      lastTranscript: harness.lastTranscript, helper: harness.helper,
+      settings: harness.settings, stats: harness.stats, history: harness.history,
+      pause: harness.pause, overlay: (state) => harness.states.push(state), logger: harness.logger,
+    });
+    coordinator = pending;
+    pending.start();
+    await dictate(harness, 7);
+    await pending.settled();
+    expect(harness.states.at(-1)?.kind).toBe('processing');
+
+    harness.helper.pressSessionShortcut('cancel');
+
+    expect({ busy: pending.isBusy(), shortcuts: harness.helper.sessionShortcuts, overlay: harness.states.at(-1)?.kind }).toEqual({ busy: false, shortcuts: [], overlay: 'hidden' });
+    readiness.resolve({ ready: false });
+    await pending.settled();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+  });
+
+  it('never delivers when the cancel arrives between transcription and the delivery boundary', async () => {
+    let cancel: () => void = () => undefined;
+    const harness = await prepared({
+      settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
+      polish: (text) => { cancel(); return Promise.resolve({ text, failure: null }); },
+    });
+    cancel = () => harness.helper.pressSessionShortcut('cancel');
+    await dictate(harness, 7);
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+  });
+
+  it('stops offering cancel once the final text is ready and delivers it', async () => {
+    const checking = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    class SlowCheck extends FakeInputHelper {
+      override async checkDelivery() {
+        checking.resolve();
+        await resume.promise;
+        return { kind: 'legacy' as const };
+      }
+    }
+    const helper = new SlowCheck({ clipboard: 'original' });
+    const harness = await prepared({ inputHelper: helper });
+    await dictate(harness, 7);
+    await checking.promise;
+
+    expect(helper.sessionShortcuts).toEqual([]);
+    const shown = harness.states.at(-1);
+    expect(shown?.kind === 'processing' && offeredActions(shown)).toEqual([]);
+    helper.pressSessionShortcut('cancel');
+    harness.coordinator.act('cancel');
+    resume.resolve();
+
+    await expect.poll(() => helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+    expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
+    expect(await harness.history.view()).toMatchObject({ entries: [expect.objectContaining({ text: ONE_SECOND_TEXT(7) })] });
+  });
+
+  it('ignores a cancel shortcut that arrives with no active session', async () => {
+    const harness = await prepared();
+    harness.helper.pressSessionShortcut('cancel');
+    harness.coordinator.act('cancel');
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
   });
 
   it('treats a transcript with only control and invisible characters as silence', async () => {

@@ -50,6 +50,8 @@ final class Commands {
             return Paste.commandV()
         case "listen-start":
             return KeyTap.shared.listen(args)
+        case "session-shortcuts":
+            return KeyTap.shared.armSessionShortcuts(args)
         case "listen-stop":
             return KeyTap.shared.stopListening()
         case "record-key":

@@ -40,6 +40,7 @@ export type DictationSessionDeps = {
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
+  uncancellable(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
   polish(text: string, signal: AbortSignal): Promise<Polished>;
   captureLane: SerialQueue;
@@ -48,7 +49,7 @@ export type DictationSessionDeps = {
   logger: Logger;
 };
 
-type Phase = 'recording' | 'finishing' | 'done';
+type Phase = 'recording' | 'finishing' | 'delivering' | 'done';
 type TerminalState = Extract<OverlayState, { kind: 'inserted' | 'copied' | 'blocked' | 'error' }>;
 type ErrorState = Extract<TerminalState, { kind: 'error' }>;
 type TransientState = Extract<OverlayState, { kind: 'recording' | 'processing' }>;
@@ -83,6 +84,7 @@ export class DictationSession {
   private notice: ProcessingNotice;
   private readonly microphones: readonly MicrophoneSetting[];
   private readonly controller = new AbortController();
+  private readonly aborted = new Promise<null>((resolve) => this.controller.signal.addEventListener('abort', () => resolve(null), { once: true }));
   private fallbackDevice: string | null = null;
   private target: Promise<AppTarget | null> = Promise.resolve(null);
   private readiness: Promise<Preparation> = Promise.resolve(NOT_READY);
@@ -153,8 +155,8 @@ export class DictationSession {
       await this.chooseTerminal({ kind: 'abandoned', state: errorState(MESSAGES.microphone) });
       return;
     }
-    const readiness = await this.readiness;
-    if (this.controller.signal.aborted) {
+    const readiness = await Promise.race([this.readiness, this.aborted]);
+    if (readiness === null) {
       return;
     }
     if (!readiness.ready) {
@@ -164,6 +166,13 @@ export class DictationSession {
     const dictation = this.startDictation(readiness.engine);
     const transcription = this.transcribe(dictation);
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
+  }
+
+  discard(): void {
+    if (this.phase !== 'recording' && this.phase !== 'finishing') return;
+    this.chooseTerminal({ kind: 'cancelled' }).catch((error: unknown) => {
+      this.deps.logger.error('The cancelled dictation could not be closed', error);
+    });
   }
 
   cancel(): Promise<void> {
@@ -287,6 +296,7 @@ export class DictationSession {
     }
     this.intent = next;
     this.phase = 'done';
+    this.deps.uncancellable(this);
     const closing = this.stopCapture();
     if (next.kind !== 'result') {
       this.controller.abort();
@@ -334,14 +344,15 @@ export class DictationSession {
     }
     const { text, failure } = this.polishing ? await this.polished(rawText) : { text: processFinalTranscript({ text: rawText, settings: this.transcriptSettings }), failure: null };
     if (this.controller.signal.aborted) return;
-    this.remember(text);
     if (text === '') {
       await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
       return;
     }
-    this.deps.transcribed(text, pcm);
+    if (!this.cross()) return;
     const target = await this.target;
     const outcome = await this.insert(text, target);
+    this.remember(text);
+    this.deps.transcribed(text, pcm);
     await this.chooseTerminal({ kind: 'result', state: withPolishNotice(insertionState(outcome, target?.name ?? ''), failure) });
   }
 
@@ -393,6 +404,14 @@ export class DictationSession {
     return text;
   }
 
+  private cross(): boolean {
+    if (this.controller.signal.aborted || this.phase !== 'finishing') return false;
+    this.phase = 'delivering';
+    this.deps.uncancellable(this);
+    this.showProcessing();
+    return true;
+  }
+
   private insert(text: string, target: AppTarget | null): Promise<InsertionOutcome | null> {
     if (this.controller.signal.aborted) {
       return Promise.resolve(null);
@@ -438,7 +457,7 @@ export class DictationSession {
 
   private showProcessing(): void {
     const state = this.notice === undefined ? ({ kind: 'processing' } as const) : ({ kind: 'processing', notice: this.notice } as const);
-    this.present(this.withLive(state));
+    this.present(this.withLive(this.phase === 'delivering' ? { ...state, delivering: true as const } : state));
   }
 
   private withLive<T extends OverlayState>(state: T): T | (T & { live: LiveText }) {

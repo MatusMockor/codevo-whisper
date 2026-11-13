@@ -50,6 +50,7 @@ void keysShutdown();
 bool canListen();
 int64_t modifierFlags();
 JsonObject* listen(JsonObject*);
+JsonObject* armSessionShortcuts(JsonObject*);
 JsonObject* record(JsonObject*);
 void fence(bool);
 void resetInput();

@@ -2,6 +2,8 @@ import type { AutoSubmit, LinuxPasteShortcut } from '../../shared/settings';
 import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+import type { OverlayAction } from '../../shared/overlay-contract';
+import type { SessionShortcut } from '../session/session-shortcuts';
 
 export type AppTarget = { bundleId: string; pid: number; name: string; windowId: number | null };
 
@@ -49,5 +51,7 @@ export interface InputHelper {
   recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult>;
   onHotkey(listener: (event: HotkeyEvent) => void): () => void;
   onShortcut(listener: (name: ShortcutName) => void): () => void;
+  armSessionShortcuts(shortcuts: readonly SessionShortcut[]): Promise<void>;
+  onSessionShortcut(listener: (action: OverlayAction) => void): () => void;
   onInputLost(listener: (reason: InputLostReason) => void): () => void;
 }

@@ -2,13 +2,14 @@ import type { OverlayAction, OverlayState } from '../../shared/overlay-contract'
 import { BLOCKED_BUTTONS, BLOCKED_COPY, copiedLabel, errorButtons, errorDetail, REROUTED_DETAIL, REROUTED_TITLES } from './overlay-copy';
 import { OverlayCard } from './OverlayCard';
 import { CheckIcon, CopyIcon, SpinIcon, WarnIcon } from './OverlayIcons';
-import { Notice, Recording, StatusPill } from './OverlayPanel';
+import { Controls, Notice, Recording, StatusPill } from './OverlayPanel';
 
-type OverlayProps = { state: OverlayState; levels: readonly number[]; onAction: (action: OverlayAction) => void };
+type OverlayProps = { state: OverlayState; levels: readonly number[]; controls: boolean; onAction: (action: OverlayAction) => void };
 
-function Content({ state, levels, onAction }: OverlayProps) {
+function Content({ state, levels, controls, onAction }: OverlayProps) {
+  const controlBar = <Controls state={state} onAction={controls ? onAction : null} />;
   if (state.kind === 'recording') {
-    return <Recording state={state} levels={levels} />;
+    return <Recording state={state} levels={levels} controls={controlBar} />;
   }
   if (state.kind === 'processing') {
     return (
@@ -19,6 +20,7 @@ function Content({ state, levels, onAction }: OverlayProps) {
         <span className="ov-status">
           Spracúvam{state.notice === 'limit-reached' && <small>dosiahnutý limit 10 minút</small>}
         </span>
+        {controlBar}
       </StatusPill>
     );
   }

@@ -5,6 +5,8 @@ import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
 import type { AppTarget, DeliveryDecision, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
+import type { OverlayAction } from '../../shared/overlay-contract';
+import type { SessionShortcut } from '../session/session-shortcuts';
 
 export type FakeInputHelperState = {
   frontmost: AppTarget | null;
@@ -36,6 +38,7 @@ export class FakeInputHelper implements InputHelper {
   }
   outputAudio: OutputAudioView = { kind: 'available', canMute: true, outputs: [{ id: 'speakers', label: 'Reproduktory' }, { id: 'headphones', label: 'Slúchadlá' }] };
   outputMuted = false;
+  sessionShortcuts: readonly SessionShortcut[] = [];
   readonly audioTrace: string[] = [];
   frontmostApp: AppTarget | null;
   editable: boolean | null;
@@ -60,6 +63,7 @@ export class FakeInputHelper implements InputHelper {
   private savedClipboard: string | null = null;
   private readonly keys = new Listeners<HotkeyEvent>(consoleLogger, 'Fake key listener failed');
   private readonly shortcuts = new Listeners<ShortcutName>(consoleLogger, 'Fake shortcut listener failed');
+  private readonly sessionKeys = new Listeners<OverlayAction>(consoleLogger, 'Fake session shortcut listener failed');
   private readonly inputLosses = new Listeners<InputLostReason>(consoleLogger, 'Fake input lost listener failed');
 
   constructor(state: Partial<FakeInputHelperState> = {}) {
@@ -214,6 +218,19 @@ export class FakeInputHelper implements InputHelper {
 
   onShortcut(listener: (name: ShortcutName) => void): () => void {
     return this.shortcuts.add(listener);
+  }
+
+  armSessionShortcuts(shortcuts: readonly SessionShortcut[]): Promise<void> {
+    this.sessionShortcuts = shortcuts;
+    return Promise.resolve();
+  }
+
+  onSessionShortcut(listener: (action: OverlayAction) => void): () => void {
+    return this.sessionKeys.add(listener);
+  }
+
+  pressSessionShortcut(action: OverlayAction): void {
+    if (this.sessionShortcuts.some((shortcut) => shortcut.action === action)) this.sessionKeys.emit(action);
   }
 
   onInputLost(listener: (reason: InputLostReason) => void): () => void {

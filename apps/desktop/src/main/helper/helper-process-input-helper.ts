@@ -20,6 +20,8 @@ import {
 } from './helper-responses';
 import type { AppTarget, ClipboardPurpose, DeliveryDecision, DeliveryRequest, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
 import { Listeners } from './listeners';
+import type { OverlayAction } from '../../shared/overlay-contract';
+import { SESSION_KEYCODES, type SessionShortcut } from '../session/session-shortcuts';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
@@ -46,6 +48,7 @@ export class HelperProcessInputHelper implements InputHelper {
   private cancelRecording: (() => void) | null = null;
   private pendingListen: { id: number; events: HotkeyEvent[] } | null = null;
   private readonly hotkeys: Listeners<HotkeyEvent>;
+  private sessionShortcuts: readonly SessionShortcut[] = [];
 
   constructor(
     private readonly channel: HelperChannel,
@@ -69,6 +72,7 @@ export class HelperProcessInputHelper implements InputHelper {
       this.pendingListen = null;
       this.cancelRecording?.();
       void this.relisten();
+      if (this.sessionShortcuts.length > 0) void this.sendSessionShortcuts().catch((error: unknown) => this.logger.error('Input helper could not arm in-dictation shortcuts after a restart', error));
     });
   }
 
@@ -252,6 +256,19 @@ export class HelperProcessInputHelper implements InputHelper {
     });
   }
 
+  armSessionShortcuts(shortcuts: readonly SessionShortcut[]): Promise<void> {
+    this.sessionShortcuts = shortcuts;
+    return this.sendSessionShortcuts();
+  }
+
+  onSessionShortcut(listener: (action: OverlayAction) => void): () => void {
+    return this.channel.onEvent((message) => {
+      if (message['event'] !== 'session-shortcut') return;
+      const shortcut = this.sessionShortcuts.find(({ action }) => action === message['id']);
+      if (shortcut !== undefined) listener(shortcut.action);
+    });
+  }
+
   onInputLost(listener: (reason: InputLostReason) => void): () => void {
     const unsubscribeEvents = this.channel.onEvent((message) => {
       const reason = parseInputLost(message);
@@ -289,6 +306,12 @@ export class HelperProcessInputHelper implements InputHelper {
     });
     this.cancelRecording = () => finish('timeout');
     return { result, cancel: this.cancelRecording };
+  }
+
+  private async sendSessionShortcuts(): Promise<void> {
+    const platform = this.platform === 'darwin' ? 'darwin' : 'linux';
+    const shortcuts = this.sessionShortcuts.map(({ action, key, modifiers }) => ({ id: action, keycode: SESSION_KEYCODES[key][platform], modifiers }));
+    ensure(await this.channel.request('session-shortcuts', { shortcuts }), 'armed', 'session-shortcuts-failed');
   }
 
   private async relisten(): Promise<void> {

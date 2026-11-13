@@ -20,6 +20,7 @@ import type { EngineId } from '../../shared/settings';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
 import { copyLastState, errorState, MESSAGES, pasteLastState, switchFailedState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
+import { SESSION_SHORTCUTS } from './session-shortcuts';
 import type { PauseState } from './pause-state';
 
 export type SessionCoordinatorDeps = {
@@ -58,8 +59,10 @@ export class SessionCoordinator {
     'use-server': () => this.reroute('server'),
     'use-local': () => this.reroute('local'),
     'enable-server': () => this.enableServer(),
+    cancel: () => this.discardShown(),
   };
   private readonly sessions = new Set<DictationSession>();
+  private readonly cancellable = new Set<DictationSession>();
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
   private recording: DictationSession | null = null;
@@ -80,6 +83,9 @@ export class SessionCoordinator {
       capture.onLevel((rms) => this.recording?.level(rms)),
       capture.onLimitReached(() => this.handleLimit()),
       bindPasteLastShortcut(helper, this, this.logger),
+      helper.onSessionShortcut((action) => {
+        if (this.cancellable.size > 0) this.act(action);
+      }),
     ];
   }
 
@@ -113,6 +119,7 @@ export class SessionCoordinator {
     if (this.shutdownTask !== null) return this.shutdownTask;
     this.stopped = true;
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+    if (this.cancellable.size > 0) this.armShortcuts(false);
     const closing = [...this.sessions].map((session) => session.cancel());
     this.recording = null;
     this.presenter.dispose();
@@ -214,6 +221,8 @@ export class SessionCoordinator {
     const session = new DictationSession(this.sessionDeps());
     this.recording = session;
     this.sessions.add(session);
+    this.cancellable.add(session);
+    if (this.cancellable.size === 1) this.armShortcuts(true);
     this.presenter.claim(session);
     session.begin();
   }
@@ -232,6 +241,24 @@ export class SessionCoordinator {
       .finally(() => {
         this.sessions.delete(session);
       });
+  }
+
+  private discardShown(): void {
+    const session = this.recording ?? [...this.cancellable].at(-1);
+    if (session === undefined) return;
+    if (session === this.recording) this.deps.hotkey.cancel();
+    session.discard();
+    this.sessions.delete(session);
+  }
+
+  private uncancellable(session: DictationSession): void {
+    if (this.cancellable.delete(session) && this.cancellable.size === 0 && !this.stopped) this.armShortcuts(false);
+  }
+
+  private armShortcuts(armed: boolean): void {
+    this.deps.helper.armSessionShortcuts(armed ? SESSION_SHORTCUTS : []).catch((error: unknown) => {
+      this.logger.error(armed ? 'The in-dictation shortcuts could not be armed' : 'The in-dictation shortcuts could not be disarmed', error);
+    });
   }
 
   private handleAbandon(session: DictationSession): void {
@@ -283,6 +310,7 @@ export class SessionCoordinator {
       settings: this.deps.settings,
       overlay: this.sessionOverlay(),
       abandon: (session) => this.handleAbandon(session),
+      uncancellable: (session) => this.uncancellable(session),
       transcribed: (text, pcm) => {
         this.recordStats(text, pcm);
         this.deps.history.record(text).catch(() => {

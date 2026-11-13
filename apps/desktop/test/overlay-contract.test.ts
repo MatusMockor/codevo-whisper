@@ -9,6 +9,9 @@ describe('overlay contract', () => {
     expect(offeredActions({ kind: 'blocked', reason: 'focus' })).toEqual(['copy-last']);
     expect(offeredActions({ kind: 'rerouted', engine: 'server' })).toEqual([]);
     expect(offeredActions({ kind: 'hidden' })).toEqual([]);
+    expect(offeredActions({ kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'AUTO' })).toEqual(['cancel']);
+    expect(offeredActions({ kind: 'processing' })).toEqual(['cancel']);
+    expect(offeredActions({ kind: 'inserted', appName: 'Notes' })).toEqual([]);
   });
 
   it('accepts only known action names', () => {
