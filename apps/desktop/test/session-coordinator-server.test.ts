@@ -148,7 +148,7 @@ describe('SessionCoordinator with the server engine', () => {
   it('processes recovered server text with the same preferences without insertion or success stats', async () => {
     const harness = await prepared({ engineOrder: ['server'], customWords: [{ word: 'Kumiba', aliases: [] }], removeFillerWords: true, appendTrailingSpace: true }, { respond: (pcm) => pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'ehm, Kumba' } } });
     await dictate(harness, continuousSpeech(26));
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last', alternative: 'retry' });
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
     expect(harness.helper.pasted).toEqual([]);
     expect(await harness.stats.days()).toEqual([]);
@@ -160,7 +160,7 @@ describe('SessionCoordinator with the server engine', () => {
     harness.lastTranscript.set('previous');
     await dictate(harness, recovery ? continuousSpeech(26) : stampedPcm(4));
     await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'error', message: recovery ? MESSAGES.serverSttUnavailable : MESSAGES.nothingHeard });
-    expect(lastVisible(harness.states)).not.toHaveProperty('action');
+    expect((lastVisible(harness.states) as { action?: string }).action).toBe(recovery ? 'retry' : undefined);
     expect(harness.lastTranscript.get()).toBe('previous');
     expect(harness.helper.pasted).toEqual([]);
     expect(await harness.stats.days()).toEqual([]);
@@ -243,7 +243,7 @@ describe('SessionCoordinator with the server engine', () => {
 
     await dictate(harness, stampedPcm(2));
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesMissing, action: 'open-server' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverLanguagesMissing, action: 'open-server', alternative: 'retry' });
     expect(harness.helper.pasted).toEqual([]);
   });
 
@@ -274,7 +274,7 @@ describe('SessionCoordinator with the server engine', () => {
     await harness.server.setEnabled(false);
     harness.helper.emitHotkey('up');
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverDisconnected });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverDisconnected, action: 'retry' });
     expect(harness.helper.pasted).toEqual([]);
     expect(gateway.stt.requests).toEqual([]);
   });
@@ -400,7 +400,7 @@ describe('SessionCoordinator with the server engine', () => {
 
     await dictate(harness, continuousSpeech(26));
 
-    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
+    await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last', alternative: 'retry' });
     expect(harness.lastTranscript.get()).toBe('toto je začiatok');
     expect(harness.helper.pasted).toEqual([]);
   });

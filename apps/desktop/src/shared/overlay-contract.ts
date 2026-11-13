@@ -1,6 +1,6 @@
 import type { EngineId } from './settings';
 
-export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel', 'toggle-polish', 'cycle-language'] as const;
+export const OVERLAY_ACTIONS = ['open-settings', 'open-languages', 'copy-last', 'open-server', 'pair-server', 'download-model', 'use-server', 'use-local', 'enable-server', 'cancel', 'toggle-polish', 'cycle-language', 'retry'] as const;
 
 export type OverlayAction = (typeof OVERLAY_ACTIONS)[number];
 

@@ -23,6 +23,7 @@ async function handle(language, pcm, vocabulary) {
   if (env.FAKE_CLI_PID_FILE) writeFileSync(env.FAKE_CLI_PID_FILE, String(process.pid));
   if (mode === 'hang') await sleep(30_000);
   if (mode === 'fail') process.exit(3);
+  if (mode === 'fail-accelerated' && args[args.indexOf('--backend') + 1] !== 'cpu') process.exit(3);
   if (env.FAKE_CLI_DELAY_S) await sleep(Number(env.FAKE_CLI_DELAY_S) * 1000);
   let text = `${process.pid}:${language || 'auto'}:${pcm.length / 2}`;
   if (mode === 'text') text = env.FAKE_CLI_TEXT ?? 'ahoj svet';

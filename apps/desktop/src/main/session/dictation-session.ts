@@ -21,7 +21,7 @@ import { sameSelection } from '../engines/local-language';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
-import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError, withPolishNotice } from './overlay-messages';
+import { errorState, failureState, insertionState, languageChip, MESSAGES, readinessError, withPolishNotice, withRetry } from './overlay-messages';
 import { processFinalTranscript, type TranscriptSettings } from './process-final-transcript';
 
 export type SessionOverlay = {
@@ -43,6 +43,7 @@ export type DictationSessionDeps = {
   abandon(session: DictationSession): void;
   uncancellable(session: DictationSession): void;
   transcribed(text: string, pcm: Uint8Array): void;
+  failed(session: DictationSession, pcm: Uint8Array): boolean;
   polish(text: string, signal: AbortSignal): Promise<Polished>;
   captureLane: SerialQueue;
   pipeline: SerialQueue;
@@ -124,17 +125,18 @@ export class DictationSession {
 
   begin(): void {
     this.showRecording();
-    this.target = this.deps.helper.frontmost().catch((error: unknown) => {
-      this.deps.logger.error('The insertion target could not be read', error);
-      return null;
-    });
-    void this.target.then(() => this.deps.helper.focusedElement()).catch(() => undefined);
-    this.readiness = this.deps.engines.prepare(this.deps.settings.get().engineOrder).catch((error: unknown) => {
-      this.deps.logger.error('The engine readiness check failed', error);
-      return NOT_READY;
-    });
+    this.prepare();
     this.opened = this.openMicrophone();
-    void this.readiness.then((readiness) => this.onPrepared(readiness));
+  }
+
+  async replay(pcm: Uint8Array): Promise<void> {
+    this.phase = 'finishing';
+    this.closing = Promise.resolve(pcm);
+    this.cleanupDone = true;
+    this.relay.push(pcm);
+    this.showProcessing();
+    this.prepare();
+    await this.transcribeRecording(pcm);
   }
 
   level(rms: number): void {
@@ -163,6 +165,10 @@ export class DictationSession {
       await this.chooseTerminal({ kind: 'abandoned', state: errorState(MESSAGES.microphone) });
       return;
     }
+    await this.transcribeRecording(pcm);
+  }
+
+  private async transcribeRecording(pcm: Uint8Array): Promise<void> {
     const readiness = await Promise.race([this.readiness, this.aborted]);
     if (readiness === null) {
       return;
@@ -173,7 +179,7 @@ export class DictationSession {
     }
     const dictation = sameSelection(this.spoken, this.languages) ? this.startDictation(readiness.engine) : await this.respoken(pcm);
     if (dictation === null) return;
-    const transcription = this.transcribe(dictation);
+    const transcription = this.transcribe(dictation, pcm);
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
 
@@ -205,6 +211,19 @@ export class DictationSession {
     const current = options.findIndex((option) => sameSelection(option, this.spoken));
     this.spoken = options[(current + 1) % options.length] ?? this.languages;
     this.showRecording();
+  }
+
+  private prepare(): void {
+    this.target = this.deps.helper.frontmost().catch((error: unknown) => {
+      this.deps.logger.error('The insertion target could not be read', error);
+      return null;
+    });
+    void this.target.then(() => this.deps.helper.focusedElement()).catch(() => undefined);
+    this.readiness = this.deps.engines.prepare(this.deps.settings.get().engineOrder).catch((error: unknown) => {
+      this.deps.logger.error('The engine readiness check failed', error);
+      return NOT_READY;
+    });
+    void this.readiness.then((readiness) => this.onPrepared(readiness));
   }
 
   private async openMicrophone(): Promise<boolean> {
@@ -384,7 +403,7 @@ export class DictationSession {
     await this.chooseTerminal({ kind: 'result', state: withPolishNotice(insertionState(outcome, target?.name ?? ''), failure) });
   }
 
-  private async transcribe(dictation: EngineDictation): Promise<string | null> {
+  private async transcribe(dictation: EngineDictation, pcm: Uint8Array): Promise<string | null> {
     try {
       return await dictation.finish();
     } catch (error) {
@@ -392,7 +411,9 @@ export class DictationSession {
         return null;
       }
       this.deps.logger.error('The transcription failed', error);
-      await this.chooseTerminal({ kind: 'result', state: await this.failure(error) });
+      const state = await this.failure(error);
+      if (this.controller.signal.aborted) return null;
+      await this.chooseTerminal({ kind: 'result', state: this.deps.failed(this, pcm) ? withRetry(state) : state });
       return null;
     }
   }

@@ -4,6 +4,7 @@ import { promoteMicrophone, type AudioDevice } from '../../shared/microphones';
 import type { ActiveModel } from '../engines/active-model';
 import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
+import type { FailedRecording } from '../session/failed-recording';
 import type { SessionCoordinator } from '../session/session-coordinator';
 import type { SettingsStore } from '../settings/settings-store';
 import type { UpdateService } from '../updates/update-service';
@@ -17,7 +18,8 @@ const DEVICE_LIST_TIMEOUT_MS = 800;
 
 export type TrayMenuDeps = {
   platform: NodeJS.Platform;
-  coordinator: Pick<SessionCoordinator, 'pasteLast' | 'copyLast' | 'pause' | 'resume' | 'isPaused'>;
+  coordinator: Pick<SessionCoordinator, 'pasteLast' | 'copyLast' | 'pause' | 'resume' | 'isPaused' | 'act'>;
+  failedRecording: Pick<FailedRecording, 'get' | 'onChange'>;
   capture: Pick<AudioCapture, 'listDevices'>;
   settings: Pick<SettingsStore, 'get' | 'update' | 'onChange'>;
   lastTranscript: Pick<LastTranscript, 'get' | 'onChange'>;
@@ -55,7 +57,7 @@ export class TrayMenu {
     }
     tray.on('click', () => this.deps.openApp());
     const attach = () => this.attachMenu();
-    this.unsubscribers = [this.deps.settings.onChange(attach), this.deps.lastTranscript.onChange(attach), this.deps.updates.onChange(attach)];
+    this.unsubscribers = [this.deps.settings.onChange(attach), this.deps.lastTranscript.onChange(attach), this.deps.updates.onChange(attach), this.deps.failedRecording.onChange(attach)];
     this.attachMenu();
     this.attachMenuWithFreshDevices();
   }
@@ -136,6 +138,7 @@ export class TrayMenu {
       readyUpdate: this.readyUpdate(),
       installingUpdate: this.installingUpdate(),
       updateCheckable: canCheckForUpdates(this.deps.updates.status()),
+      retryable: this.deps.failedRecording.get() !== null,
     };
   }
 
@@ -157,6 +160,7 @@ export class TrayMenu {
       quit: () => this.deps.quit(),
       installUpdate: () => this.installUpdate(),
       checkForUpdates: () => this.checkForUpdates(),
+      retry: () => coordinator.act('retry'),
     };
   }
 

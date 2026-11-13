@@ -18,6 +18,7 @@ import { pcmDurationMs } from '../../shared/pcm';
 import type { OverlayAction, OverlayState } from '../../shared/overlay-contract';
 import type { EngineId } from '../../shared/settings';
 import { DictationSession, type DictationSessionDeps, type SessionOverlay } from './dictation-session';
+import { FailedRecording } from './failed-recording';
 import { copyLastState, errorState, MESSAGES, pasteLastState, switchFailedState } from './overlay-messages';
 import { OverlayPresenter } from './overlay-presenter';
 import { armedSessionShortcuts } from './session-shortcuts';
@@ -42,6 +43,7 @@ export type SessionCoordinatorDeps = {
   openModelSettings?: () => void;
   enableServer?: () => Promise<void>;
   polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
+  failedRecording?: FailedRecording;
   clock?: () => number;
   platform?: NodeJS.Platform;
   logger?: Logger;
@@ -63,11 +65,14 @@ export class SessionCoordinator {
     cancel: () => this.discardShown(),
     'toggle-polish': () => this.shown()?.togglePolish(),
     'cycle-language': () => this.shown()?.cycleLanguage(),
+    retry: () => this.retry(),
   };
   private readonly sessions = new Set<DictationSession>();
   private readonly cancellable = new Set<DictationSession>();
   private readonly captureLane = new SerialQueue();
   private readonly pipeline = new SerialQueue();
+  private readonly failedRecording: FailedRecording;
+  private latest: DictationSession | null = null;
   private recording: DictationSession | null = null;
   private unsubscribers: Array<() => void> = [];
   private shutdownTask: Promise<void> | null = null;
@@ -77,6 +82,7 @@ export class SessionCoordinator {
   constructor(private readonly deps: SessionCoordinatorDeps) {
     this.presenter = new OverlayPresenter(deps.overlay);
     this.logger = deps.logger ?? consoleLogger;
+    this.failedRecording = deps.failedRecording ?? new FailedRecording();
   }
 
   start(): void {
@@ -125,6 +131,7 @@ export class SessionCoordinator {
   shutdown(): Promise<void> {
     if (this.shutdownTask !== null) return this.shutdownTask;
     this.stopped = true;
+    this.failedRecording.drop();
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
     if (this.cancellable.size > 0) this.armShortcuts(false);
     const closing = [...this.sessions].map((session) => session.cancel());
@@ -225,13 +232,34 @@ export class SessionCoordinator {
 
   private handleStart(): void {
     if (this.stopped) return;
-    const session = new DictationSession(this.sessionDeps());
+    this.failedRecording.drop();
+    const session = this.open();
     this.recording = session;
+    session.begin();
+  }
+
+  private retry(): void {
+    const pcm = this.failedRecording.get();
+    if (pcm === null || this.stopped || this.sessions.size > 0) return;
+    const session = this.open();
+    session
+      .replay(pcm)
+      .catch((error: unknown) => {
+        this.logger.error('The retried dictation failed', error);
+      })
+      .finally(() => {
+        this.sessions.delete(session);
+      });
+  }
+
+  private open(): DictationSession {
+    const session = new DictationSession(this.sessionDeps());
+    this.latest = session;
     this.sessions.add(session);
     this.cancellable.add(session);
     if (this.cancellable.size === 1) this.armShortcuts(true);
     this.presenter.claim(session);
-    session.begin();
+    return session;
   }
 
   private handleStop(reason: StopReason): void {
@@ -283,6 +311,12 @@ export class SessionCoordinator {
     this.deps.hotkey.cancel();
   }
 
+  private keepFailed(session: DictationSession, pcm: Uint8Array): boolean {
+    if (this.stopped || session !== this.latest) return false;
+    this.failedRecording.keep(pcm);
+    return true;
+  }
+
   private handleLimit(): void {
     if (this.recording === null) {
       return;
@@ -327,11 +361,13 @@ export class SessionCoordinator {
       abandon: (session) => this.handleAbandon(session),
       uncancellable: (session) => this.uncancellable(session),
       transcribed: (text, pcm) => {
+        this.failedRecording.forget(pcm);
         this.recordStats(text, pcm);
         this.deps.history.record(text).catch(() => {
           this.logger.error('The completed transcript could not be saved to history', undefined);
         });
       },
+      failed: (session, pcm) => this.keepFailed(session, pcm),
       polish: this.deps.polish ?? ((text) => Promise.resolve({ text, failure: null })),
       captureLane: this.captureLane,
       pipeline: this.pipeline,

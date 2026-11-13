@@ -136,6 +136,12 @@ export function failureState(reason: EngineFailureReason, hasTextSoFar: boolean)
   return errorState(FAILURE_MESSAGES[reason]);
 }
 
+export function withRetry(state: ErrorState): ErrorState {
+  if (state.action === undefined) return { ...state, action: 'retry' };
+  if (state.alternative === undefined) return { ...state, alternative: 'retry' };
+  return state;
+}
+
 export function readinessError(reason: EngineUnavailableReason | undefined, conditions: EngineConditions): ErrorState {
   if (reason === undefined) {
     return errorState(MESSAGES.engineUnavailable);
