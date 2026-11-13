@@ -311,9 +311,7 @@ export class SessionCoordinator {
   }
 
   private keepFailed(start: number, pcm: Uint8Array): boolean {
-    if (this.stopped || start !== this.starts) return false;
-    this.failedRecording.keep(pcm);
-    return true;
+    return !this.stopped && start === this.starts && this.failedRecording.keep(pcm);
   }
 
   private handleLimit(): void {

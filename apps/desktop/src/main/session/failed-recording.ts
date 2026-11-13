@@ -4,18 +4,21 @@ export class FailedRecording {
   private pcm: Uint8Array | null = null;
   private timer: NodeJS.Timeout | null = null;
   private readonly listeners = new Set<() => void>();
+  private readonly released = new WeakSet<Uint8Array>();
 
   get(): Uint8Array | null {
     return this.pcm;
   }
 
-  keep(pcm: Uint8Array): void {
-    if (this.pcm === pcm) return;
-    this.clearTimer();
+  keep(pcm: Uint8Array): boolean {
+    if (this.pcm === pcm) return true;
+    if (this.released.has(pcm)) return false;
+    this.drop();
     this.pcm = pcm;
     this.timer = setTimeout(() => this.drop(), FAILED_RECORDING_MS);
     this.timer.unref();
     this.changed();
+    return true;
   }
 
   forget(pcm: Uint8Array): void {
@@ -25,6 +28,7 @@ export class FailedRecording {
   drop(): void {
     if (this.pcm === null) return;
     this.clearTimer();
+    this.released.add(this.pcm);
     this.pcm = null;
     this.changed();
   }

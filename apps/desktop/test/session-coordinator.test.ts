@@ -1761,6 +1761,29 @@ describe('SessionCoordinator', () => {
       expect(harness.failedRecording.get()).toBe(held);
     });
 
+    it('holds nothing when a retry started before the ten-minute cap fails after it', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const harness = await prepared();
+        await failOnce(harness, 3);
+        await setWorkerMode('hang');
+        harness.coordinator.act('retry');
+        await expect.poll(() => harness.states.at(-1)).toEqual({ kind: 'processing' });
+        await setWorkerMode('fail');
+
+        vi.advanceTimersByTime(10 * 60_000);
+        expect(harness.failedRecording.get()).toBeNull();
+
+        await expect.poll(() => lastVisible(harness.states), { timeout: 5000 }).toEqual({ kind: 'error', message: MESSAGES.transcriptionFailed });
+        await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+        expect(harness.failedRecording.get()).toBeNull();
+        harness.coordinator.act('retry');
+        expect(harness.coordinator.isBusy()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    }, 20_000);
+
     it('drops the recording when the app shuts down', async () => {
       const harness = await prepared();
       await failOnce(harness, 3);

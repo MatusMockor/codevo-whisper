@@ -26,12 +26,14 @@ describe('FailedRecording', () => {
     vi.advanceTimersByTime(1);
     expect(held.get()).toBeNull();
 
-    held.keep(first);
+    const third = new Uint8Array(2);
+    held.keep(third);
     held.keep(second);
     expect(held.get()).toBe(second);
+    expect(held.keep(third)).toBe(false);
     vi.advanceTimersByTime(10 * 60_000);
     expect(held.get()).toBeNull();
-    expect(changes).toHaveBeenCalledTimes(5);
+    expect(changes).toHaveBeenCalledTimes(6);
   });
 
   it('forgets only the recording it holds', () => {
@@ -44,6 +46,23 @@ describe('FailedRecording', () => {
     held.forget(kept);
     expect(held.get()).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('never holds a recording again once it was released', () => {
+    const held = new FailedRecording();
+    const expired = new Uint8Array(4);
+    const forgotten = new Uint8Array(4);
+
+    expect(held.keep(expired)).toBe(true);
+    vi.advanceTimersByTime(10 * 60_000);
+    expect(held.keep(expired)).toBe(false);
+    expect(held.get()).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+
+    held.keep(forgotten);
+    held.forget(forgotten);
+    expect(held.keep(forgotten)).toBe(false);
+    expect(held.get()).toBeNull();
   });
 
   it('drops the recording and its timer', () => {
