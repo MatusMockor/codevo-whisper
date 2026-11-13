@@ -174,6 +174,12 @@ describe('polish', () => {
     expect(text).toBe(edited);
   });
 
+  it('keeps the raw transcript when the answer copies a URL from the context that is shorter once folded', async () => {
+    const dictated = 'posielam ti odkaz na platbu za našu spoločnú večeru';
+    const { text } = await polishWith(() => 'Posielam ti odkaz na platbu za našu spoločnú večeru https://example.sk/?id=42.', 2_000, { text: dictated, words: [], context: { before: 'Náš platobný odkaz: https://example.sk/?id=42', after: '' } });
+    expect(text).toBe(dictated);
+  });
+
   it('accepts preferred spellings the transcript misheard when context was sent', async () => {
     const { text } = await polishWith(() => 'Pošli to do Kumiby.', 2_000, { text: 'pošli to do kumíby', words: ['Kumiba'], context: { before: BEFORE, after: AFTER } });
     expect(text).toBe('Pošli to do Kumiby.');

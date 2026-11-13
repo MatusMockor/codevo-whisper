@@ -28,14 +28,18 @@ function editsTranscript(transcript: string, output: string, words: readonly str
   return said.filter((word) => known.has(word)).length >= said.length * MIN_TRANSCRIPT_WORDS;
 }
 
+function normalizeSpace(text: string): string {
+  return text.replace(/\s+/g, ' ');
+}
+
 function copiesContext(transcript: string, output: string, context: FieldContext): boolean {
   const spoken = fold(transcript);
-  const answer = fold(output);
+  const answer = normalizeSpace(output);
   return [context.before, context.after].some((side) => {
-    const excerpt = fold(side);
+    const excerpt = normalizeSpace(side);
     for (let start = 0; start + COPY_WINDOW <= excerpt.length; start++) {
       const window = excerpt.slice(start, start + COPY_WINDOW);
-      if (answer.includes(window) && !spoken.includes(window)) return true;
+      if (answer.includes(window) && !spoken.includes(fold(window))) return true;
     }
     return false;
   });
