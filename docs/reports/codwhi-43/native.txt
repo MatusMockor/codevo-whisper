@@ -1,0 +1,31 @@
+READY {'event': 'ready', 'pid': 55904, 'ts': 1794609730240}
+READY {'ready': True}
+permissions {'accessibility': True, 'cmd': 'permissions', 'id': 1, 'listenEvent': True, 'postEvent': True}
+output-audio {'canMute': True, 'cmd': 'output-audio', 'id': 2, 'kind': 'available', 'outputs': [{'id': 'BuiltInSpeakerDevice', 'label': 'MacBook Pro Speakers'}, {'id': 'MSLoopbackDriverDevice_UID', 'label': 'Microsoft Teams Audio'}]}
+target-capture {'bundleId': '', 'bundlePath': '/private/tmp/codwhi-43-fixture', 'captured': True, 'captureId': '57479B0A-281F-4214-881E-0E909B61BE2B', 'cmd': 'target-capture', 'id': 3, 'name': 'codwhi-43-fixture', 'pid': 55905, 'windowId': 28369}
+target-context {'after': 'AFTER', 'before': 'before ', 'cmd': 'target-context', 'id': 4, 'readable': True}
+PASS readable context around caret without edits
+type-text {'cmd': 'type-text', 'id': 5, 'posted': False, 'reason': 'focus-changed'}
+target-refocus {'cmd': 'target-refocus', 'id': 6, 'result': 'moved'}
+type-text {'cmd': 'type-text', 'id': 7, 'posted': True}
+target-return {'cmd': 'target-return', 'id': 8, 'returned': True}
+PASS original field/caret delivery and same-app window return
+target-capture {'bundleId': '', 'bundlePath': '/private/tmp/codwhi-43-fixture', 'captured': True, 'captureId': 'EC2C0CC1-7B7B-43EB-94D5-A21B4D6D28AF', 'cmd': 'target-capture', 'id': 9, 'name': 'codwhi-43-fixture', 'pid': 55905, 'windowId': 28370}
+target-context {'cmd': 'target-context', 'id': 10, 'readable': False, 'reason': 'protected'}
+target-release {'cmd': 'target-release', 'id': 11, 'released': True}
+PASS secure context withheld without edits
+target-refocus {'cmd': 'target-refocus', 'id': 12, 'reason': 'element-gone', 'result': 'failed'}
+type-text {'cmd': 'type-text', 'id': 13, 'posted': False, 'reason': 'focus-changed'}
+target-release {'cmd': 'target-release', 'id': 14, 'released': True}
+PASS removed target blocks delivery
+listen-start {'cmd': 'listen-start', 'id': 15, 'running': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 16}
+ping {'cmd': 'ping', 'id': 17, 'pid': 55904, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 18}
+ping {'cmd': 'ping', 'id': 19, 'pid': 55904, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 20}
+ping {'cmd': 'ping', 'id': 21, 'pid': 55904, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 22}
+ping {'cmd': 'ping', 'id': 23, 'pid': 55904, 'pong': True}
+listen-stop {'cmd': 'listen-stop', 'id': 24, 'running': False}
+PASS real event-tap Esc and Ctrl+Shift+L arm/disarm

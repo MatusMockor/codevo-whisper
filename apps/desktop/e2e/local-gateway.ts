@@ -7,7 +7,7 @@ import type { FakeSttRequest } from '../../server/test/support/fake-stt-server';
 const runner = fileURLToPath(new URL('../test/support/run-gateway.ts', import.meta.url));
 const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
 
-export type LocalGatewayOptions = { serverVersion?: string; languageModels?: boolean; failWhileFile?: string };
+export type LocalGatewayOptions = { serverVersion?: string; languageModels?: boolean; failWhileFile?: string; sttDelayMs?: number };
 
 export type AdminConnection = { send(value: object): void; next(): Promise<unknown>; close(): void };
 

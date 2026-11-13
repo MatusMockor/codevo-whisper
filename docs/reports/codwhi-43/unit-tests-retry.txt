@@ -1,0 +1,276 @@
+
+ RUN  v5.0.5 /Users/mcerny/projects/codevo-whisper
+
+ ❯ |desktop| test/core-handlers.test.ts (5 tests | 2 failed) 491ms
+   ❯ writeSettings (5)
+     × refuses a dictation hotkey or an in-dictation shortcut that one key press fires together 139ms (retry x1)
+     × saves a repaired in-dictation shortcut while the unchanged one still collides with a modifier-only dictation hotkey 169ms (retry x1)
+ ❯ |desktop| test/codex-cli.test.ts (15 tests | 3 failed) 3908ms
+   ❯ codexProvider (9)
+     × reports a missing binary as not found 2113ms (retry x1)
+   ❯ findCodex (1)
+     × prefers codex on PATH and otherwise finds it in a user install directory 23ms (retry x1)
+   ❯ checkCodex (5)
+     × reports a logged-out CLI without sending a prompt, and a missing one as not found 80ms (retry x1)
+(node:88646) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 cancel listeners added to [CancellationToken]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |desktop| test/session-coordinator.test.ts (132 tests | 1 failed) 46708ms
+   ❯ SessionCoordinator (112)
+     × re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing 44ms (retry x1)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |desktop| test/codex-cli.test.ts > codexProvider > reports a missing binary as not found
+ FAIL  |desktop| test/codex-cli.test.ts > codexProvider > reports a missing binary as not found
+AssertionError: expected 'codex-logged-out' to be 'codex-not-found' // Object.is equality
+
+Expected: "codex-not-found"
+Received: "codex-logged-out"
+
+ ❯ test/codex-cli.test.ts:100:41
+     98|     await mkdir(empty);
+     99|     const run = codexProvider({ model: 'gpt-6-luna', effort: 'low', en…
+    100|     expect((await failure(run)).reason).toBe('codex-not-found');
+       |                                         ^
+    101|   });
+    102|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  |desktop| test/codex-cli.test.ts > findCodex > prefers codex on PATH and otherwise finds it in a user install directory
+ FAIL  |desktop| test/codex-cli.test.ts > findCodex > prefers codex on PATH and otherwise finds it in a user install directory
+AssertionError: expected '/opt/homebrew/bin/codex' to be null
+
+- Expected:
+null
+
++ Received:
+"/opt/homebrew/bin/codex"
+
+ ❯ test/codex-cli.test.ts:149:58
+    147|       await rm(join(target, 'codex'));
+    148|     }
+    149|     expect(await findCodex({ PATH: empty, HOME: home })).toBeNull();
+       |                                                          ^
+    150|   });
+    151| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  |desktop| test/codex-cli.test.ts > checkCodex > reports a logged-out CLI without sending a prompt, and a missing one as not found
+ FAIL  |desktop| test/codex-cli.test.ts > checkCodex > reports a logged-out CLI without sending a prompt, and a missing one as not found
+AssertionError: expected { Object (ok, error) } to deeply equal { ok: false, error: 'codex-not-found' }
+
+- Expected
++ Received
+
+  {
+-   "error": "codex-not-found",
++   "error": "codex-logged-out",
+    "ok": false,
+  }
+
+ ❯ test/codex-cli.test.ts:162:129
+    160|     expect(await checkCodex({ model: 'gpt-6-luna', effort: 'low', env:…
+    161|     await expect(stat(join(dir, 'args'))).rejects.toThrow();
+    162|     expect(await checkCodex({ model: 'gpt-6-luna', effort: 'low', env:…
+       |                                                                                                                                 ^
+    163|   });
+    164|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  |desktop| test/core-handlers.test.ts > writeSettings > refuses a dictation hotkey or an in-dictation shortcut that one key press fires together
+ FAIL  |desktop| test/core-handlers.test.ts > writeSettings > refuses a dictation hotkey or an in-dictation shortcut that one key press fires together
+AssertionError: promise resolved "{ muteWhileRecording: false, …(31) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aiBaseUrl": null,
++   "aiInstructions": "",
++   "aiModel": "",
++   "aiPolish": false,
++   "aiProvider": "server",
++   "appendTrailingSpace": false,
++   "audioFeedback": false,
++   "autoSubmit": "off",
++   "clipboardPolicy": "restore",
++   "codexEffort": "low",
++   "codexModel": "gpt-6-luna",
++   "customWords": [],
++   "engineOrder": [
++     "local",
++   ],
++   "feedbackOutputId": null,
++   "feedbackVolume": 50,
++   "hotkey": {
++     "keycode": 65580,
++     "kind": "key",
++     "label": "Ctrl+Alt+J",
++     "modifiers": [
++       "control",
++       "alt",
++     ],
++   },
++   "insertion": "paste",
++   "languages": {
++     "mode": "auto",
++     "selected": [
++       "sk",
++     ],
++   },
++   "launchAtLogin": false,
++   "linuxPasteShortcut": "ctrl-v",
++   "localAcceleration": "auto",
++   "localModelId": null,
++   "localModelUnload": 5,
++   "microphones": [],
++   "mode": "smart",
++   "muteWhileRecording": false,
++   "onboardingDone": false,
++   "overlay": "indicator",
++   "removeFillerWords": false,
++   "serverEnabled": true,
++   "serverRestoreOrder": null,
++   "sessionShortcuts": {
++     "cycle-language": {
++       "key": "j",
++       "modifiers": [
++         "control",
++         "alt",
++       ],
++     },
++     "toggle-polish": {
++       "key": "a",
++       "modifiers": [
++         "control",
++         "alt",
++       ],
++     },
++   },
+  }
+
+ ❯ test/core-handlers.test.ts:49:46
+     47|   it('refuses a dictation hotkey or an in-dictation shortcut that one …
+     48|     const ctrlAltJ = { kind: 'key', keycode: 0x10000 + 36 + 8, modifie…
+     49|     await expect(write({ hotkey: ctrlAltJ })).rejects.toThrow(IpcValid…
+       |                                              ^
+     50|     await write({ hotkey: { kind: 'key', keycode: 0x10000 + 25 + 8, mo…
+     51|     const polish = { key: 'p', modifiers: ['control', 'alt'] };
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  |desktop| test/core-handlers.test.ts > writeSettings > saves a repaired in-dictation shortcut while the unchanged one still collides with a modifier-only dictation hotkey
+ FAIL  |desktop| test/core-handlers.test.ts > writeSettings > saves a repaired in-dictation shortcut while the unchanged one still collides with a modifier-only dictation hotkey
+AssertionError: promise resolved "{ muteWhileRecording: false, …(31) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aiBaseUrl": null,
++   "aiInstructions": "",
++   "aiModel": "",
++   "aiPolish": false,
++   "aiProvider": "server",
++   "appendTrailingSpace": false,
++   "audioFeedback": false,
++   "autoSubmit": "off",
++   "clipboardPolicy": "restore",
++   "codexEffort": "low",
++   "codexModel": "gpt-6-luna",
++   "customWords": [],
++   "engineOrder": [
++     "local",
++   ],
++   "feedbackOutputId": null,
++   "feedbackVolume": 50,
++   "hotkey": {
++     "keycodes": [
++       65573,
++     ],
++     "kind": "modifiers",
++     "label": "Ctrl",
++   },
++   "insertion": "paste",
++   "languages": {
++     "mode": "selected",
++     "selected": [
++       "en",
++     ],
++   },
++   "launchAtLogin": false,
++   "linuxPasteShortcut": "ctrl-v",
++   "localAcceleration": "auto",
++   "localModelId": null,
++   "localModelUnload": 5,
++   "microphones": [],
++   "mode": "smart",
++   "muteWhileRecording": false,
++   "onboardingDone": false,
++   "overlay": "indicator",
++   "removeFillerWords": false,
++   "serverEnabled": true,
++   "serverRestoreOrder": null,
++   "sessionShortcuts": {
++     "cycle-language": {
++       "key": "k",
++       "modifiers": [
++         "alt",
++       ],
++     },
++     "toggle-polish": {
++       "key": "p",
++       "modifiers": [
++         "control",
++         "alt",
++       ],
++     },
++   },
+  }
+
+ ❯ test/core-handlers.test.ts:64:148
+     62|     expect(settings.get().sessionShortcuts).toEqual({ 'toggle-polish':…
+     63|     await write({ languages: { mode: 'selected', selected: ['en'] }, h…
+     64|     await expect(write({ sessionShortcuts: { ...settings.get().session…
+       |                                                                                                                                                    ^
+     65|   });
+     66|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  |desktop| test/session-coordinator.test.ts > SessionCoordinator > re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing
+ FAIL  |desktop| test/session-coordinator.test.ts > SessionCoordinator > re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing
+AssertionError: expected [ 'cancel', 'lock-target', …(2) ] to deeply equal [ 'cancel', 'lock-target', …(1) ]
+
+- Expected
++ Received
+
+  [
+    "cancel",
+    "lock-target",
++   "toggle-polish",
+    "cycle-language",
+  ]
+
+ ❯ test/session-coordinator.test.ts:1350:73
+    1348|     await harness.settings.update({ hotkey: { kind: 'key', keycode: 0x…
+    1349|
+    1350|     expect(harness.helper.sessionShortcuts.map(({ action }) => action)…
+       |                                                                         ^
+    1351|     await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).…
+    1352|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+
+ Test Files  3 failed | 264 passed | 2 skipped (269)
+      Tests  6 failed | 2659 passed | 9 skipped (2674)
+   Start at  23:51:42
+   Duration  47.52s (tests 96%, import 3%, transform 1%)
