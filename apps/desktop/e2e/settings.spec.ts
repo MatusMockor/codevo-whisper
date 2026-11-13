@@ -502,6 +502,29 @@ test.describe('settings page', () => {
     expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ localModelUnload: 10, localAcceleration: 'cpu', mode: 'smart' });
   });
 
+  test('acceleration describes Linux Vulkan and an existing file must match a catalog model', async () => {
+    await openTranscription();
+    await expect(page.getByText('Na Linuxe Auto aj GPU spúšťajú Vulkan a na CPU prejdú, iba ak sa Vulkan nespustí.')).toBeVisible();
+    await expect(page.getByText('Na ostatných systémoch sa používa CPU.')).toHaveCount(0);
+    const picked = join(userDataDir, 'not-a-model.gguf');
+    await writeFile(picked, 'not a catalog model');
+    const pickFile = (path: string | null) =>
+      app.evaluate(({ dialog }, choice) => {
+        dialog.showOpenDialog = () => Promise.resolve({ canceled: choice === null, filePaths: choice === null ? [] : [choice] });
+      }, path);
+    const useExisting = page.getByRole('button', { name: 'Použiť existujúci súbor…' });
+
+    await pickFile(null);
+    await useExisting.click();
+    await expect(useExisting).toBeEnabled();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    await pickFile(picked);
+    await useExisting.click();
+    await expect(page.getByRole('alert')).toHaveText('Súbor sa nezhoduje so žiadnym modelom zo zoznamu.');
+    expect((await page.evaluate(() => window.codevo.getModelStates())).every((state) => state.status === 'not-downloaded')).toBe(true);
+  });
+
   test('changes to Režim, Vkladanie and Spustiť po prihlásení persist across a relaunch', async () => {
     await page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' }).click();
     await expect(row('Režim')).toContainText('Prvé stlačenie začne nahrávať, druhé ukončí.');
