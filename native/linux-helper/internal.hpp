@@ -1,6 +1,7 @@
 #pragma once
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
+#include <atspi/atspi.h>
 #include <json-glib/json-glib.h>
 #include <X11/Xlib.h>
 #include <cstdint>
@@ -28,11 +29,23 @@ extern GMainLoop* loop;
 void desktopInit();
 bool accessibilityEnabled(bool request = false);
 Target frontmost();
+AtspiAccessible* focusedAccessible(const Target&);
+Field describeField(AtspiAccessible*);
 Field focused(const Target&);
+std::string accessibleIdentity(AtspiAccessible*);
+void awaitFocus(const std::string& identity);
+void settleFocus();
 bool seatActive();
 void describeTarget(JsonObject*, const Target&);
 JsonObject* checkDelivery(JsonObject*);
-bool post(JsonObject*, bool submit);
+JsonObject* targetCapture();
+JsonObject* targetRefocus(JsonObject*);
+JsonObject* targetReturn(JsonObject*);
+bool targetRelease(JsonObject*);
+std::string capturedIdentity(const std::string& captureId);
+enum class Post { Posted, Refused, FocusChanged };
+Post post(JsonObject*, bool submit);
+bool outsideCapture(JsonObject*);
 void invalidateDelivery();
 std::string selectionShortcut(const std::string&);
 void shutdownDesktop();

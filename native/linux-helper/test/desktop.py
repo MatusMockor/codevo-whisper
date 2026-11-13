@@ -37,6 +37,13 @@ def target():
   elif cmd=='primary-copy': Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(r['text'],-1);send({'ok':True})
   elif cmd=='primary': send({'text':Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).wait_for_text()})
   elif cmd=='clipboard': send({'text':Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()})
+  elif cmd=='set': fields[r['index']].set_text(r['text']);fields[r['index']].set_position(r['caret']);send({'ok':True})
+  elif cmd=='select': fields[r['index']].select_region(r['start'],r['end']);send({'ok':True})
+  elif cmd=='caret': e=fields[r['index']];send({'position':e.get_position(),'selection':list(e.get_selection_bounds())})
+  elif cmd=='focused': send({'values':[f.has_focus() for f in fields]})
+  elif cmd=='destroy-field': fields.pop(r['index']).destroy();send({'ok':True})
+  elif cmd=='set-sensitive': fields[r['index']].set_sensitive(r['value']);send({'ok':True})
+  elif cmd=='close-window': window.destroy();send({'ok':True})
   elif cmd=='quit': Gtk.main_quit();return False
   return True
  GLib.io_add_watch(sys.stdin,GLib.IO_IN|GLib.IO_HUP,command);Gtk.main()
@@ -105,6 +112,148 @@ def verify_session_shortcuts(helper,fixture):
  assert helper.request('session-shortcuts',shortcuts=[])['armed']
  print('PASS X11 session shortcuts: repeat, extra modifiers, consumption, listen reconfiguration, disarm, conflict rollback and shutdown; overlapping binding grabs '+('verified' if bindingAvailable else 'unavailable (existing paste-last grab)'),flush=True)
 
+def verify_target_lock(helper):
+ def fixture():
+  client=Client([sys.executable,__file__,'--target']);return client,client.read()
+ def activate(window):xdo('windowactivate','--sync',window);time.sleep(.3)
+ def active():return int(subprocess.check_output(['xdotool','getactivewindow'],text=True))
+ def prepare(client,window,index=0):
+  activate(window);client.request('focus',index=index);time.sleep(.2);client.request('set',index=index,text='abcdef',caret=3);time.sleep(.2)
+ def failed(capture,reasons):
+  result=helper.request('target-refocus',captureId=capture['captureId'])
+  assert result.get('result')=='failed' and result.get('reason') in reasons,result
+  return result['reason']
+ other,o=fixture();f,t=fixture();evidence={}
+ def unchanged(label,target=True):
+  assert other.request('text')['texts'][0]=='other app',label+': other app content must not change'
+  if target:assert f.request('text')['texts'][0]=='abcdef',label+': target content must not change'
+ try:
+  other.request('focus',index=0);other.request('set',index=0,text='other app',caret=9)
+  other.request('copy',text='prior clipboard')
+  def moved_round(round):
+   prepare(f,t['windowId']);f.request('set',index=1,text='second',caret=0)
+   capture=helper.request('target-capture')
+   assert capture.get('captured') is True and capture['pid']==t['pid'] and capture['windowId']==t['windowId'] and capture['captureId'],capture
+   activate(o['windowId']);assert active()==o['windowId']
+   expected={'pid':capture['pid'],'windowId':capture['windowId']}
+   result=helper.request('target-refocus',captureId=capture['captureId'])
+   allowed=helper.request('check-delivery',expected=expected,intent='automatic',shortcut='ctrl-v',captureId=capture['captureId'])
+   saved=helper.request('clipboard-save',purpose='paste',policy='restore',operationId=allowed.get('operationId',''))
+   assert result.get('result')=='moved',(round,result)
+   assert allowed.get('kind')=='allowed',(round,allowed)
+   assert saved.get('saved') is True,(round,'locked moved delivery must save the clipboard',saved)
+   assert active()==t['windowId'],'refocus must activate the captured window'
+   assert f.request('focused')['values']==[True,False,False],'captured field must hold focus'
+   caret=f.request('caret',index=0);assert caret['position']==3 and caret['selection']==[],caret
+   tx=saved['transactionId']
+   assert helper.request('clipboard-write',text='XY',transactionId=tx)['written']
+   assert helper.request('paste',operationId=allowed['operationId'],transactionId=tx)['posted'];time.sleep(.5)
+   texts=f.request('text')['texts'];assert texts[:2]==['abcXYdef','second'],(round,texts)
+   assert helper.request('clipboard-restore',expectedText='XY',transactionId=tx)['restored'],(round,'clipboard must restore')
+   assert other.request('clipboard')['text']=='prior clipboard',(round,'clipboard content must survive')
+   back=helper.request('target-return',captureId=capture['captureId']);assert back.get('returned') is True,back
+   assert active()==o['windowId'],'return must reactivate the previous window'
+   return {'result':result['result'],'caret':caret['position'],'texts':texts,'returned':back['returned']}
+  evidence['moved']=moved_round(1)
+  evidence['movedAgain']=moved_round(2)
+  activate(t['windowId']);f.request('focus',index=0);time.sleep(.2)
+  capture=helper.request('target-capture')
+  evidence['inPlace']=helper.request('target-refocus',captureId=capture['captureId'])['result'];assert evidence['inPlace']=='in-place'
+  f.request('focus',index=1);time.sleep(.2);current=helper.request('frontmost')
+  moved=helper.request('check-delivery',expected=current,intent='automatic',shortcut='ctrl-v',captureId=capture['captureId'])
+  assert moved.get('kind')=='blocked' and moved.get('reason')=='focus-changed',moved
+  stale=helper.request('check-delivery',expected=current,intent='automatic',shortcut='ctrl-v',captureId='not-the-capture')
+  assert stale.get('kind')=='copy' and stale.get('reason')=='unverified-target',stale
+  plain=helper.request('check-delivery',expected=current,intent='automatic',shortcut='ctrl-v');assert plain.get('kind')=='allowed',plain
+  evidence['checkDelivery']={'focusChanged':moved['reason'],'mismatchedCapture':stale['reason'],'withoutCapture':plain['kind']}
+  prepare(f,t['windowId']);first=helper.request('target-capture')
+  f.request('focus',index=1);time.sleep(.2);second=helper.request('target-capture')
+  assert first.get('captured') is True and second.get('captured') is True,(first,second)
+  activate(o['windowId'])
+  assert helper.request('target-refocus',captureId=first['captureId']).get('result')=='moved','first capture must survive a second capture'
+  assert f.request('focused')['values']==[True,False,False],'first capture refocuses its own field'
+  activate(o['windowId'])
+  assert helper.request('target-refocus',captureId=second['captureId']).get('result')=='moved','second capture must refocus'
+  assert f.request('focused')['values']==[False,True,False],'second capture refocuses its own field'
+  assert helper.request('target-release',captureId=first['captureId'])=={'released':True,'id':helper.id,'cmd':'target-release'}
+  assert helper.request('target-release',captureId=first['captureId'])['released'] is False,'release is single use'
+  evidence['released']=failed(first,['stale-capture'])
+  assert helper.request('target-return',captureId=first['captureId'])['returned'] is False
+  assert helper.request('target-refocus',captureId=second['captureId']).get('result')=='in-place','releasing one capture keeps the other'
+  oldest=helper.request('target-capture')
+  for _ in range(16):helper.request('target-capture')
+  evidence['evicted']=failed(oldest,['stale-capture'])
+  evidence['coexist']=True
+  prepare(f,t['windowId']);capture=helper.request('target-capture')
+  f.request('select',index=0,start=6,end=6);time.sleep(.2);assert f.request('caret',index=0)['position']==6
+  result=helper.request('target-refocus',captureId=capture['captureId']);assert result.get('result')=='in-place',result
+  caret=f.request('caret',index=0);assert caret['position']==3 and caret['selection']==[],('in-place must restore the captured caret',caret)
+  allowed=helper.request('check-delivery',expected={'pid':capture['pid'],'windowId':capture['windowId']},intent='automatic',shortcut='ctrl-v',captureId=capture['captureId']);assert allowed.get('kind')=='allowed',allowed
+  saved=helper.request('clipboard-save',purpose='paste',policy='restore',operationId=allowed['operationId']);tx=saved['transactionId']
+  assert helper.request('clipboard-write',text='XY',transactionId=tx)['written']
+  assert helper.request('paste',operationId=allowed['operationId'],transactionId=tx)['posted'];time.sleep(.5)
+  assert f.request('text')['texts'][0]=='abcXYdef','in-place paste lands at the captured caret'
+  helper.request('clipboard-restore',expectedText='XY',transactionId=tx)
+  evidence['inPlaceCaret']=caret['position']
+  prepare(f,t['windowId']);f.request('select',index=0,start=1,end=4);time.sleep(.2);capture=helper.request('target-capture')
+  f.request('select',index=0,start=4,end=4);time.sleep(.2)
+  result=helper.request('target-refocus',captureId=capture['captureId']);assert result.get('result')=='in-place',result
+  caret=f.request('caret',index=0);assert caret['selection']==[1,4],('in-place must restore the captured selection',caret)
+  evidence['inPlaceSelection']=caret['selection']
+  prepare(f,t['windowId']);f.request('set',index=1,text='second',caret=0);capture=helper.request('target-capture');lock=capture['captureId']
+  expected={'pid':capture['pid'],'windowId':capture['windowId']};other.request('copy',text='guard clipboard')
+  f.request('focus',index=1);time.sleep(.3);submits=len(f.request('activations')['values'])
+  allowed=helper.request('check-delivery',expected=expected,intent='automatic',shortcut='ctrl-v');assert allowed.get('kind')=='allowed',allowed
+  saved=helper.request('clipboard-save',purpose='paste',policy='restore',operationId=allowed['operationId']);tx=saved['transactionId']
+  write=helper.request('clipboard-write',text='XY',transactionId=tx,captureId=lock)
+  assert write.get('written') is False and write.get('reason')=='focus-changed',write
+  assert other.request('clipboard')['text']=='guard clipboard','a refused write leaves the clipboard unchanged'
+  assert helper.request('clipboard-write',text='XY',transactionId=tx)['written']
+  paste=helper.request('paste',operationId=allowed['operationId'],transactionId=tx,captureId=lock)
+  assert paste.get('posted') is False and paste.get('reason')=='focus-changed',paste
+  time.sleep(.3);assert f.request('text')['texts'][:2]==['abcdef','second'],'a refused paste types nowhere'
+  assert helper.request('paste',operationId=allowed['operationId'],transactionId=tx)['posted'];time.sleep(.3)
+  submit=helper.request('submit',operationId=allowed['operationId'],mode='enter',captureId=lock)
+  assert submit.get('posted') is False and submit.get('reason')=='focus-changed',submit
+  typed=helper.request('type-text',text='XY',captureId=lock)
+  assert typed.get('posted') is False and typed.get('reason')=='focus-changed',typed
+  time.sleep(.3);assert len(f.request('activations')['values'])==submits,'a refused submit sends no Enter'
+  helper.request('clipboard-restore',expectedText='XY',transactionId=tx)
+  f.request('focus',index=0);time.sleep(.3);f.request('set',index=0,text='abcdef',caret=3);time.sleep(.2)
+  allowed=helper.request('check-delivery',expected=expected,intent='automatic',shortcut='ctrl-v',captureId=lock);assert allowed.get('kind')=='allowed',allowed
+  saved=helper.request('clipboard-save',purpose='paste',policy='restore',operationId=allowed['operationId']);tx=saved['transactionId']
+  assert helper.request('clipboard-write',text='XY',transactionId=tx,captureId=lock)['written'],'the captured field may receive the clipboard write'
+  assert helper.request('paste',operationId=allowed['operationId'],transactionId=tx,captureId=lock)['posted'],'the captured field may receive the paste';time.sleep(.3)
+  assert helper.request('submit',operationId=allowed['operationId'],mode='enter',captureId=lock)['posted'],'the captured field may receive the submit';time.sleep(.3)
+  assert f.request('text')['texts'][0]=='abcXYdef' and f.request('activations')['values'][submits:]==['abcXYdef'],'guarded delivery lands in the captured field only'
+  helper.request('clipboard-restore',expectedText='XY',transactionId=tx)
+  evidence['guard']={'write':write['reason'],'paste':paste['reason'],'submit':submit['reason'],'typeText':typed['reason'],'captured':'abcXYdef'}
+  f.request('set',index=1,text='second',caret=0)
+  prepare(f,t['windowId']);capture=helper.request('target-capture');activate(o['windowId'])
+  f.request('set-sensitive',index=0,value=False);time.sleep(.2)
+  evidence['insensitive']=failed(capture,['focus-refused','element-gone']);unchanged('insensitive')
+  assert helper.request('target-return',captureId=capture['captureId'])['returned'] is True and active()==o['windowId'],'return after failure must restore the other app'
+  f.request('set-sensitive',index=0,value=True)
+  prepare(f,t['windowId']);capture=helper.request('target-capture');activate(o['windowId'])
+  f.request('destroy-field',index=0);time.sleep(.2)
+  evidence['destroyed']=failed(capture,['element-gone','focus-refused']);unchanged('destroyed',False)
+  assert active()==o['windowId'],'a gone element must not move the user'
+  assert f.request('text')['texts'][0]=='second','remaining fields must not be typed into'
+  prepare(f,t['windowId']);capture=helper.request('target-capture');activate(o['windowId'])
+  f.request('close-window');time.sleep(.3)
+  evidence['windowClosed']=failed(capture,['window-gone','app-gone']);unchanged('window closed',False)
+  assert active()==o['windowId']
+  f.close();f,t=fixture()
+  prepare(f,t['windowId']);capture=helper.request('target-capture');activate(o['windowId'])
+  f.close()
+  evidence['appQuit']=failed(capture,['app-gone']);unchanged('app quit',False)
+  assert active()==o['windowId']
+  print(json.dumps({'targetLock':evidence}),flush=True)
+  print('PASS X11 target lock: coexisting and released captures, verified caret and selection restore in place and moved, repeated locked delivery, output guard on write/paste/submit/type, return, stale and gone targets never typed into',flush=True)
+ finally:
+  if f.p.poll() is None:f.close()
+  other.close()
+
 def verify(args):
  assert args.controlled_only and args.session=='x11' and os.environ.get('DISPLAY'), 'requires controlled X11 display'
  original=subprocess.check_output(['xdotool',*(['getwindowfocus','-f'] if args.session_shortcuts_only else ['getactivewindow'])],text=True).strip()
@@ -114,6 +263,8 @@ def verify(args):
   xdo('windowfocus' if args.session_shortcuts_only else 'windowactivate','--sync',t['windowId']);time.sleep(.3)
   if args.session_shortcuts_only:
    verify_session_shortcuts(helper,fixture);return
+  if args.target_lock_only:
+   verify_target_lock(helper);return
   for _ in range(30):
    current=helper.request('frontmost');element=helper.request('focused-element')
    if current.get('pid')==t['pid'] and element.get('editable') is True:break
@@ -147,6 +298,7 @@ def verify(args):
   xdo('keydown','Control_L');xdo('keydown','F12');time.sleep(.08);xdo('keyup','F12');xdo('keyup','Control_L');time.sleep(.15)
   helper.request('ping');edges=[e['phase'] for e in helper.events if e.get('event')=='hotkey'];assert edges==['down','up'],edges
   verify_session_shortcuts(helper,fixture)
+  verify_target_lock(helper)
   print('PASS native focus safety, opaque authorization, Unicode consumption and consumed X11 hotkey edges',flush=True)
  finally:
   helper.close();fixture.close()
@@ -155,4 +307,4 @@ def verify(args):
 if __name__=='__main__':
  if '--target' in sys.argv:target()
  else:
-  parser=argparse.ArgumentParser();parser.add_argument('--session',choices=['x11'],required=True);parser.add_argument('--helper',required=True);parser.add_argument('--controlled-only',action='store_true');parser.add_argument('--session-shortcuts-only',action='store_true');verify(parser.parse_args())
+  parser=argparse.ArgumentParser();parser.add_argument('--session',choices=['x11'],required=True);parser.add_argument('--helper',required=True);parser.add_argument('--controlled-only',action='store_true');parser.add_argument('--session-shortcuts-only',action='store_true');parser.add_argument('--target-lock-only',action='store_true');verify(parser.parse_args())
