@@ -83,8 +83,11 @@ export async function findExisting(entry: CatalogEntry, locations: ExistingLocat
 
 export async function matchFile(path: string, entries: readonly CatalogEntry[]): Promise<{ entry: CatalogEntry; file: ExistingFile } | null> {
   const file = await regularFile(path);
-  const sized = entries.filter((entry) => file !== null && BigInt(entry.sizeBytes) === file.info.size);
-  if (file === null || sized.length === 0) {
+  if (file === null) {
+    return null;
+  }
+  const sized = entries.filter((entry) => BigInt(entry.sizeBytes) === file.info.size);
+  if (sized.length === 0) {
     return null;
   }
   const digest = await stableDigest(file);
