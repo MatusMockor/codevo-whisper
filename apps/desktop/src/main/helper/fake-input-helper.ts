@@ -3,7 +3,7 @@ import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } fro
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
-import { LockedTargetLostError, type AppTarget, type DeliveryDecision, type DeliveryRequest, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
+import { LockedTargetLostError, type AppTarget, type DeliveryDecision, type DeliveryRequest, type FieldContext, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
 import { Listeners } from './listeners';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import type { SessionShortcut } from '../session/session-shortcuts';
@@ -66,6 +66,8 @@ export class FakeInputHelper implements InputHelper {
   readonly refocused: string[] = [];
   readonly returned: string[] = [];
   readonly released: string[] = [];
+  fieldContext: FieldContext | null = null;
+  readonly contextReads: string[] = [];
   readonly posting: PostingStep[] = [];
   capturedFocused = true;
   private captureCount = 0;
@@ -170,6 +172,11 @@ export class FakeInputHelper implements InputHelper {
     this.released.push(captureId);
     this.captures.delete(captureId);
     return Promise.resolve();
+  }
+
+  targetContext(captureId: string): Promise<FieldContext | null> {
+    this.contextReads.push(captureId);
+    return Promise.resolve(this.captures.has(captureId) ? this.fieldContext && { ...this.fieldContext } : null);
   }
 
   secureInput(): Promise<boolean> {

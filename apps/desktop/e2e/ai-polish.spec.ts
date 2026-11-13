@@ -207,6 +207,39 @@ test('an invalid address draft still shows polish as on and lets the user turn i
   await expect.poll(() => page.evaluate(() => window.codevo.getSettings())).toMatchObject({ aiBaseUrl: 'http://127.0.0.1:9/v1', aiPolish: false });
 });
 
+test('polish sends the custom words, the instructions saved in Settings and the text around the cursor', async () => {
+  const bodies: string[] = [];
+  const baseUrl = await listen(createServer((incoming, outgoing) => {
+    const chunks: Buffer[] = [];
+    incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+    incoming.on('end', () => {
+      bodies.push(Buffer.concat(chunks).toString('utf8'));
+      outgoing.writeHead(200, { 'content-type': 'application/json' });
+      outgoing.end(JSON.stringify({ id: 'chatcmpl-1', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: 'Prepis zo servera.' }, finish_reason: 'stop' }] }));
+    });
+  }));
+  const instructions = 'Píš vykanie s veľkým V.';
+  const context = { before: 'Dobrý deň, posielam podklady k projektu Kumiba. ', after: ' S pozdravom' };
+  await start({ aiBaseUrl: baseUrl, aiModel: MODEL, aiPolish: true, customWords: [{ word: 'Kumiba', aliases: ['kumíba'] }] });
+  await page.getByRole('tab', { name: 'Nastavenia' }).click();
+  await section().getByLabel('Vlastné pokyny').fill(`  ${instructions}\n`);
+  await section().getByRole('button', { name: 'Uložiť pokyny' }).click();
+  await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.aiInstructions))).toBe(instructions);
+  await expect(section().getByRole('button', { name: 'Uložiť pokyny' })).toBeDisabled();
+  await shoot('ai-settings-instructions.png');
+  await launched().evaluate((_electron, value) => { (globalThis as unknown as Hooks).codevoE2e.helper.fieldContext = value; }, context);
+
+  await pair();
+  const { text } = await dictate();
+
+  expect(bodies).toHaveLength(1);
+  const [system, user] = (JSON.parse(bodies[0]!) as { messages: Array<{ role: string; content: string }> }).messages;
+  expect(system!.content.endsWith(`\n${instructions}`)).toBe(true);
+  expect(JSON.parse(user!.content)).toEqual({ transcript: RAW, preferredSpellings: ['Kumiba'], context });
+  expect(text).toBe('Prepis zo servera.');
+  expect(await launched().evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.contextReads)).toHaveLength(1);
+});
+
 test.describe('an endpoint that cannot polish', () => {
   test('a closed port inserts the raw transcript at once', async () => {
     const closed = createServer();

@@ -3,7 +3,7 @@ import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import type { AudioOutput, OutputAudioView } from '../../shared/recording-audio';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import type { HelperMessage } from './helper-channel';
-import type { AppTarget, FocusedElement, InputLostReason, ModifierFlags, Permissions, RefocusResult, ShortcutName, TargetCapture } from './input-helper';
+import type { AppTarget, FieldContext, FocusedElement, InputLostReason, ModifierFlags, Permissions, RefocusResult, ShortcutName, TargetCapture } from './input-helper';
 
 const SHIFT_MASK = 0x20000;
 const CONTROL_MASK = 0x40000;
@@ -79,6 +79,16 @@ export function parseTargetCapture(message: HelperMessage): TargetCapture | null
   if (message['captured'] !== true || typeof captureId !== 'string' || captureId.length === 0 || captureId.length > 256 || target === null) return null;
   const bundlePath = nullableString(message, 'bundlePath');
   return { captureId, target, iconPath: bundlePath === '' ? null : bundlePath };
+}
+
+const CONTEXT_CODE_POINTS = 512;
+
+export function parseTargetContext(message: HelperMessage): FieldContext | null {
+  const { readable, before, after } = message;
+  if (readable === false) return null;
+  if (readable !== true || typeof before !== 'string' || typeof after !== 'string') throw new Error('target-context-invalid');
+  const context = { before: [...before].slice(-CONTEXT_CODE_POINTS).join(''), after: [...after].slice(0, CONTEXT_CODE_POINTS).join('') };
+  return context.before === '' && context.after === '' ? null : context;
 }
 
 export function parseRefocus(message: HelperMessage): RefocusResult {

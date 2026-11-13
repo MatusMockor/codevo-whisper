@@ -35,6 +35,8 @@ final class Commands {
             return await TargetLock.returnBack(args["captureId"] as? String ?? "")
         case "target-release":
             return TargetLock.release(args["captureId"] as? String ?? "")
+        case "target-context":
+            return TargetLock.context(args["captureId"] as? String ?? "")
         case "check-delivery":
             if outsideCapture(args, "kind") != nil {
                 return ["kind": "blocked", "reason": "focus-changed"]

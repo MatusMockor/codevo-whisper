@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon
 
 @MainActor
 enum TargetLock {
@@ -17,6 +18,7 @@ enum TargetLock {
     private static let captureLimit = 16
     private static let pollLimit: TimeInterval = 1
     private static let pollStep: Duration = .milliseconds(20)
+    private static let contextBound = 512
 
     static func capture() -> JSONObject {
         guard AXIsProcessTrusted() else {
@@ -54,6 +56,29 @@ enum TargetLock {
             return false
         }
         return isFocused(capture)
+    }
+
+    static func context(_ captureId: String) -> JSONObject {
+        guard let capture = captures[captureId] else {
+            return unreadable("stale-capture")
+        }
+        if AXQuery.string(capture.element, kAXSubroleAttribute).0 == kAXSecureTextFieldSubrole || IsSecureEventInputEnabled() {
+            return unreadable("protected")
+        }
+        guard let value = AXQuery.string(capture.element, kAXValueAttribute).0 else {
+            return unreadable("no-text")
+        }
+        guard let range = capture.range else {
+            return unreadable("no-caret")
+        }
+        let text = value as NSString
+        let start = min(max(range.location, 0), text.length)
+        let end = min(max(range.location + max(range.length, 0), start), text.length)
+        return [
+            "readable": true,
+            "before": excerpt(text, max(start - contextBound, 0), start),
+            "after": excerpt(text, end, min(end + contextBound, text.length)),
+        ]
     }
 
     static func refocus(_ captureId: String) async -> JSONObject {
@@ -169,6 +194,17 @@ enum TargetLock {
             return failed("focus-refused")
         }
         return ["result": result]
+    }
+
+    private static func excerpt(_ text: NSString, _ from: Int, _ to: Int) -> String {
+        guard from < to else {
+            return ""
+        }
+        return text.substring(with: text.rangeOfComposedCharacterSequences(for: NSRange(location: from, length: to - from)))
+    }
+
+    private static func unreadable(_ reason: String) -> JSONObject {
+        ["readable": false, "reason": reason]
     }
 
     private static func failure(_ reason: String) -> JSONObject {

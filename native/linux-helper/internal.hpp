@@ -41,6 +41,7 @@ JsonObject* checkDelivery(JsonObject*);
 JsonObject* targetCapture();
 JsonObject* targetRefocus(JsonObject*);
 JsonObject* targetReturn(JsonObject*);
+JsonObject* targetContext(JsonObject*);
 bool targetRelease(JsonObject*);
 std::string capturedIdentity(const std::string& captureId);
 enum class Post { Posted, Refused, FocusChanged };

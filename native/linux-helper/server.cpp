@@ -47,6 +47,7 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="target-capture") { json_object_unref(o);return targetCapture(); }
   else if(cmd=="target-refocus") { json_object_unref(o);return targetRefocus(args); }
   else if(cmd=="target-return") { json_object_unref(o);return targetReturn(args); }
+  else if(cmd=="target-context") { json_object_unref(o);return targetContext(args); }
   else if(cmd=="target-release") boolean(o,"released",targetRelease(args));
   else if(cmd=="clipboard-save") { json_object_unref(o);return selectionSave(args); }
   else if(cmd=="clipboard-write" && outsideCapture(args)) { boolean(o,"written",false);text(o,"reason","focus-changed"); }

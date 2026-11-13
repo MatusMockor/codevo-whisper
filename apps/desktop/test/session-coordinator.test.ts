@@ -36,7 +36,7 @@ import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
 import { createServerService } from './support/server-service';
 import { QuitGate } from '../src/main/app/quit-gate';
-import type { Polished } from '../src/main/ai/polish';
+import type { Polished, PolishRequest } from '../src/main/ai/polish';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
@@ -46,7 +46,7 @@ const AI_SERVER: Partial<Settings> = { aiBaseUrl: 'http://127.0.0.1:11434/v1', a
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { languageHint?: 'required'; appIcon?: (path: string) => Promise<string | null>; polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { languageHint?: 'required'; appIcon?: (path: string) => Promise<string | null>; polish?: (request: PolishRequest, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -1174,7 +1174,7 @@ describe('SessionCoordinator', () => {
     const received: string[] = [];
     const harness = await prepared({
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b', appendTrailingSpace: true },
-      polish: (text) => {
+      polish: ({ text }) => {
         received.push(text);
         return Promise.resolve({ text: 'Upravený\u202e text.', failure: null });
       },
@@ -1187,6 +1187,52 @@ describe('SessionCoordinator', () => {
     expect(harness.lastTranscript.get()).toBe('Upravený text. ');
     expect(await harness.history.view()).toMatchObject({ entries: [{ text: 'Upravený text. ' }] });
     expect(kinds(harness.states)).toEqual(['recording', 'processing', 'inserted']);
+  });
+
+  it('sends the preferred spellings and the text around the captured cursor to the polish, never the aliases', async () => {
+    const received: PolishRequest[] = [];
+    const harness = await prepared({
+      settings: { ...AI_SERVER, aiPolish: true, customWords: [{ word: 'Kumiba', aliases: ['kumíba', 'kumyba'] }, { word: 'Codevo', aliases: [] }] },
+      polish: (request) => {
+        received.push(request);
+        return Promise.resolve({ text: 'Upravený text.', failure: null });
+      },
+    });
+    harness.helper.fieldContext = { before: 'Ahoj Peter, ', after: ' S pozdravom' };
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.']);
+    expect(received).toEqual([{ text: ONE_SECOND_TEXT(7), words: ['Kumiba', 'Codevo'], context: { before: 'Ahoj Peter, ', after: ' S pozdravom' } }]);
+    expect(harness.helper.contextReads).toEqual(['capture-1']);
+  });
+
+  it('polishes without context when no target was captured', async () => {
+    const received: PolishRequest[] = [];
+    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: true }, helper: { frontmost: null }, polish: (request) => { received.push(request); return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
+    harness.helper.fieldContext = { before: 'Ahoj Peter, ', after: ' S pozdravom' };
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => received).toHaveLength(1);
+    expect(received[0]?.context).toBeNull();
+    expect(harness.helper.contextReads).toEqual([]);
+  });
+
+  it('polishes without context when the text around the cursor cannot be read, without logging it', async () => {
+    const received: PolishRequest[] = [];
+    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: true }, polish: (request) => { received.push(request); return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
+    harness.helper.fieldContext = { before: 'Ahoj Peter, ', after: ' S pozdravom' };
+    vi.spyOn(harness.helper, 'targetContext').mockRejectedValue(new Error('helper-error:target-context'));
+
+    await dictate(harness, 7);
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.']);
+    expect(received[0]?.context).toBeNull();
+    expect(harness.logger.errors.map(({ message }) => message)).toContain('The text around the cursor could not be read');
+    const logged = JSON.stringify([...harness.logger.infos, ...harness.logger.warns, ...harness.logger.errors.map(({ message, error }) => ({ message, error: String(error) }))]);
+    expect(logged).not.toContain('Ahoj Peter');
+    expect(logged).not.toContain('pozdravom');
   });
 
   it('polishes through Codex CLI without a server address once the user picks it', async () => {
@@ -1206,7 +1252,7 @@ describe('SessionCoordinator', () => {
   ] as const)('inserts the raw text and tells the user why Codex CLI did not polish it (%s)', async (failure, notice) => {
     const harness = await prepared({
       settings: { aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
-      polish: (text) => Promise.resolve({ text, failure }),
+      polish: ({ text }) => Promise.resolve({ text, failure }),
     });
 
     await dictate(harness, 7);
@@ -1218,7 +1264,7 @@ describe('SessionCoordinator', () => {
   it('tells the user why Codex CLI did not polish a dictation copied to the clipboard', async () => {
     const harness = await prepared({
       settings: { insertion: 'clipboard', aiPolish: true, aiProvider: 'codex', aiBaseUrl: null, aiModel: '' },
-      polish: (text) => Promise.resolve({ text, failure: 'codex-logged-out' }),
+      polish: ({ text }) => Promise.resolve({ text, failure: 'codex-logged-out' }),
     });
 
     await dictate(harness, 7);
@@ -1233,12 +1279,13 @@ describe('SessionCoordinator', () => {
     ['no endpoint is set', { aiPolish: true, aiBaseUrl: null, aiModel: 'qwen2.5:1.5b' }],
   ])('never calls the AI when %s', async (_case, settings) => {
     let calls = 0;
-    const harness = await prepared({ settings, polish: (text) => { calls++; return Promise.resolve({ text, failure: null }); } });
+    const harness = await prepared({ settings, polish: ({ text }) => { calls++; return Promise.resolve({ text, failure: null }); } });
 
     await dictate(harness, 7);
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     expect(calls).toBe(0);
+    expect(harness.helper.contextReads).toEqual([]);
   });
 
   it('cancels the AI request and inserts nothing when the app shuts down during polish', async () => {
@@ -1246,7 +1293,7 @@ describe('SessionCoordinator', () => {
     let calls = 0;
     const harness = await prepared({
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
-      polish: (text, signal) => {
+      polish: ({ text }, signal) => {
         calls++;
         return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
       },
@@ -1309,7 +1356,7 @@ describe('SessionCoordinator', () => {
     ['the AI chip', (harness: Harness) => harness.coordinator.act('toggle-polish')],
   ])('turns AI polish on for one dictation with %s without changing the setting', async (_via, toggle) => {
     const received: string[] = [];
-    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: false }, polish: (text) => { received.push(text); return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
+    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: false }, polish: ({ text }) => { received.push(text); return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
 
     await pressAndSpeak(harness, 7);
     expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', polish: false });
@@ -1346,7 +1393,7 @@ describe('SessionCoordinator', () => {
     let calls = 0;
     const harness = await prepared({
       settings: { ...AI_SERVER, aiPolish: true },
-      polish: (text, signal) => {
+      polish: ({ text }, signal) => {
         calls++;
         return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
       },
@@ -1361,29 +1408,31 @@ describe('SessionCoordinator', () => {
     expect(lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
   });
 
-  it('polishes again when the chip is turned back on before the text is delivered', async () => {
-    let calls = 0;
+  it('polishes again with the same context, read once, when the chip is turned back on before the text is delivered', async () => {
+    const received: PolishRequest[] = [];
     const harness = await prepared({
       settings: { ...AI_SERVER, aiPolish: true },
-      polish: (text, signal) => {
-        calls++;
-        if (calls > 1) return Promise.resolve({ text: 'Upravený text.', failure: null });
-        return new Promise((resolve) => signal.addEventListener('abort', () => resolve({ text, failure: 'aborted' })));
+      polish: (request, signal) => {
+        received.push(request);
+        if (received.length > 1) return Promise.resolve({ text: 'Upravený text.', failure: null });
+        return new Promise((resolve) => signal.addEventListener('abort', () => resolve({ text: request.text, failure: 'aborted' })));
       },
     });
+    harness.helper.fieldContext = { before: 'Ahoj Peter, ', after: ' S pozdravom' };
 
     await dictate(harness, 7);
-    await expect.poll(() => calls).toBe(1);
+    await expect.poll(() => received).toHaveLength(1);
     harness.coordinator.act('toggle-polish');
     harness.coordinator.act('toggle-polish');
 
     await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.']);
-    expect(calls).toBe(2);
+    expect(received.map(({ context }) => context)).toEqual([{ before: 'Ahoj Peter, ', after: ' S pozdravom' }, { before: 'Ahoj Peter, ', after: ' S pozdravom' }]);
+    expect(harness.helper.contextReads).toEqual(['capture-1']);
   });
 
   it('shows no AI chip and ignores the toggle when AI polish is not configured', async () => {
     let calls = 0;
-    const harness = await prepared({ polish: (text) => { calls++; return Promise.resolve({ text, failure: null }); } });
+    const harness = await prepared({ polish: ({ text }) => { calls++; return Promise.resolve({ text, failure: null }); } });
 
     await pressAndSpeak(harness, 7);
     harness.coordinator.act('toggle-polish');
@@ -1517,7 +1566,7 @@ describe('SessionCoordinator', () => {
     let calls = 0;
     const harness = await prepared({
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
-      polish: (text, signal) => {
+      polish: ({ text }, signal) => {
         calls++;
         return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
       },
@@ -1567,7 +1616,7 @@ describe('SessionCoordinator', () => {
     let cancel: () => void = () => undefined;
     const harness = await prepared({
       settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
-      polish: (text) => { cancel(); return Promise.resolve({ text, failure: null }); },
+      polish: ({ text }) => { cancel(); return Promise.resolve({ text, failure: null }); },
     });
     cancel = () => harness.helper.pressSessionShortcut('cancel');
     await dictate(harness, 7);

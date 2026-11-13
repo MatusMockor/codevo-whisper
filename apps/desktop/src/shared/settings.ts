@@ -69,10 +69,13 @@ export type Settings = {
   aiBaseUrl: string | null;
   aiModel: string;
   aiPolish: boolean;
+  aiInstructions: string;
   aiProvider: AiProvider;
   codexModel: string;
   codexEffort: CodexEffort;
 };
+
+export const MAX_AI_INSTRUCTIONS = 1000;
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
   muteWhileRecording: false,
@@ -103,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   aiBaseUrl: null,
   aiModel: '',
   aiPolish: false,
+  aiInstructions: '',
   aiProvider: 'server',
   codexModel: 'gpt-6-luna',
   codexEffort: 'low',
