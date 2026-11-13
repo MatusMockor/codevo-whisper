@@ -63,11 +63,13 @@ test('overlay window preserves platform presentation and shows the injected reco
   await expect(pill).toBeVisible();
   await expect(pill).toContainText('0:04');
   await expect(pill.locator('.chip')).toHaveText('AUTO');
-  await expect.poll(panelFlags).toMatchObject({ focusable: !MAC, visible: true, alwaysOnTop: !REDUCED, allWorkspaces: MAC });
+  await expect.poll(panelFlags).toMatchObject({ focusable: REDUCED, visible: true, alwaysOnTop: !REDUCED, allWorkspaces: MAC });
   if (!REDUCED) expect((await panelFlags()).focused).toBe(false);
+  await expect(overlay.getByRole('button', { name: 'Zrušiť diktovanie (Esc)' })).toHaveCount(REDUCED ? 0 : 1);
   await inject({ kind: 'processing' });
   await expect(overlay.getByText('Spracúvam')).toBeVisible();
-  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: !MAC, focused: false, mainFocused: mainFocusedBefore });
+  await expect(overlay.getByRole('button', { name: 'Zrušiť diktovanie (Esc)' })).toHaveCount(REDUCED ? 0 : 1);
+  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: REDUCED, focused: false, mainFocused: mainFocusedBefore });
 
   await inject({ kind: 'hidden' });
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);
@@ -112,7 +114,7 @@ test('Živý text shows confirmed words solid and tentative words lighter, grows
   await expect(confirmed).toHaveText('ahoj Peter, pozrel som si ten pull request.');
   await expect(tentative).toHaveCount(0);
 
-  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: !MAC, visible: true, focused: false, mainFocused: mainFocusedBefore });
+  if (!REDUCED) expect(await panelFlags()).toMatchObject({ focusable: REDUCED, visible: true, focused: false, mainFocused: mainFocusedBefore });
 });
 
 test('Živý text keeps the fallback notice inside the panel', async () => {

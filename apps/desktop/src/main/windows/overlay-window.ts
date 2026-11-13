@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron';
 import { fileURLToPath } from 'node:url';
-import { isOverlayAction, offeredActions, OVERLAY_CHANNELS, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
+import { isOverlayAction, offeredActions, OVERLAY_CHANNELS, OVERLAY_CONTROLS_OFF, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
 import { Listeners } from '../helper/listeners';
 import { isTrustedSenderUrl } from '../ipc/trusted-sender';
 import type { Logger } from '../logging/logger';
@@ -10,9 +10,13 @@ import type { RendererSource } from './renderer-source';
 
 const HIDDEN: OverlayState = { kind: 'hidden' };
 
+function waylandSession(): boolean {
+  return process.platform === 'linux' && (process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY']));
+}
+
 function createPanel(): BrowserWindow {
   const mac = process.platform === 'darwin';
-  const reduced = process.platform === 'linux' && (process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY']));
+  const reduced = waylandSession();
   const window = new BrowserWindow({
     ...(mac ? { type: 'panel' as const } : {}),
     ...OVERLAY_SIZE,
@@ -20,7 +24,7 @@ function createPanel(): BrowserWindow {
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
-    focusable: !mac,
+    focusable: reduced,
     acceptFirstMouse: true,
     resizable: false,
     movable: false,
@@ -39,6 +43,7 @@ function createPanel(): BrowserWindow {
       webviewTag: false,
       spellcheck: false,
       backgroundThrottling: false,
+      additionalArguments: reduced ? [OVERLAY_CONTROLS_OFF] : [],
     },
   });
   if (mac) {
@@ -49,8 +54,9 @@ function createPanel(): BrowserWindow {
   return window;
 }
 
-function isInteractive(state: OverlayState): boolean {
-  return offeredActions(state).length > 0;
+function offered(state: OverlayState): readonly OverlayAction[] {
+  const transient = state.kind === 'recording' || state.kind === 'processing';
+  return transient && waylandSession() ? [] : offeredActions(state);
 }
 
 export class OverlayWindow {
@@ -106,11 +112,11 @@ export class OverlayWindow {
       return;
     }
     window.webContents.send(OVERLAY_CHANNELS.state, state);
-    window.setIgnoreMouseEvents(!isInteractive(state));
+    window.setIgnoreMouseEvents(offered(state).length === 0);
     if (window.isVisible()) {
       return;
     }
-    if (process.platform === 'linux' && (process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY']))) {
+    if (waylandSession()) {
       window.show();
       return;
     }
@@ -167,7 +173,7 @@ export class OverlayWindow {
       this.logger.error('Rejected an invalid overlay action', typeof payload);
       return;
     }
-    if (!offeredActions(this.latest).includes(payload)) {
+    if (!offered(this.latest).includes(payload)) {
       this.logger.error('Rejected an overlay action the overlay does not offer', payload);
       return;
     }

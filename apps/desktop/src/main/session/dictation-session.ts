@@ -166,6 +166,10 @@ export class DictationSession {
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
 
+  discard(): Promise<void> {
+    return this.chooseTerminal({ kind: 'cancelled' });
+  }
+
   cancel(): Promise<void> {
     return this.chooseTerminal({ kind: 'shutdown' });
   }

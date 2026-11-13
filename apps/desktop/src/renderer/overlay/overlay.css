@@ -323,6 +323,34 @@ body {
   outline-color: var(--ov-amber);
 }
 
+.ov-ctl {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-right: -6px;
+  padding: 0;
+  border: 1px solid var(--ov-line-2);
+  border-radius: 50%;
+  background: var(--ov-raise);
+  color: var(--ov-ink-2);
+  cursor: pointer;
+}
+
+.ov-ctl:hover {
+  color: var(--ov-ink);
+}
+
+.ov-ctl .ic {
+  width: 12px;
+  height: 12px;
+}
+
+.ov .ov-ctl:focus-visible {
+  outline-color: var(--ov-amber);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

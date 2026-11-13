@@ -230,6 +230,33 @@ describe('HelperProcessInputHelper', () => {
     await expect.poll(() => reasons).toEqual(['helper-restarted', 'helper-died']);
   });
 
+  it('arms in-dictation shortcuts with platform keycodes and forwards only armed ones', async () => {
+    const { channel, helper } = await started();
+    const actions: string[] = [];
+    helper.onSessionShortcut((action) => actions.push(action));
+    await helper.armSessionShortcuts([{ action: 'cancel', key: 'escape', modifiers: ['shift'] }]);
+    expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([{ id: 'cancel', keycode: 53, modifiers: ['shift'] }]);
+    await channel.request('emit', { event: { event: 'session-shortcut', id: 'cancel' } });
+    await channel.request('emit', { event: { event: 'session-shortcut', id: 'copy-last' } });
+    await helper.armSessionShortcuts([]);
+    await channel.request('emit', { event: { event: 'session-shortcut', id: 'cancel' } });
+    expect(actions).toEqual(['cancel']);
+    expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([]);
+    const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
+    await linux.armSessionShortcuts([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+    expect((await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([{ id: 'cancel', keycode: 1, modifiers: [] }]);
+  });
+
+  it('rejects a refused arm and re-arms in-dictation shortcuts after a restart', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'session-shortcuts', response: { armed: false, reason: 'shortcut-in-use' } });
+    await expect(helper.armSessionShortcuts([{ action: 'cancel', key: 'escape', modifiers: [] }])).rejects.toThrow('session-shortcuts-failed');
+    await helper.armSessionShortcuts([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+
+    await expect(channel.request('crash')).rejects.toThrow('helper-exited');
+    await expect.poll(async () => (await channel.request('session-shortcuts-state'))['shortcuts']).toEqual([{ id: 'cancel', keycode: 53, modifiers: [] }]);
+  });
+
   it('listens again after the helper restarts', async () => {
     const { channel, helper } = await started();
     await helper.listen({ kind: 'key', keycode: 49, modifiers: ['control'] });

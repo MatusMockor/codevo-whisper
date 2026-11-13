@@ -2,6 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 let binding = {};
+let sessionShortcuts = [];
 let recording = {};
 let deferListen = false;
 let deferredListen;
@@ -51,6 +52,13 @@ const handlers = {
   'listen-defer-next': (id) => { deferListen = true; send({ id }); },
   'listen-finish': (id) => { deferredListen?.(); deferredListen = undefined; send({ id }); },
   'listen-state': (id) => send({ id, ...binding }),
+  'session-shortcuts': (id, args) => {
+    const override = overrides.get('session-shortcuts');
+    if (override) { overrides.delete('session-shortcuts'); send({ id, ...override.response }); return; }
+    sessionShortcuts = args.shortcuts;
+    send({ id, armed: true });
+  },
+  'session-shortcuts-state': (id) => send({ id, shortcuts: sessionShortcuts }),
   'record-key': (id, args) => {
     recording = args;
     send({ id, recording: true });

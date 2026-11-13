@@ -1037,6 +1037,89 @@ describe('SessionCoordinator', () => {
     expect(await harness.history.view()).toMatchObject({ entries: [] });
   });
 
+  it('arms in-dictation shortcuts only while a session is active', async () => {
+    const harness = await prepared();
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+
+    await dictate(harness, 7);
+    expect(harness.helper.sessionShortcuts).toEqual([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    await expect.poll(() => harness.helper.sessionShortcuts).toEqual([]);
+  });
+
+  it.each(['escape', 'overlay button'] as const)('discards a recording on %s without inserting, copying or remembering', async (via) => {
+    const harness = await prepared({ settings: { mode: 'toggle' } });
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.starts.length).toBe(1);
+    harness.capture.speak(stampedPcm(7));
+
+    if (via === 'escape') harness.helper.pressSessionShortcut('cancel');
+    else harness.coordinator.act('cancel');
+
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+    expect(harness.capture.recording).toBe(false);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+    harness.helper.emitHotkey('down');
+    await expect.poll(() => harness.capture.starts.length).toBe(2);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it.each(['escape', 'overlay button'] as const)('abandons an in-flight transcription on %s', async (via) => {
+    await setWorkerMode('hang');
+    const harness = await prepared();
+    await dictate(harness, 7);
+    await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
+
+    if (via === 'escape') harness.helper.pressSessionShortcut('cancel');
+    else harness.coordinator.act('cancel');
+
+    await expect.poll(() => harness.coordinator.isBusy(), { timeout: 3000 }).toBe(false);
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.sessionShortcuts).toEqual([]);
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.helper.clipboard).toBe('original');
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+    expect(await harness.stats.days()).toEqual([]);
+  });
+
+  it('aborts AI polish and inserts nothing when the user cancels', async () => {
+    const aborted = Promise.withResolvers<void>();
+    let calls = 0;
+    const harness = await prepared({
+      settings: { aiPolish: true, aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' },
+      polish: (text, signal) => {
+        calls++;
+        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
+      },
+    });
+
+    await dictate(harness, 7);
+    await expect.poll(() => calls).toBe(1);
+    harness.helper.pressSessionShortcut('cancel');
+    await aborted.promise;
+    await expect.poll(() => harness.coordinator.isBusy()).toBe(false);
+
+    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
+    expect(harness.helper.pasted).toEqual([]);
+    expect(harness.lastTranscript.get()).toBeNull();
+    expect(await harness.history.view()).toMatchObject({ entries: [] });
+  });
+
+  it('ignores a cancel shortcut that arrives with no active session', async () => {
+    const harness = await prepared();
+    harness.helper.pressSessionShortcut('cancel');
+    harness.coordinator.act('cancel');
+    await dictate(harness, 7);
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+  });
+
   it('treats a transcript with only control and invisible characters as silence', async () => {
     await setWorkerMode('text');
     vi.stubEnv('FAKE_CLI_TEXT', '\u001b\u200b\u202e\u0007\u2028');
