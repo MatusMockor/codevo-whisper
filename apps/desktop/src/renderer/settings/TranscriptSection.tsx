@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { isCustomWords, type Settings } from '../../shared/settings';
+import { formatCustomWords, isCustomWords, parseCustomWords } from '../../shared/custom-words';
+import type { Settings } from '../../shared/settings';
 import { Switch } from '../components/Switch';
 import { SettingsBlock, SettingsGroup, SettingsRow } from './SettingsGroup';
 import { SearchHighlight } from './settings-search';
@@ -10,18 +11,12 @@ export function TranscriptSection({ settings }: { settings: Settings }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const value = draft ?? settings.customWords.join('\n');
+  const value = draft ?? formatCustomWords(settings.customWords);
 
   function saveWords(): void {
-    const seen = new Set<string>();
-    const words = value.split(/\r?\n/u).map((line) => line.trim().normalize('NFC')).filter((word) => {
-      const key = word.toLowerCase();
-      if (key === '' || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const words = parseCustomWords(value);
     if (!isCustomWords(words)) {
-      setError('Zadajte jedno slovo na riadok, najviac 100 slov po 64 znakov. Povolené sú písmená, číslice a vnútorný apostrof, spojovník alebo bodka.');
+      setError('Zadajte jeden výraz na riadok, najviac 100 výrazov a 10 variantov k výrazu, každý do 64 znakov. Výraz tvoria slová z písmen a číslic s vnútorným apostrofom, spojovníkom alebo bodkou. Varianty napíšte za dvojbodku a oddeľte ich čiarkou.');
       return;
     }
     setSaving(true);
@@ -39,7 +34,7 @@ export function TranscriptSection({ settings }: { settings: Settings }) {
           <label htmlFor={id}>
             <SearchHighlight text="Vlastné slová" />
           </label>
-          <span id={`${id}-hint`}>Jedno slovo na riadok, najviac 100 slov po 64 znakov. Použite požadovaný pravopis mien a odborných výrazov.</span>
+          <span id={`${id}-hint`}>Jeden výraz na riadok v požadovanom pravopise, aj viacslovný. Za dvojbodku pridajte vyslovované varianty oddelené čiarkou, napríklad: Kumiba MCP: kumiba em si pí</span>
         </div>
         <div className="words-ctl">
           <textarea

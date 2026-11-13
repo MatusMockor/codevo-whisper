@@ -1,3 +1,4 @@
+import { termKey, type CustomWord } from '../../shared/custom-words';
 import type { Settings } from '../../shared/settings';
 import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import { fillerWords } from './filler-words';
@@ -26,28 +27,66 @@ function withinOneEdit(left: readonly string[], right: readonly string[]): boole
   return true;
 }
 
-function correctWords(text: string, customWords: readonly string[]): string {
-  const targets = customWords.map((word) => {
-    const canonical = word.normalize('NFC');
-    return { canonical, normalized: canonical.toLowerCase() };
-  });
-  return text.replace(/\S+/gu, (chunk) => {
-    const match = WORD_CHUNK.exec(chunk);
-    if (match === null) return chunk;
-    const [, before = '', word = '', after = ''] = match;
-    const normalized = word.toLowerCase();
-    const exact = targets.filter((target) => target.normalized === normalized);
-    const [exactMatch] = exact;
-    if (exact.length === 1 && exactMatch !== undefined) return before + exactMatch.canonical + after;
-    const letters = [...normalized];
-    if (exact.length > 1 || letters.length < 5 || !LETTER_WORD.test(normalized)) return chunk;
-    const candidates = targets.filter((target) => {
-      const candidate = [...target.normalized];
-      return candidate.length >= 5 && candidate[0] === letters[0] && LETTER_WORD.test(target.normalized) && withinOneEdit(letters, candidate);
-    });
-    const [candidate] = candidates;
-    return candidates.length === 1 && candidate !== undefined ? before + candidate.canonical + after : chunk;
-  });
+type Chunk = { readonly before: string; readonly word: string; readonly after: string };
+
+type Corrections = {
+  readonly terms: ReadonlyMap<string, string>;
+  readonly longest: number;
+  readonly fuzzy: ReadonlyArray<{ readonly word: string; readonly letters: readonly string[] }>;
+};
+
+function corrections(customWords: readonly CustomWord[]): Corrections {
+  const terms = new Map(customWords.flatMap(({ word, aliases }) => [word, ...aliases].map((term) => [termKey(term), word] as const)));
+  const longest = Math.max(1, ...[...terms.keys()].map((term) => term.split(' ').length));
+  const fuzzy = customWords.map(({ word }) => ({ word, letters: [...termKey(word)] }))
+    .filter(({ letters }) => letters.length >= 5 && LETTER_WORD.test(letters.join('')));
+  return { terms, longest, fuzzy };
+}
+
+function chunkOf(text: string): Chunk | null {
+  const match = WORD_CHUNK.exec(text);
+  if (match === null) return null;
+  const [, before = '', word = '', after = ''] = match;
+  return { before, word, after };
+}
+
+function phraseAt(chunks: ReadonlyArray<Chunk | null>, start: number, table: Corrections): { length: number; text: string } | null {
+  for (let length = Math.min(table.longest, chunks.length - start); length >= 2; length--) {
+    const span = chunks.slice(start, start + length);
+    const last = length - 1;
+    if (!span.every((chunk, index): chunk is Chunk => chunk !== null && (index === 0 || chunk.before === '') && (index === last || chunk.after === ''))) continue;
+    const preferred = table.terms.get(span.map(({ word }) => termKey(word)).join(' '));
+    if (preferred !== undefined) return { length, text: `${span[0]?.before ?? ''}${preferred}${span[last]?.after ?? ''}` };
+  }
+  return null;
+}
+
+function correctToken(text: string, chunk: Chunk | null, table: Corrections): string {
+  if (chunk === null) return text;
+  const key = termKey(chunk.word);
+  const exact = table.terms.get(key);
+  if (exact !== undefined) return chunk.before + exact + chunk.after;
+  const letters = [...key];
+  if (letters.length < 5 || !LETTER_WORD.test(key)) return text;
+  const candidates = table.fuzzy.filter((candidate) => candidate.letters[0] === letters[0] && withinOneEdit(letters, candidate.letters));
+  const [candidate] = candidates;
+  return candidates.length === 1 && candidate !== undefined ? chunk.before + candidate.word + chunk.after : text;
+}
+
+function correctWords(text: string, customWords: readonly CustomWord[]): string {
+  const table = corrections(customWords);
+  const parts = text.split(/(\s+)/u);
+  const words = parts.filter((_, index) => index % 2 === 0);
+  const gaps = parts.filter((_, index) => index % 2 === 1);
+  const chunks = words.map(chunkOf);
+  let result = '';
+  for (let index = 0; index < words.length;) {
+    const phrase = phraseAt(chunks, index, table);
+    const length = phrase?.length ?? 1;
+    result += (phrase?.text ?? correctToken(words[index] ?? '', chunks[index] ?? null, table)) + (gaps[index + length - 1] ?? '');
+    index += length;
+  }
+  return result;
 }
 
 export function processFinalTranscript({ text, settings }: { text: string; settings: TranscriptSettings }): string {

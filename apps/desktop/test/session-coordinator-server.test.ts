@@ -130,11 +130,11 @@ function lastVisible(states: OverlayState[]): OverlayState | undefined {
 
 describe('SessionCoordinator with the server engine', () => {
   it('uses transcript preferences captured before settings change during a server session', async () => {
-    const harness = await prepared({ engineOrder: ['server'], customWords: ['Kumiba'], removeFillerWords: true, appendTrailingSpace: true }, { respond: () => ({ status: 200, body: { text: 'ehm, Kumba\n' } }) });
+    const harness = await prepared({ engineOrder: ['server'], customWords: [{ word: 'Kumiba', aliases: ['kumba em si'] }], removeFillerWords: true, appendTrailingSpace: true }, { respond: () => ({ status: 200, body: { text: 'ehm, kumba em si\n' } }) });
     harness.helper.emitHotkey('down');
     await expect.poll(() => harness.capture.recording).toBe(true);
     harness.capture.speak(stampedPcm(4));
-    await harness.settings.update({ languages: { mode: 'selected', selected: ['en'] }, customWords: ['Other'], removeFillerWords: false, appendTrailingSpace: false });
+    await harness.settings.update({ languages: { mode: 'selected', selected: ['en'] }, customWords: [{ word: 'Other', aliases: [] }], removeFillerWords: false, appendTrailingSpace: false });
     harness.helper.emitHotkey('up');
     await expect.poll(() => harness.helper.pasted).toEqual(['Kumiba ']);
     expect(harness.lastTranscript.get()).toBe('Kumiba ');
@@ -146,7 +146,7 @@ describe('SessionCoordinator with the server engine', () => {
   });
 
   it('processes recovered server text with the same preferences without insertion or success stats', async () => {
-    const harness = await prepared({ engineOrder: ['server'], customWords: ['Kumiba'], removeFillerWords: true, appendTrailingSpace: true }, { respond: (pcm) => pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'ehm, Kumba' } } });
+    const harness = await prepared({ engineOrder: ['server'], customWords: [{ word: 'Kumiba', aliases: [] }], removeFillerWords: true, appendTrailingSpace: true }, { respond: (pcm) => pcm.length === 64000 ? { status: 500, body: {} } : { status: 200, body: { text: 'ehm, Kumba' } } });
     await dictate(harness, continuousSpeech(26));
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'error', message: MESSAGES.serverSttUnavailable, action: 'copy-last' });
     expect(harness.lastTranscript.get()).toBe('Kumiba ');

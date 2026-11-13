@@ -28,6 +28,10 @@ function freezeSettings(settings: Settings): Settings {
   Object.freeze(copy.microphone);
   Object.freeze(copy.engineOrder);
   Object.freeze(copy.serverRestoreOrder);
+  for (const entry of copy.customWords) {
+    Object.freeze(entry.aliases);
+    Object.freeze(entry);
+  }
   Object.freeze(copy.customWords);
   Object.freeze(copy.languages.selected);
   Object.freeze(copy.languages);

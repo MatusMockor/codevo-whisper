@@ -1,3 +1,4 @@
+import { upgradeLegacyCustomWords } from '../../shared/custom-words';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings';
 import { isReservedHotkey } from './hotkey-policy';
@@ -23,5 +24,6 @@ function storedHotkey(value: unknown): Settings['hotkey'] | undefined {
 export function sanitizeSettings(raw: unknown): Settings {
   const source = isPlainRecord(raw) ? { ...raw } : {};
   source['hotkey'] = storedHotkey(source['hotkey']);
+  source['customWords'] = upgradeLegacyCustomWords(source['customWords']);
   return Object.fromEntries(SETTINGS_KEYS.map((key) => [key, pickField(source, key)])) as Settings;
 }
