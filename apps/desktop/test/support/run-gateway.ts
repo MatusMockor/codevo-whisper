@@ -6,7 +6,7 @@ import { startServer } from '../../../server/src/app';
 import { ROUTING_STT, startFakeSttServer, type FakeSttRequest, type FakeSttResponse } from '../../../server/test/support/fake-stt-server';
 import { freePort } from './free-port';
 
-type GatewayOptions = { serverVersion?: string; languageModels?: boolean; failWhileFile?: string };
+type GatewayOptions = { serverVersion?: string; languageModels?: boolean; failWhileFile?: string; sttDelayMs?: number };
 
 function transcript(request: FakeSttRequest): FakeSttResponse {
   if (request.languages === undefined) {
@@ -23,7 +23,7 @@ function respond(_pcm: Uint8Array, _language: string, request: FakeSttRequest): 
   return transcript(request);
 }
 const dataDir = await mkdtemp(join(tmpdir(), 'cw-e2e-gw-'));
-const stt = await startFakeSttServer({ respond, ...(options.languageModels === true ? { capabilities: ROUTING_STT } : {}) });
+const stt = await startFakeSttServer({ respond, delayMs: options.sttDelayMs ?? 0, ...(options.languageModels === true ? { capabilities: ROUTING_STT } : {}) });
 const port = await freePort();
 const url = `ws://127.0.0.1:${port}`;
 const adminSocket = join(dataDir, 'admin.sock');

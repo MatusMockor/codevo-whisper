@@ -1,0 +1,154 @@
+[
+  {
+    "cmd": "frontmost",
+    "args": [],
+    "response": {
+      "bundleId": "",
+      "cmd": "frontmost",
+      "id": 16,
+      "name": "codwhi-43-fixture",
+      "pid": 44381,
+      "windowId": 28236
+    }
+  },
+  {
+    "cmd": "frontmost",
+    "args": [],
+    "response": {
+      "bundleId": "",
+      "cmd": "frontmost",
+      "id": 18,
+      "name": "codwhi-43-fixture",
+      "pid": 44381,
+      "windowId": 28236
+    }
+  },
+  {
+    "cmd": "focused-element",
+    "args": [
+      {},
+      3000
+    ],
+    "response": {
+      "bundleId": "",
+      "cmd": "focused-element",
+      "editable": true,
+      "elapsedMs": 24,
+      "elementPid": 44381,
+      "engine": "native",
+      "id": 19,
+      "lookup": {
+        "appError": "success",
+        "source": "system-wide",
+        "systemError": "success"
+      },
+      "pid": 44381,
+      "reason": "text-role",
+      "role": "AXTextArea",
+      "subrole": null
+    }
+  },
+  {
+    "cmd": "target-capture",
+    "args": [
+      {},
+      3000
+    ],
+    "response": {
+      "bundleId": "",
+      "bundlePath": "/Users/mcerny/projects/codevo-whisper/apps/desktop/test-results/macos-native-native-shortc-3511b-and-returns-to-other-window/codwhi-43-fixture",
+      "captured": true,
+      "captureId": "AB6AA956-02DF-4FC5-BFBF-DED5A0B330F0",
+      "cmd": "target-capture",
+      "id": 20,
+      "name": "codwhi-43-fixture",
+      "pid": 44381,
+      "windowId": 28236
+    }
+  },
+  {
+    "cmd": "modifier-flags",
+    "args": [],
+    "response": {
+      "cmd": "modifier-flags",
+      "combinedFlags": 536870912,
+      "flags": 536870912,
+      "id": 25
+    }
+  },
+  {
+    "cmd": "target-refocus",
+    "args": [
+      {
+        "captureId": "AB6AA956-02DF-4FC5-BFBF-DED5A0B330F0"
+      },
+      6000
+    ],
+    "response": {
+      "cmd": "target-refocus",
+      "id": 26,
+      "result": "moved"
+    }
+  },
+  {
+    "cmd": "check-delivery",
+    "args": [
+      {
+        "expected": {
+          "bundleId": "",
+          "pid": 44381,
+          "name": "codwhi-43-fixture",
+          "windowId": 28236
+        },
+        "intent": "automatic",
+        "shortcut": "ctrl-v",
+        "captureId": "AB6AA956-02DF-4FC5-BFBF-DED5A0B330F0"
+      },
+      3000
+    ],
+    "response": {
+      "cmd": "check-delivery",
+      "id": 27,
+      "kind": "legacy"
+    }
+  },
+  {
+    "cmd": "frontmost",
+    "args": [],
+    "response": {
+      "bundleId": "",
+      "cmd": "frontmost",
+      "id": 28,
+      "name": "codwhi-43-fixture",
+      "pid": 44381,
+      "windowId": 28237
+    }
+  },
+  {
+    "cmd": "target-return",
+    "args": [
+      {
+        "captureId": "AB6AA956-02DF-4FC5-BFBF-DED5A0B330F0"
+      },
+      6000
+    ],
+    "response": {
+      "cmd": "target-return",
+      "id": 29,
+      "returned": true
+    }
+  },
+  {
+    "cmd": "target-release",
+    "args": [
+      {
+        "captureId": "AB6AA956-02DF-4FC5-BFBF-DED5A0B330F0"
+      }
+    ],
+    "response": {
+      "cmd": "target-release",
+      "id": 30,
+      "released": true
+    }
+  }
+]

@@ -294,10 +294,10 @@ final class RecordingAudio: NSObject, NSSoundDelegate {
 
     private func text(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-        var value: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr else { return nil }
-        return value as String
+        return value?.takeRetainedValue() as String?
     }
 
     private func diagnostic(_ message: String) {

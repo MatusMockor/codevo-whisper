@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Settings } from '../src/shared/settings';
 
-const mainEntry = fileURLToPath(new URL('../out/main/index.js', import.meta.url));
+const appRoot = fileURLToPath(new URL('../', import.meta.url));
 const electronBinary = String(createRequire(import.meta.url)('electron'));
 
 export type LaunchOptions = { fakeHelper?: boolean; updateMode?: 'manual' };
@@ -44,9 +44,9 @@ export const FAKE_DEVICE_ARGS: readonly string[] = Object.freeze(['--use-fake-de
 export const FAKE_MEDIA_ARGS: readonly string[] = Object.freeze([...FAKE_DEVICE_ARGS, '--use-fake-ui-for-media-stream']);
 
 export function launchApp(userDataDir: string, chromiumArgs: readonly string[] = FAKE_MEDIA_ARGS, options: LaunchOptions = {}): Promise<ElectronApplication> {
-  return electron.launch({ chromiumSandbox: true, args: [...chromiumArgs, mainEntry], env: electronEnv(userDataDir, options) });
+  return electron.launch({ chromiumSandbox: true, args: [...chromiumArgs, appRoot], env: electronEnv(userDataDir, options) });
 }
 
 export function spawnApp(userDataDir: string): ChildProcess {
-  return spawn(electronBinary, [mainEntry], { env: electronEnv(userDataDir, {}), stdio: 'ignore' });
+  return spawn(electronBinary, [appRoot], { env: electronEnv(userDataDir, {}), stdio: 'ignore' });
 }
