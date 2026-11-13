@@ -73,10 +73,14 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     dispatcher,
     pairing,
     close: async () => {
-      stopRefreshing();
+      const stopped = stopRefreshing();
       pairing.close();
-      await admin.close();
-      await gateway.close();
+      try {
+        await admin.close();
+        await gateway.close();
+      } finally {
+        await stopped;
+      }
     },
   };
 }

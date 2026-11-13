@@ -166,6 +166,11 @@ export class HelperProcessInputHelper implements InputHelper {
     return parseFrontmost(await this.channel.request('frontmost'));
   }
 
+  async restoreFrontmostFocus(): Promise<boolean> {
+    if (this.platform !== 'darwin') return true;
+    return requireBoolean(await this.channel.request('restore-frontmost-focus', {}, REFOCUS_TIMEOUT_MS), 'restored', 'restore-focus-invalid');
+  }
+
   async captureTarget(): Promise<TargetCapture | null> {
     return parseTargetCapture(await this.channel.request('target-capture', {}, FOCUSED_ELEMENT_TIMEOUT_MS));
   }

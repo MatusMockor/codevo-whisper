@@ -36,9 +36,12 @@ export class SttCapabilityCache implements RefreshableCapabilities {
   }
 }
 
-export function refreshEvery(capabilities: RefreshableCapabilities, intervalMs: number): () => void {
-  void capabilities.refresh();
-  const timer = setInterval(() => void capabilities.refresh(), intervalMs);
+export function refreshEvery(capabilities: RefreshableCapabilities, intervalMs: number): () => Promise<void> {
+  let pending = capabilities.refresh();
+  const timer = setInterval(() => { pending = capabilities.refresh(); }, intervalMs);
   timer.unref();
-  return () => clearInterval(timer);
+  return async () => {
+    clearInterval(timer);
+    await pending;
+  };
 }

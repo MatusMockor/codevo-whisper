@@ -1,0 +1,37 @@
+READY {'event': 'ready', 'pid': 94846, 'ts': 1794612849982}
+READY {'ready': True}
+permissions {'accessibility': True, 'cmd': 'permissions', 'id': 1, 'listenEvent': True, 'postEvent': True}
+output-audio {'canMute': True, 'cmd': 'output-audio', 'id': 2, 'kind': 'available', 'outputs': [{'id': 'BuiltInSpeakerDevice', 'label': 'MacBook Pro Speakers'}, {'id': 'MSLoopbackDriverDevice_UID', 'label': 'Microsoft Teams Audio'}]}
+target-capture {'bundleId': '', 'bundlePath': '/private/tmp/codwhi-43-fixture', 'captured': True, 'captureId': '1BA63E6F-4A99-4FE8-8423-F3BF0B517CB7', 'cmd': 'target-capture', 'id': 3, 'name': 'codwhi-43-fixture', 'pid': 94848, 'windowId': 29821}
+target-context {'after': 'AFTER', 'before': 'before ', 'cmd': 'target-context', 'id': 4, 'readable': True}
+PASS readable context around caret without edits
+type-text {'cmd': 'type-text', 'id': 5, 'posted': False, 'reason': 'focus-changed'}
+target-refocus {'cmd': 'target-refocus', 'id': 6, 'result': 'moved'}
+type-text {'cmd': 'type-text', 'id': 7, 'posted': True}
+target-return {'cmd': 'target-return', 'id': 8, 'returned': True}
+PASS original field/caret delivery and same-app window return
+target-capture {'bundleId': '', 'bundlePath': '/private/tmp/codwhi-43-fixture', 'captured': True, 'captureId': '0FB129D7-F8EF-41B8-A9F0-4FA49B375BC4', 'cmd': 'target-capture', 'id': 9, 'name': 'codwhi-43-fixture', 'pid': 94848, 'windowId': 29821}
+target-refocus {'cmd': 'target-refocus', 'id': 10, 'result': 'moved'}
+type-text {'cmd': 'type-text', 'id': 11, 'posted': True}
+target-return {'cmd': 'target-return', 'id': 12, 'returned': True}
+target-release {'cmd': 'target-release', 'id': 13, 'released': True}
+PASS Unicode delivery completes before immediate focus return
+target-capture {'bundleId': '', 'bundlePath': '/private/tmp/codwhi-43-fixture', 'captured': True, 'captureId': 'BA21EBD3-B4A4-489D-A6B8-D15F2CE0AE67', 'cmd': 'target-capture', 'id': 14, 'name': 'codwhi-43-fixture', 'pid': 94848, 'windowId': 29822}
+target-context {'cmd': 'target-context', 'id': 15, 'readable': False, 'reason': 'protected'}
+target-release {'cmd': 'target-release', 'id': 16, 'released': True}
+PASS secure context withheld without edits
+target-refocus {'cmd': 'target-refocus', 'id': 17, 'reason': 'element-gone', 'result': 'failed'}
+type-text {'cmd': 'type-text', 'id': 18, 'posted': False, 'reason': 'focus-changed'}
+target-release {'cmd': 'target-release', 'id': 19, 'released': True}
+PASS removed target blocks delivery
+listen-start {'cmd': 'listen-start', 'id': 20, 'running': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 21}
+ping {'cmd': 'ping', 'id': 22, 'pid': 94846, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 23}
+ping {'cmd': 'ping', 'id': 24, 'pid': 94846, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 25}
+ping {'cmd': 'ping', 'id': 26, 'pid': 94846, 'pong': True}
+session-shortcuts {'armed': True, 'cmd': 'session-shortcuts', 'id': 27}
+ping {'cmd': 'ping', 'id': 28, 'pid': 94846, 'pong': True}
+listen-stop {'cmd': 'listen-stop', 'id': 29, 'running': False}
+PASS real event-tap Esc and Ctrl+Shift+L arm/disarm

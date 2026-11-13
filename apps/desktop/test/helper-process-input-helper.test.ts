@@ -115,6 +115,28 @@ describe('HelperProcessInputHelper', () => {
     await expect(helper.paste()).rejects.toThrow('paste-failed:no-event-source');
   });
 
+  it('validates the native focus repair result and leaves other platforms alone', async () => {
+    const { channel, helper } = await started();
+    const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
+    expect(await linux.restoreFrontmostFocus()).toBe(true);
+    expect((await channel.request('requests-state', { cmd: 'restore-frontmost-focus' }))['requests']).toEqual([]);
+    for (const restored of [true, false]) {
+      await channel.request('respond-next', { cmd: 'restore-frontmost-focus', response: { restored } });
+      expect(await helper.restoreFrontmostFocus()).toBe(restored);
+    }
+    await channel.request('respond-next', { cmd: 'restore-frontmost-focus', response: { restored: 'true' } });
+    await expect(helper.restoreFrontmostFocus()).rejects.toThrow('restore-focus-invalid');
+  });
+
+  it('reports missing caret support as a typing failure rather than a lost target', async () => {
+    const { channel, helper } = await started();
+    await channel.request('respond-next', { cmd: 'type-text', response: { posted: false, reason: 'caret-unavailable' } });
+    const error = await helper.typeText('dictated', 'capture-1').then(() => null, (failure: unknown) => failure);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(LockedTargetLostError);
+    expect(String(error)).toContain('caret-unavailable');
+  });
+
   it('rejects a clipboard write the helper could not perform', async () => {
     const { channel, helper } = await started();
     await channel.request('respond-next', { cmd: 'clipboard-write', response: { written: false, reason: 'set-string-failed' } });

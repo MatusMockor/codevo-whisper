@@ -1,0 +1,10 @@
+
+ RUN  v5.0.5 /Users/mcerny/projects/codevo-whisper
+
+(node:19800) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 cancel listeners added to [CancellationToken]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  267 passed | 2 skipped (269)
+      Tests  2676 passed | 9 skipped (2685)
+   Start at  00:45:43
+   Duration  53.91s (tests 95%, import 3%, transform 1%)

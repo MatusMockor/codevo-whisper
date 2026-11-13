@@ -63,6 +63,7 @@ export class OverlayWindow {
   private window: BrowserWindow | null = null;
   private ready: Promise<BrowserWindow> | null = null;
   private latest: OverlayState = HIDDEN;
+  private focusRestore: Promise<void> | null = null;
   private readonly actions: Listeners<OverlayAction>;
   private readonly actionHandler = (event: IpcMainEvent, payload: unknown): void => {
     this.handleAction(event, payload);
@@ -71,6 +72,7 @@ export class OverlayWindow {
   constructor(
     private readonly source: RendererSource,
     private readonly logger: Logger,
+    private readonly restoreFocus?: () => Promise<boolean>,
   ) {
     this.actions = new Listeners(logger, 'An overlay action listener failed');
     ipcMain.on(OVERLAY_CHANNELS.action, this.actionHandler);
@@ -126,11 +128,11 @@ export class OverlayWindow {
 
   private clear(): void {
     const window = this.window;
-    if (window === null || window.isDestroyed()) {
+    if (window === null || window.isDestroyed() || this.focusRestore !== null) {
       return;
     }
-    window.webContents.send(OVERLAY_CHANNELS.state, HIDDEN);
     window.hide();
+    window.webContents.send(OVERLAY_CHANNELS.state, HIDDEN);
   }
 
   private ensure(): Promise<BrowserWindow> {
@@ -176,6 +178,18 @@ export class OverlayWindow {
     if (!offered(this.latest).includes(payload)) {
       this.logger.error('Rejected an overlay action the overlay does not offer', payload);
       return;
+    }
+    if (process.platform === 'darwin' && this.restoreFocus !== undefined &&
+        (this.latest.kind === 'recording' || this.latest.kind === 'processing')) {
+      const restoration = Promise.resolve().then(() => this.restoreFocus?.()).then((restored) => {
+        if (!restored) this.logger.warn('The overlay target keyboard focus could not be restored', null);
+      }).catch((error: unknown) => this.logger.error('The overlay target keyboard focus could not be restored', error));
+      this.focusRestore = restoration;
+      void restoration.then(() => {
+        if (this.focusRestore !== restoration) return;
+        this.focusRestore = null;
+        if (this.latest.kind === 'hidden') this.clear();
+      });
     }
     this.actions.emit(payload);
   }

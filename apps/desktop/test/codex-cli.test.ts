@@ -1,10 +1,23 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import type * as FsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { checkCodex, codexProvider, findCodex } from '../src/main/ai/codex-cli';
 import { LlmError } from '../src/main/ai/llm-client';
+
+const filesystem = vi.hoisted<{ systemCodexPaths: Record<string, string> }>(() => ({ systemCodexPaths: {} }));
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>();
+  const fixturePath = (path: Parameters<typeof actual.access>[0]) => typeof path === 'string' ? filesystem.systemCodexPaths[path] ?? path : path;
+  return {
+    ...actual,
+    access: (path: Parameters<typeof actual.access>[0], mode?: number) => actual.access(fixturePath(path), mode),
+    stat: (path: Parameters<typeof actual.stat>[0], options?: Parameters<typeof actual.stat>[1]) => actual.stat(fixturePath(path), options),
+  };
+});
 
 const FAKE_CODEX = fileURLToPath(new URL('./support/fake-codex.sh', import.meta.url));
 const MESSAGES = [
@@ -20,6 +33,11 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'cw-codex-test-'));
   bin = join(dir, 'bin');
   home = join(dir, 'home');
+  // PATH and HOME do not hide Codex's fixed system install locations.
+  filesystem.systemCodexPaths = {
+    '/usr/local/bin/codex': join(dir, 'usr-local', 'codex'),
+    '/opt/homebrew/bin/codex': join(dir, 'homebrew', 'codex'),
+  };
   await mkdir(bin);
   await mkdir(home);
   await symlink(FAKE_CODEX, join(bin, 'codex'));
@@ -147,6 +165,16 @@ describe('findCodex', () => {
       await rm(join(target, 'codex'));
     }
     expect(await findCodex({ PATH: empty, HOME: home })).toBeNull();
+  });
+
+  it.each(['/usr/local/bin/codex', '/opt/homebrew/bin/codex'])('finds the fixed system install at %s when PATH and HOME have no Codex', async (systemPath) => {
+    const fixture = filesystem.systemCodexPaths[systemPath]!;
+    await mkdir(dirname(fixture), { recursive: true });
+    await writeFile(fixture, '#!/bin/sh\n');
+    await chmod(fixture, 0o755);
+
+    expect(await findCodex({ PATH: '', HOME: home })).toBe(systemPath);
+    expect(await findCodex({ PATH: bin, HOME: home })).toBe(join(bin, 'codex'));
   });
 });
 

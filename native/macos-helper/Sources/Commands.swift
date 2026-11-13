@@ -6,6 +6,7 @@ final class Commands {
 
     private let pasteboard = Pasteboard()
     private let recordingAudio = RecordingAudio()
+    private let overlayFocus = OverlayFocus.shared
 
     func shutdown() async {
         await recordingAudio.shutdown()
@@ -27,6 +28,8 @@ final class Commands {
             return Permissions.request(args["kind"] as? String ?? "")
         case "frontmost":
             return Frontmost.describe()
+        case "restore-frontmost-focus":
+            return await overlayFocus.restore()
         case "target-capture":
             return TargetLock.capture()
         case "target-refocus":
@@ -63,6 +66,9 @@ final class Commands {
             }
             if let blocked = outsideCapture(args, "posted") {
                 return blocked
+            }
+            if let captureId = args["captureId"] as? String {
+                return await TargetLock.typeText(captureId, text: text)
             }
             return Typing.typeText(text)
         case "submit":

@@ -21,9 +21,13 @@ let dir: string;
 let gateway: LocalGateway;
 
 function command(value: string): Promise<FixtureState> {
+  return fixtureCommand(fixture, lines, value);
+}
+
+function fixtureCommand(target: ChildProcessWithoutNullStreams, output: ReturnType<typeof createInterface>, value: string): Promise<FixtureState> {
   return new Promise((resolve) => {
-    lines.once('line', (line) => resolve(JSON.parse(line) as FixtureState));
-    fixture.stdin.write(`${value}\n`);
+    output.once('line', (line) => resolve(JSON.parse(line) as FixtureState));
+    target.stdin.write(`${value}\n`);
   });
 }
 
@@ -54,6 +58,11 @@ async function nativeClick(panel: Page, name: RegExp): Promise<void> {
   expect(box).not.toBeNull();
   const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/overlay/overlay.html'))!.getBounds());
   await command(`click ${bounds.x + box!.x + box!.width / 2} ${bounds.y + box!.y + box!.height / 2}`);
+}
+
+async function expectOverlayHidden(panel: Page): Promise<void> {
+  await expect(panel.locator('.stage > *')).toHaveCount(0);
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/overlay/overlay.html'))!.isVisible())).toBe(false);
 }
 
 test.beforeEach(async () => {
@@ -112,15 +121,74 @@ for (const mode of ['recording', 'transcribing', 'click']) {
     }
     if (mode === 'click') await nativeClick(panel, /Zrušiť/);
     if (mode !== 'click') await command('escape');
-    await expect(panel.locator('.stage > *')).toHaveCount(0);
+    await expectOverlayHidden(panel);
     await expect.poll(() => command('state')).toMatchObject({ first: 'before AFTER', second: 'other field' });
     await command('probe');
     await expect.poll(() => command('state')).toMatchObject({ first: 'before probeAFTER', second: 'other field' });
   });
 }
 
-for (const lock of ['shortcut', 'click']) {
-  test(`native ${lock} target lock inserts at captured caret and returns to other window`, async () => {
+test('native overlay cancellation returns to the app selected after dictation began', async () => {
+  const panel = await startRecording();
+  const newer = spawn(test.info().outputPath('codwhi-43-fixture'));
+  const newerLines = createInterface({ input: newer.stdout });
+  const newerCommand = (value: string) => fixtureCommand(newer, newerLines, value);
+  try {
+    await new Promise<void>((resolve) => newerLines.once('line', () => resolve()));
+    await expect.poll(async () => {
+      await newerCommand('first');
+      return app.evaluate(async () => {
+        const hooks = globalThis as unknown as { codevoE2e: { helper: { frontmost(): Promise<{ pid: number }> } } };
+        return (await hooks.codevoE2e.helper.frontmost()).pid;
+      });
+    }).toBe(newer.pid);
+    await nativeClick(panel, /Zrušiť/);
+    await expectOverlayHidden(panel);
+    await newerCommand('probe');
+    await expect.poll(() => newerCommand('state')).toMatchObject({ first: 'before probeAFTER', keyWindow: 'CODWHI-43 fixture 0' });
+    expect(await command('state')).toMatchObject({ first: 'before AFTER', second: 'other field' });
+  } finally {
+    newer.stdin.end();
+    newerLines.close();
+  }
+});
+
+test('native overlay cancellation keeps intentionally focused Electron settings active', async () => {
+  const panel = await startRecording();
+  const electronPid = await app.evaluate(({ BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().split('#')[0]?.endsWith('/renderer/index.html'))!;
+    main.show();
+    main.focus();
+    return process.pid;
+  });
+  await expect.poll(() => app.evaluate(async () => {
+    const hooks = globalThis as unknown as { codevoE2e: { helper: { frontmost(): Promise<{ pid: number }> } } };
+    return (await hooks.codevoE2e.helper.frontmost()).pid;
+  })).toBe(electronPid);
+  await page.getByRole('tab', { name: 'Nastavenia' }).click();
+  const search = page.getByRole('searchbox', { name: 'Hľadať v nastaveniach' });
+  await search.focus();
+  await nativeClick(panel, /Zrušiť/);
+  await expectOverlayHidden(panel);
+  expect(await app.evaluate(async () => {
+    const hooks = globalThis as unknown as { codevoE2e: { helper: { frontmost(): Promise<{ pid: number }> } } };
+    return (await hooks.codevoE2e.helper.frontmost()).pid;
+  })).toBe(electronPid);
+  expect(await app.evaluate(({ BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().split('#')[0]?.endsWith('/renderer/index.html'))!;
+    return main.isFocused();
+  })).toBe(true);
+  await command('probe');
+  await expect(search).toHaveValue('probe');
+});
+
+for (const { lock, insertion } of [
+  { lock: 'shortcut', insertion: 'type' },
+  { lock: 'click', insertion: 'type' },
+  { lock: 'shortcut', insertion: 'paste' },
+] as const) {
+  test(`native ${lock} target lock (${insertion}) inserts at captured caret and returns to other window`, async () => {
+    await page.evaluate((mode) => window.codevo.updateSettings({ insertion: mode }), insertion);
     const panel = await startRecording();
     if (lock === 'shortcut') await command('lock');
     if (lock === 'click') await nativeClick(panel, /Uzamknúť/);
@@ -130,6 +198,34 @@ for (const lock of ['shortcut', 'click']) {
     await expect.poll(() => command('state'), { timeout: 15_000 }).toMatchObject({ first: 'before prepis zo serveraAFTER', second: 'other field', keyWindow: 'CODWHI-43 fixture 1' });
   });
 }
+
+test('native target lock inserts into its original app and returns to the newer app', async () => {
+  const panel = await startRecording();
+  await command('lock');
+  await expect(panel.locator('.ov-target')).toHaveAttribute('aria-pressed', 'true');
+  const newer = spawn(test.info().outputPath('codwhi-43-fixture'));
+  const newerLines = createInterface({ input: newer.stdout });
+  const newerCommand = (value: string) => fixtureCommand(newer, newerLines, value);
+  try {
+    await new Promise<void>((resolve) => newerLines.once('line', () => resolve()));
+    await expect.poll(async () => {
+      await newerCommand('first');
+      return app.evaluate(async () => {
+        const hooks = globalThis as unknown as { codevoE2e: { helper: { frontmost(): Promise<{ pid: number }> } } };
+        return (await hooks.codevoE2e.helper.frontmost()).pid;
+      });
+    }).toBe(newer.pid);
+    await command('record');
+    await expect.poll(() => command('state'), { timeout: 15_000 }).toMatchObject({ first: 'before prepis zo serveraAFTER' });
+    await expect.poll(() => newerCommand('state')).toMatchObject({ first: 'before AFTER', keyWindow: 'CODWHI-43 fixture 0' });
+    await newerCommand('probe');
+    await expect.poll(() => newerCommand('state')).toMatchObject({ first: 'before probeAFTER' });
+    expect(await command('state')).toMatchObject({ first: 'before prepis zo serveraAFTER', second: 'other field' });
+  } finally {
+    newer.stdin.end();
+    newerLines.close();
+  }
+});
 
 test('a removed locked field receives nothing and never types into the other field', async () => {
   const panel = await startRecording();

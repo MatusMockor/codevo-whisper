@@ -50,6 +50,7 @@ export interface InputHelper {
   permissions(): Promise<Permissions>;
   requestPermission(kind: PermissionKind): Promise<void>;
   frontmost(): Promise<AppTarget | null>;
+  restoreFrontmostFocus(): Promise<boolean>;
   captureTarget(): Promise<TargetCapture | null>;
   refocusTarget(captureId: string): Promise<RefocusResult>;
   returnFocus(captureId: string): Promise<boolean>;

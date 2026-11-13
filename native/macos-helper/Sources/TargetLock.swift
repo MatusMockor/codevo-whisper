@@ -8,6 +8,7 @@ enum TargetLock {
         let app: NSRunningApplication
         let element: AXUIElement
         let range: CFRange?
+        let windowId: Int?
         let sequence: Int
         var returnApp: NSRunningApplication?
         var returnElement: AXUIElement?
@@ -37,8 +38,8 @@ enum TargetLock {
         }
         sequence += 1
         let id = UUID().uuidString
-        captures[id] = Capture(app: app, element: element, range: selectedRange(element), sequence: sequence)
         var result = Frontmost.describe(app)
+        captures[id] = Capture(app: app, element: element, range: selectedRange(element), windowId: result["windowId"] as? Int, sequence: sequence)
         result["captured"] = true
         result["captureId"] = id
         if let path = app.bundleURL?.path {
@@ -56,6 +57,32 @@ enum TargetLock {
             return false
         }
         return isFocused(capture)
+    }
+
+    static func typeText(_ captureId: String, text: String) async -> JSONObject {
+        guard let capture = captures[captureId], isFocused(capture) else {
+            return ["posted": false, "reason": "focus-changed"]
+        }
+        guard let range = selectedRange(capture.element), range.location <= Int.max - text.utf16.count else {
+            return ["posted": false, "reason": "caret-unavailable"]
+        }
+        let result = Typing.typeText(text)
+        guard result["posted"] as? Bool == true else { return result }
+        // CGEventPost queues input. Returning focus before the editor handles it
+        // can send the remaining characters into the return window.
+        let end = range.location + text.utf16.count
+        if await poll({
+            guard isFocused(capture), let now = selectedRange(capture.element) else { return false }
+            return now.location == end && now.length == 0
+        }) {
+            return result
+        }
+        if var current = captures[captureId] {
+            current.returnApp = nil
+            current.returnElement = nil
+            captures[captureId] = current
+        }
+        return ["posted": false, "reason": "delivery-unconfirmed"]
     }
 
     static func context(_ captureId: String) -> JSONObject {
@@ -122,7 +149,8 @@ enum TargetLock {
     }
 
     private static func activate(_ app: NSRunningApplication) async -> Bool {
-        _ = app.activate(options: [])
+        let activated = AXQuery.setBool(AXQuery.application(app.processIdentifier), kAXFrontmostAttribute, true)
+        if activated != .success { _ = app.activate(options: []) }
         if await poll({ frontmostPid() == app.processIdentifier }) {
             return true
         }
@@ -137,7 +165,11 @@ enum TargetLock {
 
     private static func isFocused(_ capture: Capture) -> Bool {
         guard frontmostPid() == capture.app.processIdentifier,
-              let focused = FocusLookup.run(pid: capture.app.processIdentifier).element
+              let focused = FocusLookup.run(pid: capture.app.processIdentifier).element,
+              let window = AXQuery.element(capture.element, kAXWindowAttribute).0,
+              let focusedWindow = AXQuery.element(AXQuery.application(capture.app.processIdentifier), kAXFocusedWindowAttribute).0,
+              CFEqual(window, focusedWindow),
+              capture.windowId == nil || Frontmost.describe(capture.app)["windowId"] as? Int == capture.windowId
         else {
             return false
         }
@@ -175,7 +207,10 @@ enum TargetLock {
             return nil
         }
         var range = CFRange()
-        return AXValueGetValue(value as! AXValue, .cfRange, &range) ? range : nil
+        guard AXValueGetValue(value as! AXValue, .cfRange, &range),
+              range.location >= 0, range.location != NSNotFound, range.length >= 0,
+              range.location <= Int.max - range.length else { return nil }
+        return range
     }
 
     private static func restored(_ capture: Capture, _ result: String) -> JSONObject {
