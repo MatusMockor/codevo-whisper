@@ -87,7 +87,7 @@ function isSessionShortcuts(value: unknown): value is Settings['sessionShortcuts
     return false;
   }
   const [polish, language] = REBINDABLE_ACTIONS.map((action) => value[action]);
-  return isSessionBinding(polish) && isSessionBinding(language) && !shortcutsConflict({ hotkey: null, sessionShortcuts: { 'toggle-polish': polish, 'cycle-language': language } });
+  return isSessionBinding(polish) && isSessionBinding(language) && !shortcutsConflict({ hotkey: null, sessionShortcuts: { 'toggle-polish': polish, 'cycle-language': language } }, new Set(REBINDABLE_ACTIONS));
 }
 
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({

@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings';
 
 const X11 = 0x10000;
 const EVDEV = 0x20000;
+const HOTKEY: ReadonlySet<'hotkey'> = new Set(['hotkey']);
 const AI_READY: Partial<Settings> = { aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' };
 
 function key(keycode: number, modifiers: Members<Modifier>) {
@@ -115,11 +116,20 @@ describe('in-dictation shortcuts', () => {
     expect(conflicts(b, a)).toBe(expected);
   });
 
+  it('checks only the bindings a write changes, so an existing collision never blocks repairing another row', () => {
+    const ctrl = settings({ hotkey: { kind: 'modifiers', keycodes: [X11 + 37], label: 'Ctrl' } });
+    expect(shortcutsConflict(ctrl, new Set(['toggle-polish']), 'linux')).toBe(true);
+    const repaired = { ...ctrl, sessionShortcuts: { ...ctrl.sessionShortcuts, 'toggle-polish': { key: 'p', modifiers: ['alt'] } } } as const;
+    expect(shortcutsConflict(repaired, new Set(['toggle-polish']), 'linux')).toBe(false);
+    expect(shortcutsConflict(repaired, new Set(['cycle-language']), 'linux')).toBe(true);
+    expect(shortcutsConflict(repaired, new Set(), 'linux')).toBe(false);
+  });
+
   it('checks the dictation hotkey against Esc, both shortcuts and each other', () => {
-    expect(shortcutsConflict(settings({ hotkey: key(X11 + 30 + 8, ['control', 'alt']) }), 'linux')).toBe(true);
-    expect(shortcutsConflict(settings({ hotkey: key(EVDEV + 1, ['control']) }), 'linux')).toBe(true);
-    expect(shortcutsConflict(settings({ hotkey: { kind: 'modifiers', keycodes: [EVDEV + 56], label: 'Alt' } }), 'linux')).toBe(true);
-    expect(shortcutsConflict(settings({ hotkey: key(X11 + 96, ['control']) }), 'linux')).toBe(false);
-    expect(shortcutsConflict(settings({ hotkey: null }), 'linux')).toBe(false);
+    expect(shortcutsConflict(settings({ hotkey: key(X11 + 30 + 8, ['control', 'alt']) }), HOTKEY, 'linux')).toBe(true);
+    expect(shortcutsConflict(settings({ hotkey: key(EVDEV + 1, ['control']) }), HOTKEY, 'linux')).toBe(true);
+    expect(shortcutsConflict(settings({ hotkey: { kind: 'modifiers', keycodes: [EVDEV + 56], label: 'Alt' } }), HOTKEY, 'linux')).toBe(true);
+    expect(shortcutsConflict(settings({ hotkey: key(X11 + 96, ['control']) }), HOTKEY, 'linux')).toBe(false);
+    expect(shortcutsConflict(settings({ hotkey: null }), HOTKEY, 'linux')).toBe(false);
   });
 });

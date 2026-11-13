@@ -1,7 +1,7 @@
 import { isAiConfigured } from '../../shared/ai';
 import type { HotkeySetting, Settings } from '../../shared/settings';
 import type { OverlayAction } from '../../shared/overlay-contract';
-import { conflicts, REBINDABLE_ACTIONS, SESSION_MODIFIERS, type RebindableKey, type SessionBinding, type SessionModifier, type Trigger } from '../../shared/session-shortcuts';
+import { conflicts, REBINDABLE_ACTIONS, SESSION_MODIFIERS, type RebindableAction, type RebindableKey, type SessionBinding, type SessionModifier, type Trigger } from '../../shared/session-shortcuts';
 
 export type { SessionModifier };
 export type SessionKey = RebindableKey | 'escape';
@@ -75,10 +75,17 @@ function firesWithHotkey(row: SessionShortcut, hotkey: Trigger | null): boolean 
   return hotkey !== null && conflicts(shortcutTrigger(row), hotkey);
 }
 
-export function shortcutsConflict(settings: Pick<Settings, 'hotkey' | 'sessionShortcuts'>, platform: Platform = process.platform): boolean {
+export type ShortcutSlot = 'hotkey' | RebindableAction;
+
+export function shortcutsConflict(settings: Pick<Settings, 'hotkey' | 'sessionShortcuts'>, changed: ReadonlySet<ShortcutSlot>, platform: Platform = process.platform): boolean {
   const hotkey = hotkeyTrigger(settings.hotkey, platform);
-  const rows = [...FIXED_SESSION_SHORTCUTS, ...REBINDABLE_ACTIONS.map((action) => ({ action, ...settings.sessionShortcuts[action] }))];
-  return rows.some((row, index) => firesWithHotkey(row, hotkey) || rows.slice(index + 1).some((other) => conflicts(shortcutTrigger(row), shortcutTrigger(other))));
+  const slots: Array<{ slot: ShortcutSlot | null; trigger: Trigger }> = [
+    ...(hotkey === null ? [] : [{ slot: 'hotkey' as const, trigger: hotkey }]),
+    ...FIXED_SESSION_SHORTCUTS.map((row) => ({ slot: null, trigger: shortcutTrigger(row) })),
+    ...REBINDABLE_ACTIONS.map((action) => ({ slot: action, trigger: shortcutTrigger(settings.sessionShortcuts[action]) })),
+  ];
+  const touched = (slot: ShortcutSlot | null) => slot !== null && changed.has(slot);
+  return slots.some((a, index) => slots.slice(index + 1).some((b) => (touched(a.slot) || touched(b.slot)) && conflicts(a.trigger, b.trigger)));
 }
 
 export function recordedSessionBinding(recorded: NonNullable<HotkeySetting>, platform: Platform): SessionBinding | null {

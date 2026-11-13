@@ -36,13 +36,13 @@ export function permissionHandlers({
     const binding = recordedSessionBinding(recorded, platform);
     if (binding === null) return 'unsupported';
     const current = settings.get();
-    return shortcutsConflict({ ...current, sessionShortcuts: { ...current.sessionShortcuts, [action]: binding } }, platform) ? 'conflict' : binding;
+    return shortcutsConflict({ ...current, sessionShortcuts: { ...current.sessionShortcuts, [action]: binding } }, new Set([action]), platform) ? 'conflict' : binding;
   }
 
   async function recordHotkey(): Promise<HotkeyRecordResult> {
     const recorded = await recorder.record();
     if (typeof recorded === 'string') return recorded;
-    return shortcutsConflict({ ...settings.get(), hotkey: recorded }, platform) ? 'conflict' : recorded;
+    return shortcutsConflict({ ...settings.get(), hotkey: recorded }, new Set(['hotkey']), platform) ? 'conflict' : recorded;
   }
 
   return {

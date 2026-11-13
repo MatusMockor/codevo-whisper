@@ -6,7 +6,9 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { StatsStore } from '../stats/stats-store';
 import type { AppStatusService } from '../status/app-status-service';
 import type { HandlerGroup } from './invoke-handlers';
-import { shortcutsConflict } from '../session/session-shortcuts';
+import { shortcutsConflict, type ShortcutSlot } from '../session/session-shortcuts';
+import { sameHotkey } from '../../shared/hotkey';
+import { REBINDABLE_ACTIONS } from '../../shared/session-shortcuts';
 import { IpcValidationError, validateSettingsPatch } from './validate';
 
 export type CoreHandlerDeps = {
@@ -20,8 +22,17 @@ export type CoreHandlerDeps = {
 
 export type SettingsWriter = Pick<CoreHandlerDeps, 'settings' | 'order'>;
 
+function changedShortcuts(patch: Partial<Settings>, current: Settings): Set<ShortcutSlot> {
+  const changed = new Set<ShortcutSlot>(patch.hotkey !== undefined && !sameHotkey(patch.hotkey, current.hotkey) ? ['hotkey'] : []);
+  for (const action of REBINDABLE_ACTIONS) {
+    const binding = patch.sessionShortcuts?.[action];
+    if (binding !== undefined && JSON.stringify(binding) !== JSON.stringify(current.sessionShortcuts[action])) changed.add(action);
+  }
+  return changed;
+}
+
 function allowedPatch(patch: Partial<Settings>, current: Settings): Partial<Settings> {
-  if ((Object.hasOwn(patch, 'hotkey') || Object.hasOwn(patch, 'sessionShortcuts')) && shortcutsConflict({ ...current, ...patch })) {
+  if (shortcutsConflict({ ...current, ...patch }, changedShortcuts(patch, current))) {
     throw new IpcValidationError('The shortcut collides with another shortcut');
   }
   if (current.serverEnabled || !(patch.engineOrder?.includes('server') ?? false)) {

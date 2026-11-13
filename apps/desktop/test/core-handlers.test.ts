@@ -53,6 +53,17 @@ describe('writeSettings', () => {
     expect(settings.get().sessionShortcuts['toggle-polish']).toEqual({ key: 'a', modifiers: ['control', 'alt'] });
   });
 
+  it('saves a repaired in-dictation shortcut while the unchanged one still collides with a modifier-only dictation hotkey', async () => {
+    await settings.update({ hotkey: { kind: 'modifiers', keycodes: [0x10000 + 37], label: 'Ctrl' } });
+    const polish = { key: 'p', modifiers: ['alt'] };
+
+    await write({ sessionShortcuts: { ...settings.get().sessionShortcuts, 'toggle-polish': polish } });
+    await write({ sessionShortcuts: { ...settings.get().sessionShortcuts, 'cycle-language': { key: 'k', modifiers: ['alt'] } } });
+    expect(settings.get().sessionShortcuts).toEqual({ 'toggle-polish': polish, 'cycle-language': { key: 'k', modifiers: ['alt'] } });
+    await write({ languages: { mode: 'selected', selected: ['en'] }, hotkey: settings.get().hotkey });
+    await expect(write({ sessionShortcuts: { ...settings.get().sessionShortcuts, 'toggle-polish': { key: 'p', modifiers: ['control', 'alt'] } } })).rejects.toThrow(IpcValidationError);
+  });
+
   it('saves the engine order and the other settings of one patch', async () => {
     const languages = { mode: 'selected', selected: ['en'] };
     const saved = await write({ engineOrder: ['server', 'local'], languages });

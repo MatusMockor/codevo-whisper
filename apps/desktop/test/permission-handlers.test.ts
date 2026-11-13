@@ -112,6 +112,14 @@ describe('permissionHandlers', () => {
     await expect(handlers.recordHotkey()).resolves.toEqual(free);
   });
 
+  it('lets the user repair one in-dictation shortcut while the other still collides with a modifier-only dictation hotkey', async () => {
+    const { helper, handlers } = harness('linux', { kind: 'modifiers', keycodes: [0x10000 + 37], label: 'Ctrl' });
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['alt'], label: 'Alt+P' };
+    await expect(handlers.recordSessionShortcut('toggle-polish')).resolves.toEqual({ key: 'p', modifiers: ['alt'] });
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 37 + 8, modifiers: ['alt'], label: 'Alt+K' };
+    await expect(handlers.recordSessionShortcut('cycle-language')).resolves.toEqual({ key: 'k', modifiers: ['alt'] });
+  });
+
   it('refuses Esc and passes a recording timeout through', async () => {
     const { helper, handlers } = harness('darwin');
     helper.recordedHotkey = { kind: 'key', keycode: 53, modifiers: ['control'], label: '⌃⎋' };
