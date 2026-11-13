@@ -24,12 +24,15 @@ const ACCELERATIONS: ReadonlyArray<SegmentOption<LocalAcceleration>> = [
   { id: 'cpu', label: 'CPU' },
 ];
 
-function UseExistingFile() {
+function UseExistingFile({ onLinked }: { onLinked: (id: string) => void }) {
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
   function pick(): void {
     setState('busy');
     window.codevo.useExistingModel().then(
-      () => setState('idle'),
+      (id) => {
+        setState('idle');
+        if (id !== null) onLinked(id);
+      },
       (error: unknown) => {
         console.error('Using an existing model file failed', error);
         setState('failed');
@@ -62,17 +65,22 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
       </p>
     );
   }
+  const catalog = models.catalog.value;
+  function activateLinked(id: string): void {
+    const model = catalog.models.find((item) => item.id === id);
+    if (model !== undefined && settings.localModelId === null) actions.run(model, 'activate');
+  }
   return (
     <div className="card model-card">
       <p className="card-lead">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa do tohto počítača. Ak ho už máte z Handy alebo z Hugging Face cache, použije sa bez sťahovania. Potom prepis funguje aj bez internetu.</p>
       <ModelList
-        models={models.catalog.value.models}
+        models={catalog.models}
         states={models.states}
         context={{ activeId: settings.localModelId, busyId: busyModelId(models.states) }}
         errors={actions.errors}
         onAction={actions.run}
       />
-      <UseExistingFile />
+      <UseExistingFile onLinked={activateLinked} />
       <SettingsRow title="Uvoľniť model" titleId="set-local-unload" description="Čas sa počíta od konca posledného diktovania. Počas diktovania a dokončovania prepisu model zostáva načítaný.">
         <select
           className="select"

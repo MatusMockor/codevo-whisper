@@ -8,8 +8,8 @@ import { withoutArguments } from './without-arguments';
 
 export type ModelHandlerDeps = {
   catalog: ModelCatalogView;
-  models: Pick<ModelManager, 'states'>;
-  actions: Pick<ModelActions, 'download' | 'pause' | 'delete' | 'activate' | 'useExisting'>;
+  models: Pick<ModelManager, 'states' | 'useExisting'>;
+  actions: Pick<ModelActions, 'download' | 'pause' | 'delete' | 'activate'>;
   languagePack: Pick<LanguagePack, 'view' | 'download'>;
   pickModelFile: () => Promise<string | null>;
 };
@@ -26,7 +26,7 @@ export function modelHandlers({ catalog, models, actions, languagePack, pickMode
     activateModel: (id) => actions.activate(validateModelId(id)),
     useExistingModel: withoutArguments(async () => {
       const file = await pickModelFile();
-      return file === null ? null : actions.useExisting(file);
+      return file === null ? null : models.useExisting(file);
     }),
     getLanguagePack: withoutArguments(() => languagePack.view()),
     downloadLanguagePack: withoutArguments(() => languagePack.download()),

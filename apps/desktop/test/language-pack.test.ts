@@ -130,6 +130,7 @@ describe('language pack', () => {
   it('uses a picked model file over IPC and treats a cancelled dialog as no choice', async () => {
     const picked = join(scratch, 'picked.gguf');
     await writeFile(picked, canaryBody);
+    await settings.update({ localModelId: null });
     let choice: string | null = null;
     const handlers = modelHandlers({ catalog: { models: [], defaultModelId: 'parakeet' }, models, actions: new ModelActions({ models, settings }), languagePack: pack(), pickModelFile: () => Promise.resolve(choice) });
 
@@ -138,6 +139,7 @@ describe('language pack', () => {
     choice = picked;
     await expect(handlers.useExistingModel()).resolves.toBe('canary');
     await expect(models.verify('canary')).resolves.toBe('ok');
+    expect(settings.get().localModelId).toBeNull();
     expect(server.requests).toEqual([]);
   });
 });

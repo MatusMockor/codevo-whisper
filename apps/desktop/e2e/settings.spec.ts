@@ -525,6 +525,19 @@ test.describe('settings page', () => {
     expect((await page.evaluate(() => window.codevo.getModelStates())).every((state) => state.status === 'not-downloaded')).toBe(true);
   });
 
+  test('a picked file for a model that needs a language asks for the language before it is used', async () => {
+    await openTranscription();
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('models:use-existing');
+      ipcMain.handle('models:use-existing', () => 'canary-1b-v2-q8');
+    });
+
+    await page.getByRole('button', { name: 'Použiť existujúci súbor…' }).click();
+
+    await expect(page.getByRole('dialog', { name: 'Vyberte jazyk diktovania' })).toContainText('Canary 1B v2');
+    expect(await page.evaluate(() => window.codevo.getSettings())).toMatchObject({ localModelId: null, languages: { mode: 'auto' } });
+  });
+
   test('changes to Režim, Vkladanie and Spustiť po prihlásení persist across a relaunch', async () => {
     await page.getByRole('group', { name: 'Režim klávesu' }).getByRole('button', { name: 'Prepínanie' }).click();
     await expect(row('Režim')).toContainText('Prvé stlačenie začne nahrávať, druhé ukončí.');

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -152,18 +152,5 @@ describe('ModelActions', () => {
     }
     expect(() => actions.pause('nope')).toThrow(expect.objectContaining({ reason: 'unknown-model' }));
     expect(actions.queuedModels()).toBe(0);
-  });
-
-  it('useExisting activates the picked model when none is active', async () => {
-    const picked = join(scratch, 'picked.gguf');
-    await writeFile(picked, payload);
-    const { models, actions } = harness();
-
-    await expect(actions.useExisting(picked)).resolves.toBe('alpha');
-
-    expect(settings.get().localModelId).toBe('alpha');
-    expect(warmUps).toEqual([join(modelsDir, 'alpha.gguf')]);
-    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'ready' });
-    expect(server.requests).toEqual([]);
   });
 });

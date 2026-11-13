@@ -4,7 +4,7 @@ import { ModelError } from './model-error';
 import type { ModelManager } from './model-manager';
 
 export type ModelActionsDeps = {
-  models: Pick<ModelManager, 'download' | 'pause' | 'delete' | 'activate' | 'states' | 'useExisting'>;
+  models: Pick<ModelManager, 'download' | 'pause' | 'delete' | 'activate' | 'states'>;
   settings: Pick<SettingsStore, 'get'>;
 };
 
@@ -34,12 +34,6 @@ export class ModelActions {
 
   activate(id: string): Promise<void> {
     return this.known(id, () => this.queue(id).run(() => this.deps.models.activate(id)));
-  }
-
-  async useExisting(file: string): Promise<string> {
-    const id = await this.deps.models.useExisting(file);
-    await this.queue(id).run(() => this.activateFirstReady(id));
-    return id;
   }
 
   private async downloadAndActivate(id: string): Promise<void> {
