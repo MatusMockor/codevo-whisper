@@ -7,7 +7,12 @@ enum Frontmost {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             return ["pid": -1]
         }
-        return [
+        return describe(app)
+    }
+
+    @MainActor
+    static func describe(_ app: NSRunningApplication) -> JSONObject {
+        [
             "pid": Int(app.processIdentifier),
             "bundleId": app.bundleIdentifier ?? "",
             "name": app.localizedName ?? "",
