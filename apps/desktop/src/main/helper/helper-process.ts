@@ -165,7 +165,7 @@ export class HelperProcess implements HelperChannel {
   private handleLine(line: string, markReady: () => void): void {
     const message = parseLine(line);
     if (!message) {
-      this.logger.error('Input helper sent an invalid line', line);
+      this.logger.error('Input helper sent an invalid line', { chars: line.length });
       return;
     }
     if (typeof message['id'] === 'number') {

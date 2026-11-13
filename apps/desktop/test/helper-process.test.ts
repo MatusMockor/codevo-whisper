@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { HelperMessage } from '../src/main/helper/helper-channel';
 import type { HelperProcess } from '../src/main/helper/helper-process';
 import { protocolHelper } from './protocol-helper';
+import { RecordingLogger } from './recording-logger';
 
 let helper: HelperProcess | null = null;
 
@@ -71,6 +72,17 @@ describe('HelperProcess', () => {
     expect(second).not.toBe(first);
     expect(restarts).toEqual([1]);
     await expect(process.request('ping')).rejects.toThrow('helper-unavailable');
+  });
+
+  it('never logs the body of a response line cut off by a crash', async () => {
+    const logger = new RecordingLogger();
+    helper = protocolHelper(2000, [], logger);
+    await helper.start();
+
+    await expect(helper.request('crash-mid-response', { text: 'Dobrý deň, tajný text okolo kurzora' })).rejects.toThrow('helper-exited');
+
+    expect(logger.errors.map(({ message }) => message)).toContain('Input helper sent an invalid line');
+    expect(JSON.stringify(logger.errors.map(({ message, error }) => ({ message, error: error instanceof Error ? error.message : error })))).not.toContain('tajný text');
   });
 
   it('rejects start when the helper dies before ready and does not restart it', async () => {

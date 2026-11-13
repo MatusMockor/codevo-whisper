@@ -26,6 +26,7 @@ const handlers = {
   echo: (id, args) => setTimeout(() => send({ id, value: args.value }), args.delayMs ?? 0),
   silent: () => undefined,
   crash: () => process.exit(1),
+  'crash-mid-response': (id, args) => process.stdout.write(JSON.stringify({ id, readable: true, before: args.text, after: '' }).slice(0, -12), () => process.exit(1)),
   emit: (id, args) => {
     send(args.event);
     send({ id });
