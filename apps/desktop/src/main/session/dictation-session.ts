@@ -1,4 +1,4 @@
-import { canPolish } from '../../shared/ai';
+import { canPolish, isAiConfigured } from '../../shared/ai';
 import { preferredSpellings } from '../../shared/custom-words';
 import type { Polished } from '../ai/polish';
 import type { AudioCapture } from '../audio/audio-capture';
@@ -17,6 +17,7 @@ import type { EngineConditions } from '../../shared/engine-routing';
 import type { LiveText, OverlayState } from '../../shared/overlay-contract';
 import type { MicrophoneSetting } from '../../shared/settings';
 import type { LanguageSelection } from '../../shared/dictation-languages';
+import { sameSelection } from '../engines/local-language';
 import type { RecordingAudioLease, RecordingAudioSettings } from '../../shared/recording-audio';
 import { FrameRelay } from './frame-relay';
 import { LiveTranscript } from './live-transcript';
@@ -76,9 +77,13 @@ export class DictationSession {
   private phase: Phase = 'recording';
   private readonly startedAt: number;
   private readonly languages: LanguageSelection;
-  private readonly transcriptSettings: TranscriptSettings;
+  private transcriptSettings: TranscriptSettings;
   private readonly partials: boolean;
-  private readonly polishing: boolean;
+  private spoken: LanguageSelection;
+  private readonly polishChip: boolean;
+  private polishOn: boolean;
+  private polishStop: AbortController | null = null;
+  private readonly stream = new AbortController();
   private readonly live: LiveTranscript | null;
   private lastLevel = 0;
   private notice: ProcessingNotice;
@@ -106,9 +111,11 @@ export class DictationSession {
     this.startedAt = deps.clock();
     const { languages, microphones, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
     this.languages = languages;
+    this.spoken = languages;
     this.transcriptSettings = Object.freeze({ languages, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
     this.partials = overlay === 'live';
-    this.polishing = canPolish(deps.settings.get());
+    this.polishChip = isAiConfigured(deps.settings.get());
+    this.polishOn = canPolish(deps.settings.get());
     this.live = this.partials ? new LiveTranscript() : null;
     this.microphones = microphones;
     const { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume } = deps.settings.get();
@@ -148,6 +155,7 @@ export class DictationSession {
       return;
     }
     this.phase = 'finishing';
+    this.transcriptSettings = Object.freeze({ ...this.transcriptSettings, languages: this.spoken });
     this.notice = reason === 'max-duration' ? 'limit-reached' : undefined;
     this.showProcessing();
     const pcm = await this.stopCapture();
@@ -163,7 +171,8 @@ export class DictationSession {
       await this.chooseTerminal({ kind: 'result', state: await this.readinessError(readiness.reason) });
       return;
     }
-    const dictation = this.startDictation(readiness.engine);
+    const dictation = sameSelection(this.spoken, this.languages) ? this.startDictation(readiness.engine) : await this.respoken(pcm);
+    if (dictation === null) return;
     const transcription = this.transcribe(dictation);
     await this.deps.pipeline.run(() => this.transcribeAndInsert(transcription, pcm));
   }
@@ -177,6 +186,25 @@ export class DictationSession {
 
   cancel(): Promise<void> {
     return this.chooseTerminal({ kind: 'shutdown' });
+  }
+
+  togglePolish(): void {
+    if (!this.polishChip || (this.phase !== 'recording' && this.phase !== 'finishing')) return;
+    this.polishOn = !this.polishOn;
+    if (!this.polishOn) this.polishStop?.abort();
+    if (this.phase === 'recording') {
+      this.showRecording();
+      return;
+    }
+    this.showProcessing();
+  }
+
+  cycleLanguage(): void {
+    if (this.phase !== 'recording') return;
+    const options: LanguageSelection[] = [{ mode: 'auto', selected: this.languages.selected }, ...this.languages.selected.map((code) => ({ mode: 'selected' as const, selected: [code] }))];
+    const current = options.findIndex((option) => sameSelection(option, this.spoken));
+    this.spoken = options[(current + 1) % options.length] ?? this.languages;
+    this.showRecording();
   }
 
   private async openMicrophone(): Promise<boolean> {
@@ -261,7 +289,7 @@ export class DictationSession {
   }
 
   private dictationOptions(): DictationOptions {
-    const options: DictationOptions = { languages: this.languages, vocabulary: preferredSpellings(this.transcriptSettings.customWords), signal: this.controller.signal, partials: this.partials };
+    const options: DictationOptions = { languages: this.languages, vocabulary: preferredSpellings(this.transcriptSettings.customWords), signal: AbortSignal.any([this.controller.signal, this.stream.signal]), partials: this.partials };
     if (this.live === null) {
       return options;
     }
@@ -342,7 +370,7 @@ export class DictationSession {
     if (rawText === null) {
       return;
     }
-    const { text, failure } = this.polishing ? await this.polished(rawText) : { text: processFinalTranscript({ text: rawText, settings: this.transcriptSettings }), failure: null };
+    const { text, failure } = await this.finalText(rawText);
     if (this.controller.signal.aborted) return;
     if (text === '') {
       await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
@@ -388,10 +416,47 @@ export class DictationSession {
     return failureState(error.reason, textSoFar !== '');
   }
 
-  private async polished(rawText: string): Promise<Polished> {
+  private async respoken(pcm: Uint8Array): Promise<EngineDictation | null> {
+    this.stream.abort();
+    this.releaseEngine();
+    const preparing = this.deps.engines.prepare(this.deps.settings.get().engineOrder, this.spoken).catch((error: unknown) => {
+      this.deps.logger.error('The engine readiness check failed', error);
+      return NOT_READY;
+    });
+    const readiness = await Promise.race([preparing, this.aborted]);
+    if (readiness === null) {
+      void preparing.then((late) => late.ready && late.engine.release());
+      return null;
+    }
+    if (!readiness.ready) {
+      await this.chooseTerminal({ kind: 'result', state: await this.readinessError(readiness.reason) });
+      return null;
+    }
+    try {
+      const dictation = readiness.engine.start({ languages: this.spoken, vocabulary: preferredSpellings(this.transcriptSettings.customWords), signal: this.controller.signal });
+      dictation.push(pcm);
+      return dictation;
+    } catch (error) {
+      this.deps.logger.error('The chosen language could not be transcribed', error);
+      await this.chooseTerminal({ kind: 'result', state: await this.failure(error) });
+      return null;
+    }
+  }
+
+  private async finalText(rawText: string): Promise<Polished> {
+    while (this.polishOn) {
+      const stop = new AbortController();
+      this.polishStop = stop;
+      const result = await this.polished(rawText, AbortSignal.any([this.controller.signal, stop.signal]));
+      if (!stop.signal.aborted) return result;
+    }
+    return { text: processFinalTranscript({ text: rawText, settings: this.transcriptSettings }), failure: null };
+  }
+
+  private async polished(rawText: string, signal: AbortSignal): Promise<Polished> {
     const processed = processFinalTranscript({ text: rawText, settings: { ...this.transcriptSettings, appendTrailingSpace: false } });
     if (processed === '') return { text: '', failure: null };
-    const { text, failure } = await this.deps.polish(processed, this.controller.signal);
+    const { text, failure } = await this.deps.polish(processed, signal);
     return { text: sanitizeInsertionText(text, this.transcriptSettings), failure };
   }
 
@@ -450,20 +515,24 @@ export class DictationSession {
   }
 
   private showRecording(): void {
-    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, languageChip: languageChip(this.languages) } as const;
+    const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, languageChip: languageChip(this.spoken), ...this.polishState() } as const;
     const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
     this.present(this.withLive(withDevice));
   }
 
   private showProcessing(): void {
-    const state = this.notice === undefined ? ({ kind: 'processing' } as const) : ({ kind: 'processing', notice: this.notice } as const);
+    const state = { kind: 'processing', ...(this.notice === undefined ? {} : { notice: this.notice }), ...this.polishState() } as const;
     this.present(this.withLive(this.phase === 'delivering' ? { ...state, delivering: true as const } : state));
+  }
+
+  private polishState(): { polish?: boolean } {
+    return this.polishChip ? { polish: this.polishOn } : {};
   }
 
   private withLive<T extends OverlayState>(state: T): T | (T & { live: LiveText }) {
     if (this.live === null) {
       return state;
     }
-    return { ...state, live: this.live.view() };
+    return { ...state, live: sameSelection(this.spoken, this.languages) ? this.live.view() : { confirmed: '', tentative: '' } };
   }
 }

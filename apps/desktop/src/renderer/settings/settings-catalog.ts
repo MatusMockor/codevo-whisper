@@ -5,6 +5,8 @@ export type SettingsGroupId = 'dictation' | 'microphone' | 'insertion' | 'transc
 
 export type SettingId =
   | 'hotkey'
+  | 'polish-shortcut'
+  | 'language-shortcut'
   | 'mode'
   | 'overlay'
   | 'languages'
@@ -48,6 +50,8 @@ const GROUPS: readonly GroupDefinition[] = [
     title: 'Diktovanie',
     rows: [
       { id: 'hotkey', title: 'Klávesová skratka', keywords: 'hotkey kláves skratka nahrať' },
+      { id: 'polish-shortcut', title: 'Skratka AI úpravy', keywords: 'skratka ai úprava počas diktovania prepnúť' },
+      { id: 'language-shortcut', title: 'Skratka jazyka', keywords: 'skratka jazyk počas diktovania prepnúť auto' },
       { id: 'mode', title: 'Režim', keywords: 'režim klávesu inteligentný podrž prepínanie' },
       { id: 'overlay', title: 'Zobrazenie panela', keywords: 'panel overlay indikátor živý text' },
       { id: 'languages', title: 'Jazyky diktovania', keywords: 'jazyk jazyky zvolené hlavný automaticky rozpoznanie slovenčina čeština angličtina nemčina poľština' },

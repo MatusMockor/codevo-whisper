@@ -24,7 +24,7 @@ import { SettingsStore } from '../src/main/settings/settings-store';
 import { coordinatorDictationGuard } from '../src/main/updates/coordinator-dictation-guard';
 import { StatsStore } from '../src/main/stats/stats-store';
 import { localDate } from '../src/shared/calendar-date';
-import { offeredActions, type OverlayState } from '../src/shared/overlay-contract';
+import { offeredActions, type LiveText, type OverlayState } from '../src/shared/overlay-contract';
 import type { Preparation } from '../src/main/engines/transcription-engine';
 import type { Settings } from '../src/shared/settings';
 import { FAKE_WORKER, readRecordedCalls } from './support/resident-fixture';
@@ -41,10 +41,11 @@ import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './sup
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
 const NOTES: AppTarget = { bundleId: 'com.apple.Notes', pid: 200, name: 'Notes', windowId: 4 };
+const AI_SERVER: Partial<Settings> = { aiBaseUrl: 'http://127.0.0.1:11434/v1', aiModel: 'qwen2.5:1.5b' };
 const ONE_SECOND_TEXT = (marker: number): string => `${marker}:32000`;
 const FAKE_TIMELINE_CLI = fileURLToPath(new URL('./support/resident-worker.js', import.meta.url));
 
-type Setup = { polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
+type Setup = { languageHint?: 'required'; polish?: (text: string, signal: AbortSignal) => Promise<Polished>; settings?: Partial<Settings>; helper?: Partial<FakeInputHelperState>; binary?: string; platform?: NodeJS.Platform; clock?: () => number; engineClock?: Clock; inputHelper?: FakeInputHelper; pasteDelay?: 'default' };
 
 type Harness = Awaited<ReturnType<typeof prepared>>;
 
@@ -86,7 +87,7 @@ async function prepared(setup: Setup = {}) {
   const modelsDir = join(scratch, 'models');
   await mkdir(modelsDir, { recursive: true });
   await writeFile(join(modelsDir, 'tiny.gguf'), MODEL_BODY);
-  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY)], settings, warmUp: () => Promise.resolve(), logger });
+  const models = new ModelManager({ dir: modelsDir, catalog: [testEntry('tiny', MODEL_BODY, setup.languageHint === undefined ? {} : { languageHint: setup.languageHint })], settings, warmUp: () => Promise.resolve(), logger });
   const engineClock = setup.engineClock === undefined ? {} : { clock: setup.engineClock };
   const engine = new LocalEngine({ binary: setup.binary ?? FAKE_WORKER, acceleratorBinary: setup.binary ?? FAKE_WORKER, models, settings, arch: 'arm64', platform: setup.platform ?? process.platform, ...engineClock });
   locals.push(engine);
@@ -1048,10 +1049,207 @@ describe('SessionCoordinator', () => {
     expect(harness.helper.sessionShortcuts).toEqual([]);
 
     await dictate(harness, 7);
-    expect(harness.helper.sessionShortcuts).toEqual([{ action: 'cancel', key: 'escape', modifiers: [] }]);
+    expect(harness.helper.sessionShortcuts).toEqual([
+      { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'cycle-language', key: 'j', modifiers: ['control', 'alt'] },
+    ]);
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     await expect.poll(() => harness.helper.sessionShortcuts).toEqual([]);
+  });
+
+  it('arms the AI toggle and the shortcuts saved in Settings when AI polish is configured', async () => {
+    const harness = await prepared({ settings: { ...AI_SERVER, sessionShortcuts: { 'toggle-polish': { key: 'p', modifiers: ['meta'] }, 'cycle-language': { key: 'f2', modifiers: ['shift'] } } } });
+
+    await pressAndSpeak(harness, 7);
+
+    expect(harness.helper.sessionShortcuts).toEqual([
+      { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'toggle-polish', key: 'p', modifiers: ['meta'] },
+      { action: 'cycle-language', key: 'f2', modifiers: ['shift'] },
+    ]);
+  });
+
+  it('re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing', async () => {
+    vi.stubEnv('CW_WORKER_DELAY_MS', '1500');
+    const harness = await prepared({ settings: AI_SERVER });
+    await dictate(harness, 7);
+    await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+
+    await harness.settings.update({ hotkey: { kind: 'key', keycode: 0x10000 + 30 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+A' } });
+
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+    await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7)]);
+  });
+
+  it.each([
+    ['the shortcut', (harness: Harness) => harness.helper.pressSessionShortcut('toggle-polish')],
+    ['the AI chip', (harness: Harness) => harness.coordinator.act('toggle-polish')],
+  ])('turns AI polish on for one dictation with %s without changing the setting', async (_via, toggle) => {
+    const received: string[] = [];
+    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: false }, polish: (text) => { received.push(text); return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
+
+    await pressAndSpeak(harness, 7);
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', polish: false });
+    toggle(harness);
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', polish: true });
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.']);
+    expect(received).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(harness.settings.get().aiPolish).toBe(false);
+
+    await dictate(harness, 8);
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.', ONE_SECOND_TEXT(8)]);
+    expect(received).toHaveLength(1);
+  });
+
+  it('turns AI polish off for one dictation while it is transcribing', async () => {
+    let calls = 0;
+    vi.stubEnv('CW_WORKER_DELAY_MS', '600');
+    const harness = await prepared({ settings: { ...AI_SERVER, aiPolish: true }, polish: () => { calls++; return Promise.resolve({ text: 'Upravený text.', failure: null }); } });
+
+    await dictate(harness, 7);
+    await expect.poll(() => lastVisible(harness.states)).toMatchObject({ kind: 'processing', polish: true });
+    harness.helper.pressSessionShortcut('toggle-polish');
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'processing', polish: false });
+
+    await expect.poll(() => harness.helper.pasted, { timeout: 3000 }).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(calls).toBe(0);
+    expect(harness.settings.get().aiPolish).toBe(true);
+  });
+
+  it('stops a running AI request when the chip is turned off and inserts the unpolished text without a notice', async () => {
+    const aborted = Promise.withResolvers<void>();
+    let calls = 0;
+    const harness = await prepared({
+      settings: { ...AI_SERVER, aiPolish: true },
+      polish: (text, signal) => {
+        calls++;
+        return new Promise((resolve) => signal.addEventListener('abort', () => { aborted.resolve(); resolve({ text, failure: 'aborted' }); }));
+      },
+    });
+
+    await dictate(harness, 7);
+    await expect.poll(() => calls).toBe(1);
+    harness.coordinator.act('toggle-polish');
+    await aborted.promise;
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
+  });
+
+  it('polishes again when the chip is turned back on before the text is delivered', async () => {
+    let calls = 0;
+    const harness = await prepared({
+      settings: { ...AI_SERVER, aiPolish: true },
+      polish: (text, signal) => {
+        calls++;
+        if (calls > 1) return Promise.resolve({ text: 'Upravený text.', failure: null });
+        return new Promise((resolve) => signal.addEventListener('abort', () => resolve({ text, failure: 'aborted' })));
+      },
+    });
+
+    await dictate(harness, 7);
+    await expect.poll(() => calls).toBe(1);
+    harness.coordinator.act('toggle-polish');
+    harness.coordinator.act('toggle-polish');
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Upravený text.']);
+    expect(calls).toBe(2);
+  });
+
+  it('shows no AI chip and ignores the toggle when AI polish is not configured', async () => {
+    let calls = 0;
+    const harness = await prepared({ polish: (text) => { calls++; return Promise.resolve({ text, failure: null }); } });
+
+    await pressAndSpeak(harness, 7);
+    harness.coordinator.act('toggle-polish');
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    expect(calls).toBe(0);
+    expect(harness.states.some((state) => 'polish' in state)).toBe(false);
+  });
+
+  it('cycles AUTO and each selected language and transcribes the whole recording in the chosen one', async () => {
+    const harness = await prepared({ languageHint: 'required', settings: { languages: { mode: 'selected', selected: ['sk', 'cs'] } } });
+
+    await pressAndSpeak(harness, 7);
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'SK +1' });
+    const chips = ['cycle-language', 'cycle-language', 'cycle-language', 'cycle-language'].map(() => {
+      harness.helper.pressSessionShortcut('cycle-language');
+      return (lastVisible(harness.states) as { languageChip?: string }).languageChip;
+    });
+    expect(chips).toEqual(['AUTO', 'SK', 'CS', 'AUTO']);
+    harness.coordinator.act('cycle-language');
+    harness.coordinator.act('cycle-language');
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    const calls = await readRecordedCalls(argsFile);
+    expect(calls.at(-1)?.[calls.at(-1)!.indexOf('--language') + 1]).toBe('cs');
+    expect(harness.settings.get().languages).toEqual({ mode: 'selected', selected: ['sk', 'cs'] });
+  });
+
+  it('cleans up the final text in the chosen language, not the starting one', async () => {
+    await setWorkerMode('text');
+    vi.stubEnv('FAKE_CLI_TEXT', 'Es geht um das Haus.');
+    const harness = await prepared({ languageHint: 'required', settings: { removeFillerWords: true, languages: { mode: 'selected', selected: ['en', 'de'] } } });
+
+    await pressAndSpeak(harness, 7);
+    harness.coordinator.act('cycle-language');
+    harness.coordinator.act('cycle-language');
+    harness.coordinator.act('cycle-language');
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'DE' });
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Es geht um das Haus.']);
+  });
+
+  it('keeps the streaming transcription when the language is cycled back to where it started', async () => {
+    const harness = await prepared({ languageHint: 'required', settings: { languages: { mode: 'selected', selected: ['sk'] } } });
+
+    await pressAndSpeak(harness, 7);
+    harness.coordinator.act('cycle-language');
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'AUTO' });
+    harness.coordinator.act('cycle-language');
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    const languages = (await readRecordedCalls(argsFile)).map((call) => call[call.indexOf('--language') + 1]);
+    expect(languages).toEqual(['sk']);
+  });
+
+  it('hides live words in the starting language while another language is chosen', async () => {
+    const samples = timelineSpeech(4);
+    await useTimeline(samples);
+    let now = 0;
+    const harness = await prepared({ binary: FAKE_TIMELINE_CLI, languageHint: 'required', settings: { overlay: 'live', languages: { mode: 'selected', selected: ['sk'] } }, engineClock: { now: () => now } });
+
+    await speakTimeline(harness, samples, () => {
+      now += 1000;
+    });
+    await expect.poll(() => (lastVisible(harness.states) as { live?: LiveText }).live?.tentative ?? '').not.toBe('');
+    harness.coordinator.act('cycle-language');
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'AUTO', live: { confirmed: '', tentative: '' } });
+    harness.coordinator.act('cycle-language');
+
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'SK' });
+    expect((lastVisible(harness.states) as { live?: LiveText }).live?.tentative).not.toBe('');
+  });
+
+  it('fixes the language once recording stops', async () => {
+    await setWorkerMode('hang');
+    const harness = await prepared({ languageHint: 'required', settings: { languages: { mode: 'selected', selected: ['sk', 'cs'] } } });
+
+    await dictate(harness, 7);
+    await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
+    const before = harness.states.length;
+    harness.helper.pressSessionShortcut('cycle-language');
+
+    expect(harness.states.slice(before).some((state) => state.kind === 'recording')).toBe(false);
   });
 
   it.each(['escape', 'overlay button'] as const)('discards a recording on %s without inserting, copying or remembering', async (via) => {

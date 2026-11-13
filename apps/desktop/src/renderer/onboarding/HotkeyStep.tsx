@@ -10,7 +10,7 @@ export function HotkeyStep({ settings }: { settings: Settings }) {
         <b id="ob-hotkey-title">Skratka na diktovanie</b>
         <p className="ob-mode">{MODE_DESCRIPTIONS[settings.mode]} Režim zmeníte v Nastaveniach.</p>
       </div>
-      <HotkeyRecorder hotkey={settings.hotkey} labelledBy="ob-hotkey-title" onRecorded={(hotkey) => saveSettings({ hotkey })} />
+      <HotkeyRecorder label={settings.hotkey?.label ?? null} labelledBy="ob-hotkey-title" record={() => window.codevo.recordHotkey()} onRecorded={(hotkey) => saveSettings({ hotkey })} />
     </div>
   );
 }

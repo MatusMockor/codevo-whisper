@@ -38,8 +38,7 @@ export class RemoteEngine implements TranscriptionEngine {
     this.options = { ...DEFAULT_REMOTE_OPTIONS, ...deps.options };
   }
 
-  async prepare(): Promise<Preparation> {
-    const selection = this.deps.selection();
+  async prepare(selection: LanguageSelection = this.deps.selection()): Promise<Preparation> {
     try {
       const ready = await this.deps.connector.connect();
       if (!ready.scope.isCurrent()) {

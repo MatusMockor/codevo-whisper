@@ -1,4 +1,5 @@
 import type { AiCheck, AiKeyState, CodexCheck, CodexEffort } from './ai';
+import type { RebindableAction, SessionShortcutRecordResult } from './session-shortcuts';
 import type { HistoryPolicy, HistoryView } from './history';
 import type { AppStatus } from './app-status';
 import type { OutputAudioView } from './recording-audio';
@@ -35,6 +36,7 @@ export type IpcInvokeApi = {
   getDataFolder(): Promise<string>;
   relaunch(): Promise<void>;
   recordHotkey(): Promise<HotkeyRecordResult>;
+  recordSessionShortcut(action: RebindableAction): Promise<SessionShortcutRecordResult>;
   isHotkeyArmed(): Promise<boolean>;
   getModelCatalog(): Promise<ModelCatalogView>;
   getModelStates(): Promise<ModelState[]>;
@@ -124,6 +126,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   getDataFolder: 'app:data-folder',
   relaunch: 'app:relaunch',
   recordHotkey: 'hotkey:record',
+  recordSessionShortcut: 'session-shortcut:record',
   isHotkeyArmed: 'hotkey:armed',
   getModelCatalog: 'models:catalog',
   getModelStates: 'models:states',

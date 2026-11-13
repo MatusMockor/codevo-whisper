@@ -19,6 +19,7 @@ const DEFAULTS: Settings = {
   removeFillerWords: false,
   appendTrailingSpace: false,
   hotkey: null,
+  sessionShortcuts: { 'toggle-polish': { key: 'a', modifiers: ['control', 'alt'] }, 'cycle-language': { key: 'j', modifiers: ['control', 'alt'] } },
   mode: 'smart',
   languages: { mode: 'auto', selected: ['sk'] },
   microphones: [],
@@ -625,6 +626,7 @@ test.describe('settings page', () => {
     await expect(status()).toHaveText('Používať môžete najviac 5 jazykov. Najprv niektorý odoberte.');
     await expect(used()).toHaveCount(5);
 
+    await usedZone().scrollIntoViewIfNeeded();
     await pointerDrag(usedRow('Poľština'), usedRow('Angličtina'), top);
     await expect(used()).toHaveText([/Poľština/, /Angličtina/, /Slovenčina/, /Čeština/, /Nemčina/]);
     await usedRow('Nemčina').scrollIntoViewIfNeeded();
@@ -725,6 +727,28 @@ test.describe('settings page', () => {
     await recorder.click();
     await expect(row('Klávesová skratka').getByRole('alert')).toContainText('Túto skratku nemožno použiť.');
     await expect(recorder).toContainText('Pravý ⌃ Control');
+  });
+
+  test('in-dictation shortcuts record a new key and every recorder refuses a key another shortcut already fires on', async () => {
+    const polish = row('Skratka AI úpravy').locator('.hk');
+    await expect(polish).toContainText('Ctrl+Alt+A');
+    await expect(row('Skratka jazyka').locator('.hk')).toContainText('Ctrl+Alt+J');
+
+    await setRecordedHotkey({ kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+P' });
+    await polish.click();
+    await expect(polish).toContainText('Ctrl+Alt+P');
+    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.sessionShortcuts['toggle-polish']))).toEqual({ key: 'p', modifiers: ['control', 'alt'] });
+
+    await setRecordedHotkey({ kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['alt'], label: 'Alt+J' });
+    await polish.click();
+    await expect(row('Skratka AI úpravy').getByRole('alert')).toContainText('Túto skratku už používa iná skratka aplikácie');
+    await expect(polish).toContainText('Ctrl+Alt+P');
+
+    const dictation = row('Klávesová skratka').locator('.hk');
+    await setRecordedHotkey({ kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+J' });
+    await dictation.click();
+    await expect(row('Klávesová skratka').getByRole('alert')).toContainText('Túto skratku už používa iná skratka aplikácie');
+    expect(await page.evaluate(() => window.codevo.getSettings().then((settings) => settings.hotkey))).toBeNull();
   });
 
   test('the transcription groups moved to Prepis and Settings links there', async () => {

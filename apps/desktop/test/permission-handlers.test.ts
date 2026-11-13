@@ -11,6 +11,7 @@ import { MACOS_PERMISSION_LINKS } from '../src/main/permissions/macos-permission
 import { PermissionsService } from '../src/main/permissions/permissions-service';
 import { AppReveal } from '../src/main/system/app-reveal';
 import { RecordingDesktopShell } from '../src/main/system/desktop-shell';
+import { DEFAULT_SETTINGS, type HotkeySetting } from '../src/shared/settings';
 import { RecordingLogger } from './recording-logger';
 
 let dir: string;
@@ -23,7 +24,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function harness(platform: NodeJS.Platform = 'darwin') {
+function harness(platform: NodeJS.Platform = 'darwin', hotkey: HotkeySetting = null) {
   const helper = new FakeInputHelper({ permissions: { listen: false, post: true, accessibility: false } });
   const shell = new RecordingDesktopShell();
   const logger = new RecordingLogger();
@@ -41,6 +42,8 @@ function harness(platform: NodeJS.Platform = 'darwin') {
     recorder: new KeyRecorder(helper, { cancel: () => undefined }),
     hotkey: { isArmed: () => Promise.resolve(false) },
     relaunch: () => Promise.resolve(),
+    settings: { get: () => ({ ...DEFAULT_SETTINGS, hotkey }) },
+    platform,
   });
   return { helper, shell, handlers };
 }
@@ -76,6 +79,54 @@ describe('permissionHandlers', () => {
     await handlers.revealAppInFinder();
 
     expect(shell.revealed).toEqual([]);
+  });
+
+  it('records an in-dictation shortcut as a portable binding', async () => {
+    const { helper, handlers } = harness('linux');
+    helper.recordedHotkey = { kind: 'key', keycode: 0x20000 + 25, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+P' };
+
+    await expect(handlers.recordSessionShortcut('toggle-polish')).resolves.toEqual({ key: 'p', modifiers: ['control', 'alt'] });
+    helper.recordedHotkey = { kind: 'key', keycode: 0x20000 + 36, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+J' };
+    await expect(handlers.recordSessionShortcut('cycle-language')).resolves.toEqual({ key: 'j', modifiers: ['control', 'alt'] });
+  });
+
+  it.each([
+    ['the dictation hotkey', { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt', 'shift'], label: 'Ctrl+Alt+Shift+P' } as const, { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+P' } as const],
+    ['a modifier-only dictation hotkey', { kind: 'modifiers', keycodes: [0x10000 + 37], label: 'Ctrl' } as const, { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'shift'], label: 'Ctrl+Shift+P' } as const],
+    ['the other in-dictation shortcut', null, { kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['shift'], label: 'Shift+J' } as const],
+  ])('refuses an in-dictation shortcut that overlaps %s', async (_case, hotkey, recorded) => {
+    const { helper, handlers } = harness('linux', hotkey);
+    helper.recordedHotkey = recorded;
+
+    await expect(handlers.recordSessionShortcut('toggle-polish')).resolves.toBe('conflict');
+  });
+
+  it('refuses a dictation hotkey that an in-dictation shortcut or Esc fires with', async () => {
+    const { helper, handlers } = harness('linux');
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+J' };
+    await expect(handlers.recordHotkey()).resolves.toBe('conflict');
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 9, modifiers: ['shift'], label: 'Shift+Esc' };
+    await expect(handlers.recordHotkey()).resolves.toBe('conflict');
+    const free = { kind: 'key', keycode: 0x10000 + 96, modifiers: ['control'], label: 'Ctrl+F12' } as const;
+    helper.recordedHotkey = free;
+    await expect(handlers.recordHotkey()).resolves.toEqual(free);
+  });
+
+  it('lets the user repair one in-dictation shortcut while the other still collides with a modifier-only dictation hotkey', async () => {
+    const { helper, handlers } = harness('linux', { kind: 'modifiers', keycodes: [0x10000 + 37], label: 'Ctrl' });
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['alt'], label: 'Alt+P' };
+    await expect(handlers.recordSessionShortcut('toggle-polish')).resolves.toEqual({ key: 'p', modifiers: ['alt'] });
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 37 + 8, modifiers: ['alt'], label: 'Alt+K' };
+    await expect(handlers.recordSessionShortcut('cycle-language')).resolves.toEqual({ key: 'k', modifiers: ['alt'] });
+  });
+
+  it('refuses Esc and passes a recording timeout through', async () => {
+    const { helper, handlers } = harness('darwin');
+    helper.recordedHotkey = { kind: 'key', keycode: 53, modifiers: ['control'], label: '⌃⎋' };
+    await expect(handlers.recordSessionShortcut('cycle-language')).resolves.toBe('unsupported');
+    helper.recordedHotkey = 'timeout';
+    await expect(handlers.recordSessionShortcut('cycle-language')).resolves.toBe('timeout');
+    expect(() => handlers.recordSessionShortcut('cancel')).toThrow(IpcValidationError);
   });
 
   it('rejects invalid permission kinds and unexpected arguments', async () => {

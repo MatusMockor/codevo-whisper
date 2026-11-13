@@ -217,14 +217,26 @@ body {
   color: var(--ov-ink-2);
 }
 
-.ov-lock {
-  display: inline-flex;
+button.chip {
+  background: transparent;
+  cursor: pointer;
+}
+
+button.chip:hover {
+  color: var(--ov-ink);
+}
+
+.ov button.chip:focus-visible {
+  outline-color: var(--ov-amber);
+}
+
+.chip[data-on="true"] {
+  border-color: var(--ov-ok);
   color: var(--ov-ok);
 }
 
-.ov-lock .ic {
-  width: 13px;
-  height: 13px;
+.chip[data-on="false"] {
+  text-decoration: line-through;
 }
 
 .ov-status {
