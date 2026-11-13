@@ -91,13 +91,25 @@ describe('permissionHandlers', () => {
   });
 
   it.each([
-    ['the dictation hotkey', { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control'], label: 'Ctrl+P' } as const, { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+P' } as const],
-    ['the other in-dictation shortcut', null, { kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['control', 'alt', 'shift'], label: 'Ctrl+Alt+Shift+J' } as const],
+    ['the dictation hotkey', { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt', 'shift'], label: 'Ctrl+Alt+Shift+P' } as const, { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+P' } as const],
+    ['a modifier-only dictation hotkey', { kind: 'modifiers', keycodes: [0x10000 + 37], label: 'Ctrl' } as const, { kind: 'key', keycode: 0x10000 + 25 + 8, modifiers: ['control', 'shift'], label: 'Ctrl+Shift+P' } as const],
+    ['the other in-dictation shortcut', null, { kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['shift'], label: 'Shift+J' } as const],
   ])('refuses an in-dictation shortcut that overlaps %s', async (_case, hotkey, recorded) => {
     const { helper, handlers } = harness('linux', hotkey);
     helper.recordedHotkey = recorded;
 
     await expect(handlers.recordSessionShortcut('toggle-polish')).resolves.toBe('conflict');
+  });
+
+  it('refuses a dictation hotkey that an in-dictation shortcut or Esc fires with', async () => {
+    const { helper, handlers } = harness('linux');
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 36 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+J' };
+    await expect(handlers.recordHotkey()).resolves.toBe('conflict');
+    helper.recordedHotkey = { kind: 'key', keycode: 0x10000 + 9, modifiers: ['shift'], label: 'Shift+Esc' };
+    await expect(handlers.recordHotkey()).resolves.toBe('conflict');
+    const free = { kind: 'key', keycode: 0x10000 + 96, modifiers: ['control'], label: 'Ctrl+F12' } as const;
+    helper.recordedHotkey = free;
+    await expect(handlers.recordHotkey()).resolves.toEqual(free);
   });
 
   it('refuses Esc and passes a recording timeout through', async () => {

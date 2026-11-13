@@ -1,8 +1,9 @@
 import type { KeyRecorder } from '../hotkey/key-recorder';
 import type { PermissionsService } from '../permissions/permissions-service';
-import { overlapsHotkey, recordedSessionBinding } from '../session/session-shortcuts';
+import { recordedSessionBinding, shortcutsConflict } from '../session/session-shortcuts';
 import type { SettingsStore } from '../settings/settings-store';
-import { overlaps, REBINDABLE_ACTIONS, type RebindableAction, type SessionShortcutRecordResult } from '../../shared/session-shortcuts';
+import type { HotkeyRecordResult } from '../../shared/hotkey-record';
+import type { RebindableAction, SessionShortcutRecordResult } from '../../shared/session-shortcuts';
 import type { AppReveal } from '../system/app-reveal';
 import type { HandlerGroup } from './invoke-handlers';
 import { validatePermissionKind, validateRebindableAction } from './validate';
@@ -35,8 +36,13 @@ export function permissionHandlers({
     const binding = recordedSessionBinding(recorded, platform);
     if (binding === null) return 'unsupported';
     const current = settings.get();
-    const others = REBINDABLE_ACTIONS.filter((other) => other !== action).map((other) => current.sessionShortcuts[other]);
-    return others.some((other) => overlaps(binding, other)) || overlapsHotkey(binding, current.hotkey, platform) ? 'conflict' : binding;
+    return shortcutsConflict({ ...current, sessionShortcuts: { ...current.sessionShortcuts, [action]: binding } }, platform) ? 'conflict' : binding;
+  }
+
+  async function recordHotkey(): Promise<HotkeyRecordResult> {
+    const recorded = await recorder.record();
+    if (typeof recorded === 'string') return recorded;
+    return shortcutsConflict({ ...settings.get(), hotkey: recorded }, platform) ? 'conflict' : recorded;
   }
 
   return {
@@ -46,7 +52,7 @@ export function permissionHandlers({
     getPermissionGuide: withoutArguments(async () => ({ asked: await permissions.asked(), canRevealApp: appReveal.available() })),
     revealAppInFinder: withoutArguments(() => appReveal.reveal()),
     relaunch: () => relaunch(),
-    recordHotkey: () => recorder.record(),
+    recordHotkey: () => recordHotkey(),
     recordSessionShortcut: (action) => recordSessionShortcut(validateRebindableAction(action)),
     isHotkeyArmed: () => hotkey.isArmed(),
   };

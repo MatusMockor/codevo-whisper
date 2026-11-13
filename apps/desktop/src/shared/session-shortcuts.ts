@@ -22,14 +22,25 @@ export const DEFAULT_SESSION_SHORTCUTS: SessionShortcutSettings = Object.freeze(
   'cycle-language': Object.freeze({ key: 'j', modifiers: Object.freeze(['control', 'alt'] as const) }),
 });
 
-type Chord = { key: string; modifiers: readonly string[] };
+export type Trigger =
+  | { match: 'subset'; key: string; modifiers: readonly string[] }
+  | { match: 'exact'; key: string; modifiers: readonly string[] }
+  | { match: 'held'; modifiers: readonly string[] };
 
 function within(inner: readonly string[], outer: readonly string[]): boolean {
   return inner.every((modifier) => outer.includes(modifier));
 }
 
-export function overlaps(a: Chord, b: Chord): boolean {
-  return a.key === b.key && (within(a.modifiers, b.modifiers) || within(b.modifiers, a.modifiers));
+export function conflicts(a: Trigger, b: Trigger): boolean {
+  if (a.match === 'held' || b.match === 'held') {
+    const [gesture, other] = a.match === 'held' ? [a, b] : [b, a];
+    return within(gesture.modifiers, other.modifiers);
+  }
+  if (a.key !== b.key) return false;
+  if (a.match === 'subset' && b.match === 'subset') return true;
+  if (a.match === 'exact' && b.match === 'exact') return within(a.modifiers, b.modifiers) && within(b.modifiers, a.modifiers);
+  const [loose, strict] = a.match === 'subset' ? [a, b] : [b, a];
+  return within(loose.modifiers, strict.modifiers);
 }
 
 const MAC_SYMBOLS: Readonly<Record<SessionModifier, string>> = { control: '⌃', alt: '⌥', shift: '⇧', meta: '⌘' };

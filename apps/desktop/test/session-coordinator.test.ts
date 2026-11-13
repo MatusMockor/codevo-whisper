@@ -1070,6 +1070,19 @@ describe('SessionCoordinator', () => {
     ]);
   });
 
+  it('re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing', async () => {
+    vi.stubEnv('CW_WORKER_DELAY_MS', '1500');
+    const harness = await prepared({ settings: AI_SERVER });
+    await dictate(harness, 7);
+    await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+
+    await harness.settings.update({ hotkey: { kind: 'key', keycode: 0x10000 + 30 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+A' } });
+
+    expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+    await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7)]);
+  });
+
   it.each([
     ['the shortcut', (harness: Harness) => harness.helper.pressSessionShortcut('toggle-polish')],
     ['the AI chip', (harness: Harness) => harness.coordinator.act('toggle-polish')],
@@ -1178,6 +1191,21 @@ describe('SessionCoordinator', () => {
     const calls = await readRecordedCalls(argsFile);
     expect(calls.at(-1)?.[calls.at(-1)!.indexOf('--language') + 1]).toBe('cs');
     expect(harness.settings.get().languages).toEqual({ mode: 'selected', selected: ['sk', 'cs'] });
+  });
+
+  it('cleans up the final text in the chosen language, not the starting one', async () => {
+    await setWorkerMode('text');
+    vi.stubEnv('FAKE_CLI_TEXT', 'Es geht um das Haus.');
+    const harness = await prepared({ languageHint: 'required', settings: { removeFillerWords: true, languages: { mode: 'selected', selected: ['en', 'de'] } } });
+
+    await pressAndSpeak(harness, 7);
+    harness.coordinator.act('cycle-language');
+    harness.coordinator.act('cycle-language');
+    harness.coordinator.act('cycle-language');
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'DE' });
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual(['Es geht um das Haus.']);
   });
 
   it('keeps the streaming transcription when the language is cycled back to where it started', async () => {

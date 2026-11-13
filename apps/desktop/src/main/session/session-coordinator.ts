@@ -71,6 +71,7 @@ export class SessionCoordinator {
   private recording: DictationSession | null = null;
   private unsubscribers: Array<() => void> = [];
   private shutdownTask: Promise<void> | null = null;
+  private armed = '[]';
   private stopped = false;
 
   constructor(private readonly deps: SessionCoordinatorDeps) {
@@ -88,6 +89,9 @@ export class SessionCoordinator {
       bindPasteLastShortcut(helper, this, this.logger),
       helper.onSessionShortcut((action) => {
         if (this.cancellable.size > 0) this.act(action);
+      }),
+      this.deps.settings.onChange(() => {
+        if (this.cancellable.size > 0 && !this.stopped) this.armShortcuts(true);
       }),
     ];
   }
@@ -263,7 +267,11 @@ export class SessionCoordinator {
   }
 
   private armShortcuts(armed: boolean): void {
-    this.deps.helper.armSessionShortcuts(armed ? armedSessionShortcuts(this.deps.settings.get(), this.deps.platform ?? process.platform) : []).catch((error: unknown) => {
+    const rows = armed ? armedSessionShortcuts(this.deps.settings.get(), this.deps.platform ?? process.platform) : [];
+    const key = JSON.stringify(rows);
+    if (key === this.armed) return;
+    this.armed = key;
+    this.deps.helper.armSessionShortcuts(rows).catch((error: unknown) => {
       this.logger.error(armed ? 'The in-dictation shortcuts could not be armed' : 'The in-dictation shortcuts could not be disarmed', error);
     });
   }

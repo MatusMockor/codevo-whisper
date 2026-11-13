@@ -6,6 +6,7 @@ import type { SettingsStore } from '../settings/settings-store';
 import type { StatsStore } from '../stats/stats-store';
 import type { AppStatusService } from '../status/app-status-service';
 import type { HandlerGroup } from './invoke-handlers';
+import { shortcutsConflict } from '../session/session-shortcuts';
 import { IpcValidationError, validateSettingsPatch } from './validate';
 
 export type CoreHandlerDeps = {
@@ -20,6 +21,9 @@ export type CoreHandlerDeps = {
 export type SettingsWriter = Pick<CoreHandlerDeps, 'settings' | 'order'>;
 
 function allowedPatch(patch: Partial<Settings>, current: Settings): Partial<Settings> {
+  if ((Object.hasOwn(patch, 'hotkey') || Object.hasOwn(patch, 'sessionShortcuts')) && shortcutsConflict({ ...current, ...patch })) {
+    throw new IpcValidationError('The shortcut collides with another shortcut');
+  }
   if (current.serverEnabled || !(patch.engineOrder?.includes('server') ?? false)) {
     return patch;
   }

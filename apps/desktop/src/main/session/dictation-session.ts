@@ -77,7 +77,7 @@ export class DictationSession {
   private phase: Phase = 'recording';
   private readonly startedAt: number;
   private readonly languages: LanguageSelection;
-  private readonly transcriptSettings: TranscriptSettings;
+  private transcriptSettings: TranscriptSettings;
   private readonly partials: boolean;
   private spoken: LanguageSelection;
   private readonly polishChip: boolean;
@@ -155,6 +155,7 @@ export class DictationSession {
       return;
     }
     this.phase = 'finishing';
+    this.transcriptSettings = Object.freeze({ ...this.transcriptSettings, languages: this.spoken });
     this.notice = reason === 'max-duration' ? 'limit-reached' : undefined;
     this.showProcessing();
     const pcm = await this.stopCapture();

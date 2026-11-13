@@ -1,7 +1,7 @@
 import { isAiConfigured } from '../../shared/ai';
 import type { HotkeySetting, Settings } from '../../shared/settings';
 import type { OverlayAction } from '../../shared/overlay-contract';
-import { overlaps, REBINDABLE_ACTIONS, SESSION_MODIFIERS, type RebindableKey, type SessionBinding, type SessionModifier } from '../../shared/session-shortcuts';
+import { conflicts, REBINDABLE_ACTIONS, SESSION_MODIFIERS, type RebindableKey, type SessionBinding, type SessionModifier, type Trigger } from '../../shared/session-shortcuts';
 
 export type { SessionModifier };
 export type SessionKey = RebindableKey | 'escape';
@@ -27,6 +27,11 @@ export const SESSION_KEYCODES: Readonly<Record<SessionKey, { darwin: number; lin
   f9: { darwin: 101, linux: 67 }, f10: { darwin: 109, linux: 68 }, f11: { darwin: 103, linux: 87 }, f12: { darwin: 111, linux: 88 },
 });
 
+const MODIFIER_KEYCODES: Readonly<Record<'darwin' | 'linux', Readonly<Record<number, SessionModifier>>>> = Object.freeze({
+  darwin: { 54: 'meta', 55: 'meta', 56: 'shift', 60: 'shift', 58: 'alt', 61: 'alt', 59: 'control', 62: 'control' },
+  linux: { 29: 'control', 97: 'control', 42: 'shift', 54: 'shift', 56: 'alt', 100: 'alt', 125: 'meta', 126: 'meta' },
+});
+
 const X11_TAG = 0x10000;
 const EVDEV_TAG = 0x20000;
 const X11_KEYCODE_OFFSET = 8;
@@ -37,9 +42,13 @@ function nativeKeycode(recorded: number, platform: Platform): number {
   return recorded - X11_TAG - X11_KEYCODE_OFFSET;
 }
 
+function sideOf(platform: Platform): 'darwin' | 'linux' {
+  return platform === 'darwin' ? 'darwin' : 'linux';
+}
+
 function sessionKeyOf(recorded: number, platform: Platform): SessionKey | null {
   const code = nativeKeycode(recorded, platform);
-  const side = platform === 'darwin' ? 'darwin' : 'linux';
+  const side = sideOf(platform);
   const entry = Object.entries(SESSION_KEYCODES).find(([, codes]) => codes[side] === code);
   return entry === undefined ? null : (entry[0] as SessionKey);
 }
@@ -48,10 +57,28 @@ function isSessionModifier(modifier: string): modifier is SessionModifier {
   return SESSION_MODIFIERS.some((candidate) => candidate === modifier);
 }
 
-export function overlapsHotkey(chord: { key: SessionKey; modifiers: readonly SessionModifier[] }, hotkey: HotkeySetting, platform: Platform): boolean {
-  if (hotkey?.kind !== 'key') return false;
+function hotkeyTrigger(hotkey: HotkeySetting, platform: Platform): Trigger | null {
+  if (hotkey === null) return null;
+  if (hotkey.kind === 'modifiers') {
+    const names = MODIFIER_KEYCODES[sideOf(platform)];
+    return { match: 'held', modifiers: hotkey.keycodes.map((code) => names[nativeKeycode(code, platform)] ?? `keycode-${code}`) };
+  }
   const key = sessionKeyOf(hotkey.keycode, platform);
-  return key !== null && overlaps(chord, { key, modifiers: hotkey.modifiers });
+  return key === null ? null : { match: 'exact', key, modifiers: hotkey.modifiers };
+}
+
+function shortcutTrigger({ key, modifiers }: { key: SessionKey; modifiers: readonly SessionModifier[] }): Trigger {
+  return { match: 'subset', key, modifiers };
+}
+
+function firesWithHotkey(row: SessionShortcut, hotkey: Trigger | null): boolean {
+  return hotkey !== null && conflicts(shortcutTrigger(row), hotkey);
+}
+
+export function shortcutsConflict(settings: Pick<Settings, 'hotkey' | 'sessionShortcuts'>, platform: Platform = process.platform): boolean {
+  const hotkey = hotkeyTrigger(settings.hotkey, platform);
+  const rows = [...FIXED_SESSION_SHORTCUTS, ...REBINDABLE_ACTIONS.map((action) => ({ action, ...settings.sessionShortcuts[action] }))];
+  return rows.some((row, index) => firesWithHotkey(row, hotkey) || rows.slice(index + 1).some((other) => conflicts(shortcutTrigger(row), shortcutTrigger(other))));
 }
 
 export function recordedSessionBinding(recorded: NonNullable<HotkeySetting>, platform: Platform): SessionBinding | null {
@@ -64,5 +91,6 @@ export function recordedSessionBinding(recorded: NonNullable<HotkeySetting>, pla
 
 export function armedSessionShortcuts(settings: Settings, platform: Platform): readonly SessionShortcut[] {
   const rebindable = REBINDABLE_ACTIONS.filter((action) => action !== 'toggle-polish' || isAiConfigured(settings)).map((action) => ({ action, ...settings.sessionShortcuts[action] }));
-  return [...FIXED_SESSION_SHORTCUTS, ...rebindable.filter((row) => !overlapsHotkey(row, settings.hotkey, platform))];
+  const hotkey = hotkeyTrigger(settings.hotkey, platform);
+  return [...FIXED_SESSION_SHORTCUTS, ...rebindable].filter((row) => !firesWithHotkey(row, hotkey));
 }

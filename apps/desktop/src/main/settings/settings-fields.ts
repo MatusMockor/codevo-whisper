@@ -3,7 +3,8 @@ import { isDictationLanguage, MAX_SELECTED_LANGUAGES } from '../../shared/dictat
 import { MAX_MICROPHONES } from '../../shared/microphones';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords } from '../../shared/custom-words';
-import { overlaps, REBINDABLE_ACTIONS, REBINDABLE_KEYS, SESSION_MODIFIERS, type SessionBinding } from '../../shared/session-shortcuts';
+import { REBINDABLE_ACTIONS, REBINDABLE_KEYS, SESSION_MODIFIERS, type SessionBinding } from '../../shared/session-shortcuts';
+import { shortcutsConflict } from '../session/session-shortcuts';
 import { isEngineOrder, type MicrophoneSetting, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
@@ -86,7 +87,7 @@ function isSessionShortcuts(value: unknown): value is Settings['sessionShortcuts
     return false;
   }
   const [polish, language] = REBINDABLE_ACTIONS.map((action) => value[action]);
-  return isSessionBinding(polish) && isSessionBinding(language) && !overlaps(polish, language);
+  return isSessionBinding(polish) && isSessionBinding(language) && !shortcutsConflict({ hotkey: null, sessionShortcuts: { 'toggle-polish': polish, 'cycle-language': language } });
 }
 
 export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
