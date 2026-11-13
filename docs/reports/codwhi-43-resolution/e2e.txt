@@ -1,0 +1,86 @@
+
+Running 34 tests using 1 worker
+
+(node:1846) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/launch.spec.ts:26:1 › shows a window titled Codevo Whisper with the sidebar sections (736ms)
+  ✓   2 e2e/launch.spec.ts:37:1 › switches pages from the sidebar (941ms)
+  ✓   3 e2e/launch.spec.ts:44:1 › the real window denies window.open (1.4s)
+  ✓   4 e2e/launch.spec.ts:53:1 › the real window blocks navigation to external URLs (1.5s)
+  ✓   5 e2e/launch.spec.ts:65:1 › closing the main window keeps the app running in the tray and it opens again (3.3s)
+  -   6 e2e/linux-overlay.spec.ts:75:1 › X11 product overlay takes clicks above normal and fullscreen targets without taking focus and copies interactively
+  -   7 e2e/linux-overlay.spec.ts:118:1 › X11 overlay cancel button discards a live dictation and the target keeps focus
+  -   8 e2e/linux-overlay.spec.ts:159:1 › X11 Esc from the real keyboard path discards a live dictation and never reaches the target
+  -   9 e2e/linux-overlay.spec.ts:194:1 › X11 AI and language chips flip one dictation by click, keep the target focused and polish the text per the chip
+  -  10 e2e/linux-overlay.spec.ts:238:1 › X11 Ctrl+Alt+J from the real keyboard cycles the language while dictating and never reaches the target
+(node:2067) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2073) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  11 e2e/macos-native.spec.ts:114:3 › native cancellation during recording preserves the target (3.6s)
+(node:2220) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2226) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  12 e2e/macos-native.spec.ts:114:3 › native cancellation during transcribing preserves the target (3.5s)
+(node:2324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2331) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  13 e2e/macos-native.spec.ts:114:3 › native cancellation during click preserves the target (3.2s)
+(node:2999) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3005) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  14 e2e/macos-native.spec.ts:131:1 › native overlay cancellation returns to the app selected after dictation began (3.9s)
+(node:3450) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  15 e2e/macos-native.spec.ts:156:1 › native overlay cancellation keeps intentionally focused Electron settings active (3.8s)
+(node:3637) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3643) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  16 e2e/macos-native.spec.ts:190:3 › native shortcut target lock (type) inserts at captured caret and returns to other window (4.8s)
+(node:3794) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3800) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  17 e2e/macos-native.spec.ts:190:3 › native click target lock (type) inserts at captured caret and returns to other window (5.2s)
+(node:3939) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3945) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  18 e2e/macos-native.spec.ts:190:3 › native shortcut target lock (paste) inserts at captured caret and returns to other window (6.0s)
+(node:4150) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  19 e2e/macos-native.spec.ts:202:1 › native target lock inserts into its original app and returns to the newer app (5.5s)
+(node:4292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4298) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  20 e2e/macos-native.spec.ts:230:1 › a removed locked field receives nothing and never types into the other field (5.1s)
+(node:4620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4626) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  21 e2e/macos-native.spec.ts:241:1 › native field context reaches the polish request without editing the field (5.5s)
+  ✓  22 e2e/overlay.spec.ts:57:1 › overlay window preserves platform presentation and shows the injected recording state (746ms)
+  ✓  23 e2e/overlay.spec.ts:78:1 › the target chip is the single lock control and stays inert when the target cannot be locked (955ms)
+  ✓  24 e2e/overlay.spec.ts:94:1 › Živý text shows confirmed words solid and tentative words lighter, grows upward and never takes focus (1.0s)
+  ✓  25 e2e/overlay.spec.ts:136:1 › Živý text keeps the fallback notice inside the panel (940ms)
+  ✓  26 e2e/overlay.spec.ts:146:1 › hiding clears the rendered state so the next show never flashes the previous result (739ms)
+  ✓  27 e2e/overlay.spec.ts:157:1 › overlay shows the fallback notice, the processing and the result states (960ms)
+  ✓  28 e2e/overlay.spec.ts:175:1 › overlay error and blocked states offer their actions (994ms)
+  ✓  29 e2e/overlay.spec.ts:209:1 › after switching the engine the overlay asks for the hotkey again (955ms)
+  ✓  30 e2e/overlay.spec.ts:220:1 › the overlay settings action opens the settings page (1.1s)
+  ✓  31 e2e/overlay.spec.ts:238:1 › Stiahnuť model opens Prepis at the Lokálny model section (1.0s)
+  ✓  32 e2e/overlay.spec.ts:250:1 › the missing language pack action opens Settings at Jazyky diktovania (1.1s)
+  ✓  33 e2e/overlay.spec.ts:262:1 › Spárovať server opens Prepis at the server section (979ms)
+  ✓  34 e2e/overlay.spec.ts:272:1 › the overlay ignores an action the shown state does not offer (1.4s)
+
+  5 skipped
+  29 passed (1.2m)

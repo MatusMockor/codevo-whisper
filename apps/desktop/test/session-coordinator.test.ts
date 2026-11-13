@@ -38,6 +38,7 @@ import { createServerService } from './support/server-service';
 import { QuitGate } from '../src/main/app/quit-gate';
 import type { Polished, PolishRequest } from '../src/main/ai/polish';
 import { expectedText, secondFrames, timelineSpeech, writeTimeline } from './support/timeline-audio';
+import { SHORTCUT_PLATFORMS } from './support/shortcut-platforms';
 
 const FN = { kind: 'modifiers', keycodes: [63], label: 'Fn / 🌐' } as const;
 const MODEL_BODY = 'GGUF';
@@ -1338,14 +1339,14 @@ describe('SessionCoordinator', () => {
     ]);
   });
 
-  it('re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing', async () => {
+  it.each(SHORTCUT_PLATFORMS)('re-arms the in-dictation shortcuts when the dictation hotkey changes while a dictation is processing on $name', async ({ platform, keycodes }) => {
     vi.stubEnv('CW_WORKER_DELAY_MS', '1500');
-    const harness = await prepared({ settings: AI_SERVER });
+    const harness = await prepared({ platform, settings: AI_SERVER });
     await dictate(harness, 7);
     await expect.poll(() => kinds(harness.states).at(-1)).toBe('processing');
     expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'toggle-polish', 'cycle-language']);
 
-    await harness.settings.update({ hotkey: { kind: 'key', keycode: 0x10000 + 30 + 8, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+A' } });
+    await harness.settings.update({ hotkey: { kind: 'key', keycode: keycodes.a, modifiers: ['control', 'alt'], label: 'Ctrl+Alt+A' } });
 
     expect(harness.helper.sessionShortcuts.map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'cycle-language']);
     await expect.poll(() => harness.helper.pasted, { timeout: 4000 }).toEqual([ONE_SECOND_TEXT(7)]);

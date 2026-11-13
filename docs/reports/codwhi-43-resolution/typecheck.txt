@@ -1,0 +1,25 @@
+
+> codevo-whisper@0.0.0 typecheck /Users/mcerny/projects/codevo-whisper
+> tsc -p tsconfig.json && pnpm -r --if-present typecheck
+
+Scope: 10 of 11 workspace projects
+packages/audio typecheck$ tsc -p tsconfig.json
+packages/protocol typecheck$ tsc -p tsconfig.json
+scripts typecheck$ tsc -p tsconfig.json
+packages/stt-runner typecheck$ tsc -p tsconfig.json
+packages/stt-runner typecheck: Done
+packages/audio typecheck: Done
+scripts typecheck: Done
+packages/protocol typecheck: Done
+apps/mobile typecheck$ tsc -p tsconfig.json
+apps/server typecheck$ tsc -p tsconfig.json
+packages/language-routing typecheck$ tsc -p tsconfig.json
+tools/dev-client typecheck$ tsc -p tsconfig.json
+tools/dev-client typecheck: Done
+packages/language-routing typecheck: Done
+apps/mobile typecheck: Done
+apps/server typecheck: Done
+apps/stt typecheck$ tsc -p tsconfig.json
+apps/desktop typecheck$ tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && tsc -p tsconfig.e2e.json
+apps/stt typecheck: Done
+apps/desktop typecheck: Done

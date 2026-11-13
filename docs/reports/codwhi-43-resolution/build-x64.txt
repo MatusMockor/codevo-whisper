@@ -1,0 +1,1 @@
+built /Users/mcerny/projects/codevo-whisper/native/macos-helper/build/x64/codevo-input-helper

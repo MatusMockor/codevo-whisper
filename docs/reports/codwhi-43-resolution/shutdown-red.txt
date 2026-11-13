@@ -1,0 +1,33 @@
+
+ RUN  v5.0.5 /Users/mcerny/projects/codevo-whisper
+
+ ❯ |server| test/capability-cache.test.ts (7 tests | 1 failed) 158ms
+   ❯ SttCapabilityCache (7)
+     × waits for an in-flight capability request when polling is stopped 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |server| test/capability-cache.test.ts > SttCapabilityCache > waits for an in-flight capability request when polling is stopped
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/capability-cache.test.ts:30:23
+     28|     try {
+     29|       await Promise.resolve();
+     30|       expect(settled).toBe(false);
+       |                       ^
+     31|     } finally {
+     32|       response.resolve(NO_CAPABILITIES);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  00:43:57
+   Duration  302ms (tests 71%, import 16%, transform 12%, worker 1%)

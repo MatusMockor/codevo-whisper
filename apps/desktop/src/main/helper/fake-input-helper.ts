@@ -143,6 +143,10 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve(this.frontmostApp && { ...this.frontmostApp });
   }
 
+  restoreFrontmostFocus(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
   captureTarget(): Promise<TargetCapture | null> {
     if (this.frontmostApp === null) return Promise.resolve(null);
     const captureId = `capture-${++this.captureCount}`;

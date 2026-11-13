@@ -82,13 +82,24 @@ try:
     assert restored["result"] == "moved", restored
     assert fixture.send("state")["keyWindow"].endswith("0")
     assert request("type-text", captureId=token, text="INSERT")["posted"]
-    time.sleep(0.3)
-    assert fixture.send("state")["first"] == "before INSERTAFTER"
     assert request("target-return", captureId=token)["returned"]
+    assert fixture.send("state")["first"] == "before INSERTAFTER"
     time.sleep(0.3)
     state = fixture.send("state")
     assert state["keyWindow"].endswith("1") and state["second"] == "other field", state
     print("PASS original field/caret delivery and same-app window return")
+
+    focus("first")
+    unicode_capture = request("target-capture")["captureId"]
+    focus("second")
+    assert request("target-refocus", captureId=unicode_capture)["result"] == "moved"
+    assert request("type-text", captureId=unicode_capture, text="ž😀e\u0301")["posted"]
+    assert request("target-return", captureId=unicode_capture)["returned"]
+    unicode_state = fixture.send("state")
+    assert unicode_state["first"] == "before ž😀e\u0301INSERTAFTER", unicode_state
+    assert unicode_state["caret"] == 12 and unicode_state["second"] == "other field", unicode_state
+    request("target-release", captureId=unicode_capture)
+    print("PASS Unicode delivery completes before immediate focus return")
 
     focus("secure")
     protected = request("target-capture")

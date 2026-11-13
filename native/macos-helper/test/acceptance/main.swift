@@ -87,6 +87,13 @@ final class Fixture {
 setvbuf(stdout, nil, _IONBF, 0)
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
+let menu = NSMenu()
+let editItem = NSMenuItem()
+let editMenu = NSMenu(title: "Edit")
+editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+editItem.submenu = editMenu
+menu.addItem(editItem)
+app.mainMenu = menu
 let fixture = MainActor.assumeIsolated { Fixture() }
 func emit(_ value: [String: Any]) {
     let data = try! JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])

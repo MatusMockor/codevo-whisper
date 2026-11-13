@@ -1,4 +1,6 @@
-# CODWHI-43 macOS validation
+# CODWHI-43 original macOS validation
+
+These are historical baseline results. The subsequent fixes and current verification are recorded in the [resolution report](codwhi-43-resolution.md).
 
 2026-11-13. Base `8e8b7f3` after fast-forwarding `main`. Local branch `fix/codwhi-43-macos-validation`. macOS 26.3 (25D125), Apple Silicon, Swift 6.2.3, Node 24.17.0, pnpm 10.34.5, Electron 45.0.0.
 

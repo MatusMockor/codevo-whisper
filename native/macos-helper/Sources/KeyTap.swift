@@ -178,7 +178,7 @@ final class KeyTap {
     private func ensureTap(active: Bool) -> Bool {
         if port != nil && activeTap == active { return true }
         releaseTap()
-        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue) | CGEventMask(1 << CGEventType.keyUp.rawValue)
+        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue) | CGEventMask(1 << CGEventType.keyUp.rawValue) | CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -233,6 +233,10 @@ final class KeyTap {
 }
 
 private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, userInfo: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
+    if type == .leftMouseDown {
+        MainActor.assumeIsolated { OverlayFocus.shared.rememberClick() }
+        return Unmanaged.passUnretained(event)
+    }
     if event.getIntegerValueField(.eventSourceUserData) == SyntheticInput.marker {
         return Unmanaged.passUnretained(event)
     }

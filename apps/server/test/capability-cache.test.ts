@@ -19,6 +19,22 @@ async function cacheFor(capabilities: FakeSttResponse = ROUTING_STT): Promise<{ 
 }
 
 describe('SttCapabilityCache', () => {
+  it('waits for an in-flight capability request when polling is stopped', async () => {
+    const response = Promise.withResolvers<typeof NO_CAPABILITIES>();
+    const cache = new SttCapabilityCache({ capabilities: () => response.promise });
+    const stop = refreshEvery(cache, 20);
+    let settled = false;
+    const finishing = Promise.resolve(stop()).then(() => { settled = true; });
+    try {
+      await Promise.resolve();
+      expect(settled).toBe(false);
+    } finally {
+      response.resolve(NO_CAPABILITIES);
+      await finishing;
+    }
+    expect(settled).toBe(true);
+  });
+
   it('knows nothing before the first refresh', async () => {
     const { cache, stt } = await cacheFor();
 
@@ -66,7 +82,7 @@ describe('SttCapabilityCache', () => {
     const { cache, stt } = await cacheFor();
     const stop = refreshEvery(cache, 20);
     await waitUntil(() => stt.capabilityRequests() >= 3);
-    stop();
+    await stop();
     const stopped = stt.capabilityRequests();
     await new Promise((resolve) => setTimeout(resolve, 80));
 

@@ -197,7 +197,7 @@ export function composeApplication(logger: Logger): Application {
       dataFolder: () => homeRelativePath(app.getPath('userData'), app.getPath('home')),
     });
     const insertion = new InsertionService(helper, settings, lastTranscript, undefined, logger);
-    const overlay = new OverlayWindow(rendererSource('overlay'), logger);
+    const overlay = new OverlayWindow(rendererSource('overlay'), logger, () => helper.restoreFrontmostFocus());
     const views = new Listeners<OverlayState>(logger, 'An overlay view failed');
     views.add((state) => overlay.show(state));
     const failedRecording = new FailedRecording();
