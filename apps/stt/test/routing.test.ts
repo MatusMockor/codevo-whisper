@@ -142,6 +142,33 @@ describe('language routing on resident workers', () => {
     expect(reply).toEqual({ status: 200, body: { text: expect.stringMatching(/^\d+:sk:32000$/) as unknown } });
   });
 
+  it('passes the vocabulary to the plain transcriber', async () => {
+    const started = await serve(false);
+    await startWith(() => started.engine.transcriber.warmUp(), { FAKE_WORKER_VOCABULARY: '1' });
+
+    expect(await send(started.server, '/transcribe?language=sk&vocabulary=Kumiba&vocabulary=%C5%BDilina', { body: pcm(TWO_SECONDS) })).toEqual({
+      status: 200,
+      body: { text: '["Kumiba","Žilina"]' },
+    });
+    expect((await send(started.server, '/transcribe?language=sk', { body: pcm(TWO_SECONDS) })).body).toEqual({ text: '[]' });
+  });
+
+  it('passes the vocabulary to the conditioned model of a routed segment', async () => {
+    const ready = await serveReady({ FAKE_WORKER_LID_TOP: 'sk', FAKE_WORKER_LID_P: '0.995', FAKE_WORKER_VOCABULARY: '1' });
+
+    const reply = await send(ready, '/transcribe?language=auto&languages=sk,cs&kind=partial&vocabulary=Kumiba&vocabulary=Codevo+Whisper', { body: pcm(TWO_SECONDS) });
+
+    expect(reply).toEqual({ status: 200, body: { text: '["Kumiba","Codevo Whisper"]', language: 'sk', route: 'conditioned' } });
+  });
+
+  it('passes the vocabulary to the verbatim model of a routed segment', async () => {
+    const ready = await serveReady({ FAKE_WORKER_LID_TOP: 'uk', FAKE_WORKER_LID_P: '0.995' }, { FAKE_WORKER_VOCABULARY: '1' });
+
+    const reply = await send(ready, '/transcribe?language=auto&languages=sk,cs&vocabulary=Kumiba', { body: pcm(TWO_SECONDS) });
+
+    expect(reply).toEqual({ status: 200, body: { text: '["Kumiba"]', language: null, route: 'verbatim-foreign' } });
+  });
+
   it('answers 400 for invalid language lists and kinds', async () => {
     const ready = await serveReady({ FAKE_WORKER_LID_TOP: 'cs', FAKE_WORKER_LID_P: '0.995' });
     const invalid = [

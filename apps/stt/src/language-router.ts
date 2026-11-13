@@ -1,10 +1,23 @@
-import { SUPPORTED_LANGUAGES, type RoutedRequest, type RoutedTranscriber, type RoutedTranscript, type SupportedLanguage } from '@codevo-whisper/language-routing';
-import type { EngineComponent } from './engine-component';
+import {
+  RoutedTranscriber,
+  SUPPORTED_LANGUAGES,
+  type ConditionedRequest,
+  type ConditionedTranscriber,
+  type RoutedRequest,
+  type RoutedTranscript,
+  type SupportedLanguage,
+  type VerbatimRequest,
+  type VerbatimTranscriber,
+} from '@codevo-whisper/language-routing';
+import type { LanguageIdRunner } from './language-id-runner';
+import type { Transcriber } from './transcriber';
 
 export interface LanguageRouter {
   languages(): readonly SupportedLanguage[];
-  transcribe(request: RoutedRequest): Promise<RoutedTranscript>;
+  transcribe(request: RoutedRequest, vocabulary: readonly string[]): Promise<RoutedTranscript>;
 }
+
+export type RoutingWorkers = { identifier: LanguageIdRunner; conditioned: Transcriber; verbatim: Transcriber };
 
 export class UnavailableLanguageRouter implements LanguageRouter {
   languages(): readonly SupportedLanguage[] {
@@ -16,23 +29,26 @@ export class UnavailableLanguageRouter implements LanguageRouter {
   }
 }
 
+function withVocabulary(model: Transcriber, vocabulary: readonly string[]): ConditionedTranscriber & VerbatimTranscriber {
+  return { transcribe: (request: ConditionedRequest | VerbatimRequest) => model.transcribe({ ...request, vocabulary }) };
+}
+
 export class ModelLanguageRouter implements LanguageRouter {
   private warmedUp = false;
 
-  constructor(
-    private readonly routed: RoutedTranscriber,
-    private readonly workers: readonly EngineComponent[],
-  ) {}
+  constructor(private readonly workers: RoutingWorkers) {}
 
   languages(): readonly SupportedLanguage[] {
-    this.warmedUp ||= this.workers.every((worker) => worker.ready());
+    const { identifier, conditioned, verbatim } = this.workers;
+    this.warmedUp ||= [verbatim, conditioned, identifier].every((worker) => worker.ready());
     if (!this.warmedUp) {
       return [];
     }
     return SUPPORTED_LANGUAGES;
   }
 
-  transcribe(request: RoutedRequest): Promise<RoutedTranscript> {
-    return this.routed.transcribe(request);
+  transcribe(request: RoutedRequest, vocabulary: readonly string[]): Promise<RoutedTranscript> {
+    const { identifier, conditioned, verbatim } = this.workers;
+    return new RoutedTranscriber({ identifier, conditioned: withVocabulary(conditioned, vocabulary), verbatim: withVocabulary(verbatim, vocabulary) }).transcribe(request);
   }
 }

@@ -39,6 +39,12 @@ function send(path: string, options: { method?: string; contentType?: string; bo
   });
 }
 
+function vocabularyPath(terms: readonly string[]): string {
+  const query = new URLSearchParams({ language: 'sk' });
+  terms.forEach((term) => query.append('vocabulary', term));
+  return `/transcribe?${query.toString()}`;
+}
+
 beforeEach(async () => {
   const transcriber = new CliTranscriber({ binary: FAKE_CLI, model: '/models/fake.gguf', backend: 'cpu', threads: 2 });
   server = await startSttServer({ transcriber, ...NO_ROUTING, port: 0, host: '127.0.0.1' });
@@ -71,6 +77,25 @@ describe('STT sidecar', () => {
     expect((await send('/transcribe?language=auto', { body: new Uint8Array(640) })).status).toBe(200);
     expect((await send('/transcribe?language=en', { body: new Uint8Array(960_000) })).status).toBe(200);
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(960_002) })).status).toBe(413);
+  });
+
+  it('accepts a vocabulary of 100 terms of 256 UTF-8 bytes each', async () => {
+    vi.stubEnv('FAKE_CLI_TEXT', 'ahoj svet');
+
+    expect(await send(vocabularyPath(Array.from({ length: 100 }, () => '𝐀'.repeat(64))), { body: new Uint8Array(32_000) })).toEqual({
+      status: 200,
+      body: { text: 'ahoj svet' },
+    });
+  });
+
+  it('answers 400 for an invalid vocabulary', async () => {
+    const invalid = [Array.from({ length: 101 }, () => 'slovo'), ['a'.repeat(65)], ['𝐀'.repeat(65)], [''], ['Kum\u0000iba'], ['Kum\niba'], ['Kum\u200biba']];
+    for (const terms of invalid) {
+      expect(await send(vocabularyPath(terms), { body: new Uint8Array(32_000) }), JSON.stringify(terms)).toEqual({
+        status: 400,
+        body: { error: 'invalid PCM or language' },
+      });
+    }
   });
 
   it('answers 503 to a concurrent request and reports busy on /health', async () => {

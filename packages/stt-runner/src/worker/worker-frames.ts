@@ -11,6 +11,12 @@ const HEADER_BYTES = 5;
 const MAX_SAMPLES = 30 * 16_000;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
+export const MAX_VOCABULARY_TERMS = 100;
+
+export function isVocabularyTerm(term: string): boolean {
+  return term.length > 0 && [...term].length <= 64 && Buffer.byteLength(term, 'utf8') <= 256 && !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(term);
+}
+
 export type BoundedAudio = { samples: number; audio: Uint8Array };
 
 function languageTag(language: TranscribeLanguage): Buffer {
@@ -47,12 +53,12 @@ export function encodeWorkerRequest(language: TranscribeLanguage, pcm: Uint8Arra
   tag.copy(header, 1);
   header.writeUInt32LE(samples, 1 + tag.length);
   if (vocabulary.length === 0) return Buffer.concat([header, audio]);
-  if (vocabulary.length > 100) throw new RangeError('a worker request holds at most 100 vocabulary terms');
+  if (vocabulary.length > MAX_VOCABULARY_TERMS) throw new RangeError('a worker request holds at most 100 vocabulary terms');
   const terms = vocabulary.map((term) => {
-    const bytes = Buffer.from(term, 'utf8');
-    if (term.length === 0 || [...term].length > 64 || bytes.length > 256 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(term)) {
+    if (!isVocabularyTerm(term)) {
       throw new RangeError('invalid worker vocabulary term');
     }
+    const bytes = Buffer.from(term, 'utf8');
     const length = Buffer.alloc(2);
     length.writeUInt16LE(bytes.length);
     return Buffer.concat([length, bytes]);

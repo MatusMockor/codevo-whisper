@@ -1,5 +1,4 @@
-import type { LanguageSelection, RoutedTranscript, SegmentKind } from '@codevo-whisper/language-routing';
-import type { TranscribeLanguage } from '@codevo-whisper/stt-runner';
+import type { RoutedTranscript } from '@codevo-whisper/language-routing';
 import type { LanguageRouter } from './language-router';
 import type { PlainQuery, RoutedQuery } from './transcribe-query';
 import type { Transcriber } from './transcriber';
@@ -15,11 +14,12 @@ export interface TranscriptionJob {
 class PlainJob implements TranscriptionJob {
   constructor(
     private readonly transcriber: Transcriber,
-    private readonly language: TranscribeLanguage,
+    private readonly query: PlainQuery,
   ) {}
 
   async run(pcm: Uint8Array, signal: AbortSignal): Promise<PlainReply> {
-    const text = await this.transcriber.transcribe({ pcm, language: this.language, signal });
+    const { language, vocabulary } = this.query;
+    const text = await this.transcriber.transcribe({ pcm, language, vocabulary, signal });
     return { text };
   }
 }
@@ -27,12 +27,12 @@ class PlainJob implements TranscriptionJob {
 class RoutedJob implements TranscriptionJob {
   constructor(
     private readonly router: LanguageRouter,
-    private readonly selection: LanguageSelection,
-    private readonly segment: SegmentKind,
+    private readonly query: RoutedQuery,
   ) {}
 
   async run(pcm: Uint8Array, signal: AbortSignal): Promise<RoutedTranscript> {
-    const { text, language, route } = await this.router.transcribe({ pcm, selection: this.selection, kind: this.segment, signal });
+    const { selection, segment, vocabulary } = this.query;
+    const { text, language, route } = await this.router.transcribe({ pcm, selection, kind: segment, signal }, vocabulary);
     return { text, language, route };
   }
 }
@@ -45,11 +45,11 @@ export class TranscriptionJobs {
 
   for(query: PlainQuery | RoutedQuery): TranscriptionJob | null {
     if (query.kind === 'plain') {
-      return new PlainJob(this.transcriber, query.language);
+      return new PlainJob(this.transcriber, query);
     }
     if (this.router.languages().length === 0) {
       return null;
     }
-    return new RoutedJob(this.router, query.selection, query.segment);
+    return new RoutedJob(this.router, query);
   }
 }
