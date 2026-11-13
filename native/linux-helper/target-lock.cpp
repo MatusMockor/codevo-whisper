@@ -94,6 +94,30 @@ JsonObject* targetCapture() {
   gchar* raw=g_uuid_string_random();std::string id=raw;g_free(raw);c.sequence=++sequence;captures[id]=c;
   boolean(o,"captured",true);text(o,"captureId",id);describeTarget(o,t);return o;
 }
+JsonObject* targetContext(JsonObject* args) {
+  auto o=object();
+  auto fail=[&](const char* reason) {boolean(o,"readable",false);text(o,"reason",reason);return o;};
+  auto c=find(string(args,"captureId"));if(!c)return fail("stale-capture");
+  if(wayland || !display)return fail("unsupported");
+  atspi_accessible_clear_cache(c->element);
+  auto field=describeField(c->element);
+  if(field.protectedInput)return fail("protected");
+  if(!field.known)return fail("no-text");
+  if(c->range.caret<0)return fail("no-caret");
+  auto iface=atspi_accessible_get_text_iface(c->element);if(!iface)return fail("no-text");
+  constexpr int bound=512;GError* error=nullptr;
+  int count=atspi_text_get_character_count(iface,&error);
+  auto clamp=[&](int offset) {return std::clamp(offset,0,std::max(count,0));};
+  int start=clamp(c->range.start>=0?c->range.start:c->range.caret),end=clamp(c->range.end>=0?c->range.end:c->range.caret);
+  auto read=[&](int from,int to) {
+    std::string value;if(error)return value;
+    gchar* raw=atspi_text_get_text(iface,from,to,&error);if(raw)value=raw;g_free(raw);return value;
+  };
+  auto before=read(std::max(start-bound,0),start),after=read(end,std::min(end+bound,count));
+  g_object_unref(iface);
+  if(error) {g_clear_error(&error);return fail("no-text");}
+  boolean(o,"readable",true);text(o,"before",before);text(o,"after",after);return o;
+}
 JsonObject* targetRefocus(JsonObject* args) {
   auto o=object();
   auto fail=[&](const char* reason) {text(o,"result","failed");text(o,"reason",reason);return o;};

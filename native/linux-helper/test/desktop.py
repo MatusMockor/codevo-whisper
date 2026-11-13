@@ -228,6 +228,31 @@ def verify_target_lock(helper):
   assert f.request('text')['texts'][0]=='abcXYdef' and f.request('activations')['values'][submits:]==['abcXYdef'],'guarded delivery lands in the captured field only'
   helper.request('clipboard-restore',expectedText='XY',transactionId=tx)
   evidence['guard']={'write':write['reason'],'paste':paste['reason'],'submit':submit['reason'],'typeText':typed['reason'],'captured':'abcXYdef'}
+  def read(capture,expected,label,index=0):
+   field=f.request('caret',index=index);texts=f.request('text')['texts']
+   result=helper.request('target-context',captureId=capture if isinstance(capture,str) else capture['captureId'])
+   assert {k:result[k] for k in result if k not in ['id','cmd']}==expected,(label,result)
+   assert f.request('caret',index=index)==field and f.request('text')['texts']==texts,label+': a context read must not change the field text, caret or selection'
+   return result
+  prepare(f,t['windowId']);caret=helper.request('target-capture')
+  read(caret,{'readable':True,'before':'abc','after':'def'},'caret')
+  f.request('focus',index=1);time.sleep(.2);activate(o['windowId'])
+  read(caret,{'readable':True,'before':'abc','after':'def'},'focus moved away')
+  prepare(f,t['windowId']);f.request('select',index=0,start=1,end=4);time.sleep(.2);selection=helper.request('target-capture')
+  read(selection,{'readable':True,'before':'a','after':'ef'},'selection')
+  prepare(f,t['windowId']);f.request('set',index=0,text='ž'*700+'b'*700,caret=700);time.sleep(.2);long=helper.request('target-capture')
+  read(long,{'readable':True,'before':'ž'*512,'after':'b'*512},'bounded multibyte')
+  f.request('set',index=0,text='abc',caret=1);time.sleep(.2)
+  read(long,{'readable':True,'before':'abc','after':''},'anchors clamp to a shorter text')
+  f.request('focus',index=2);time.sleep(.2);f.request('set',index=2,text='hunter2',caret=3);time.sleep(.2);secret=helper.request('target-capture')
+  assert secret.get('captured') is True,secret
+  read(secret,{'readable':False,'reason':'protected'},'password field',2)
+  assert helper.request('target-release',captureId=caret['captureId'])['released']
+  read(caret,{'readable':False,'reason':'stale-capture'},'released capture')
+  read('not-a-capture',{'readable':False,'reason':'stale-capture'},'unknown capture')
+  f.request('set',index=2,text='',caret=0);f.request('focus',index=0);time.sleep(.2)
+  evidence['context']={'caret':'abc|def','focusMoved':'abc|def','selection':'a|ef','bounded':512,'clamped':'abc|','password':'protected','released':'stale-capture'}
+  print('PASS X11 target context: caret and selection anchors from the capture, captured field read after focus moved, 512-character multibyte bound, clamp to shorter text, password field protected, released and unknown captures stale, field text caret and selection unchanged by every read',flush=True)
   f.request('set',index=1,text='second',caret=0)
   prepare(f,t['windowId']);capture=helper.request('target-capture');activate(o['windowId'])
   f.request('set-sensitive',index=0,value=False);time.sleep(.2)
