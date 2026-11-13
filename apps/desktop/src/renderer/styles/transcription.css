@@ -830,7 +830,15 @@
   padding: 12px 0;
 }
 
-.model-card .models + .srow {
+.model-card .model-existing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.model-card .model-existing + .srow {
   margin-top: 6px;
   border-top: 0;
 }

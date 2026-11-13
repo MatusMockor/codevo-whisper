@@ -45,7 +45,7 @@ import { exposeE2eHooks } from './e2e-hooks';
 import { createHomeServices } from './home-wiring';
 import { createMeetings, type Meetings } from './meeting-wiring';
 import { createInputHelper } from './input-helper-factory';
-import { createModels } from './model-wiring';
+import { createModels, pickModelFile } from './model-wiring';
 import { createServerServices } from './server-wiring';
 import { createSettingsServices, migrateLanguageSettings } from './settings-wiring';
 import { QuitGate, type QuitEvent } from './quit-gate';
@@ -182,6 +182,7 @@ export function composeApplication(logger: Logger): Application {
       models: models.manager,
       actions: settingsServices.actions,
       languagePack: models.languagePack,
+      pickModelFile,
       microphones: settingsServices.microphones,
       server: server.service,
       order,

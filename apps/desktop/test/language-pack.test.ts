@@ -118,12 +118,26 @@ describe('language pack', () => {
 
   it('is reachable over IPC only without arguments', async () => {
     const languagePack = pack();
-    const handlers = modelHandlers({ catalog: { models: [], defaultModelId: 'parakeet' }, models, actions: new ModelActions({ models, settings }), languagePack });
+    const handlers = modelHandlers({ catalog: { models: [], defaultModelId: 'parakeet' }, models, actions: new ModelActions({ models, settings }), languagePack, pickModelFile: () => Promise.resolve(null) });
 
     await expect(handlers.downloadLanguagePack('canary')).rejects.toThrow(IpcValidationError);
     expect(server.requests).toEqual([]);
     await expect(handlers.getLanguagePack()).resolves.toMatchObject({ conditioned: { state: { status: 'not-downloaded' } } });
     await handlers.downloadLanguagePack();
     expect(isLanguagePackReady(await handlers.getLanguagePack())).toBe(true);
+  });
+
+  it('uses a picked model file over IPC and treats a cancelled dialog as no choice', async () => {
+    const picked = join(scratch, 'picked.gguf');
+    await writeFile(picked, canaryBody);
+    let choice: string | null = null;
+    const handlers = modelHandlers({ catalog: { models: [], defaultModelId: 'parakeet' }, models, actions: new ModelActions({ models, settings }), languagePack: pack(), pickModelFile: () => Promise.resolve(choice) });
+
+    await expect(handlers.useExistingModel()).resolves.toBeNull();
+    await expect(handlers.useExistingModel(picked)).rejects.toThrow(IpcValidationError);
+    choice = picked;
+    await expect(handlers.useExistingModel()).resolves.toBe('canary');
+    await expect(models.verify('canary')).resolves.toBe('ok');
+    expect(server.requests).toEqual([]);
   });
 });

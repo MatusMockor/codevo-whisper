@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogEntry } from '../src/main/models/catalog-entry';
+import type { ExistingLocations } from '../src/main/models/existing-models';
 import { ModelManager } from '../src/main/models/model-manager';
 import { PROGRESS_INTERVAL_MS } from '../src/main/models/model-state-board';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -26,10 +27,11 @@ function serve(id: string, file: Partial<FakeFile> = {}): void {
   server.serve(modelUrlPath(id), { body: payload, ...file });
 }
 
-function manager(catalog: CatalogEntry[] = [testEntry('alpha', payload), testEntry('beta', payload)]): ModelManager {
+function manager(catalog: CatalogEntry[] = [testEntry('alpha', payload), testEntry('beta', payload)], existing?: ExistingLocations): ModelManager {
   return new ModelManager({
     dir: modelsDir,
     catalog,
+    ...(existing === undefined ? {} : { existing }),
     settings,
     fetchImpl: server.fetchImpl,
     warmUp: (path) => {
@@ -431,5 +433,144 @@ describe('ModelManager', () => {
     await expect(models.activate('nope')).rejects.toMatchObject({ reason: 'unknown-model' });
     await expect(models.delete('nope')).rejects.toMatchObject({ reason: 'unknown-model' });
     expect(() => models.pause('nope')).toThrow(expect.objectContaining({ reason: 'unknown-model' }) as Error);
+  });
+});
+
+describe('ModelManager with models already on disk', () => {
+  const HUB_REPO = 'models--test--models';
+
+  async function hubCache(body: Buffer): Promise<{ locations: ExistingLocations; blob: string }> {
+    const cache = join(scratch, 'hf', 'hub');
+    const entry = testEntry('alpha', body);
+    const blob = join(cache, HUB_REPO, 'blobs', entry.sha256);
+    const snapshot = join(cache, HUB_REPO, 'snapshots', 'b'.repeat(40));
+    await mkdir(join(cache, HUB_REPO, 'blobs'), { recursive: true });
+    await mkdir(snapshot, { recursive: true });
+    await writeFile(blob, body);
+    await symlink(join('..', '..', 'blobs', entry.sha256), join(snapshot, entry.source.file));
+    return { locations: { hubCaches: [cache], folders: [] }, blob };
+  }
+
+  async function handyFolder(body: Buffer): Promise<{ locations: ExistingLocations; file: string }> {
+    const folder = join(scratch, 'handy', 'models');
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, 'notes.txt'), 'not a model');
+    const file = join(folder, 'ggml-model.bin');
+    await writeFile(file, body);
+    return { locations: { hubCaches: [], folders: [folder] }, file };
+  }
+
+  async function linkTarget(id: string): Promise<string | null> {
+    const model = join(modelsDir, `${id}.gguf`);
+    return (await lstat(model)).isSymbolicLink() ? readlink(model) : null;
+  }
+
+  it('uses a matching file from the Hugging Face cache without downloading', async () => {
+    serve('alpha');
+    const { locations, blob } = await hubCache(payload);
+    const models = manager(undefined, locations);
+
+    await models.download('alpha');
+
+    expect(server.requests).toEqual([]);
+    await expect(linkTarget('alpha')).resolves.toBe(await realpath(blob));
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'ready', receivedBytes: PAYLOAD_BYTES });
+    await expect(models.verify('alpha')).resolves.toBe('ok');
+  });
+
+  it('uses a matching file from a Handy model folder without downloading', async () => {
+    serve('alpha');
+    const { locations, file } = await handyFolder(payload);
+    const models = manager(undefined, locations);
+
+    await models.download('alpha');
+
+    expect(server.requests).toEqual([]);
+    await expect(linkTarget('alpha')).resolves.toBe(await realpath(file));
+    await expect(models.verify('alpha')).resolves.toBe('ok');
+  });
+
+  it('downloads when a file of the same size has a different hash', async () => {
+    serve('alpha');
+    const other = randomBytes(PAYLOAD_BYTES);
+    const { locations, file } = await handyFolder(other);
+    const models = manager(undefined, locations);
+
+    await models.download('alpha');
+
+    expect(server.requests).toEqual([{ path: modelUrlPath('alpha'), range: null }]);
+    await expect(linkTarget('alpha')).resolves.toBeNull();
+    expect(Buffer.compare(await readFile(file), other)).toBe(0);
+  });
+
+  it('delete removes only the link', async () => {
+    const { locations, file } = await handyFolder(payload);
+    const models = manager(undefined, locations);
+    await models.download('alpha');
+
+    await models.delete('alpha');
+
+    await expect(listModels()).resolves.toEqual([]);
+    expect(Buffer.compare(await readFile(file), payload)).toBe(0);
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'not-downloaded' });
+  });
+
+  it('reads as not downloaded when the linked file is removed', async () => {
+    const { locations, file } = await handyFolder(payload);
+    const models = manager(undefined, locations);
+    await models.download('alpha');
+
+    await rm(file);
+
+    await expect(models.verify('alpha')).resolves.toBe('missing');
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'not-downloaded', receivedBytes: 0 });
+  });
+
+  it('reports broken when the linked file is rewritten with other bytes', async () => {
+    const { locations, file } = await handyFolder(payload);
+    const models = manager(undefined, locations);
+    await models.download('alpha');
+
+    await writeFile(file, randomBytes(PAYLOAD_BYTES));
+
+    await expect(models.verify('alpha')).resolves.toBe('broken');
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'broken' });
+  });
+
+  it('useExisting links a picked file that matches a catalog model', async () => {
+    const betaPayload = randomBytes(PAYLOAD_BYTES);
+    const picked = join(scratch, 'picked.gguf');
+    await writeFile(picked, betaPayload);
+    const models = manager([testEntry('alpha', payload), testEntry('beta', betaPayload)]);
+
+    await expect(models.useExisting(picked)).resolves.toBe('beta');
+
+    expect(server.requests).toEqual([]);
+    await expect(linkTarget('beta')).resolves.toBe(await realpath(picked));
+    expect(stateOf(models, 'beta')).toMatchObject({ status: 'ready', receivedBytes: PAYLOAD_BYTES });
+    expect(stateOf(models, 'alpha')).toMatchObject({ status: 'not-downloaded' });
+    await expect(models.verify('beta')).resolves.toBe('ok');
+  });
+
+  it('useExisting rejects a file that matches no catalog model', async () => {
+    const picked = join(scratch, 'picked.gguf');
+    await writeFile(picked, randomBytes(PAYLOAD_BYTES));
+    const models = manager();
+
+    await expect(models.useExisting(picked)).rejects.toMatchObject({ name: 'ModelError', reason: 'no-match' });
+
+    await expect(listModels()).resolves.toEqual([]);
+  });
+
+  it('useExisting keeps a model that is already downloaded', async () => {
+    serve('alpha');
+    const picked = join(scratch, 'picked.gguf');
+    await writeFile(picked, payload);
+    const models = manager();
+    await models.download('alpha');
+
+    await expect(models.useExisting(picked)).resolves.toBe('alpha');
+
+    await expect(linkTarget('alpha')).resolves.toBeNull();
   });
 });

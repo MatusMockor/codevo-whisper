@@ -42,6 +42,7 @@ export type IpcInvokeApi = {
   pauseModel(id: string): Promise<void>;
   deleteModel(id: string): Promise<void>;
   activateModel(id: string): Promise<void>;
+  useExistingModel(): Promise<string | null>;
   getLanguagePack(): Promise<LanguagePackView>;
   downloadLanguagePack(): Promise<void>;
   getMicrophones(): Promise<AudioDevice[]>;
@@ -130,6 +131,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   pauseModel: 'models:pause',
   deleteModel: 'models:delete',
   activateModel: 'models:activate',
+  useExistingModel: 'models:use-existing',
   getLanguagePack: 'language-pack:get',
   downloadLanguagePack: 'language-pack:download',
   getMicrophones: 'microphones:list',

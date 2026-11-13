@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { LocalAcceleration, LocalModelUnload, Settings } from '../../shared/settings';
 import { LanguagePrompt } from '../components/LanguagePrompt';
 import { ModelList } from '../components/ModelList';
@@ -23,6 +24,32 @@ const ACCELERATIONS: ReadonlyArray<SegmentOption<LocalAcceleration>> = [
   { id: 'cpu', label: 'CPU' },
 ];
 
+function UseExistingFile() {
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
+  function pick(): void {
+    setState('busy');
+    window.codevo.useExistingModel().then(
+      () => setState('idle'),
+      (error: unknown) => {
+        console.error('Using an existing model file failed', error);
+        setState('failed');
+      },
+    );
+  }
+  return (
+    <div className="model-existing">
+      <button type="button" className="btn" disabled={state === 'busy'} onClick={pick}>
+        Použiť existujúci súbor…
+      </button>
+      {state === 'failed' && (
+        <p className="field-note warn" role="alert">
+          Súbor sa nezhoduje so žiadnym modelom zo zoznamu.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function LocalModelSection({ settings, models }: { settings: Settings; models: Models }) {
   const actions = useModelActions(settings);
   if (models.catalog.kind === 'loading') {
@@ -37,7 +64,7 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
   }
   return (
     <div className="card model-card">
-      <p className="card-lead">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa do tohto počítača. Potom prepis funguje aj bez internetu.</p>
+      <p className="card-lead">Model sa stiahne z Hugging Face iba po kliknutí na Stiahnuť a uloží sa do tohto počítača. Ak ho už máte z Handy alebo z Hugging Face cache, použije sa bez sťahovania. Potom prepis funguje aj bez internetu.</p>
       <ModelList
         models={models.catalog.value.models}
         states={models.states}
@@ -45,6 +72,7 @@ export function LocalModelSection({ settings, models }: { settings: Settings; mo
         errors={actions.errors}
         onAction={actions.run}
       />
+      <UseExistingFile />
       <SettingsRow title="Uvoľniť model" titleId="set-local-unload" description="Čas sa počíta od konca posledného diktovania. Počas diktovania a dokončovania prepisu model zostáva načítaný.">
         <select
           className="select"
