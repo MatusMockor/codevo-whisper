@@ -132,6 +132,7 @@ test('X11 overlay cancel button discards a live dictation and the target keeps f
     await expect(cancel).toBeVisible();
     expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts)).toEqual([
       { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
       { action: 'cycle-language', key: 'j', modifiers: ['control', 'alt'] },
     ]);
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -207,7 +208,7 @@ test('X11 AI and language chips flip one dictation by click, keep the target foc
     await expect(overlay.locator('.ov-lock')).toHaveCount(0);
     await expect(overlay.getByRole('button', { name: 'AI úprava vypnutá' })).toBeVisible();
     await expect(overlay.getByRole('button', { name: 'Jazyk diktovania: AUTO' })).toBeVisible();
-    expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts.map(({ action }) => action))).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+    expect(await app.evaluate(() => (globalThis as unknown as Hooks).codevoE2e.helper.sessionShortcuts.map(({ action }) => action))).toEqual(['cancel', 'lock-target', 'toggle-polish', 'cycle-language']);
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     const [aiX, aiY] = await pointAt(app, overlay, 'button[aria-label^="AI úprava"]');

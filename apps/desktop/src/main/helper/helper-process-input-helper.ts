@@ -15,16 +15,19 @@ import {
   parsePermissions,
   parseOutputAudio,
   parseRecordedHotkey,
+  parseRefocus,
   parseShortcut,
+  parseTargetCapture,
   requireBoolean,
 } from './helper-responses';
-import type { AppTarget, ClipboardPurpose, DeliveryDecision, DeliveryRequest, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import { LockedTargetLostError, type AppTarget, type ClipboardPurpose, type DeliveryDecision, type DeliveryRequest, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
 import { Listeners } from './listeners';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import { SESSION_KEYCODES, type SessionShortcut } from '../session/session-shortcuts';
 
 const PERMISSION_REQUEST_TIMEOUT_MS = 60_000;
 const FOCUSED_ELEMENT_TIMEOUT_MS = 3000;
+const REFOCUS_TIMEOUT_MS = 6000;
 const TYPING_TIMEOUT_MS = 120_000;
 
 function ensure(message: HelperMessage, key: string, failure: string): void {
@@ -32,6 +35,15 @@ function ensure(message: HelperMessage, key: string, failure: string): void {
     return;
   }
   throw new Error(`${failure}:${failureReason(message)}`);
+}
+
+function ensurePosted(message: HelperMessage, key: string, failure: string): void {
+  if (message[key] === false && message['reason'] === 'focus-changed') throw new LockedTargetLostError();
+  ensure(message, key, failure);
+}
+
+function lockArgs(captureId: string | undefined): { captureId?: string } {
+  return captureId === undefined ? {} : { captureId };
 }
 
 export class HelperProcessInputHelper implements InputHelper {
@@ -81,6 +93,10 @@ export class HelperProcessInputHelper implements InputHelper {
   }
 
   async checkDelivery(request: DeliveryRequest): Promise<DeliveryDecision> {
+    if (this.platform === 'darwin' && request.captureId !== undefined) {
+      const message = await this.channel.request('check-delivery', request, FOCUSED_ELEMENT_TIMEOUT_MS);
+      return message['kind'] === 'legacy' ? { kind: 'legacy' } : { kind: 'blocked', reason: 'focus-changed' };
+    }
     if (this.platform !== 'linux') return { kind: 'legacy' };
     this.operationId = null;
     const message = await this.channel.request('check-delivery', request, FOCUSED_ELEMENT_TIMEOUT_MS);
@@ -149,6 +165,22 @@ export class HelperProcessInputHelper implements InputHelper {
     return parseFrontmost(await this.channel.request('frontmost'));
   }
 
+  async captureTarget(): Promise<TargetCapture | null> {
+    return parseTargetCapture(await this.channel.request('target-capture', {}, FOCUSED_ELEMENT_TIMEOUT_MS));
+  }
+
+  async refocusTarget(captureId: string): Promise<RefocusResult> {
+    return parseRefocus(await this.channel.request('target-refocus', { captureId }, REFOCUS_TIMEOUT_MS));
+  }
+
+  async returnFocus(captureId: string): Promise<boolean> {
+    return isTrue(await this.channel.request('target-return', { captureId }, REFOCUS_TIMEOUT_MS), 'returned');
+  }
+
+  async releaseTarget(captureId: string): Promise<void> {
+    requireBoolean(await this.channel.request('target-release', { captureId }), 'released', 'target-release-invalid');
+  }
+
   async secureInput(): Promise<boolean> {
     return requireBoolean(await this.channel.request('secure-input'), 'enabled', 'secure-input-invalid');
   }
@@ -178,8 +210,8 @@ export class HelperProcessInputHelper implements InputHelper {
     this.transactionId = transactionId;
   }
 
-  async writeClipboard(text: string): Promise<void> {
-    ensure(await this.channel.request('clipboard-write', { text, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}) }), 'written', 'clipboard-write-failed');
+  async writeClipboard(text: string, captureId?: string): Promise<void> {
+    ensurePosted(await this.channel.request('clipboard-write', { text, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}), ...lockArgs(captureId) }), 'written', 'clipboard-write-failed');
   }
 
   async restoreClipboard(expectedText: string): Promise<boolean> {
@@ -190,16 +222,16 @@ export class HelperProcessInputHelper implements InputHelper {
     return requireBoolean(await this.channel.request('clipboard-restore', { force: true, ...(this.platform === 'linux' ? { transactionId: this.transactionId } : {}) }), 'restored', 'clipboard-restore-invalid');
   }
 
-  async paste(): Promise<void> {
-    ensure(await this.channel.request('paste', this.platform === 'linux' ? { operationId: this.operationId, transactionId: this.transactionId } : {}), 'posted', 'paste-failed');
+  async paste(captureId?: string): Promise<void> {
+    ensurePosted(await this.channel.request('paste', { ...(this.platform === 'linux' ? { operationId: this.operationId, transactionId: this.transactionId } : {}), ...lockArgs(captureId) }), 'posted', 'paste-failed');
   }
 
-  async typeText(text: string): Promise<void> {
-    ensure(await this.channel.request('type-text', { text }, TYPING_TIMEOUT_MS), 'posted', 'type-failed');
+  async typeText(text: string, captureId?: string): Promise<void> {
+    ensurePosted(await this.channel.request('type-text', { text, ...lockArgs(captureId) }, TYPING_TIMEOUT_MS), 'posted', 'type-failed');
   }
 
-  async submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void> {
-    ensure(await this.channel.request('submit', { mode, ...(this.platform === 'linux' ? { operationId: this.operationId } : {}) }), 'posted', 'submit-failed');
+  async submit(mode: Exclude<AutoSubmit, 'off'>, captureId?: string): Promise<void> {
+    ensurePosted(await this.channel.request('submit', { mode, ...(this.platform === 'linux' ? { operationId: this.operationId } : {}), ...lockArgs(captureId) }), 'posted', 'submit-failed');
   }
 
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {

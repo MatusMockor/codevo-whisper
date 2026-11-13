@@ -49,6 +49,14 @@ export function SpinIcon() {
   );
 }
 
+export function PinIcon() {
+  return (
+    <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M6 2h4M6.8 2v4L4.5 9h7L9.2 6V2M8 9v5" />
+    </svg>
+  );
+}
+
 export function CloseIcon() {
   return (
     <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">

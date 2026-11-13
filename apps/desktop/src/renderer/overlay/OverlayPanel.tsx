@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { offeredActions, type LiveText, type OverlayAction, type OverlayState } from '../../shared/overlay-contract';
-import { ACTION_LABELS, fallbackNotice } from './overlay-copy';
+import { offeredActions, type LiveText, type OverlayAction, type OverlayState, type OverlayTarget } from '../../shared/overlay-contract';
+import { ACTION_LABELS, fallbackNotice, UNLOCK_TARGET_LABEL } from './overlay-copy';
 import { barScale, formatElapsed, WAVE_BARS } from './level-history';
-import { CloseIcon, MicIcon } from './OverlayIcons';
+import { CloseIcon, MicIcon, PinIcon } from './OverlayIcons';
 
 type RecordingState = Extract<OverlayState, { kind: 'recording' }>;
 type TransientState = Extract<OverlayState, { kind: 'recording' | 'processing' }>;
@@ -52,6 +52,8 @@ export function Notice({ text }: { text: string | undefined }) {
   return <p className="ov-notice">{text}</p>;
 }
 
+type OnAction = ((action: OverlayAction) => void) | null;
+
 const CONTROL_ICONS: Partial<Readonly<Record<OverlayAction, () => ReactNode>>> = Object.freeze({
   cancel: () => <CloseIcon />,
 });
@@ -62,7 +64,7 @@ function chipsOf(state: TransientState): ChipModel[] {
   return [...language, ...polish];
 }
 
-export function Chips({ state, onAction }: { state: TransientState; onAction: ((action: OverlayAction) => void) | null }) {
+export function Chips({ state, onAction }: { state: TransientState; onAction: OnAction }) {
   const offered = onAction === null ? [] : offeredActions(state);
   return chipsOf(state).map(({ action, text, label, on }) =>
     offered.includes(action) ? (
@@ -77,7 +79,7 @@ export function Chips({ state, onAction }: { state: TransientState; onAction: ((
   );
 }
 
-export function Controls({ state, onAction }: { state: OverlayState; onAction: ((action: OverlayAction) => void) | null }) {
+export function Controls({ state, onAction }: { state: OverlayState; onAction: OnAction }) {
   if (onAction === null) {
     return null;
   }
@@ -88,12 +90,40 @@ export function Controls({ state, onAction }: { state: OverlayState; onAction: (
   ));
 }
 
-export function Recording({ state, levels, chips, controls }: { state: RecordingState; levels: readonly number[]; chips: ReactNode; controls: ReactNode }) {
+function TargetChip({ target, onAction }: { target: OverlayTarget | undefined; onAction: OnAction }) {
+  if (target === undefined) {
+    return null;
+  }
+  const locked = target.lock === 'locked';
+  const className = locked ? 'ov-target locked' : 'ov-target';
+  const content = (
+    <>
+      {target.icon !== undefined && <img src={target.icon} alt="" width={16} height={16} />}
+      <span className="ov-target-name">{target.name}</span>
+    </>
+  );
+  if (target.lock === 'unavailable' || onAction === null) {
+    return (
+      <span className={className} title={target.name}>
+        {content}
+      </span>
+    );
+  }
+  const label = `${locked ? UNLOCK_TARGET_LABEL : ACTION_LABELS['lock-target']}: ${target.name}`;
+  return (
+    <button type="button" className={className} aria-pressed={locked} aria-label={label} title={label} onClick={() => onAction('lock-target')}>
+      {content}
+      <PinIcon />
+    </button>
+  );
+}
+
+export function Recording({ state, levels, chips, controls, onAction }: { state: RecordingState; levels: readonly number[]; chips: ReactNode; controls: ReactNode; onAction: OnAction }) {
   const orbStyle = { '--lvl': barScale(state.level) } as CSSProperties;
   return (
     <>
       <Notice text={state.fallbackDevice === undefined ? undefined : fallbackNotice(state.fallbackDevice)} />
-      <div className={`${panelClass(state.live, 'ind')} rec`} role="status" aria-label="Nahrávam">
+      <div className={`${panelClass(state.live, state.target === undefined ? 'ind' : 'ind wide')} rec`} role="status" aria-label="Nahrávam">
         <LiveWords live={state.live} />
         <div className="ov-bar">
           <span className="orb rec" style={orbStyle}>
@@ -102,6 +132,7 @@ export function Recording({ state, levels, chips, controls }: { state: Recording
           <Waveform levels={levels} />
           <span className="ov-time">{formatElapsed(state.elapsedMs)}</span>
           {chips}
+          <TargetChip target={state.target} onAction={onAction} />
           {controls}
         </div>
       </div>

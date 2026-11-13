@@ -5,16 +5,17 @@ import type { AudioCapture } from '../audio/audio-capture';
 import type { EngineSelector } from '../engines/engine-selector';
 import type { DictationOptions, EngineDictation, EngineUnavailableReason, Preparation, PreparedEngine, TranscriptUpdate } from '../engines/transcription-engine';
 import { EngineUnavailableError, TranscriptionFailedError } from '../engines/transcription-engine';
-import type { AppTarget, InputHelper } from '../helper/input-helper';
+import type { AppTarget, InputHelper, TargetCapture } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
 import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
+import { isSameTarget } from '../insertion/same-target';
 import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
 import type { Logger } from '../logging/logger';
 import type { SettingsStore } from '../settings/settings-store';
 import type { EngineConditions } from '../../shared/engine-routing';
-import type { LiveText, OverlayState } from '../../shared/overlay-contract';
+import type { LiveText, OverlayState, OverlayTarget } from '../../shared/overlay-contract';
 import type { MicrophoneSetting } from '../../shared/settings';
 import type { LanguageSelection } from '../../shared/dictation-languages';
 import { sameSelection } from '../engines/local-language';
@@ -37,7 +38,8 @@ export type DictationSessionDeps = {
   capabilities(): Promise<EngineConditions>;
   insertion: Pick<InsertionService, 'insert'>;
   lastTranscript: LastTranscript;
-  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio'>;
+  helper: Pick<InputHelper, 'frontmost' | 'focusedElement' | 'beginRecordingAudio' | 'captureTarget' | 'releaseTarget'>;
+  appIcon?: (path: string) => Promise<string | null>;
   settings: Pick<SettingsStore, 'get'>;
   overlay: SessionOverlay;
   abandon(session: DictationSession): void;
@@ -65,6 +67,8 @@ type Presentation =
   | { kind: 'hide' }
   | { kind: 'show'; state: TransientState }
   | { kind: 'flash'; state: TerminalState };
+
+type ShownTarget = { name: string; icon?: string; lock: { captureId: string; locked: boolean } | null };
 
 type ProcessingNotice = Extract<OverlayState, { kind: 'processing' }>['notice'];
 
@@ -107,6 +111,10 @@ export class DictationSession {
   private intent: TerminalIntent | null = null;
   private cleanupDone = false;
   private flashed: TerminalState | null = null;
+  private shownTarget: ShownTarget | null = null;
+  private capture: Promise<TargetCapture | null> = Promise.resolve(null);
+  private delivery: Promise<unknown> = Promise.resolve();
+  private released: Promise<void> | null = null;
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
@@ -126,6 +134,11 @@ export class DictationSession {
   begin(): void {
     this.showRecording();
     this.prepare();
+    this.capture = this.target.then(() => this.deps.helper.captureTarget()).catch((error: unknown) => {
+      this.deps.logger.error('The dictation target could not be captured', error);
+      return null;
+    });
+    void this.showTarget();
     this.opened = this.openMicrophone();
   }
 
@@ -144,6 +157,13 @@ export class DictationSession {
       return;
     }
     this.lastLevel = Math.max(0, Math.min(1, rms));
+    this.showRecording();
+  }
+
+  toggleLock(): void {
+    const lock = this.shownTarget?.lock ?? null;
+    if (this.phase !== 'recording' || lock === null) return;
+    lock.locked = !lock.locked;
     this.showRecording();
   }
 
@@ -260,6 +280,30 @@ export class DictationSession {
     }
   }
 
+  private async showTarget(): Promise<void> {
+    const target = await this.target;
+    const capture = await this.capture;
+    const lockable = capture !== null && target !== null && target.name !== '' && isSameTarget(capture.target, target);
+    if (!lockable) this.releaseCapture();
+    if (target === null || target.name === '') return;
+    const shown: ShownTarget = { name: target.name, lock: lockable ? { captureId: capture.captureId, locked: false } : null };
+    this.shownTarget = shown;
+    this.refreshRecording();
+    const iconPath = lockable ? capture.iconPath : null;
+    if (iconPath === null || this.deps.appIcon === undefined) return;
+    const icon = await this.deps.appIcon(iconPath).catch((error: unknown) => {
+      this.deps.logger.error('The target app icon could not be read', error);
+      return null;
+    });
+    if (icon === null) return;
+    shown.icon = icon;
+    this.refreshRecording();
+  }
+
+  private refreshRecording(): void {
+    if (this.phase === 'recording') this.showRecording();
+  }
+
   private noteFallback(fallback: boolean): void {
     if (!fallback) {
       return;
@@ -351,7 +395,18 @@ export class DictationSession {
     }
     this.present();
     if (next.kind === 'abandoned') this.deps.abandon(this);
+    this.releaseCapture();
     return closing.then(() => undefined);
+  }
+
+  private releaseCapture(): void {
+    this.released ??= Promise.all([this.capture, this.delivery])
+      .then(async ([capture]) => {
+        if (capture !== null) await this.deps.helper.releaseTarget(capture.captureId);
+      })
+      .catch((error: unknown) => {
+        this.deps.logger.error('The dictation target could not be released', error);
+      });
   }
 
   private stopCapture(): Promise<Uint8Array> {
@@ -502,10 +557,13 @@ export class DictationSession {
     if (this.controller.signal.aborted) {
       return Promise.resolve(null);
     }
-    return this.deps.insertion.insert(text, target, this.transcriptSettings).catch((error: unknown) => {
+    const lock = this.shownTarget?.lock;
+    const delivery = this.deps.insertion.insert(text, target, this.transcriptSettings, lock?.locked === true ? lock.captureId : undefined).catch((error: unknown) => {
       this.deps.logger.error('The transcript could not be inserted', error);
       return null;
     });
+    this.delivery = delivery;
+    return delivery;
   }
 
   private decision(transient: TransientState | null): Presentation {
@@ -538,7 +596,15 @@ export class DictationSession {
   private showRecording(): void {
     const state = { kind: 'recording', elapsedMs: this.deps.clock() - this.startedAt, level: this.lastLevel, languageChip: languageChip(this.spoken), ...this.polishState() } as const;
     const withDevice = this.fallbackDevice === null ? state : { ...state, fallbackDevice: this.fallbackDevice };
-    this.present(this.withLive(withDevice));
+    const target = this.overlayTarget();
+    this.present(this.withLive(target === null ? withDevice : { ...withDevice, target }));
+  }
+
+  private overlayTarget(): OverlayTarget | null {
+    if (this.shownTarget === null) return null;
+    const { name, icon, lock } = this.shownTarget;
+    const view: OverlayTarget = { name, lock: lock === null ? 'unavailable' : lock.locked ? 'locked' : 'unlocked' };
+    return icon === undefined ? view : { ...view, icon };
   }
 
   private showProcessing(): void {

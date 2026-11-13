@@ -75,6 +75,22 @@ test('overlay window preserves platform presentation and shows the injected reco
   await expect.poll(async () => (await panelFlags()).visible).toBe(false);
 });
 
+test('the target chip is the single lock control and stays inert when the target cannot be locked', async () => {
+  const recording = { kind: 'recording', elapsedMs: 1000, level: 0.4, languageChip: 'SK' } as const;
+  await inject({ ...recording, target: { name: 'Notes', lock: 'unlocked' } });
+  const overlay = await overlayPage();
+  const lock = overlay.getByRole('button', { name: 'Uzamknúť cieľ: Notes' });
+  await expect(lock).toHaveCount(REDUCED ? 0 : 1);
+  await expect(overlay.locator('.ov-target')).toContainText('Notes');
+  await expect(overlay.getByRole('button', { name: /cieľ/ })).toHaveCount(REDUCED ? 0 : 1);
+  if (!REDUCED) await expect(lock).toHaveAttribute('aria-pressed', 'false');
+  await inject({ ...recording, target: { name: 'Notes', lock: 'locked' } });
+  if (!REDUCED) await expect(overlay.getByRole('button', { name: 'Odomknúť cieľ: Notes' })).toHaveAttribute('aria-pressed', 'true');
+  await inject({ ...recording, target: { name: 'Notes', lock: 'unavailable' } });
+  await expect(overlay.locator('.ov-target')).toContainText('Notes');
+  await expect(overlay.getByRole('button', { name: /cieľ/ })).toHaveCount(0);
+});
+
 test('Živý text shows confirmed words solid and tentative words lighter, grows upward and never takes focus', async () => {
   const mainFocusedBefore = (await panelFlags()).mainFocused;
   const recording = { kind: 'recording', elapsedMs: 4200, level: 0.6, languageChip: 'SK' } as const;

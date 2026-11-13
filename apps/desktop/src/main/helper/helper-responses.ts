@@ -3,7 +3,7 @@ import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import type { AudioOutput, OutputAudioView } from '../../shared/recording-audio';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import type { HelperMessage } from './helper-channel';
-import type { AppTarget, FocusedElement, InputLostReason, ModifierFlags, Permissions, ShortcutName } from './input-helper';
+import type { AppTarget, FocusedElement, InputLostReason, ModifierFlags, Permissions, RefocusResult, ShortcutName, TargetCapture } from './input-helper';
 
 const SHIFT_MASK = 0x20000;
 const CONTROL_MASK = 0x40000;
@@ -71,6 +71,19 @@ export function parseFrontmost(message: HelperMessage): AppTarget | null {
     name: nullableString(message, 'name') ?? '',
     windowId: nullableInteger(message, 'windowId'),
   };
+}
+
+export function parseTargetCapture(message: HelperMessage): TargetCapture | null {
+  const captureId = message['captureId'];
+  const target = parseFrontmost(message);
+  if (message['captured'] !== true || typeof captureId !== 'string' || captureId.length === 0 || captureId.length > 256 || target === null) return null;
+  const bundlePath = nullableString(message, 'bundlePath');
+  return { captureId, target, iconPath: bundlePath === '' ? null : bundlePath };
+}
+
+export function parseRefocus(message: HelperMessage): RefocusResult {
+  const result = message['result'];
+  return result === 'in-place' || result === 'moved' ? result : 'failed';
 }
 
 export function parseFocusedElement(message: HelperMessage): FocusedElement {

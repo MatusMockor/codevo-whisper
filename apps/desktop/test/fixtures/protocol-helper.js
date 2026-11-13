@@ -8,6 +8,7 @@ let deferListen = false;
 let deferredListen;
 const overrides = new Map();
 const operations = [];
+const requests = [];
 const audioOperations = [];
 let clipboard = '';
 
@@ -76,10 +77,12 @@ const handlers = {
   'type-text': (id, args) => { operations.push({ cmd: 'type-text', text: args.text }); send({ id, posted: true }); },
   submit: (id, args) => { operations.push({ cmd: 'submit', mode: args.mode }); send({ id, posted: true }); },
   'output-state': (id) => send({ id, operations }),
+  'requests-state': (id, args) => send({ id, requests: requests.filter((request) => request.cmd === args.cmd) }),
   paste: (id) => send({ id, posted: false, reason: 'no-event-source' }),
 };
 
 function respond(request) {
+  requests.push({ cmd: request.cmd, args: request.args ?? {} });
   const override = overrides.get(request.cmd);
   if (override) {
     overrides.delete(request.cmd);

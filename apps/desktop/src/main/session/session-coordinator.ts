@@ -44,6 +44,7 @@ export type SessionCoordinatorDeps = {
   enableServer?: () => Promise<void>;
   polish?: (text: string, signal: AbortSignal) => Promise<Polished>;
   failedRecording?: FailedRecording;
+  appIcon?: (path: string) => Promise<string | null>;
   clock?: () => number;
   platform?: NodeJS.Platform;
   logger?: Logger;
@@ -66,6 +67,7 @@ export class SessionCoordinator {
     'toggle-polish': () => this.shown()?.togglePolish(),
     'cycle-language': () => this.shown()?.cycleLanguage(),
     retry: () => this.retry(),
+    'lock-target': () => this.recording?.toggleLock(),
   };
   private readonly sessions = new Set<DictationSession>();
   private readonly cancellable = new Set<DictationSession>();
@@ -366,6 +368,7 @@ export class SessionCoordinator {
       },
       failed: (pcm) => this.keepFailed(start, pcm),
       polish: this.deps.polish ?? ((text) => Promise.resolve({ text, failure: null })),
+      ...(this.deps.appIcon === undefined ? {} : { appIcon: this.deps.appIcon }),
       captureLane: this.captureLane,
       pipeline: this.pipeline,
       clock: this.deps.clock ?? Date.now,

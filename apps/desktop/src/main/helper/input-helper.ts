@@ -19,7 +19,11 @@ export type ShortcutName = 'paste-last';
 
 export type InputLostReason = 'tap-reenabled' | 'tap-error' | 'helper-restarted' | 'helper-died';
 
-export type DeliveryRequest = { expected: AppTarget | null; intent: 'automatic' | 'replay'; shortcut: LinuxPasteShortcut };
+export type TargetCapture = { captureId: string; target: AppTarget; iconPath: string | null };
+
+export type RefocusResult = 'in-place' | 'moved' | 'failed';
+
+export type DeliveryRequest = { expected: AppTarget | null; intent: 'automatic' | 'replay'; shortcut: LinuxPasteShortcut; captureId?: string };
 export type DeliveryDecision =
   | { kind: 'legacy' }
   | { kind: 'allowed'; target: AppTarget }
@@ -27,6 +31,13 @@ export type DeliveryDecision =
   | { kind: 'blocked'; reason: 'focus-changed' | 'protected-input' | 'modifiers-held' };
 
 export type ClipboardPurpose = { kind: 'copy' } | { kind: 'paste'; policy: 'restore' | 'leave' };
+
+export class LockedTargetLostError extends Error {
+  constructor() {
+    super('locked-target-lost');
+    this.name = 'LockedTargetLostError';
+  }
+}
 
 export interface InputHelper {
   checkDelivery(request: DeliveryRequest): Promise<DeliveryDecision>;
@@ -37,16 +48,20 @@ export interface InputHelper {
   permissions(): Promise<Permissions>;
   requestPermission(kind: PermissionKind): Promise<void>;
   frontmost(): Promise<AppTarget | null>;
+  captureTarget(): Promise<TargetCapture | null>;
+  refocusTarget(captureId: string): Promise<RefocusResult>;
+  returnFocus(captureId: string): Promise<boolean>;
+  releaseTarget(captureId: string): Promise<void>;
   secureInput(): Promise<boolean>;
   focusedElement(): Promise<FocusedElement>;
   modifierFlags(): Promise<ModifierFlags>;
   saveClipboard(purpose?: ClipboardPurpose): Promise<void>;
-  writeClipboard(text: string): Promise<void>;
+  writeClipboard(text: string, captureId?: string): Promise<void>;
   restoreClipboard(expectedText: string): Promise<boolean>;
   restoreSavedClipboard(): Promise<boolean>;
-  paste(): Promise<void>;
-  typeText(text: string): Promise<void>;
-  submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void>;
+  paste(captureId?: string): Promise<void>;
+  typeText(text: string, captureId?: string): Promise<void>;
+  submit(mode: Exclude<AutoSubmit, 'off'>, captureId?: string): Promise<void>;
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void>;
   recordHotkey(timeoutMs: number): Promise<HotkeyRecordResult>;
   onHotkey(listener: (event: HotkeyEvent) => void): () => void;

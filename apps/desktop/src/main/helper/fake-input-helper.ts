@@ -3,10 +3,12 @@ import type { OutputAudioView, RecordingAudioLease, RecordingAudioSettings } fro
 import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import { consoleLogger } from '../logging/logger';
-import type { AppTarget, DeliveryDecision, FocusedElement, InputHelper, InputLostReason, ModifierFlags, PermissionKind, Permissions, ShortcutName } from './input-helper';
+import { LockedTargetLostError, type AppTarget, type DeliveryDecision, type DeliveryRequest, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
 import { Listeners } from './listeners';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import type { SessionShortcut } from '../session/session-shortcuts';
+
+export type PostingStep = { cmd: 'clipboard-write' | 'paste' | 'type-text' | 'submit'; captureId: string | undefined };
 
 export type FakeInputHelperState = {
   frontmost: AppTarget | null;
@@ -33,7 +35,7 @@ const DEFAULT_STATE: FakeInputHelperState = {
 };
 
 export class FakeInputHelper implements InputHelper {
-  checkDelivery(): Promise<DeliveryDecision> {
+  checkDelivery(_request: DeliveryRequest): Promise<DeliveryDecision> {
     return Promise.resolve({ kind: 'legacy' });
   }
   outputAudio: OutputAudioView = { kind: 'available', canMute: true, outputs: [{ id: 'speakers', label: 'Reproduktory' }, { id: 'headphones', label: 'Slúchadlá' }] };
@@ -58,6 +60,17 @@ export class FakeInputHelper implements InputHelper {
   readonly submitted: Exclude<AutoSubmit, 'off'>[] = [];
   readonly requestedPermissions: PermissionKind[] = [];
   readonly recordTimeouts: number[] = [];
+  iconPath: string | null = null;
+  refocusResult: RefocusResult = 'in-place';
+  returnResult = true;
+  readonly refocused: string[] = [];
+  readonly returned: string[] = [];
+  readonly released: string[] = [];
+  readonly posting: PostingStep[] = [];
+  capturedFocused = true;
+  private captureCount = 0;
+  private readonly captures = new Map<string, AppTarget>();
+  private returnTo: AppTarget | null = null;
   holdRecordings = false;
   private releaseRecording: (() => void) | null = null;
   private savedClipboard: string | null = null;
@@ -128,6 +141,37 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve(this.frontmostApp && { ...this.frontmostApp });
   }
 
+  captureTarget(): Promise<TargetCapture | null> {
+    if (this.frontmostApp === null) return Promise.resolve(null);
+    const captureId = `capture-${++this.captureCount}`;
+    this.captures.set(captureId, { ...this.frontmostApp });
+    return Promise.resolve({ captureId, target: { ...this.frontmostApp }, iconPath: this.iconPath });
+  }
+
+  refocusTarget(captureId: string): Promise<RefocusResult> {
+    this.refocused.push(captureId);
+    const captured = this.captures.get(captureId);
+    if (captured === undefined) return Promise.resolve('failed');
+    if (this.refocusResult !== 'failed') {
+      this.returnTo = this.frontmostApp;
+      this.frontmostApp = { ...captured };
+    }
+    return Promise.resolve(this.refocusResult);
+  }
+
+  returnFocus(captureId: string): Promise<boolean> {
+    this.returned.push(captureId);
+    if (this.returnResult && this.returnTo !== null) this.frontmostApp = this.returnTo;
+    this.returnTo = null;
+    return Promise.resolve(this.returnResult);
+  }
+
+  releaseTarget(captureId: string): Promise<void> {
+    this.released.push(captureId);
+    this.captures.delete(captureId);
+    return Promise.resolve();
+  }
+
   secureInput(): Promise<boolean> {
     return Promise.resolve(this.secureInputEnabled);
   }
@@ -146,7 +190,8 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve();
   }
 
-  writeClipboard(text: string): Promise<void> {
+  writeClipboard(text: string, captureId?: string): Promise<void> {
+    if (!this.guard('clipboard-write', captureId)) return Promise.reject(new LockedTargetLostError());
     if (this.clipboardWriteFails) {
       this.clipboard = '';
       return Promise.reject(new Error('clipboard-write-failed:set-string-failed'));
@@ -175,19 +220,27 @@ export class FakeInputHelper implements InputHelper {
     return Promise.resolve(true);
   }
 
-  paste(): Promise<void> {
+  paste(captureId?: string): Promise<void> {
+    if (!this.guard('paste', captureId)) return Promise.reject(new LockedTargetLostError());
     this.pasted.push(this.clipboard);
     return Promise.resolve();
   }
 
-  typeText(text: string): Promise<void> {
+  typeText(text: string, captureId?: string): Promise<void> {
+    if (!this.guard('type-text', captureId)) return Promise.reject(new LockedTargetLostError());
     this.typed.push(text);
     return Promise.resolve();
   }
 
-  submit(mode: Exclude<AutoSubmit, 'off'>): Promise<void> {
+  submit(mode: Exclude<AutoSubmit, 'off'>, captureId?: string): Promise<void> {
+    if (!this.guard('submit', captureId)) return Promise.reject(new LockedTargetLostError());
     this.submitted.push(mode);
     return Promise.resolve();
+  }
+
+  private guard(cmd: PostingStep['cmd'], captureId: string | undefined): boolean {
+    this.posting.push({ cmd, captureId });
+    return captureId === undefined || (this.capturedFocused && this.captures.has(captureId));
   }
 
   listen(binding: HotkeyBinding | null, onReady?: () => void): Promise<void> {

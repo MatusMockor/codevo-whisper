@@ -23,13 +23,14 @@ describe('in-dictation shortcuts', () => {
   it('arms Esc, the AI toggle and the language cycle from settings', () => {
     expect(armedSessionShortcuts(settings(AI_READY), 'linux')).toEqual([
       { action: 'cancel', key: 'escape', modifiers: [] },
+      { action: 'lock-target', key: 'l', modifiers: ['control', 'shift'] },
       { action: 'toggle-polish', key: 'a', modifiers: ['control', 'alt'] },
       { action: 'cycle-language', key: 'j', modifiers: ['control', 'alt'] },
     ]);
   });
 
   it('leaves the AI toggle unarmed while AI polish is not configured', () => {
-    expect(armedSessionShortcuts(settings(), 'linux').map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+    expect(armedSessionShortcuts(settings(), 'linux').map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'cycle-language']);
   });
 
   it.each([
@@ -38,21 +39,45 @@ describe('in-dictation shortcuts', () => {
     ['macOS', 'darwin', 38, ['control', 'alt']],
   ] as const)('drops a shortcut that overlaps the dictation hotkey on %s', (_case, platform, keycode, modifiers) => {
     const armed = armedSessionShortcuts(settings({ ...AI_READY, hotkey: key(keycode, modifiers) }), platform);
-    expect(armed.map(({ action }) => action)).toEqual(['cancel', 'toggle-polish']);
+    expect(armed.map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'toggle-polish']);
   });
 
   it('drops every shortcut a modifier-only dictation hotkey fires on', () => {
     const hotkey = { kind: 'modifiers', keycodes: [X11 + 37], label: 'Ctrl' } as const;
     expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey }), 'linux').map(({ action }) => action)).toEqual(['cancel']);
     const mac = { kind: 'modifiers', keycodes: [58, 59], label: '⌃⌥' } as const;
-    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: mac }), 'darwin').map(({ action }) => action)).toEqual(['cancel']);
+    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: mac }), 'darwin').map(({ action }) => action)).toEqual(['cancel', 'lock-target']);
   });
 
   it('keeps a shortcut that no single key press fires together with the dictation hotkey', () => {
-    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: key(X11 + 30 + 8, ['shift']) }), 'linux')).toHaveLength(3);
-    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: key(38, ['alt']) }), 'darwin')).toHaveLength(3);
-    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: { kind: 'modifiers', keycodes: [X11 + 37, X11 + 50], label: 'Ctrl+Shift' } }), 'linux')).toHaveLength(3);
-    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: { kind: 'modifiers', keycodes: [63], label: 'Fn' } }), 'darwin')).toHaveLength(3);
+    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: key(X11 + 30 + 8, ['shift']) }), 'linux')).toHaveLength(4);
+    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: key(38, ['alt']) }), 'darwin')).toHaveLength(4);
+    const ctrlShift = { kind: 'modifiers', keycodes: [X11 + 37, X11 + 50], label: 'Ctrl+Shift' } as const;
+    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: ctrlShift }), 'linux').map(({ action }) => action)).toEqual(['cancel', 'toggle-polish', 'cycle-language']);
+    expect(armedSessionShortcuts(settings({ ...AI_READY, hotkey: { kind: 'modifiers', keycodes: [63], label: 'Fn' } }), 'darwin')).toHaveLength(4);
+  });
+
+  it.each([
+    ['X11', 'linux', X11 + 38 + 8],
+    ['Wayland', 'linux', EVDEV + 38],
+    ['macOS', 'darwin', 37],
+  ] as const)('drops the target lock and keeps Esc when the %s dictation hotkey is Ctrl+Shift+L', (_case, platform, keycode) => {
+    expect(armedSessionShortcuts(settings({ hotkey: key(keycode, ['control', 'shift']) }), platform).map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+    expect(armedSessionShortcuts(settings({ hotkey: key(keycode, ['control', 'alt', 'shift']) }), platform).map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+  });
+
+  it.each([
+    ['X11', 'linux', [X11 + 37, X11 + 50]],
+    ['Wayland', 'linux', [EVDEV + 29, EVDEV + 42]],
+    ['macOS', 'darwin', [59, 56]],
+  ] as const)('drops the target lock when the held %s dictation hotkey is Ctrl+Shift', (_case, platform, keycodes) => {
+    const armed = armedSessionShortcuts(settings({ hotkey: { kind: 'modifiers', keycodes, label: 'Ctrl+Shift' } }), platform);
+    expect(armed.map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
+  });
+
+  it('keeps the target lock when the dictation hotkey presses L without Shift or presses another key', () => {
+    expect(armedSessionShortcuts(settings({ hotkey: key(EVDEV + 38, ['control']) }), 'linux').map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'cycle-language']);
+    expect(armedSessionShortcuts(settings({ hotkey: key(EVDEV + 37, ['control', 'shift']) }), 'linux').map(({ action }) => action)).toEqual(['cancel', 'lock-target', 'cycle-language']);
   });
 
   it.each([
@@ -86,6 +111,7 @@ describe('in-dictation shortcuts', () => {
     ['a repeated modifier', { ...DEFAULT_SESSION_SHORTCUTS, 'cycle-language': { key: 'j', modifiers: ['alt', 'alt'] } }],
     ['overlapping shortcuts', { 'toggle-polish': { key: 'j', modifiers: ['control'] }, 'cycle-language': { key: 'j', modifiers: ['control', 'alt'] } }],
     ['shortcuts one press fires together', { 'toggle-polish': { key: 'j', modifiers: ['control'] }, 'cycle-language': { key: 'j', modifiers: ['alt'] } }],
+    ['a binding on the fixed target-lock key', { ...DEFAULT_SESSION_SHORTCUTS, 'cycle-language': { key: 'l', modifiers: ['control', 'shift'] } }],
     ['a missing action', { 'toggle-polish': DEFAULT_SESSION_SHORTCUTS['toggle-polish'] }],
     ['an extra field', { ...DEFAULT_SESSION_SHORTCUTS, 'cycle-language': { key: 'j', modifiers: ['alt'], label: 'Alt+J' } }],
   ])('rejects stored shortcuts with %s and falls back to the defaults', (_case, value) => {
@@ -131,5 +157,14 @@ describe('in-dictation shortcuts', () => {
     expect(shortcutsConflict(settings({ hotkey: { kind: 'modifiers', keycodes: [EVDEV + 56], label: 'Alt' } }), HOTKEY, 'linux')).toBe(true);
     expect(shortcutsConflict(settings({ hotkey: key(X11 + 96, ['control']) }), HOTKEY, 'linux')).toBe(false);
     expect(shortcutsConflict(settings({ hotkey: null }), HOTKEY, 'linux')).toBe(false);
+  });
+
+  it.each([
+    ['Ctrl+Shift+L', key(EVDEV + 38, ['control', 'shift'])],
+    ['held Shift', { kind: 'modifiers', keycodes: [EVDEV + 42], label: 'Shift' } as const],
+    ['held Ctrl+Shift', { kind: 'modifiers', keycodes: [EVDEV + 29, EVDEV + 42], label: 'Ctrl+Shift' } as const],
+  ])('accepts a %s dictation hotkey and only leaves the target lock shortcut unarmed', (_case, hotkey) => {
+    expect(shortcutsConflict(settings({ hotkey }), HOTKEY, 'linux')).toBe(false);
+    expect(armedSessionShortcuts(settings({ hotkey }), 'linux').map(({ action }) => action)).toEqual(['cancel', 'cycle-language']);
   });
 });

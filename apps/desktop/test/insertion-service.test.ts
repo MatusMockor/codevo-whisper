@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeInputHelper, type FakeInputHelperState } from '../src/main/helper/fake-input-helper';
 import { HelperProcessInputHelper } from '../src/main/helper/helper-process-input-helper';
-import type { AppTarget } from '../src/main/helper/input-helper';
+import type { AppTarget, DeliveryRequest } from '../src/main/helper/input-helper';
 import { InsertionService } from '../src/main/insertion/insertion-service';
 import { LastTranscript } from '../src/main/insertion/last-transcript';
 import { SettingsStore } from '../src/main/settings/settings-store';
@@ -63,6 +63,125 @@ async function prepared(setup: Setup = {}) {
   const service = new InsertionService(helper, settings, lastTranscript, sleep, logger);
   return { helper, lastTranscript, sleeps, service, logger, settings };
 }
+
+async function lockedOn(setup: Setup & { refocus: 'in-place' | 'moved' | 'failed' }) {
+  const harness = await prepared(setup);
+  const capture = await harness.helper.captureTarget();
+  if (capture === null) throw new Error('fixture has no target to capture');
+  harness.helper.refocusResult = setup.refocus;
+  if (setup.refocus !== 'in-place') harness.helper.frontmostApp = NOTES;
+  return { ...harness, lock: capture.captureId };
+}
+
+describe('InsertionService with a locked target', () => {
+  it('never refocuses or returns focus without a lock', async () => {
+    const { service, helper } = await prepared({ settings: { autoSubmit: 'enter' } });
+    expect(await service.insert('dictated', TEXT_EDIT)).toBe('pasted');
+    expect({ submitted: helper.submitted, refocused: helper.refocused, returned: helper.returned }).toEqual({ submitted: ['enter'], refocused: [], returned: [] });
+  });
+
+  it('delivers and submits as usual when the locked field still has focus, naming the capture in the delivery check', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'in-place', settings: { autoSubmit: 'enter' } });
+    const requests: DeliveryRequest[] = [];
+    helper.checkDelivery = (request) => { requests.push(request); return Promise.resolve({ kind: 'legacy' }); };
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(helper.submitted).toEqual(['enter']);
+    expect(requests).toEqual([{ expected: TEXT_EDIT, intent: 'automatic', shortcut: 'ctrl-v', captureId: lock }]);
+    expect(helper.returned).toEqual([]);
+  });
+
+  it.each(['paste', 'type'] as const)('inserts by %s into a target the user left, never submits there, then returns focus', async (insertion) => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'moved', settings: { insertion, autoSubmit: 'enter' } });
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('delivered-submit-blocked');
+    expect([...helper.pasted, ...helper.typed]).toEqual(['dictated']);
+    expect(helper.submitted).toEqual([]);
+    expect(helper.returned).toEqual([lock]);
+    expect(helper.frontmostApp).toEqual(NOTES);
+  });
+
+  it('reports a plain paste into a target the user left when auto-submit is off', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'moved' });
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('pasted');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(helper.returned).toEqual([lock]);
+  });
+
+  it.each(['failed', 'throws'] as const)('types nothing and leaves the clipboard alone when refocusing %s', async (failure) => {
+    const { service, helper, lock, logger } = await lockedOn({ refocus: 'failed', settings: { autoSubmit: 'enter' } });
+    if (failure === 'throws') helper.refocusTarget = () => Promise.reject(new Error('helper gone'));
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('blocked-focus-changed');
+    expect({ pasted: helper.pasted, typed: helper.typed, submitted: helper.submitted, clipboard: helper.clipboard }).toEqual({ pasted: [], typed: [], submitted: [], clipboard: 'original' });
+    expect(helper.returned).toEqual([lock]);
+    expect(logger.errors.some((entry) => String(entry.error).includes('helper gone'))).toBe(failure === 'throws');
+  });
+
+  it('returns focus even when the refocused target blocks delivery', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'moved' });
+    helper.checkDelivery = () => Promise.resolve({ kind: 'blocked', reason: 'protected-input' });
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('blocked-secure-input');
+    expect(helper.pasted).toEqual([]);
+    expect(helper.returned).toEqual([lock]);
+  });
+
+  it.each(['in-place', 'moved'] as const)('blocks before the clipboard write when the %s locked field lost focus, keeping the user clipboard', async (refocus) => {
+    const { service, helper, lock } = await lockedOn({ refocus, settings: { autoSubmit: 'enter' } });
+    helper.capturedFocused = false;
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('blocked-focus-changed');
+    expect({ pasted: helper.pasted, submitted: helper.submitted, clipboard: helper.clipboard }).toEqual({ pasted: [], submitted: [], clipboard: 'original' });
+    expect(helper.returned).toEqual(refocus === 'moved' ? [lock] : []);
+  });
+
+  it('blocks at the paste when the locked field lost focus after the clipboard write and restores the user clipboard', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'moved', settings: { autoSubmit: 'enter' } });
+    const write = helper.writeClipboard.bind(helper);
+    helper.writeClipboard = async (text, captureId) => {
+      await write(text, captureId);
+      helper.capturedFocused = false;
+    };
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('blocked-focus-changed');
+    expect({ pasted: helper.pasted, submitted: helper.submitted, clipboard: helper.clipboard }).toEqual({ pasted: [], submitted: [], clipboard: 'original' });
+    expect(helper.returned).toEqual([lock]);
+  });
+
+  it('blocks typing when the locked field lost focus', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'in-place', settings: { insertion: 'type', autoSubmit: 'enter' } });
+    helper.capturedFocused = false;
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('blocked-focus-changed');
+    expect({ typed: helper.typed, submitted: helper.submitted }).toEqual({ typed: [], submitted: [] });
+  });
+
+  it('delivers but never submits when the locked field loses focus before the submit', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'in-place', settings: { autoSubmit: 'enter' }, onSleep: (_ms, fake) => { fake.capturedFocused = false; } });
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('delivered-submit-blocked');
+    expect({ pasted: helper.pasted, submitted: helper.submitted }).toEqual({ pasted: ['dictated'], submitted: [] });
+  });
+
+  it('names the capture on every posting step when the locked field keeps focus', async () => {
+    const { service, helper, lock } = await lockedOn({ refocus: 'in-place', settings: { autoSubmit: 'enter' } });
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('pasted');
+    expect(helper.posting).toEqual([{ cmd: 'clipboard-write', captureId: lock }, { cmd: 'paste', captureId: lock }, { cmd: 'submit', captureId: lock }]);
+  });
+
+  it.each(['paste', 'type'] as const)('sends no capture on any step of an unlocked %s', async (insertion) => {
+    const { service, helper } = await prepared({ settings: { insertion, autoSubmit: 'enter' } });
+    const requests: DeliveryRequest[] = [];
+    helper.checkDelivery = (request) => { requests.push(request); return Promise.resolve({ kind: 'legacy' }); };
+    expect(await service.insert('dictated', TEXT_EDIT)).toBe(insertion === 'paste' ? 'pasted' : 'typed');
+    expect(helper.posting.length).toBeGreaterThan(1);
+    expect(helper.posting.every(({ captureId }) => captureId === undefined)).toBe(true);
+    expect(requests.every((request) => !('captureId' in request))).toBe(true);
+  });
+
+  it.each(['refused', 'rejected'] as const)('keeps the delivered outcome and logs when returning focus is %s', async (failure) => {
+    const { service, helper, lock, logger } = await lockedOn({ refocus: 'moved', settings: { autoSubmit: 'enter' } });
+    helper.returnResult = false;
+    if (failure === 'rejected') helper.returnFocus = () => Promise.reject(new Error('return failed'));
+    expect(await service.insert('dictated', TEXT_EDIT, undefined, lock)).toBe('delivered-submit-blocked');
+    expect(helper.pasted).toEqual(['dictated']);
+    expect(logger.errors.length).toBe(1);
+  });
+});
 
 describe('InsertionService', () => {
   it('delivers automatic Linux dictation after the shortcut modifier is released', async () => {
