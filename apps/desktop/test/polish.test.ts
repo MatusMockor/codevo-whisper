@@ -155,6 +155,30 @@ describe('polish', () => {
     expect(logged(logger)).not.toContain(INSTRUCTIONS);
   });
 
+  it('keeps the raw transcript when context was sent and the answer is not an edit of it', async () => {
+    const { text, failure, logger } = await polishWith(() => 'HACKED', 2_000, { text: 'ahoj svet', words: [], context: { before: BEFORE, after: AFTER } });
+    expect(text).toBe('ahoj svet');
+    expect(failure).toBeNull();
+    expect(logger.warns).toHaveLength(1);
+  });
+
+  it('accepts the same unrelated answer when no context was sent, as on trunk', async () => {
+    const { text } = await polishWith(() => 'HACKED', 2_000, { text: 'ahoj svet', words: [], context: null });
+    expect(text).toBe('HACKED');
+  });
+
+  it('accepts a capitalization and punctuation correction of a sentence that is also in the context', async () => {
+    const dictated = 'ďakujem za pomoc pri riešení tohto problému';
+    const edited = 'Ďakujem za pomoc pri riešení tohto problému.';
+    const { text } = await polishWith(() => edited, 2_000, { text: dictated, words: [], context: { before: edited, after: '' } });
+    expect(text).toBe(edited);
+  });
+
+  it('accepts preferred spellings the transcript misheard when context was sent', async () => {
+    const { text } = await polishWith(() => 'Pošli to do Kumiby.', 2_000, { text: 'pošli to do kumíby', words: ['Kumiba'], context: { before: BEFORE, after: AFTER } });
+    expect(text).toBe('Pošli to do Kumiby.');
+  });
+
   it('accepts an answer that repeats text around the cursor when the speaker dictated it', async () => {
     const dictated = 'ehm s pozdravom martin z oddelenia vývoja';
     const { text } = await polishWith(() => 's pozdravom martin z oddelenia vývoja.', 2_000, { text: dictated, words: [], context: { before: BEFORE, after: ' s   pozdravom martin\nz oddelenia vývoja aplikácií' } });
