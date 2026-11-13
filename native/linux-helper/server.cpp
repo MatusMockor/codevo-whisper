@@ -53,6 +53,7 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
   else if(cmd=="paste" || cmd=="submit") boolean(o,"posted",post(args,cmd=="submit"));
   else if(cmd=="type-text") { boolean(o,"posted",false);text(o,"reason","unsupported-output"); }
   else if(cmd=="listen-start") { json_object_unref(o);return listen(args); }
+  else if(cmd=="session-shortcuts") { json_object_unref(o);return armSessionShortcuts(args); }
   else if(cmd=="listen-stop") { auto empty=object();text(empty,"kind","none");json_object_unref(o);o=listen(empty);json_object_unref(empty); }
   else if(cmd=="record-key") { json_object_unref(o);return record(args); }
   else if(cmd=="output-audio") { text(o,"kind","unavailable");text(o,"reason","platform"); }

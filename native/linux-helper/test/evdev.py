@@ -31,6 +31,31 @@ try:
  recorded=[e for e in client.events if e.get('event')=='recorded'];assert len(recorded)==1 and recorded[0]['keycode']==0x20000+194,recorded
  client.request('listen-start',listenId=18,kind='modifiers',keycodes=[0x20000+97]);key(97,1);key(97,0);client.request('ping')
  assert [e['phase'] for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==18]==['down','up']
+ armed=client.request('session-shortcuts',shortcuts=[{'id':'cancel','keycode':1,'modifiers':[]}]);assert armed.get('armed') is True,armed
+ def sessions():
+  client.request('ping');return [e for e in client.events if e.get('event')=='session-shortcut']
+ key(1,1);key(1,2);key(1,0)
+ assert [e['id'] for e in sessions()]==['cancel']
+ key(29,1);key(1,1);key(1,0);key(29,0)
+ assert [e['id'] for e in sessions()]==['cancel','cancel']
+ assert all(isinstance(e.get('ts'),int) for e in sessions())
+ assert client.request('session-shortcuts',shortcuts=[])['armed']
+ key(1,1);key(1,0);assert len(sessions())==2
+ invalid=client.request('session-shortcuts',shortcuts=[{'id':'cancel','keycode':1,'modifiers':['invalid']}])
+ assert invalid.get('armed') is False and invalid.get('reason')=='invalid-shortcut',invalid
+ assert client.request('session-shortcuts',shortcuts=[{'id':'cancel','keycode':1,'modifiers':[]}])['armed']
+ assert client.request('record-key',recordingId=5,timeoutMs=1000)['recording']
+ key(1,1);key(1,0);assert len(sessions())==2,'record-key must suppress session shortcuts, including unsupported unmodified keys'
+ client.request('listen-start',listenId=18,kind='modifiers',keycodes=[0x20000+97])
+ key(1,1);key(1,0);assert len(sessions())==3,'listen-start must preserve session shortcuts'
+ assert client.request('session-shortcuts',shortcuts=[{'id':'modified','keycode':1,'modifiers':['control']}])['armed']
+ key(1,1);key(1,0);assert len(sessions())==3
+ key(29,1);key(125,1);key(1,1);key(1,0);key(125,0);key(29,0)
+ assert [e['id'] for e in sessions()]==['cancel','cancel','cancel','modified']
+ for invalid in [None,{},[None],[{'id':'','keycode':1,'modifiers':[]}],[{'id':'x'*65,'keycode':1,'modifiers':[]}],[{'id':'cancel','keycode':-1,'modifiers':[]}],[{'id':'cancel','keycode':768,'modifiers':[]}],[{'id':'cancel','keycode':True,'modifiers':[]}],[{'id':'cancel','keycode':1,'modifiers':[None]}],[{'id':'cancel','keycode':1}],[{'id':'cancel','keycode':1,'modifiers':[]}]*17]:
+  result=client.request('session-shortcuts',shortcuts=invalid)
+  assert result.get('armed') is False and result.get('reason')=='invalid-shortcut',(invalid,result)
+ key(29,1);key(1,1);key(1,0);key(29,0);assert len(sessions())==4,'invalid replacement must disarm everything'
  synthetic='--synthetic-sync' in sys.argv
  if synthetic:
   before=len([e for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==18])
@@ -54,7 +79,7 @@ try:
   key(97,1);key(97,0);client.request('ping')
   assert [e['phase'] for e in client.events if e.get('event')=='hotkey' and e.get('listenId')==19]==['down','down','up'],client.events
  fcntl.ioctl(fd,0x5502);time.sleep(.3);client.request('ping');assert any(e.get('event')=='tap-error' for e in client.events),'unplug must cancel'
- print(json.dumps({'controlledDevice':node,'unrelatedDevicesRead':False,'repeatIgnored':True,'keyAndModifierEdges':True,'recordingNamespace':True,'unplugCancelled':True,'synDropped':'synthetic libevdev sync cancelled and rearmed' if synthetic else 'kernel SYN_DROPPED unexecuted','session':'Wayland-path fixture on X11, not actual Wayland'}))
+ print(json.dumps({'controlledDevice':node,'unrelatedDevicesRead':False,'repeatIgnored':True,'keyAndModifierEdges':True,'recordingNamespace':True,'sessionShortcuts':True,'sessionShortcutsConsumed':False,'unplugCancelled':True,'synDropped':'synthetic libevdev sync cancelled and rearmed' if synthetic else 'kernel SYN_DROPPED unexecuted','session':'Wayland-path fixture on X11, not actual Wayland'}))
 finally:
  if client:client.close()
  try:fcntl.ioctl(fd,0x5502)

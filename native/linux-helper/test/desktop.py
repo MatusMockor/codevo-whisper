@@ -10,9 +10,9 @@ def target():
  window=Gtk.Window(title='Codevo controlled native target')
  window.set_wmclass('codevo-fixture','CodevoFixture');window.set_default_size(520,220)
  box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);window.add(box)
- fields=[];activations=[]
+ fields=[];activations=[];keys=[]
  for secret in [False,False,True]:
-  entry=Gtk.Entry();entry.connect('activate',lambda entry:activations.append(entry.get_text()));entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
+  entry=Gtk.Entry();entry.connect('activate',lambda entry:activations.append(entry.get_text()));entry.connect('key-press-event',lambda entry,event:keys.append(event.hardware_keycode));entry.set_visibility(not secret);box.pack_start(entry,True,True,0);fields.append(entry)
  if '--compatible-target' in sys.argv:
   def paste_variant(entry,event):
    if event.keyval in [Gdk.KEY_v,Gdk.KEY_V] and event.state&Gdk.ModifierType.CONTROL_MASK and event.state&Gdk.ModifierType.SHIFT_MASK:
@@ -29,6 +29,7 @@ def target():
   if cmd=='focus': fields[r['index']].grab_focus();send({'ok':True})
   elif cmd=='text': send({'texts':[f.get_text() for f in fields]})
   elif cmd=='activations': send({'values':activations})
+  elif cmd=='keys': send({'values':keys})
   elif cmd=='clear':
    for f in fields:f.set_text('')
    send({'ok':True})
@@ -61,13 +62,58 @@ class Client:
   self.p.stdin.close();assert self.p.wait(timeout=4)==0
 
 def xdo(*args):subprocess.run(['xdotool',*map(str,args)],check=True,stdout=subprocess.DEVNULL)
+def verify_session_shortcuts(helper,fixture):
+ shortcut={'id':'cancel','keycode':1,'modifiers':[]}
+ def sessions():
+  time.sleep(.1);helper.request('ping');return [e for e in helper.events if e.get('event')=='session-shortcut']
+ result=helper.request('session-shortcuts',shortcuts=[shortcut]);assert result.get('armed') is True,result
+ result=helper.request('listen-start',listenId=2,kind='none')
+ assert result.get('running') or result.get('reason')=='shortcut-in-use',result
+ bindingAvailable=result.get('running') is True
+ before=fixture.request('keys')['values'].count(9)
+ xdo('keydown','Escape');time.sleep(.8);xdo('keyup','Escape')
+ assert [e['id'] for e in sessions()]==['cancel'],'repeat must emit once'
+ xdo('keydown','Control_L');xdo('keydown','Super_L');xdo('key','Escape');xdo('keyup','Super_L');xdo('keyup','Control_L')
+ assert [e['id'] for e in sessions()]==['cancel','cancel']
+ assert fixture.request('keys')['values'].count(9)==before,'armed Escape must be consumed'
+ result=helper.request('listen-start',listenId=3,kind='key',keycode=0x10000+9,modifiers=['control'])
+ assert result.get('running')==bindingAvailable,result
+ if bindingAvailable:
+  assert helper.request('session-shortcuts',shortcuts=[])['armed']
+  xdo('keydown','Control_L');xdo('key','Escape');xdo('keyup','Control_L')
+  assert len(sessions())==2
+  assert [e['phase'] for e in helper.events if e.get('event')=='hotkey' and e.get('listenId')==3]==['down','up'],'session disarm must preserve overlapping binding grabs'
+  assert fixture.request('keys')['values'].count(9)==before
+  assert helper.request('session-shortcuts',shortcuts=[shortcut])['armed']
+ result=helper.request('listen-stop');assert result.get('running')==bindingAvailable,result
+ xdo('keydown','Control_L');xdo('key','Escape');xdo('keyup','Control_L')
+ assert len(sessions())==3,'listen-stop must preserve overlapping session grabs'
+ assert helper.request('session-shortcuts',shortcuts=[])['armed']
+ xdo('key','Escape');assert len(sessions())==3
+ assert fixture.request('keys')['values'].count(9)==before+1,'disarm must release Escape'
+ assert helper.request('session-shortcuts',shortcuts=[shortcut])['armed']
+ rival=Client(helper.p.args);assert rival.read()['event']=='ready'
+ try:
+  conflict={'id':'conflict','keycode':68,'modifiers':['control','shift','alt','meta']}
+  result=rival.request('session-shortcuts',shortcuts=[conflict]);assert result.get('armed') is True,result
+  result=helper.request('session-shortcuts',shortcuts=[shortcut,conflict])
+  assert result.get('armed') is False and result.get('reason')=='shortcut-in-use',result
+  xdo('key','Escape');assert len(sessions())==3
+  assert fixture.request('keys')['values'].count(9)==before+2,'failed grab must release partial grabs'
+ finally:rival.close()
+ assert helper.request('session-shortcuts',shortcuts=[shortcut,conflict])['armed'],'shutdown must release session grabs'
+ assert helper.request('session-shortcuts',shortcuts=[])['armed']
+ print('PASS X11 session shortcuts: repeat, extra modifiers, consumption, listen reconfiguration, disarm, conflict rollback and shutdown; overlapping binding grabs '+('verified' if bindingAvailable else 'unavailable (existing paste-last grab)'),flush=True)
+
 def verify(args):
  assert args.controlled_only and args.session=='x11' and os.environ.get('DISPLAY'), 'requires controlled X11 display'
- original=subprocess.check_output(['xdotool','getactivewindow'],text=True).strip()
+ original=subprocess.check_output(['xdotool',*(['getwindowfocus','-f'] if args.session_shortcuts_only else ['getactivewindow'])],text=True).strip()
  fixture=Client([sys.executable,__file__,'--target']);t=fixture.read()
  helper=Client([str(pathlib.Path(args.helper).resolve())]);assert helper.read()['event']=='ready'
  try:
-  xdo('windowactivate','--sync',t['windowId']);time.sleep(.3)
+  xdo('windowfocus' if args.session_shortcuts_only else 'windowactivate','--sync',t['windowId']);time.sleep(.3)
+  if args.session_shortcuts_only:
+   verify_session_shortcuts(helper,fixture);return
   for _ in range(30):
    current=helper.request('frontmost');element=helper.request('focused-element')
    if current.get('pid')==t['pid'] and element.get('editable') is True:break
@@ -100,12 +146,13 @@ def verify(args):
   assert helper.request('listen-start',listenId=1,kind='key',keycode=0x10000+96,modifiers=['control'])['running']
   xdo('keydown','Control_L');xdo('keydown','F12');time.sleep(.08);xdo('keyup','F12');xdo('keyup','Control_L');time.sleep(.15)
   helper.request('ping');edges=[e['phase'] for e in helper.events if e.get('event')=='hotkey'];assert edges==['down','up'],edges
+  verify_session_shortcuts(helper,fixture)
   print('PASS native focus safety, opaque authorization, Unicode consumption and consumed X11 hotkey edges',flush=True)
  finally:
   helper.close();fixture.close()
-  if original:xdo('windowactivate',original)
+  if original and original not in ['0','1']:xdo('windowfocus' if args.session_shortcuts_only else 'windowactivate',original)
 
 if __name__=='__main__':
  if '--target' in sys.argv:target()
  else:
-  parser=argparse.ArgumentParser();parser.add_argument('--session',choices=['x11'],required=True);parser.add_argument('--helper',required=True);parser.add_argument('--controlled-only',action='store_true');verify(parser.parse_args())
+  parser=argparse.ArgumentParser();parser.add_argument('--session',choices=['x11'],required=True);parser.add_argument('--helper',required=True);parser.add_argument('--controlled-only',action='store_true');parser.add_argument('--session-shortcuts-only',action='store_true');verify(parser.parse_args())

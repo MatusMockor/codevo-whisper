@@ -16,6 +16,9 @@ static constexpr int X11_TAG=0x10000, EVDEV_TAG=0x20000;
 static constexpr int64_t SHIFT=0x20000,CONTROL=0x40000,ALT=0x80000,META=0x100000;
 struct Binding { std::string kind="none";std::set<int> keys;int key=0;int64_t flags=0; };
 static Binding binding;
+struct SessionShortcut {std::string id;int key;int64_t flags=0;};
+static std::vector<SessionShortcut> sessionShortcuts;
+static std::set<int> sessionPressed;
 static std::set<int> held;
 static std::set<int> recordedModifiers;
 static int recordedKey=0;
@@ -29,7 +32,7 @@ static int xiOpcode=0;
 static Display* inputDisplay=nullptr;
 static guint xWatch=0;
 static unsigned int lockMask=LockMask,numMask=0;
-static std::vector<std::pair<int,unsigned int>> grabs;
+static std::vector<std::pair<int,unsigned int>> grabs,sessionGrabs;
 struct Device { int fd=-1;libevdev* ev=nullptr;guint watch=0;std::set<int> pressed;~Device(){if(watch)g_source_remove(watch);if(ev)libevdev_free(ev);if(fd>=0)close(fd);} };
 static std::map<std::string,std::unique_ptr<Device>> devices;
 static std::string onlyDevice;
@@ -53,7 +56,7 @@ static void finishRecord(const char* name) {
   auto o=object();text(o,"event",name);number(o,"recordingId",recordingId);emit(o);recordingId=0;
   if(recordTimer){g_source_remove(recordTimer);recordTimer=0;}
 }
-void resetInput() {finishRecord("record-cancelled");down=false;neutral=false;invalidateDelivery();event("tap-error");}
+void resetInput() {finishRecord("record-cancelled");sessionPressed.clear();down=false;neutral=false;invalidateDelivery();event("tap-error");}
 void fence(bool begin) {fencedUntil=begin?INT64_MAX:g_get_monotonic_time()+100000;}
 static int replayKey() {return wayland?KEY_V:(inputDisplay?XKeysymToKeycode(inputDisplay,XK_v):0);}
 static std::string keyLabel(int key) {
@@ -74,6 +77,8 @@ static void completeRecording() {
   text(o,"label",label);emit(o);recordingId=0;if(recordTimer){g_source_remove(recordTimer);recordTimer=0;}neutral=false;
 }
 static void handle(int key,bool pressed,bool raw,int64_t observedFlags=-1) {
+  bool sessionDown=false;
+  if(!raw) {if(pressed)sessionDown=sessionPressed.insert(key).second;else sessionPressed.erase(key);}
   if(raw && pressed && held.count(key) && !wayland)return;
   if(pressed)held.insert(key);else held.erase(key);
   if(!active || g_get_monotonic_time()<fencedUntil) {neutral=false;return;}
@@ -82,6 +87,7 @@ static void handle(int key,bool pressed,bool raw,int64_t observedFlags=-1) {
   if(recordingId && !raw)return;
   if(recordingId && raw) {
     if(pressed) {
+      sessionPressed.insert(key);
       if(modifier(key))recordedModifiers.insert(key);
       else if(current) {recordedKey=key;recordedFlags=current;}
       else {finishRecord("record-unsupported");return;}
@@ -89,6 +95,9 @@ static void handle(int key,bool pressed,bool raw,int64_t observedFlags=-1) {
       if(recordedKey==replayKey() && recordedFlags==(CONTROL|META))finishRecord("record-unsupported");else completeRecording();
     }
     return;
+  }
+  if(!raw && sessionDown)for(auto& shortcut:sessionShortcuts)if(key==shortcut.key && (current&shortcut.flags)==shortcut.flags) {
+    auto o=object();text(o,"event","session-shortcut");text(o,"id",shortcut.id);number(o,"ts",g_get_real_time()/1000);emit(o);
   }
   if(!raw && key==replayKey() && current==(CONTROL|META) && pressed) {auto o=object();text(o,"event","shortcut");text(o,"name","paste-last");emit(o);return;}
   if(binding.kind=="modifiers" && raw) {
@@ -104,17 +113,50 @@ int64_t modifierFlags() {
   if(inputDisplay && !wayland) {char keys[32];XQueryKeymap(inputDisplay,keys);std::set<int> current;for(int key=8;key<256;++key)if(keys[key/8]&(1<<(key%8)))current.insert(key);return flags(current);}
   int64_t result=0;for(auto& pair:devices)result|=flags(pair.second->pressed);return result;
 }
-static void ungrab() {if(inputDisplay)for(auto [key,mask]:grabs)XUngrabKey(inputDisplay,key,mask,DefaultRootWindow(inputDisplay));grabs.clear();}
-static bool grab(int key,unsigned int mask) {
+static void ungrab(std::vector<std::pair<int,unsigned int>>& owned,const std::vector<std::pair<int,unsigned int>>& other) {
+  if(inputDisplay)for(auto pair:owned)if(std::find(other.begin(),other.end(),pair)==other.end())XUngrabKey(inputDisplay,pair.first,pair.second,DefaultRootWindow(inputDisplay));
+  owned.clear();if(inputDisplay)XFlush(inputDisplay);
+}
+static bool grab(int key,unsigned int mask,std::vector<std::pair<int,unsigned int>>& owned,const std::vector<std::pair<int,unsigned int>>& other) {
   static bool failed=false;failed=false;
   auto previous=XSetErrorHandler(+[](Display*,XErrorEvent* error)->int {if(error->error_code==BadAccess)failed=true;return 0;});
-  for(auto extra:std::set<unsigned int>{0,lockMask,numMask,lockMask|numMask}) {XGrabKey(inputDisplay,key,mask|extra,DefaultRootWindow(inputDisplay),False,GrabModeAsync,GrabModeAsync);grabs.push_back({key,mask|extra});}
+  for(auto extra:std::set<unsigned int>{0,lockMask,numMask,lockMask|numMask}) {
+    auto pair=std::make_pair(key,mask|extra);if(std::find(owned.begin(),owned.end(),pair)!=owned.end())continue;
+    if(std::find(other.begin(),other.end(),pair)==other.end())XGrabKey(inputDisplay,key,pair.second,DefaultRootWindow(inputDisplay),False,GrabModeAsync,GrabModeAsync);
+    owned.push_back(pair);
+  }
   XSync(inputDisplay,False);XSetErrorHandler(previous);return !failed;
 }
 static unsigned int xflags(int64_t flags) {unsigned int mask=0;if(flags&CONTROL)mask|=ControlMask;if(flags&ALT)mask|=Mod1Mask;if(flags&SHIFT)mask|=ShiftMask;if(flags&META)mask|=Mod4Mask;return mask;}
 bool canListen() {return (wayland?inputDeviceCount()>0:available) && seatActive();}
+JsonObject* armSessionShortcuts(JsonObject* args) {
+  ungrab(sessionGrabs,grabs);sessionShortcuts.clear();sessionPressed=held;
+  auto o=object();auto invalid=[&](const char* reason){ungrab(sessionGrabs,grabs);boolean(o,"armed",false);text(o,"reason",reason);return o;};
+  auto list=array(args,"shortcuts");if(!list || json_array_get_length(list)>16)return invalid("invalid-shortcut");
+  std::vector<SessionShortcut> next;
+  for(guint i=0;i<json_array_get_length(list);++i) {
+    auto node=json_array_get_element(list,i);if(!JSON_NODE_HOLDS_OBJECT(node))return invalid("invalid-shortcut");
+    auto item=json_node_get_object(node);auto id=string(item,"id");auto code=integer(item,"keycode",-1);auto mods=array(item,"modifiers");
+    if(id.empty() || g_utf8_strlen(id.c_str(),-1)>64 || code<1 || code>(wayland?KEY_MAX:247) || !mods)return invalid("invalid-shortcut");
+    SessionShortcut shortcut{id,int(code)+(wayland?0:8)};
+    for(guint m=0;m<json_array_get_length(mods);++m) {
+      auto mod=json_array_get_element(mods,m);if(!JSON_NODE_HOLDS_VALUE(mod) || json_node_get_value_type(mod)!=G_TYPE_STRING)return invalid("invalid-shortcut");
+      std::string name=json_node_get_string(mod);
+      if(name=="control")shortcut.flags|=CONTROL;else if(name=="alt")shortcut.flags|=ALT;else if(name=="shift")shortcut.flags|=SHIFT;else if(name=="meta")shortcut.flags|=META;else return invalid("invalid-shortcut");
+    }
+    next.push_back(shortcut);
+  }
+  if(inputDisplay && !wayland)for(auto& shortcut:next) {
+    auto required=xflags(shortcut.flags);
+    for(unsigned int subset=0;subset<16;++subset) {
+      unsigned int mask=0;if(subset&1)mask|=ControlMask;if(subset&2)mask|=ShiftMask;if(subset&4)mask|=Mod1Mask;if(subset&8)mask|=Mod4Mask;
+      if((mask&required)==required && !grab(shortcut.key,mask,sessionGrabs,grabs))return invalid("shortcut-in-use");
+    }
+  }
+  sessionShortcuts=std::move(next);boolean(o,"armed",true);return o;
+}
 JsonObject* listen(JsonObject* args) {
-  finishRecord("record-cancelled");ungrab();binding={};down=false;neutral=held.empty();listenId=integer(args,"listenId");invalidateDelivery();
+  finishRecord("record-cancelled");ungrab(grabs,sessionGrabs);binding={};down=false;neutral=held.empty();listenId=integer(args,"listenId");invalidateDelivery();
   auto o=object();auto kind=string(args,"kind");Binding next;next.kind=kind;
   auto invalid=[&](const char* reason){boolean(o,"running",false);text(o,"reason",reason);return o;};
   if(kind!="none" && kind!="key" && kind!="modifiers")return invalid("invalid-binding");
@@ -133,7 +175,7 @@ JsonObject* listen(JsonObject* args) {
     for(guint i=0;i<json_array_get_length(keys);++i) {auto node=json_array_get_element(keys,i);if(json_node_get_value_type(node)!=G_TYPE_INT64)return invalid("invalid-keycode");auto code=json_node_get_int(node)-tag();if(code<=0 || code>(wayland?KEY_MAX:255) || !modifier(code))return invalid("re-record-for-session");next.keys.insert(code);}
   }
   if(inputDisplay && !wayland && canListen()) {
-    if(!grab(replayKey(),ControlMask|Mod4Mask) || (kind=="key" && !grab(next.key,xflags(next.flags)))) {ungrab();return invalid("shortcut-in-use");}
+    if(!grab(replayKey(),ControlMask|Mod4Mask,grabs,sessionGrabs) || (kind=="key" && !grab(next.key,xflags(next.flags),grabs,sessionGrabs))) {ungrab(grabs,sessionGrabs);return invalid("shortcut-in-use");}
   }
   binding=next;boolean(o,"running",kind=="none" || canListen());return o;
 }
@@ -195,7 +237,7 @@ static void discover() {
             if(ev.type!=EV_KEY || ev.value==2)continue;
             if(ev.value)d->pressed.insert(ev.code);else d->pressed.erase(ev.code);
             refreshHeld();handle(ev.code,held.count(ev.code),true);
-            if(binding.kind=="key" || ev.code==replayKey())handle(ev.code,held.count(ev.code),false);
+            if(binding.kind=="key" || ev.code==replayKey() || std::any_of(sessionShortcuts.begin(),sessionShortcuts.end(),[&](auto& shortcut){return shortcut.key==ev.code;}))handle(ev.code,held.count(ev.code),false);
           }
           if(status!=-EAGAIN) {retire(*d);return G_SOURCE_REMOVE;}
           return G_SOURCE_CONTINUE;
@@ -238,6 +280,6 @@ void keysShutdown() {
   if(retireTimer)g_source_remove(retireTimer);
   if(monitorWatch)g_source_remove(monitorWatch);
   if(xWatch)g_source_remove(xWatch);
-  if(inputDisplay && !wayland){ungrab();XCloseDisplay(inputDisplay);inputDisplay=nullptr;}devices.clear();if(monitor)udev_monitor_unref(monitor);if(udevContext)udev_unref(udevContext);
+  if(inputDisplay && !wayland){ungrab(sessionGrabs,grabs);ungrab(grabs,sessionGrabs);XCloseDisplay(inputDisplay);inputDisplay=nullptr;}devices.clear();if(monitor)udev_monitor_unref(monitor);if(udevContext)udev_unref(udevContext);
 }
 }
