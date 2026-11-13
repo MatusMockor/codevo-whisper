@@ -3,6 +3,7 @@ import { isEngineId } from '../../shared/engine-routing';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
+import { REBINDABLE_ACTIONS, type RebindableAction } from '../../shared/session-shortcuts';
 import type { EngineId, Settings } from '../../shared/settings';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import { isPlainRecord, isSettingsKey, isValidField, SETTINGS_FIELDS } from '../settings/settings-fields';
@@ -41,6 +42,14 @@ export function validateSettingsPatch(input: unknown, platform: NodeJS.Platform 
     patch[key] = value;
   }
   return patch;
+}
+
+export function validateRebindableAction(input: unknown): RebindableAction {
+  const action = REBINDABLE_ACTIONS.find((candidate) => candidate === input);
+  if (action === undefined) {
+    throw new IpcValidationError('Invalid in-dictation shortcut action');
+  }
+  return action;
 }
 
 export function validateModelId(input: unknown): string {

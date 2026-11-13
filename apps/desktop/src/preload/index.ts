@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { SessionShortcutRecordResult } from '../shared/session-shortcuts';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, type IpcApi, type IpcEventListener, type IpcEventName, type IpcEvents } from '../shared/ipc-contract';
 import type { AiCheck, AiKeyState, CodexCheck } from '../shared/ai';
 import type { EngineSwitch } from '../shared/engine-routing';
@@ -53,6 +54,7 @@ const api: IpcApi = {
   getDataFolder: () => ipcRenderer.invoke(INVOKE_CHANNELS.getDataFolder) as Promise<string>,
   relaunch: () => ipcRenderer.invoke(INVOKE_CHANNELS.relaunch) as Promise<void>,
   recordHotkey: () => ipcRenderer.invoke(INVOKE_CHANNELS.recordHotkey) as Promise<HotkeyRecordResult>,
+  recordSessionShortcut: (action) => ipcRenderer.invoke(INVOKE_CHANNELS.recordSessionShortcut, action) as Promise<SessionShortcutRecordResult>,
   isHotkeyArmed: () => ipcRenderer.invoke(INVOKE_CHANNELS.isHotkeyArmed) as Promise<boolean>,
   getModelCatalog: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelCatalog) as Promise<ModelCatalogView>,
   getModelStates: () => ipcRenderer.invoke(INVOKE_CHANNELS.getModelStates) as Promise<ModelState[]>,

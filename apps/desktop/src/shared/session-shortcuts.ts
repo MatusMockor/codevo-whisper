@@ -13,6 +13,8 @@ export type SessionBinding = { key: RebindableKey; modifiers: readonly SessionMo
 export const REBINDABLE_ACTIONS = ['toggle-polish', 'cycle-language'] as const;
 export type RebindableAction = (typeof REBINDABLE_ACTIONS)[number];
 
+export type SessionShortcutRecordResult = SessionBinding | 'unsupported' | 'conflict' | 'timeout' | 'cancelled';
+
 export type SessionShortcutSettings = Readonly<Record<RebindableAction, SessionBinding>>;
 
 export const DEFAULT_SESSION_SHORTCUTS: SessionShortcutSettings = Object.freeze({

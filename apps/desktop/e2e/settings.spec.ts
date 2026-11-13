@@ -19,6 +19,7 @@ const DEFAULTS: Settings = {
   removeFillerWords: false,
   appendTrailingSpace: false,
   hotkey: null,
+  sessionShortcuts: { 'toggle-polish': { key: 'a', modifiers: ['control', 'alt'] }, 'cycle-language': { key: 'j', modifiers: ['control', 'alt'] } },
   mode: 'smart',
   languages: { mode: 'auto', selected: ['sk'] },
   microphones: [],

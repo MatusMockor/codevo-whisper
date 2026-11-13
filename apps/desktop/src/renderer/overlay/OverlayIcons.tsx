@@ -7,15 +7,6 @@ export function MicIcon() {
   );
 }
 
-export function LockIcon() {
-  return (
-    <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="3" y="7" width="10" height="7.5" rx="2" />
-      <path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2" />
-    </svg>
-  );
-}
-
 export function CheckIcon() {
   return (
     <svg className="ic" viewBox="0 0 16 16" aria-hidden="true">

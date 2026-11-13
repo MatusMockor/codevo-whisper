@@ -191,8 +191,11 @@ export class DictationSession {
     if (!this.polishChip || (this.phase !== 'recording' && this.phase !== 'finishing')) return;
     this.polishOn = !this.polishOn;
     if (!this.polishOn) this.polishStop?.abort();
-    if (this.phase === 'recording') this.showRecording();
-    else this.showProcessing();
+    if (this.phase === 'recording') {
+      this.showRecording();
+      return;
+    }
+    this.showProcessing();
   }
 
   cycleLanguage(): void {

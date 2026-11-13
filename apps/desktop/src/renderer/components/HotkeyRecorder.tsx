@@ -1,11 +1,12 @@
 import { useId, useState } from 'react';
-import type { HotkeySetting } from '../../shared/settings';
-import { hotkeyRecordMessage } from '../settings/hotkey-record-message';
+import { hotkeyRecordMessage, type HotkeyRecordProblem } from '../settings/hotkey-record-message';
 import { HOTKEY_RECORDING } from './activity-gate';
 
-type HotkeyRecorderProps = { hotkey: HotkeySetting; labelledBy: string; onRecorded: (hotkey: NonNullable<HotkeySetting>) => void };
+const DICTATION_NOTE = navigator.userAgent.includes('Linux') ? 'Stlačte skratku a uvoľnite všetky klávesy. Po zmene X11 alebo Waylandu ju nahrajte znova. Ctrl+Super+V je vyhradené.' : 'Stlačte skratku a uvoľnite všetky klávesy. Esc zruší záznam. Kombinácie s bežným klávesom vyžadujú povolenie Prístupnosť.';
 
-export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorderProps) {
+type HotkeyRecorderProps<T extends object> = { label: string | null; labelledBy: string; note?: string; record: () => Promise<T | HotkeyRecordProblem>; onRecorded: (value: T) => void };
+
+export function HotkeyRecorder<T extends object>({ label, labelledBy, note = DICTATION_NOTE, record: recordKeys, onRecorded }: HotkeyRecorderProps<T>) {
   const [recording, setRecording] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const currentId = useId();
@@ -18,8 +19,7 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
     const end = HOTKEY_RECORDING.begin();
     setRecording(true);
     setMessage(null);
-    window.codevo
-      .recordHotkey()
+    recordKeys()
       .then(
         (result) => {
           if (typeof result === 'string') {
@@ -42,10 +42,10 @@ export function HotkeyRecorder({ hotkey, labelledBy, onRecorded }: HotkeyRecorde
   return (
     <div className="hk-wrap">
       <button type="button" className="hk" data-rec={recording} aria-labelledby={`${labelledBy} ${currentId}`} aria-busy={recording} aria-describedby={helpId} onClick={record}>
-        <span id={currentId}>{recording ? 'Stlačte novú skratku…' : (hotkey?.label ?? 'Nenastavená')}</span>
-        <small>{hotkey === null ? 'Nastaviť' : 'Zmeniť'}</small>
+        <span id={currentId}>{recording ? 'Stlačte novú skratku…' : (label ?? 'Nenastavená')}</span>
+        <small>{label === null ? 'Nastaviť' : 'Zmeniť'}</small>
       </button>
-      <p id={helpId} className="field-note">{navigator.userAgent.includes('Linux') ? 'Stlačte skratku a uvoľnite všetky klávesy. Po zmene X11 alebo Waylandu ju nahrajte znova. Ctrl+Super+V je vyhradené.' : 'Stlačte skratku a uvoľnite všetky klávesy. Esc zruší záznam. Kombinácie s bežným klávesom vyžadujú povolenie Prístupnosť.'}</p>
+      <p id={helpId} className="field-note">{note}</p>
       {message !== null && (
         <p className="field-note warn" role="alert">
           {message}
