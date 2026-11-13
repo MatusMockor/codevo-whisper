@@ -1144,54 +1144,6 @@ describe('SessionCoordinator', () => {
     expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
   });
 
-  it('never delivers or remembers text cancelled while the delivery check is pending', async () => {
-    const entered = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
-    class DelayedHelper extends FakeInputHelper {
-      override async checkDelivery() {
-        entered.resolve();
-        await resume.promise;
-        return { kind: 'legacy' as const };
-      }
-    }
-    const helper = new DelayedHelper({ clipboard: 'original' });
-    const harness = await prepared({ inputHelper: helper });
-    await dictate(harness, 7);
-    await entered.promise;
-
-    helper.pressSessionShortcut('cancel');
-    expect({ busy: harness.coordinator.isBusy(), shortcuts: helper.sessionShortcuts }).toEqual({ busy: false, shortcuts: [] });
-    resume.resolve();
-    await harness.coordinator.settled();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    expect(helper.pasted).toEqual([]);
-    expect(helper.clipboard).toBe('original');
-    expect(harness.lastTranscript.get()).toBeNull();
-    expect(await harness.history.view()).toMatchObject({ entries: [] });
-    expect(await harness.stats.days()).toEqual([]);
-    expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
-  });
-
-  it('never delivers text cancelled while insertion waits for the shortcut modifiers to be released', async () => {
-    const harness = await prepared({ helper: { modifiers: { control: true, command: false, option: false, shift: false } }, pasteDelay: 'default' });
-    let polls = 0;
-    const flags = harness.helper.modifierFlags.bind(harness.helper);
-    harness.helper.modifierFlags = () => { polls++; return flags(); };
-    await dictate(harness, 7);
-    await expect.poll(() => polls).toBeGreaterThan(1);
-
-    harness.coordinator.act('cancel');
-    harness.helper.modifiers = { control: false, command: false, option: false, shift: false };
-    await harness.coordinator.settled();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    expect(harness.helper.pasted).toEqual([]);
-    expect(harness.helper.clipboard).toBe('original');
-    expect(harness.lastTranscript.get()).toBeNull();
-    expect(await harness.history.view()).toMatchObject({ entries: [] });
-  });
-
   it('never delivers when the cancel arrives between transcription and the delivery boundary', async () => {
     let cancel: () => void = () => undefined;
     const harness = await prepared({
@@ -1210,20 +1162,20 @@ describe('SessionCoordinator', () => {
     expect(harness.states.at(-1)).toEqual({ kind: 'hidden' });
   });
 
-  it('releases Esc and drops the cancel control once delivery to the target begins', async () => {
-    const pasting = Promise.withResolvers<void>();
+  it('stops offering cancel once the final text is ready and delivers it', async () => {
+    const checking = Promise.withResolvers<void>();
     const resume = Promise.withResolvers<void>();
-    class SlowPaste extends FakeInputHelper {
-      override async paste() {
-        pasting.resolve();
+    class SlowCheck extends FakeInputHelper {
+      override async checkDelivery() {
+        checking.resolve();
         await resume.promise;
-        return super.paste();
+        return { kind: 'legacy' as const };
       }
     }
-    const helper = new SlowPaste({ clipboard: 'original' });
+    const helper = new SlowCheck({ clipboard: 'original' });
     const harness = await prepared({ inputHelper: helper });
     await dictate(harness, 7);
-    await pasting.promise;
+    await checking.promise;
 
     expect(helper.sessionShortcuts).toEqual([]);
     const shown = harness.states.at(-1);
@@ -1235,6 +1187,7 @@ describe('SessionCoordinator', () => {
     await expect.poll(() => helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
     await expect.poll(() => lastVisible(harness.states)).toEqual({ kind: 'inserted', appName: 'TextEdit' });
     expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
+    expect(await harness.history.view()).toMatchObject({ entries: [expect.objectContaining({ text: ONE_SECOND_TEXT(7) })] });
   });
 
   it('ignores a cancel shortcut that arrives with no active session', async () => {

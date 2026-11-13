@@ -7,7 +7,7 @@ import type { DictationOptions, EngineDictation, EngineUnavailableReason, Prepar
 import { EngineUnavailableError, TranscriptionFailedError } from '../engines/transcription-engine';
 import type { AppTarget, InputHelper } from '../helper/input-helper';
 import type { StopReason } from '../hotkey/hotkey-service';
-import type { DeliveryGate, InsertionOutcome, InsertionService } from '../insertion/insertion-service';
+import type { InsertionOutcome, InsertionService } from '../insertion/insertion-service';
 import type { LastTranscript } from '../insertion/last-transcript';
 import { sanitizeInsertionText } from '../insertion/sanitize-insertion-text';
 import type { SerialQueue } from '../insertion/serial-queue';
@@ -85,7 +85,6 @@ export class DictationSession {
   private readonly microphones: readonly MicrophoneSetting[];
   private readonly controller = new AbortController();
   private readonly aborted = new Promise<null>((resolve) => this.controller.signal.addEventListener('abort', () => resolve(null), { once: true }));
-  private readonly gate: DeliveryGate = { signal: this.controller.signal, cross: () => this.cross() };
   private fallbackDevice: string | null = null;
   private target: Promise<AppTarget | null> = Promise.resolve(null);
   private readiness: Promise<Preparation> = Promise.resolve(NOT_READY);
@@ -349,9 +348,9 @@ export class DictationSession {
       await this.chooseTerminal({ kind: 'result', state: errorState(MESSAGES.nothingHeard) });
       return;
     }
+    if (!this.cross()) return;
     const target = await this.target;
     const outcome = await this.insert(text, target);
-    if (outcome === 'cancelled') return;
     this.remember(text);
     this.deps.transcribed(text, pcm);
     await this.chooseTerminal({ kind: 'result', state: withPolishNotice(insertionState(outcome, target?.name ?? ''), failure) });
@@ -413,8 +412,11 @@ export class DictationSession {
     return true;
   }
 
-  private insert(text: string, target: AppTarget | null): Promise<InsertionOutcome | 'cancelled' | null> {
-    return this.deps.insertion.insert(text, target, this.transcriptSettings, this.gate).catch((error: unknown) => {
+  private insert(text: string, target: AppTarget | null): Promise<InsertionOutcome | null> {
+    if (this.controller.signal.aborted) {
+      return Promise.resolve(null);
+    }
+    return this.deps.insertion.insert(text, target, this.transcriptSettings).catch((error: unknown) => {
       this.deps.logger.error('The transcript could not be inserted', error);
       return null;
     });

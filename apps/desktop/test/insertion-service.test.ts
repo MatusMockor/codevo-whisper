@@ -77,27 +77,6 @@ describe('InsertionService', () => {
     expect(helper.pasted).toEqual(['Žilina 🚀']);
   });
 
-  it.each(['paste', 'type', 'clipboard'] as const)('crosses the delivery gate right before the first %s effect and stops when it refuses', async (insertion) => {
-    const { service, helper } = await prepared({ settings: { insertion, clipboardPolicy: 'leave' } });
-    const crossings: string[] = [];
-    const refused = { signal: new AbortController().signal, cross: () => { crossings.push(helper.clipboard); return false; } };
-    expect(await service.insert('dictated', TEXT_EDIT, undefined, refused)).toBe('cancelled');
-    expect({ crossings, clipboard: helper.clipboard, pasted: helper.pasted, typed: helper.typed }).toEqual({ crossings: ['original'], clipboard: 'original', pasted: [], typed: [] });
-
-    const open = { signal: new AbortController().signal, cross: () => { crossings.push(helper.clipboard); return true; } };
-    expect(await service.insert('dictated', TEXT_EDIT, undefined, open)).not.toBe('cancelled');
-    expect(crossings).toEqual(['original', 'original']);
-    expect(helper.clipboard).toBe('dictated');
-  });
-
-  it('reports a pre-boundary outcome as cancelled once the gate signal aborts', async () => {
-    const controller = new AbortController();
-    const { service, helper } = await prepared({ helper: { modifiers: HELD }, onSleep: () => controller.abort() });
-    const gate = { signal: controller.signal, cross: () => !controller.signal.aborted };
-    expect(await service.insert('dictated', TEXT_EDIT, undefined, gate)).toBe('cancelled');
-    expect(helper.clipboard).toBe('original');
-  });
-
   it('does not write the clipboard when a dictation shortcut stays held', async () => {
     const { service, helper } = await prepared({ helper: { modifiers: HELD } });
     expect(await service.insert('dictated', TEXT_EDIT)).toBe('blocked-modifiers-held');
