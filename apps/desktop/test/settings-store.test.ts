@@ -169,7 +169,7 @@ describe('SettingsStore', () => {
         mode: 'toggle',
         languages: { mode: 'selected', selected: ['de', 'xx'] },
         hotkey: { keycode: 12, label: 'Q' },
-        microphone: { deviceId: 'usb-mic', label: 'USB Mic' },
+        microphones: [{ deviceId: 'usb-mic', label: 'USB Mic' }, { deviceId: 'usb-mic', label: 'Duplicate' }],
         engineOrder: ['server', 'server'],
         localModelId: 42,
         insertion: 'clipboard',
@@ -185,11 +185,44 @@ describe('SettingsStore', () => {
     expect(loaded).toEqual({
       ...DEFAULT_SETTINGS,
       mode: 'toggle',
-      microphone: { deviceId: 'usb-mic', label: 'USB Mic' },
       insertion: 'clipboard',
       onboardingDone: true,
     });
     expect(loaded).not.toHaveProperty('history');
+  });
+
+  it('migrates a stored single microphone into a one-item list and saves only the list', async () => {
+    await writeFile(file, JSON.stringify({ microphone: { deviceId: 'usb-mic', label: 'USB Mic' } }));
+    const store = new SettingsStore(file);
+
+    expect((await store.load()).microphones).toEqual([{ deviceId: 'usb-mic', label: 'USB Mic' }]);
+
+    await store.update({ mode: 'toggle' });
+    const saved = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
+    expect(saved['microphones']).toEqual([{ deviceId: 'usb-mic', label: 'USB Mic' }]);
+    expect(saved).not.toHaveProperty('microphone');
+  });
+
+  it('keeps the system default for a stored default or invalid single microphone', async () => {
+    for (const microphone of [{ deviceId: null, label: null }, { deviceId: 42, label: 'USB Mic' }, 'usb-mic']) {
+      await writeFile(file, JSON.stringify({ microphone }));
+      expect((await new SettingsStore(file).load()).microphones).toEqual([]);
+    }
+  });
+
+  it('prefers a stored list over a leftover single microphone', async () => {
+    const microphones = [{ deviceId: 'dock', label: 'Dock Mic' }, { deviceId: 'built-in', label: 'MacBook Pro Microphone' }];
+    await writeFile(file, JSON.stringify({ microphones, microphone: { deviceId: 'usb-mic', label: 'USB Mic' } }));
+
+    expect((await new SettingsStore(file).load()).microphones).toEqual(microphones);
+  });
+
+  it('protects the stored microphone list from mutation', async () => {
+    await writeFile(file, JSON.stringify({ microphones: [{ deviceId: 'dock', label: 'Dock Mic' }] }));
+    const loaded = await new SettingsStore(file).load();
+
+    expect(Reflect.set(loaded.microphones, 0, { deviceId: 'x', label: 'x' })).toBe(false);
+    expect(Reflect.set(loaded.microphones[0] ?? {}, 'label', 'x')).toBe(false);
   });
 
   it('round trips combinations and protects nested members from mutation', async () => {

@@ -10,7 +10,7 @@ const MODEL: TrayMenuModel = {
     { deviceId: 'built-in', label: 'MacBook Pro Microphone', isBluetooth: false, isDefault: false },
     { deviceId: 'usb', label: 'Shure MV7', isBluetooth: false, isDefault: false },
   ],
-  microphone: { deviceId: null, label: null },
+  microphones: [],
   languages: { mode: 'auto', selected: ['sk', 'cs', 'en'] },
   autoLanguageAllowed: true,
   readyUpdate: null,
@@ -24,7 +24,7 @@ function recordingActions(): { actions: TrayMenuActions; calls: string[] } {
     copyLast: () => calls.push('copy-last'),
     pasteLast: () => calls.push('paste-last'),
     togglePause: () => calls.push('toggle-pause'),
-    chooseMicrophone: (microphone) => calls.push(`microphone:${microphone.deviceId ?? 'default'}`),
+    chooseMicrophone: (microphone) => calls.push(`microphone:${microphone?.deviceId ?? 'default'}`),
     chooseLanguageMode: (mode) => calls.push(`language-mode:${mode}`),
     editLanguages: () => calls.push('edit-languages'),
     openApp: () => calls.push('open-app'),
@@ -104,23 +104,32 @@ describe('trayMenuTemplate', () => {
     expect(calls).toEqual(['toggle-pause']);
   });
 
-  it('lists the system default and every microphone and marks the chosen one', () => {
+  it('lists the system default and every microphone and marks the one recording uses', () => {
     const { actions, calls } = recordingActions();
-    const microphones = submenu(trayMenuTemplate({ ...MODEL, microphone: { deviceId: 'usb', label: 'Shure MV7' } }, actions), 'Mikrofón');
+    const list = [{ deviceId: 'airpods', label: 'AirPods Pro' }, { deviceId: 'usb', label: 'Shure MV7' }, { deviceId: 'built-in', label: 'MacBook Pro Microphone' }];
+    const microphones = submenu(trayMenuTemplate({ ...MODEL, microphones: list }, actions), 'Mikrofón');
 
-    expect(labels(microphones)).toEqual(['Systémový predvolený', '---', 'MacBook Pro Microphone', 'Shure MV7']);
+    expect(labels(microphones)).toEqual(['Systémový predvolený', '---', 'MacBook Pro Microphone', 'Shure MV7', 'AirPods Pro (nepripojený)']);
     expect(microphones.filter((entry) => entry.checked).map((entry) => entry.label)).toEqual(['Shure MV7']);
     click(item(microphones, 'Systémový predvolený'));
     click(item(microphones, 'MacBook Pro Microphone'));
     expect(calls).toEqual(['microphone:default', 'microphone:built-in']);
   });
 
-  it('keeps an unplugged chosen microphone visible as not connected', () => {
+  it('marks the system default when no listed microphone is connected and keeps the first one visible', () => {
     const { actions } = recordingActions();
-    const microphones = submenu(trayMenuTemplate({ ...MODEL, microphone: { deviceId: 'airpods', label: 'AirPods Pro' } }, actions), 'Mikrofón');
+    const microphones = submenu(trayMenuTemplate({ ...MODEL, microphones: [{ deviceId: 'airpods', label: 'AirPods Pro' }] }, actions), 'Mikrofón');
 
-    expect(item(microphones, 'AirPods Pro (nepripojený)')).toMatchObject({ checked: true, enabled: false });
-    expect(item(microphones, 'Systémový predvolený').checked).toBe(false);
+    expect(item(microphones, 'AirPods Pro (nepripojený)')).toMatchObject({ checked: false, enabled: false });
+    expect(item(microphones, 'Systémový predvolený').checked).toBe(true);
+  });
+
+  it('marks a listed microphone that reconnected under a new id', () => {
+    const { actions } = recordingActions();
+    const microphones = submenu(trayMenuTemplate({ ...MODEL, microphones: [{ deviceId: 'usb-old', label: 'Shure MV7' }] }, actions), 'Mikrofón');
+
+    expect(microphones.filter((entry) => entry.checked).map((entry) => entry.label)).toEqual(['Shure MV7']);
+    expect(labels(microphones)).not.toContain('Shure MV7 (nepripojený)');
   });
 
   it('switches between automatic and the selected languages and opens the language settings', () => {

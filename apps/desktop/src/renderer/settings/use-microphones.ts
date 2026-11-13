@@ -13,13 +13,14 @@ export type MicrophoneLevel = { level: number; failed: boolean };
 
 const PEAK_DECAY = 0.85;
 
-export function useMicrophoneLevel({ deviceId, label }: MicrophoneSetting): MicrophoneLevel {
+export function useMicrophoneLevel(microphones: readonly MicrophoneSetting[]): MicrophoneLevel {
+  const key = JSON.stringify(microphones);
   const [level, setLevel] = useState<MicrophoneLevel>({ level: 0, failed: false });
 
   useEffect(() => {
     let active = true;
     const unsubscribe = window.codevo.on('microphone-level', (rms) => setLevel((current) => ({ level: Math.max(rms, current.level * PEAK_DECAY), failed: false })));
-    window.codevo.startMicrophoneMeter({ deviceId, label }).catch((error: unknown) => {
+    window.codevo.startMicrophoneMeter(JSON.parse(key) as MicrophoneSetting[]).catch((error: unknown) => {
       console.error('Opening the microphone meter failed', error);
       if (active) {
         setLevel({ level: 0, failed: true });
@@ -32,7 +33,7 @@ export function useMicrophoneLevel({ deviceId, label }: MicrophoneSetting): Micr
         console.error('Closing the microphone meter failed', error);
       });
     };
-  }, [deviceId, label]);
+  }, [key]);
 
   return level;
 }

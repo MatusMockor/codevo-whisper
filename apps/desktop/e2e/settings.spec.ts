@@ -21,7 +21,7 @@ const DEFAULTS: Settings = {
   hotkey: null,
   mode: 'smart',
   languages: { mode: 'auto', selected: ['sk'] },
-  microphone: { deviceId: null, label: null },
+  microphones: [],
   engineOrder: ['local'],
   serverEnabled: true,
   serverRestoreOrder: null,
@@ -890,11 +890,11 @@ test.describe('settings page', () => {
     await expect(stat(join(userDataDir, 'models'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  test('the microphone picker lists the system default and shows a live level', async () => {
-    const select = row('Vstup').getByRole('combobox');
-    await expect(select.locator('option').first()).toHaveText('Systémový predvolený');
-    await expect(select).toHaveValue('system-default');
-    await expect.poll(() => select.locator('option').count()).toBeGreaterThan(1);
+  test('the microphone list starts on the system default, shows a live level and is edited from the keyboard', async () => {
+    const add = page.getByRole('combobox', { name: 'Pridať mikrofón' });
+    const stored = () => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.microphones.map((entry) => entry.deviceId)));
+    await expect(page.getByText('Zoznam je prázdny, nahráva sa zo systémového predvoleného mikrofónu.')).toBeVisible();
+    await expect.poll(() => add.locator('option:not([disabled])').count()).toBeGreaterThan(1);
     const heard = await page.evaluate(
       () =>
         new Promise<boolean>((resolve) => {
@@ -910,9 +910,24 @@ test.describe('settings page', () => {
     expect(heard).toBe(true);
     await expect(page.getByRole('meter', { name: 'Úroveň mikrofónu' })).toBeVisible();
 
-    const device = await select.locator('option').nth(1).getAttribute('value');
-    await select.selectOption(device ?? '');
-    await expect.poll(() => page.evaluate(() => window.codevo.getSettings().then((settings) => settings.microphone.deviceId))).toBe(device);
+    const [first, second] = await add.locator('option:not([disabled])').evaluateAll((options) => options.map((option) => ({ id: (option as HTMLOptionElement).value, label: option.textContent ?? '' })));
+    if (first === undefined || second === undefined) throw new Error('two fake microphones expected');
+    await add.selectOption(first.id);
+    await add.selectOption(second.id);
+    await expect.poll(stored).toEqual([first.id, second.id]);
+    const items = page.locator('.mic-item');
+    await expect(items.nth(0)).toContainText('používa sa');
+    await expect(items.nth(1)).toContainText('pripojený');
+
+    await page.getByRole('button', { name: `Posunúť nižšie: ${first.label}` }).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(stored).toEqual([second.id, first.id]);
+    await expect(items.nth(0)).toContainText(second.label);
+
+    await page.getByRole('button', { name: `Odstrániť: ${second.label}` }).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(stored).toEqual([first.id]);
+    await expect(page.getByRole('button', { name: `Odstrániť: ${first.label}` })).toBeFocused();
   });
 
   test('the meter releases the microphone while the main window is hidden or minimized', async () => {

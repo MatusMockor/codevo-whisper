@@ -50,7 +50,7 @@ export type Settings = {
   hotkey: HotkeySetting;
   mode: DictationMode;
   languages: LanguageSelection;
-  microphone: MicrophoneSetting;
+  microphones: readonly MicrophoneSetting[];
   engineOrder: Array<EngineId>;
   serverEnabled: boolean;
   serverRestoreOrder: Array<EngineId> | null;
@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   hotkey: null,
   mode: 'smart',
   languages: Object.freeze({ mode: 'auto', selected: Object.freeze(['sk'] as const) }),
-  microphone: Object.freeze({ deviceId: null, label: null }),
+  microphones: Object.freeze([]),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,
   serverEnabled: true,
   serverRestoreOrder: null,

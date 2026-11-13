@@ -1,36 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import { isBluetoothLabel, resolveDevice, toAudioDevices, type AudioDevice } from '../src/main/audio/device-resolver';
+import { isBluetoothLabel, toAudioDevices } from '../src/main/audio/device-resolver';
+import { promoteMicrophone, resolveDevice, type AudioDevice } from '../src/shared/microphones';
 
 const builtIn: AudioDevice = { deviceId: 'built-in-id', label: 'MacBook Pro Microphone', isBluetooth: false, isDefault: false };
 const airPods: AudioDevice = { deviceId: 'airpods-id', label: 'Matúš AirPods Pro', isBluetooth: true, isDefault: false };
 const usb: AudioDevice = { deviceId: 'usb-id', label: 'Scarlett 2i2 USB', isBluetooth: false, isDefault: false };
 
 describe('resolveDevice', () => {
-  it('uses the system default when nothing was chosen', () => {
-    expect(resolveDevice([builtIn, usb], { deviceId: null, label: null })).toEqual({ device: null, fallback: false });
+  it('uses the system default when the list is empty', () => {
+    expect(resolveDevice([builtIn, usb], [])).toEqual({ device: null, fallback: false });
   });
 
   it('matches by deviceId', () => {
-    expect(resolveDevice([builtIn, usb], { deviceId: 'usb-id', label: 'Scarlett 2i2 USB' })).toEqual({ device: usb, fallback: false });
+    expect(resolveDevice([builtIn, usb], [{ deviceId: 'usb-id', label: 'Scarlett 2i2 USB' }])).toEqual({ device: usb, fallback: false });
   });
 
   it('matches by label when the deviceId changed', () => {
     const reconnected = { ...airPods, deviceId: 'airpods-new-id' };
 
-    expect(resolveDevice([builtIn, reconnected], { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' })).toEqual({
+    expect(resolveDevice([builtIn, reconnected], [{ deviceId: 'airpods-id', label: 'Matúš AirPods Pro' }])).toEqual({
       device: reconnected,
       fallback: false,
     });
   });
 
-  it('falls back to the default device when the chosen one is missing', () => {
-    expect(resolveDevice([builtIn, usb], { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' })).toEqual({ device: null, fallback: true });
+  it('uses the first connected entry in list order', () => {
+    const list = [
+      { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' },
+      { deviceId: 'usb-id', label: 'Scarlett 2i2 USB' },
+      { deviceId: 'built-in-id', label: 'MacBook Pro Microphone' },
+    ];
+
+    expect(resolveDevice([builtIn, usb], list)).toEqual({ device: usb, fallback: false });
+    expect(resolveDevice([builtIn, usb, airPods], list)).toEqual({ device: airPods, fallback: false });
+  });
+
+  it('prefers a higher entry matched by label over a lower entry matched by id', () => {
+    const reconnected = { ...airPods, deviceId: 'airpods-new-id' };
+    const list = [
+      { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' },
+      { deviceId: 'usb-id', label: 'Scarlett 2i2 USB' },
+    ];
+
+    expect(resolveDevice([usb, reconnected], list)).toEqual({ device: reconnected, fallback: false });
+  });
+
+  it('falls back to the default device when no entry is connected', () => {
+    expect(resolveDevice([builtIn, usb], [{ deviceId: 'airpods-id', label: 'Matúš AirPods Pro' }])).toEqual({ device: null, fallback: true });
   });
 
   it('does not match an empty label', () => {
     const unlabeled = { ...usb, label: '' };
 
-    expect(resolveDevice([unlabeled], { deviceId: 'gone-id', label: '' })).toEqual({ device: null, fallback: true });
+    expect(resolveDevice([unlabeled], [{ deviceId: 'gone-id', label: '' }])).toEqual({ device: null, fallback: true });
+  });
+});
+
+describe('promoteMicrophone', () => {
+  const usbEntry = { deviceId: 'usb-id', label: 'Scarlett 2i2 USB' };
+  const airPodsEntry = { deviceId: 'airpods-id', label: 'Matúš AirPods Pro' };
+  const builtInEntry = { deviceId: 'built-in-id', label: 'MacBook Pro Microphone' };
+
+  it('moves a listed device to the top and keeps the rest in order', () => {
+    expect(promoteMicrophone([usbEntry, airPodsEntry, builtInEntry], builtInEntry)).toEqual([builtInEntry, usbEntry, airPodsEntry]);
+  });
+
+  it('adds a new device at the top', () => {
+    expect(promoteMicrophone([usbEntry], airPodsEntry)).toEqual([airPodsEntry, usbEntry]);
+  });
+
+  it('replaces an entry that reconnected under a new id with the same label', () => {
+    const reconnected = { deviceId: 'airpods-new-id', label: 'Matúš AirPods Pro' };
+
+    expect(promoteMicrophone([usbEntry, airPodsEntry], reconnected)).toEqual([reconnected, usbEntry]);
   });
 });
 

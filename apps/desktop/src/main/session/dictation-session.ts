@@ -81,7 +81,7 @@ export class DictationSession {
   private readonly live: LiveTranscript | null;
   private lastLevel = 0;
   private notice: ProcessingNotice;
-  private readonly microphone: MicrophoneSetting;
+  private readonly microphones: readonly MicrophoneSetting[];
   private readonly controller = new AbortController();
   private fallbackDevice: string | null = null;
   private target: Promise<AppTarget | null> = Promise.resolve(null);
@@ -102,13 +102,13 @@ export class DictationSession {
 
   constructor(private readonly deps: DictationSessionDeps) {
     this.startedAt = deps.clock();
-    const { languages, microphone, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
+    const { languages, microphones, overlay, customWords, removeFillerWords, appendTrailingSpace } = deps.settings.get();
     this.languages = languages;
     this.transcriptSettings = Object.freeze({ languages, customWords: Object.freeze([...customWords]), removeFillerWords, appendTrailingSpace });
     this.partials = overlay === 'live';
     this.polishing = canPolish(deps.settings.get());
     this.live = this.partials ? new LiveTranscript() : null;
-    this.microphone = microphone;
+    this.microphones = microphones;
     const { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume } = deps.settings.get();
     this.audioSettings = { muteWhileRecording, audioFeedback, feedbackOutputId, feedbackVolume };
   }
@@ -183,7 +183,7 @@ export class DictationSession {
         }
         this.unsubscribeFrames = this.deps.capture.onFrame((pcm) => this.relay.push(pcm));
         try {
-          const started = await this.deps.capture.start(this.microphone);
+          const started = await this.deps.capture.start(this.microphones);
           this.microphoneOpened = true;
           return started;
         } catch (error) {
@@ -208,7 +208,7 @@ export class DictationSession {
     if (!fallback) {
       return;
     }
-    this.fallbackDevice = this.microphone.label ?? '';
+    this.fallbackDevice = this.microphones[0]?.label ?? '';
     this.level(0);
   }
 

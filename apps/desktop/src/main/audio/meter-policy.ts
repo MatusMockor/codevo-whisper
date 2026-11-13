@@ -18,7 +18,7 @@ export type MeterPolicyDeps = {
 };
 
 export class MeterPolicy {
-  private wanted: MicrophoneSetting | null = null;
+  private wanted: readonly MicrophoneSetting[] | null = null;
   private running = false;
   private readonly unsubscribers: Array<() => void>;
 
@@ -36,7 +36,7 @@ export class MeterPolicy {
     ];
   }
 
-  request(microphone: MicrophoneSetting): Promise<void> {
+  request(microphone: readonly MicrophoneSetting[]): Promise<void> {
     this.wanted = microphone;
     this.running = false;
     return this.sync();
@@ -71,7 +71,7 @@ export class MeterPolicy {
     return this.deps.meter.stop();
   }
 
-  private start(microphone: MicrophoneSetting): Promise<void> {
+  private start(microphone: readonly MicrophoneSetting[]): Promise<void> {
     if (this.running) {
       return Promise.resolve();
     }

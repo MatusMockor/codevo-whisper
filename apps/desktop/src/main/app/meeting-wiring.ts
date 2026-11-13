@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { meetingFileName, meetingMarkdown } from '../../shared/meeting-markdown';
 import type { Complete } from '../ai/llm-client';
 import type { AudioCapture } from '../audio/audio-capture';
-import { resolveDevice } from '../audio/device-resolver';
+import { resolveDevice } from '../../shared/microphones';
 import { localBackend, type LocalEngineArch } from '../engines/local-backend';
 import { resolveTranscribeCli } from '../engines/transcribe-binary';
 import type { Logger } from '../logging/logger';
@@ -72,7 +72,7 @@ export function createMeetings({ captureWindow, capture, models, diarizer, setti
     store,
     capture: captureWindow,
     systemAudio: systemAudioPlan,
-    microphoneId: async () => resolveDevice(await capture.listDevices(), settings.get().microphone).device?.deviceId ?? null,
+    microphoneId: async () => resolveDevice(await capture.listDevices(), settings.get().microphones).device?.deviceId ?? null,
     logger,
   });
   const transcriber = new MeetingTranscriber({

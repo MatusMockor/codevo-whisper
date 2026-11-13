@@ -34,7 +34,7 @@ function body(state: SignalState, value: string, meta: string, keyLabel: string 
 }
 
 function microphone({ settings, permissions, status }: PathInput): NodeBody {
-  const label = settings.microphone.label ?? DEFAULT_MICROPHONE;
+  const label = settings.microphones[0]?.label ?? DEFAULT_MICROPHONE;
   const access = permissions?.microphone ?? (status.permissionsOk ? 'granted' : null);
   if (access === 'denied') {
     return body('err', 'Prístup zamietnutý', label);

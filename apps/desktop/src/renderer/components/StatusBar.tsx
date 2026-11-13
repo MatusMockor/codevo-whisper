@@ -53,7 +53,7 @@ function MicrophoneItem({ dictation }: { dictation: Dictation }) {
   return (
     <div className="sbar-mic">
       <Glyph name="mic" size="sm" />
-      <span>{dictation.settings.value.microphone.label ?? DEFAULT_MICROPHONE}</span>
+      <span>{dictation.settings.value.microphones[0]?.label ?? DEFAULT_MICROPHONE}</span>
     </div>
   );
 }

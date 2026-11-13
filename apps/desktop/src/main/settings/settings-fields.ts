@@ -1,8 +1,9 @@
 import { CODEX_EFFORTS, isAiBaseUrl, isAiModel, isCodexModel } from '../../shared/ai';
 import { isDictationLanguage, MAX_SELECTED_LANGUAGES } from '../../shared/dictation-languages';
+import { MAX_MICROPHONES } from '../../shared/microphones';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { isCustomWords } from '../../shared/custom-words';
-import { isEngineOrder, type Settings } from '../../shared/settings';
+import { isEngineOrder, type MicrophoneSetting, type Settings } from '../../shared/settings';
 
 type FieldGuards = { readonly [K in keyof Settings]: (value: unknown) => value is Settings[K] };
 
@@ -41,11 +42,20 @@ function isHotkey(value: unknown): value is Settings['hotkey'] {
   return value === null || parseHotkeySetting(value) !== undefined;
 }
 
-function isMicrophone(value: unknown): value is Settings['microphone'] {
+export function isMicrophone(value: unknown): value is MicrophoneSetting {
   if (!isPlainRecord(value) || !hasExactKeys(value, ['deviceId', 'label'])) {
     return false;
   }
-  return isNullableText(value['deviceId']) && isNullableText(value['label']);
+  const { deviceId, label } = value;
+  return isNullableText(deviceId) && isNullableText(label) && (deviceId !== null || label !== null);
+}
+
+function isMicrophones(value: unknown): value is Settings['microphones'] {
+  if (!Array.isArray(value) || value.length > MAX_MICROPHONES || !value.every(isMicrophone)) {
+    return false;
+  }
+  const ids = value.flatMap((entry) => (entry.deviceId === null ? [] : [entry.deviceId]));
+  return new Set(ids).size === ids.length;
 }
 
 function isSelectedLanguages(value: unknown): value is Settings['languages']['selected'] {
@@ -73,7 +83,7 @@ export const SETTINGS_FIELDS: FieldGuards = Object.freeze({
   hotkey: isHotkey,
   mode: oneOf(['hold', 'toggle', 'smart']),
   languages: isLanguages,
-  microphone: isMicrophone,
+  microphones: isMicrophones,
   engineOrder: isEngineOrder,
   serverEnabled: isBoolean,
   serverRestoreOrder: (value: unknown): value is Settings['serverRestoreOrder'] => value === null || isEngineOrder(value),

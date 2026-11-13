@@ -1,6 +1,6 @@
 import { Menu, Tray } from 'electron';
 import type { AudioCapture } from '../audio/audio-capture';
-import type { AudioDevice } from '../audio/device-resolver';
+import { promoteMicrophone, type AudioDevice } from '../../shared/microphones';
 import type { ActiveModel } from '../engines/active-model';
 import type { LastTranscript } from '../insertion/last-transcript';
 import type { Logger } from '../logging/logger';
@@ -130,7 +130,7 @@ export class TrayMenu {
       lastTranscript: this.deps.lastTranscript.get(),
       paused,
       devices: this.devices,
-      microphone: settings.microphone,
+      microphones: settings.microphones,
       languages: settings.languages,
       autoLanguageAllowed: this.deps.models.activeLanguageHint() !== 'required',
       readyUpdate: this.readyUpdate(),
@@ -146,7 +146,10 @@ export class TrayMenu {
       copyLast: () => void coordinator.copyLast().catch(report('Copying the last transcript from the tray failed')),
       pasteLast: () => void coordinator.pasteLast().catch(report('Pasting the last transcript from the tray failed')),
       togglePause: () => this.togglePause(),
-      chooseMicrophone: (microphone) => void settings.update({ microphone }).catch(report('The microphone could not be saved')),
+      chooseMicrophone: (microphone) =>
+        void settings
+          .update((current) => ({ microphones: microphone === null ? [] : promoteMicrophone(current.microphones, microphone) }))
+          .catch(report('The microphone could not be saved')),
       chooseLanguageMode: (mode) => void settings.update((current) => ({ languages: { ...current.languages, mode } })).catch(report('The language mode could not be saved')),
       editLanguages: () => this.deps.openSettings(),
       openApp: () => this.deps.openApp(),

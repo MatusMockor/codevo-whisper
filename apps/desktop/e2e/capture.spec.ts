@@ -1,3 +1,4 @@
+import type { MicrophoneSetting } from '../src/shared/settings';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { E2eHooks } from '../src/main/app/e2e-hooks';
 import { isCapturePage, mainWindow } from './app-windows';
@@ -19,7 +20,7 @@ const END_SLACK_MS = 100;
 const START_SLACK_MS = 100;
 const LEVEL_TOLERANCE = 2;
 const SETTLE_MS = 750;
-const SYSTEM_DEFAULT = { deviceId: null, label: null };
+const SYSTEM_DEFAULT: readonly MicrophoneSetting[] = [];
 
 let app: ElectronApplication;
 let userDataDir: string;
@@ -181,12 +182,12 @@ test.describe('with Chromium fake media', () => {
       const result = await capture.start(microphone);
       await capture.stop();
       return result;
-    }, { deviceId: chosen.deviceId, label: chosen.label });
+    }, [{ deviceId: chosen.deviceId, label: chosen.label }]);
     expect(exact).toEqual({ fallback: false, deviceLabel: chosen.label });
 
     const missing = await app.evaluate(async () => {
       const { capture } = (globalThis as unknown as HookGlobal).codevoE2e;
-      const result = await capture.start({ deviceId: 'unplugged-airpods', label: 'Matúš AirPods Pro' });
+      const result = await capture.start([{ deviceId: 'unplugged-airpods', label: 'Matúš AirPods Pro' }]);
       await capture.stop();
       return result;
     });
@@ -244,7 +245,7 @@ test.describe('with Chromium fake media', () => {
       const started = await audio.start(microphone);
       await new Promise((resolve) => setTimeout(resolve, 300));
       return { started, bytes: (await audio.stop()).byteLength };
-    }, { deviceId: chosen.deviceId, label: chosen.label });
+    }, [{ deviceId: chosen.deviceId, label: chosen.label }]);
 
     expect(result.started.fallback).toBe(true);
     expect(result.started.deviceLabel).not.toBe('');
@@ -275,7 +276,7 @@ test.describe('with the app permission handler', () => {
 
     const bytes = await app.evaluate(async () => {
       const { capture } = (globalThis as unknown as HookGlobal).codevoE2e;
-      await capture.start({ deviceId: null, label: null });
+      await capture.start([]);
       await new Promise((resolve) => setTimeout(resolve, 300));
       return (await capture.stop()).byteLength;
     });

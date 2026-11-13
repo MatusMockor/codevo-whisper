@@ -45,7 +45,7 @@ describe('QuitGate', () => {
 
   it('defers the quit until the microphone finished starting and then quits once', async () => {
     const { host, capture, gate, quits } = harness();
-    const meter = capture.startMeter({ deviceId: null, label: null });
+    const meter = capture.startMeter([]);
     const first = new QuitEvent();
     const second = new QuitEvent();
 
@@ -65,7 +65,7 @@ describe('QuitGate', () => {
 
   it('quits anyway when the microphone does not settle in time', async () => {
     const { capture, gate, quits } = harness(30);
-    void capture.startMeter({ deviceId: null, label: null });
+    void capture.startMeter([]);
     const event = new QuitEvent();
 
     gate.handle(event);
@@ -76,7 +76,7 @@ describe('QuitGate', () => {
 
   it('never holds the quit back while the system shuts down or logs out', async () => {
     const { capture, gate, quits } = harness();
-    void capture.startMeter({ deviceId: null, label: null });
+    void capture.startMeter([]);
     const event = new QuitEvent();
 
     gate.systemShuttingDown();

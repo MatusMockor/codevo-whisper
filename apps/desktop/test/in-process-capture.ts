@@ -1,5 +1,5 @@
 import type { AudioCapture, CaptureStart } from '../src/main/audio/audio-capture';
-import { resolveDevice, type AudioDevice } from '../src/main/audio/device-resolver';
+import { resolveDevice, type AudioDevice } from '../src/shared/microphones';
 import { Listeners } from '../src/main/helper/listeners';
 import { concatPcm, PCM_BYTES_PER_SECOND, PCM_SAMPLE_RATE } from '../src/shared/pcm';
 import type { MicrophoneSetting } from '../src/shared/settings';
@@ -21,8 +21,8 @@ export class InProcessCapture implements AudioCapture {
   failNextStart = false;
   failureDelayMs = 0;
   recording = false;
-  metering: MicrophoneSetting | null = null;
-  readonly starts: MicrophoneSetting[] = [];
+  metering: readonly MicrophoneSetting[] | null = null;
+  readonly starts: (readonly MicrophoneSetting[])[] = [];
   frameSubscribers = 0;
   private frames: Uint8Array[] = [];
   private readonly frameListeners = new Listeners<Uint8Array>(new RecordingLogger(), 'In-process frame listener failed');
@@ -38,7 +38,7 @@ export class InProcessCapture implements AudioCapture {
     return () => undefined;
   }
 
-  start(chosen: MicrophoneSetting): Promise<CaptureStart> {
+  start(chosen: readonly MicrophoneSetting[]): Promise<CaptureStart> {
     this.starts.push(chosen);
     if (this.failNextStart) {
       this.failNextStart = false;
@@ -108,7 +108,7 @@ export class InProcessCapture implements AudioCapture {
     return this.recordingStops.add(listener);
   }
 
-  startMeter(chosen: MicrophoneSetting): Promise<void> {
+  startMeter(chosen: readonly MicrophoneSetting[]): Promise<void> {
     if (!this.recording) {
       this.metering = chosen;
     }

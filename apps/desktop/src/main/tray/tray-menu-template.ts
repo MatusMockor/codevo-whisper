@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron';
-import type { AudioDevice } from '../audio/device-resolver';
+import { resolveDevice, type AudioDevice } from '../../shared/microphones';
 import type { LanguageMode, LanguageSelection } from '../../shared/dictation-languages';
 import type { MicrophoneSetting } from '../../shared/settings';
 
@@ -8,7 +8,7 @@ export type TrayMenuModel = {
   lastTranscript: string | null;
   paused: boolean;
   devices: readonly AudioDevice[];
-  microphone: MicrophoneSetting;
+  microphones: readonly MicrophoneSetting[];
   languages: LanguageSelection;
   autoLanguageAllowed: boolean;
   readyUpdate: string | null;
@@ -20,7 +20,7 @@ export type TrayMenuActions = {
   copyLast(): void;
   pasteLast(): void;
   togglePause(): void;
-  chooseMicrophone(microphone: MicrophoneSetting): void;
+  chooseMicrophone(microphone: MicrophoneSetting | null): void;
   chooseLanguageMode(mode: LanguageMode): void;
   editLanguages(): void;
   openApp(): void;
@@ -58,30 +58,27 @@ function lastTranscriptItems(model: TrayMenuModel, actions: TrayMenuActions): Me
   return [header, { label: excerpt(model.lastTranscript), enabled: false }, copy, paste];
 }
 
-function isSystemDefault(microphone: MicrophoneSetting): boolean {
-  return microphone.deviceId === null && microphone.label === null;
-}
-
-function missingDeviceItems(model: TrayMenuModel): MenuItemConstructorOptions[] {
-  const { microphone, devices } = model;
-  if (isSystemDefault(microphone) || devices.some((device) => device.deviceId === microphone.deviceId)) {
+function missingDeviceItems({ microphones, devices }: TrayMenuModel): MenuItemConstructorOptions[] {
+  const first = microphones[0];
+  if (first === undefined || resolveDevice(devices, [first]).device !== null) {
     return [];
   }
-  return [{ label: `${microphone.label ?? 'Vybraný mikrofón'} (nepripojený)`, type: 'radio', checked: true, enabled: false }];
+  return [{ label: `${first.label ?? 'Vybraný mikrofón'} (nepripojený)`, type: 'radio', checked: false, enabled: false }];
 }
 
 function microphoneMenu(model: TrayMenuModel, actions: TrayMenuActions): MenuItemConstructorOptions {
+  const recording = resolveDevice(model.devices, model.microphones).device;
   const systemDefault: MenuItemConstructorOptions = {
     label: 'Systémový predvolený',
     type: 'radio',
-    checked: isSystemDefault(model.microphone),
-    click: () => actions.chooseMicrophone({ deviceId: null, label: null }),
+    checked: recording === null,
+    click: () => actions.chooseMicrophone(null),
   };
   const devices = model.devices.map(
     (device): MenuItemConstructorOptions => ({
       label: device.label,
       type: 'radio',
-      checked: device.deviceId === model.microphone.deviceId,
+      checked: device.deviceId === recording?.deviceId,
       click: () => actions.chooseMicrophone({ deviceId: device.deviceId, label: device.label }),
     }),
   );

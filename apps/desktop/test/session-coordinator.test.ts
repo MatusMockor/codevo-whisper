@@ -566,21 +566,21 @@ describe('SessionCoordinator', () => {
     expect(harness.lastTranscript.get()).toBe(ONE_SECOND_TEXT(7));
     expect(harness.helper.clipboard).toBe('original');
     expect(harness.capture.recording).toBe(false);
-    expect(harness.capture.starts).toEqual([{ deviceId: null, label: null }]);
+    expect(harness.capture.starts).toEqual([[]]);
     const [call] = await readRecordedCalls(argsFile);
     expect(call?.[call.indexOf('--language') + 1]).toBe('auto');
     await expect.poll(() => harness.states.at(-1), { timeout: 3000 }).toEqual({ kind: 'hidden' });
   });
 
   it('shows the fallback microphone notice', async () => {
-    const harness = await prepared({ settings: { microphone: { deviceId: 'airpods-id', label: 'AirPods Pro' } } });
+    const harness = await prepared({ settings: { microphones: [{ deviceId: 'airpods-id', label: 'AirPods Pro' }] } });
 
     await dictate(harness, 3);
 
     await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(3)]);
     const recordings = harness.states.filter((state) => state.kind === 'recording');
     expect(recordings.at(-1)).toMatchObject({ fallbackDevice: 'AirPods Pro', level: 0.2 });
-    expect(harness.capture.starts).toEqual([{ deviceId: 'airpods-id', label: 'AirPods Pro' }]);
+    expect(harness.capture.starts).toEqual([[{ deviceId: 'airpods-id', label: 'AirPods Pro' }]]);
   });
 
   it('shows the missing local model error with download and pairing actions and never switches to an unpaired server', async () => {
@@ -1131,7 +1131,7 @@ describe('SessionCoordinator', () => {
     const harness = await prepared();
     const host = new FakeCaptureHost();
     const microphone = new WindowAudioCapture(host, harness.logger);
-    await microphone.startMeter({ deviceId: null, label: null });
+    await microphone.startMeter([]);
     const guard = coordinatorDictationGuard({ coordinator: () => harness.coordinator, microphone, meter: microphone, logger: harness.logger });
 
     const release = await guard.suspend();
@@ -1139,13 +1139,13 @@ describe('SessionCoordinator', () => {
     expect(harness.coordinator.isPaused()).toBe(true);
     expect(host.requests.at(-1)).toEqual({ type: 'stop' });
     expect(microphone.isBusy()).toBe(false);
-    await expect(microphone.startMeter({ deviceId: null, label: null })).rejects.toThrow('The microphone is closed for an app update');
+    await expect(microphone.startMeter([])).rejects.toThrow('The microphone is closed for an app update');
     harness.helper.emitHotkey('down');
     expect(guard.isDictating()).toBe(false);
     release();
 
     expect(harness.coordinator.isPaused()).toBe(false);
-    await expect(microphone.startMeter({ deviceId: null, label: null })).resolves.toBeUndefined();
+    await expect(microphone.startMeter([])).resolves.toBeUndefined();
   });
 
   it('the update guard keeps a pause the user chose', async () => {

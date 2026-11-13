@@ -17,7 +17,7 @@ export class MicrophoneSettings {
     return this.capture.listDevices();
   }
 
-  startMeter(microphone: MicrophoneSetting): Promise<void> {
+  startMeter(microphone: readonly MicrophoneSetting[]): Promise<void> {
     return this.meter.request(microphone);
   }
 

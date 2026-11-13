@@ -45,7 +45,7 @@ export type IpcInvokeApi = {
   getLanguagePack(): Promise<LanguagePackView>;
   downloadLanguagePack(): Promise<void>;
   getMicrophones(): Promise<AudioDevice[]>;
-  startMicrophoneMeter(microphone: MicrophoneSetting): Promise<void>;
+  startMicrophoneMeter(microphone: readonly MicrophoneSetting[]): Promise<void>;
   stopMicrophoneMeter(): Promise<void>;
   getServer(): Promise<ServerView>;
   pairServer(token: string): Promise<void>;

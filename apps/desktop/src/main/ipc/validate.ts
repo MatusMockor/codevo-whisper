@@ -3,7 +3,7 @@ import { isEngineId } from '../../shared/engine-routing';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { PERMISSION_KINDS, type PermissionKind } from '../../shared/permissions';
 import { MAX_PAIRING_TOKEN_CHARS } from '../../shared/server';
-import type { EngineId, MicrophoneSetting, Settings } from '../../shared/settings';
+import type { EngineId, Settings } from '../../shared/settings';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import { isPlainRecord, isSettingsKey, isValidField, SETTINGS_FIELDS } from '../settings/settings-fields';
 
@@ -74,9 +74,9 @@ export function validatePermissionKind(input: unknown): PermissionKind {
   return kind;
 }
 
-export function validateMicrophone(input: unknown): MicrophoneSetting {
-  if (!SETTINGS_FIELDS.microphone(input)) {
-    throw new IpcValidationError('Invalid microphone');
+export function validateMicrophones(input: unknown): Settings['microphones'] {
+  if (!SETTINGS_FIELDS.microphones(input)) {
+    throw new IpcValidationError('Invalid microphones');
   }
   return input;
 }
