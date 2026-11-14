@@ -7,6 +7,7 @@ import { LockedTargetLostError, type AppTarget, type DeliveryDecision, type Deli
 import { Listeners } from './listeners';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import type { SessionShortcut } from '../session/session-shortcuts';
+import type { Rect } from '../windows/overlay-placement';
 
 export type PostingStep = { cmd: 'clipboard-write' | 'paste' | 'type-text' | 'submit'; captureId: string | undefined };
 
@@ -145,6 +146,10 @@ export class FakeInputHelper implements InputHelper {
 
   restoreFrontmostFocus(): Promise<boolean> {
     return Promise.resolve(true);
+  }
+
+  workAreas(): Promise<Rect[]> {
+    return Promise.resolve([]);
   }
 
   captureTarget(): Promise<TargetCapture | null> {

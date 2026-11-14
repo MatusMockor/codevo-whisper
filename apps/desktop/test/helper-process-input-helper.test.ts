@@ -128,6 +128,18 @@ describe('HelperProcessInputHelper', () => {
     await expect(helper.restoreFrontmostFocus()).rejects.toThrow('restore-focus-invalid');
   });
 
+  it('reads per-monitor work areas on Linux and rejects malformed ones', async () => {
+    const { channel, helper } = await started();
+    expect(await helper.workAreas()).toEqual([]);
+    expect((await channel.request('requests-state', { cmd: 'work-areas' }))['requests']).toEqual([]);
+    const linux = new HelperProcessInputHelper(channel, undefined, 'linux');
+    const areas = [{ x: 0, y: 0, width: 1920, height: 1009 }, { x: 1920, y: 32, width: 2560, height: 1337 }];
+    await channel.request('respond-next', { cmd: 'work-areas', response: { areas } });
+    expect(await linux.workAreas()).toEqual(areas);
+    await channel.request('respond-next', { cmd: 'work-areas', response: { areas: [{ x: 0, y: 0, width: 0, height: 1009 }] } });
+    await expect(linux.workAreas()).rejects.toThrow('work-areas-invalid');
+  });
+
   it('reports missing caret support as a typing failure rather than a lost target', async () => {
     const { channel, helper } = await started();
     await channel.request('respond-next', { cmd: 'type-text', response: { posted: false, reason: 'caret-unavailable' } });

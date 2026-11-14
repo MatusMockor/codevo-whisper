@@ -4,6 +4,7 @@ import type { HotkeyBinding, HotkeyEvent } from '../../shared/hotkey';
 import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import type { SessionShortcut } from '../session/session-shortcuts';
+import type { Rect } from '../windows/overlay-placement';
 
 export type AppTarget = { bundleId: string; pid: number; name: string; windowId: number | null };
 
@@ -51,6 +52,7 @@ export interface InputHelper {
   requestPermission(kind: PermissionKind): Promise<void>;
   frontmost(): Promise<AppTarget | null>;
   restoreFrontmostFocus(): Promise<boolean>;
+  workAreas(): Promise<Rect[]>;
   captureTarget(): Promise<TargetCapture | null>;
   refocusTarget(captureId: string): Promise<RefocusResult>;
   returnFocus(captureId: string): Promise<boolean>;
