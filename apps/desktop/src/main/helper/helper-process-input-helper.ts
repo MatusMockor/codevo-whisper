@@ -16,6 +16,7 @@ import {
   parseOutputAudio,
   parseRecordedHotkey,
   parseRefocus,
+  parseWorkAreas,
   parseShortcut,
   parseTargetCapture,
   parseTargetContext,
@@ -23,6 +24,7 @@ import {
 } from './helper-responses';
 import { LockedTargetLostError, type AppTarget, type ClipboardPurpose, type DeliveryDecision, type DeliveryRequest, type FieldContext, type FocusedElement, type InputHelper, type InputLostReason, type ModifierFlags, type PermissionKind, type Permissions, type RefocusResult, type ShortcutName, type TargetCapture } from './input-helper';
 import { Listeners } from './listeners';
+import type { Rect } from '../windows/overlay-placement';
 import type { OverlayAction } from '../../shared/overlay-contract';
 import { SESSION_KEYCODES, type SessionShortcut } from '../session/session-shortcuts';
 
@@ -169,6 +171,11 @@ export class HelperProcessInputHelper implements InputHelper {
   async restoreFrontmostFocus(): Promise<boolean> {
     if (this.platform !== 'darwin') return true;
     return requireBoolean(await this.channel.request('restore-frontmost-focus', {}, REFOCUS_TIMEOUT_MS), 'restored', 'restore-focus-invalid');
+  }
+
+  async workAreas(): Promise<Rect[]> {
+    if (this.platform !== 'linux') return [];
+    return parseWorkAreas(await this.channel.request('work-areas'));
   }
 
   async captureTarget(): Promise<TargetCapture | null> {

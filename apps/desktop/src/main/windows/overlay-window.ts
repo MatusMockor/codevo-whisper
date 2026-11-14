@@ -5,7 +5,7 @@ import { Listeners } from '../helper/listeners';
 import { isTrustedSenderUrl } from '../ipc/trusted-sender';
 import type { Logger } from '../logging/logger';
 import { loadSource } from './load-source';
-import { bottomCenter, OVERLAY_SIZE } from './overlay-placement';
+import { bottomCenter, displayWorkArea, OVERLAY_SIZE, type Rect } from './overlay-placement';
 import type { RendererSource } from './renderer-source';
 
 const HIDDEN: OverlayState = { kind: 'hidden' };
@@ -64,6 +64,7 @@ export class OverlayWindow {
   private ready: Promise<BrowserWindow> | null = null;
   private latest: OverlayState = HIDDEN;
   private focusRestore: Promise<void> | null = null;
+  private areas: readonly Rect[] = [];
   private readonly actions: Listeners<OverlayAction>;
   private readonly actionHandler = (event: IpcMainEvent, payload: unknown): void => {
     this.handleAction(event, payload);
@@ -73,6 +74,7 @@ export class OverlayWindow {
     private readonly source: RendererSource,
     private readonly logger: Logger,
     private readonly restoreFocus?: () => Promise<boolean>,
+    private readonly workAreas?: () => Promise<readonly Rect[]>,
   ) {
     this.actions = new Listeners(logger, 'An overlay action listener failed');
     ipcMain.on(OVERLAY_CHANNELS.action, this.actionHandler);
@@ -122,7 +124,7 @@ export class OverlayWindow {
       window.show();
       return;
     }
-    window.setBounds(bottomCenter(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea));
+    window.setBounds(bottomCenter(displayWorkArea(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), this.areas)));
     window.showInactive();
   }
 
@@ -133,6 +135,15 @@ export class OverlayWindow {
     }
     window.hide();
     window.webContents.send(OVERLAY_CHANNELS.state, HIDDEN);
+    void this.refreshAreas();
+  }
+
+  private refreshAreas(): Promise<void> {
+    if (this.workAreas === undefined) return Promise.resolve();
+    return this.workAreas().then(
+      (areas) => { this.areas = areas; },
+      (error: unknown) => this.logger.warn('The desktop work areas could not be read', error),
+    );
   }
 
   private ensure(): Promise<BrowserWindow> {
@@ -150,7 +161,7 @@ export class OverlayWindow {
         this.forget();
       }
     });
-    this.ready = loadSource(window, this.source).then(
+    this.ready = Promise.all([loadSource(window, this.source), this.refreshAreas()]).then(
       () => window,
       (error: unknown) => {
         this.forget();

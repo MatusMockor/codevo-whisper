@@ -40,6 +40,14 @@ JsonObject* command(const std::string& cmd, JsonObject* args) {
     boolean(o,"accessibility",accessibilityEnabled(cmd=="request-permission" && string(args,"kind")=="accessibility"));
   }
   else if(cmd=="frontmost") describeTarget(o,frontmost());
+  else if(cmd=="work-areas") {
+    auto areas=json_array_new();auto gdk=gdk_display_get_default();
+    for(int i=0;display && !wayland && gdk && i<gdk_display_get_n_monitors(gdk);++i) {
+      GdkRectangle r;gdk_monitor_get_workarea(gdk_display_get_monitor(gdk,i),&r);
+      auto a=object();number(a,"x",r.x);number(a,"y",r.y);number(a,"width",r.width);number(a,"height",r.height);json_array_add_object_element(areas,a);
+    }
+    json_object_set_array_member(o,"areas",areas);
+  }
   else if(cmd=="focused-element") { auto f=focused(frontmost()); if(f.known) boolean(o,"editable",f.editable && !f.protectedInput);else json_object_set_null_member(o,"editable");text(o,"role",f.role); }
   else if(cmd=="secure-input") { auto f=focused(frontmost());boolean(o,"enabled",!f.known || f.protectedInput); }
   else if(cmd=="modifier-flags") number(o,"flags",modifierFlags());

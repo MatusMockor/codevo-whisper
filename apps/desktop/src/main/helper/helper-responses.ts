@@ -3,6 +3,7 @@ import type { HotkeyRecordResult } from '../../shared/hotkey-record';
 import type { AudioOutput, OutputAudioView } from '../../shared/recording-audio';
 import { isReservedHotkey } from '../settings/hotkey-policy';
 import type { HelperMessage } from './helper-channel';
+import type { Rect } from '../windows/overlay-placement';
 import type { AppTarget, FieldContext, FocusedElement, InputLostReason, ModifierFlags, Permissions, RefocusResult, ShortcutName, TargetCapture } from './input-helper';
 
 const SHIFT_MASK = 0x20000;
@@ -23,6 +24,18 @@ export function parseOutputAudio(message: HelperMessage): OutputAudioView {
     parsed.push({ id: output.id, label: output.label });
   }
   return { kind: 'available', outputs: parsed, canMute: message['canMute'] };
+}
+
+export function parseWorkAreas(message: HelperMessage): Rect[] {
+  const areas = message['areas'];
+  if (!Array.isArray(areas) || areas.length > 16) throw new Error('work-areas-invalid');
+  const entries: readonly unknown[] = areas;
+  return entries.map((area) => {
+    if (typeof area !== 'object' || area === null) throw new Error('work-areas-invalid');
+    const { x, y, width, height } = area as Record<string, unknown>;
+    if (![x, y, width, height].every(Number.isSafeInteger) || (width as number) <= 0 || (height as number) <= 0) throw new Error('work-areas-invalid');
+    return { x: x as number, y: y as number, width: width as number, height: height as number };
+  });
 }
 
 function nullableBoolean(message: HelperMessage, key: string): boolean | null {

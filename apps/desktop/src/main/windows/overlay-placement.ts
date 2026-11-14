@@ -14,3 +14,12 @@ export function bottomCenter(workArea: Rect, size: Size = OVERLAY_SIZE, margin =
     height: size.height,
   };
 }
+
+function contains(outer: Rect, inner: Rect): boolean {
+  return inner.width > 0 && inner.height > 0 && inner.x >= outer.x && inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+}
+
+export function displayWorkArea(display: { bounds: Rect; workArea: Rect }, areas: readonly Rect[]): Rect {
+  return areas.find((area) => contains(display.bounds, area)) ?? display.workArea;
+}
