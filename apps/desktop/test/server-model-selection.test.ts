@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS } from '../src/shared/settings';
 import { FakePowerEvents } from './fake-power-events';
 import { RecordingLogger } from './recording-logger';
 import { startTestGateway, type TestGateway } from './support/gateway';
-import { createServerService, tinyModels, type ServerServiceHarness } from './support/server-service';
+import { createServerService, tinyModels, type ServerServiceHarness, type ServerServiceSetup } from './support/server-service';
 
 const WHISPER_MISSING: FakeSttResponse = { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } };
 
@@ -25,6 +25,7 @@ const SECOND = 32_000;
 
 let dir: string;
 let gateway: TestGateway;
+let setup: ServerServiceSetup;
 let harness: ServerServiceHarness;
 let reconnect: ServerReconnect | null = null;
 
@@ -34,7 +35,8 @@ beforeEach(async () => {
   const settings = new SettingsStore(join(dir, 'settings.json'));
   await settings.load();
   const logger = new RecordingLogger();
-  harness = createServerService({ dir, settings, models: await tinyModels(dir, settings, logger, false), logger });
+  setup = { dir, settings, models: await tinyModels(dir, settings, logger, false), logger };
+  harness = createServerService(setup);
 });
 
 afterEach(async () => {
@@ -53,6 +55,12 @@ async function pair(): Promise<void> {
   await window.admin.next();
   window.admin.close();
   await expect.poll(async () => (await harness.service.view()).server?.status.kind).toBe('online');
+}
+
+async function restartApp(): Promise<void> {
+  harness.service.dispose();
+  harness = createServerService(setup);
+  await harness.service.check();
 }
 
 async function server(): Promise<PairedServerView | null> {
@@ -96,7 +104,10 @@ describe('server transcription model selection', () => {
 
     expect(await server()).toMatchObject({ transcriptionModel: 'whisper-large-v3' });
     expect(await new EncryptedPairingFile(harness.file, new InsecureTestVault()).load()).toMatchObject({ transcriptionModel: 'whisper-large-v3' });
+    await restartApp();
+    expect(await server()).toMatchObject({ transcriptionModel: 'whisper-large-v3', status: { kind: 'online', transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } });
     expect(await dictate()).toBe('ahoj svet');
+    expect(requestedModels()).toEqual(['whisper-large-v3']);
     await choose('parakeet-ultra');
     expect(await dictate()).toBe('ahoj svet');
     expect(requestedModels()).toEqual(['whisper-large-v3', 'parakeet-ultra']);

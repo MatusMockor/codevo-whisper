@@ -121,6 +121,7 @@ describe('EncryptedPairingFile', () => {
     await repository.save(saved);
 
     await repository.amend('f3a1c0de', (current) => ({ ...current, transcriptionModel: 'parakeet-ultra' }));
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
     await repository.amend(saved.deviceId, (current) => ({ ...current, transcriptionModel: 'whisper-large-v3' }));
 
     expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual({ ...saved, transcriptionModel: 'whisper-large-v3' });

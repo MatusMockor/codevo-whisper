@@ -1,15 +1,15 @@
-import type { EngineComponent } from './engine-component';
+import type { Transcriber } from './transcriber';
 
 export class SingleFlightWarmUp {
   private pending: Promise<void> | null = null;
 
-  constructor(private readonly component: EngineComponent) {}
+  constructor(private readonly transcriber: Pick<Transcriber, 'resident' | 'warmUp'>) {}
 
   run(): Promise<void> {
-    if (this.component.ready()) {
+    if (this.transcriber.resident()) {
       return Promise.resolve();
     }
-    this.pending ??= this.component.warmUp().finally(() => {
+    this.pending ??= this.transcriber.warmUp().finally(() => {
       this.pending = null;
     });
     return this.pending;

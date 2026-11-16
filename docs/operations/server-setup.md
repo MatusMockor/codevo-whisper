@@ -83,7 +83,7 @@ With all three models it prints the 25 languages and the model names:
 {"languages":["bg","cs","da","de","el","en","es","et","fi","fr","hr","hu","it","lt","lv","mt","nl","pl","pt","ro","ru","sk","sl","sv","uk"],"models":{"transcription":"Parakeet Ultra (F16)","conditioned":"Canary 1B v2 (Q8)","languageId":"VoxLingua107 (rozpoznanie jazyka)"},"transcriptionModels":[{"id":"parakeet-ultra","name":"Parakeet Ultra (F16)","available":true,"default":true},{"id":"whisper-large-v3","name":"Whisper Large v3 (F16)","available":true,"default":false}]}
 ```
 
-`transcriptionModels` lists the models a device can pick for its dictations (desktop apps need a gateway of version 0.5.0 or newer). `"available":false` means the file is missing: run the provisioning again.
+`transcriptionModels` lists the models a device can pick for its dictations (desktop apps need a gateway of version 0.5.0 or newer). `"available":false` means the file is missing: run the provisioning again, then restart the sidecar with `$COMPOSE restart stt`, because it checks for the Whisper file only at startup. The gateway picks up the new list on its next capability refresh (every 30 s, or on the next device connection), so no gateway restart is needed.
 
 `"languages":[]` means the language models are missing or not loaded: run the provisioning again and check `$COMPOSE logs stt` for `language_models_missing` or `language_models_warmup_failed`. A `404` means the sidecar image predates language sets; rebuild it. Desktop apps see the same list and models in the server card, and restricted dictation needs a gateway of version 0.3.0 or newer (`codevo-whisper status` prints the version). Older desktops and the mobile app keep working unchanged.
 

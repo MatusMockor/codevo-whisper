@@ -49,6 +49,10 @@ export class WorkerProcess {
     return !this.exited && !this.stopped;
   }
 
+  get loaded(): boolean {
+    return this.started && this.alive;
+  }
+
   get crashed(): boolean {
     return this.exited && !this.stopped;
   }

@@ -72,6 +72,15 @@ function prepare(stt: SttServer, model: string): Promise<Reply> {
   return send(stt, `/prepare?model=${model}`);
 }
 
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function workerOf(reply: Reply): string {
   return ((reply.body as { text?: string }).text ?? '').split(':')[0] ?? '';
 }
@@ -224,6 +233,25 @@ describe('selectable transcription models', () => {
     await expect.poll(async () => (await transcribe(stt, 'language=sk&model=whisper-large-v3')).status, { interval: 50, timeout: 3000 }).toBe(200);
     expect(await whisperSpawns()).toBe(1);
   });
+
+  it('loads Whisper again outside the inference slot after its worker was killed', async () => {
+    vi.stubEnv('FAKE_WORKER_SLOW_SAMPLES', String(TWO_SECONDS));
+    const stt = await serveWithWhisper();
+    const pid = Number(workerOf(await transcribe(stt, 'language=sk&model=whisper-large-v3', 1600)));
+    const { port } = stt.address() as AddressInfo;
+    const abandoned = request({ host: '127.0.0.1', port, path: '/transcribe?language=sk&model=whisper-large-v3', method: 'POST', headers: { 'content-type': 'application/octet-stream' } });
+    abandoned.on('error', () => undefined);
+    abandoned.end(Buffer.from(pcm(TWO_SECONDS)));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    abandoned.destroy();
+
+    await expect.poll(() => isAlive(pid), { interval: 20, timeout: 5000 }).toBe(false);
+
+    expect(await transcribe(stt, 'language=sk&model=whisper-large-v3', 1600)).toEqual({ status: 503, body: { error: 'model loading' } });
+    expect(await prepare(stt, 'whisper-large-v3')).toEqual({ status: 200, body: { status: 'ready' } });
+    expect((await transcribe(stt, 'language=sk&model=whisper-large-v3', 1600)).body.text).toMatch(/^\d+:sk:1600$/);
+    expect(await whisperSpawns()).toBe(2);
+  }, 10_000);
 
   it('answers 502 when Whisper fails to load and loads it again on the next request', async () => {
     const errors: string[] = [];

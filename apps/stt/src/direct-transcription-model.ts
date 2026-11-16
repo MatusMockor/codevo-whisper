@@ -21,7 +21,7 @@ export class DirectTranscriptionModel implements TranscriptionModel {
   }
 
   ready(): boolean {
-    return this.transcriber.ready();
+    return this.transcriber.resident();
   }
 
   prepare(): Promise<void> {
