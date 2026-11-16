@@ -12,11 +12,12 @@ import { provision, provisionManifest } from '../src/provision';
 
 const CONTENT = Buffer.from('fake gguf model bytes '.repeat(5000));
 const CONTENT_SHA256 = createHash('sha256').update(CONTENT).digest('hex');
-const ROLES: readonly ModelRole[] = ['verbatim', 'conditioned', 'language-id'];
+const ROLES: readonly ModelRole[] = ['verbatim', 'conditioned', 'language-id', 'selectable'];
 const MANIFEST_CONTENT: Readonly<Record<ModelRole, Buffer>> = {
   verbatim: Buffer.from('parakeet '.repeat(4000)),
   conditioned: Buffer.from('canary '.repeat(3000)),
   'language-id': Buffer.from('voxlingua '.repeat(2000)),
+  selectable: Buffer.from('whisper '.repeat(1000)),
 };
 const CONTENT_BY_PATH: ReadonlyMap<string, Buffer> = new Map([['/model.gguf', CONTENT], ...ROLES.map((role): [string, Buffer] => [`/${role}.gguf`, MANIFEST_CONTENT[role]])]);
 
@@ -105,7 +106,7 @@ describe('provision', () => {
 });
 
 describe('ServerModelManifest', () => {
-  it('pins the three server models at the configured targets', () => {
+  it('pins the four server models at the configured targets', () => {
     const manifest = ServerModelManifest.pinned(loadSttConfig({}));
 
     expect(manifest.files).toEqual([
@@ -130,14 +131,23 @@ describe('ServerModelManifest', () => {
         size: 26_693_632,
         target: '/models/lang-id-voxlingua107-ecapa-Q8_0.gguf',
       },
+      {
+        role: 'selectable',
+        url: 'https://huggingface.co/handy-computer/whisper-large-v3-gguf/resolve/274ad1d1cf680b7ee53cc70f78461394cd3a344b/whisper-large-v3-F16.gguf',
+        sha256: 'e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584',
+        size: 3_107_236_640,
+        target: '/models/whisper-large-v3-F16.gguf',
+      },
     ]);
-    expect(manifest.extraBytes()).toBe(1_170_983_648);
+    expect(manifest.extraBytes()).toBe(4_278_220_288);
   });
 
   it('follows overridden model paths', () => {
-    const manifest = ServerModelManifest.pinned(loadSttConfig({ STT_MODEL_PATH: '/m/p.gguf', STT_CONDITIONED_MODEL_PATH: '/m/c.gguf', STT_LID_MODEL_PATH: '/m/l.gguf' }));
+    const manifest = ServerModelManifest.pinned(
+      loadSttConfig({ STT_MODEL_PATH: '/m/p.gguf', STT_CONDITIONED_MODEL_PATH: '/m/c.gguf', STT_LID_MODEL_PATH: '/m/l.gguf', STT_WHISPER_MODEL_PATH: '/m/w.gguf' }),
+    );
 
-    expect(manifest.files.map((file) => file.target)).toEqual(['/m/p.gguf', '/m/c.gguf', '/m/l.gguf']);
+    expect(manifest.files.map((file) => file.target)).toEqual(['/m/p.gguf', '/m/c.gguf', '/m/l.gguf', '/m/w.gguf']);
   });
 });
 
@@ -145,6 +155,12 @@ describe('ServerModelManifest targets', () => {
   it('rejects two models configured at the same path', () => {
     expect(() => ServerModelManifest.pinned(loadSttConfig({ STT_MODEL_PATH: '/models/shared.gguf', STT_CONDITIONED_MODEL_PATH: '/models/shared.gguf' }))).toThrow(
       'model targets must be unique: /models/shared.gguf is the target of both verbatim and conditioned',
+    );
+  });
+
+  it('rejects the Whisper model configured at the path of another model', () => {
+    expect(() => ServerModelManifest.pinned(loadSttConfig({ STT_WHISPER_MODEL_PATH: '/models/parakeet-ultra-F16.gguf' }))).toThrow(
+      'model targets must be unique: /models/parakeet-ultra-F16.gguf is the target of both verbatim and selectable',
     );
   });
 
@@ -174,7 +190,7 @@ describe('provisionManifest', () => {
     await provisionManifest(manifest);
     requested = [];
 
-    expect((await provisionManifest(manifest)).map(({ result }) => result)).toEqual(['present', 'present', 'present']);
+    expect((await provisionManifest(manifest)).map(({ result }) => result)).toEqual(ROLES.map(() => 'present'));
     expect(requested).toEqual([]);
   });
 

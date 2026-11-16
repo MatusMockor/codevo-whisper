@@ -51,6 +51,7 @@ function describe(pairing: ServerPairing, status: PairedServerView['status'], en
     deviceFingerprint: fingerprint(pairing.deviceKey.publicKey),
     status,
     enabled,
+    transcriptionModel: pairing.transcriptionModel ?? null,
   };
 }
 
@@ -101,6 +102,15 @@ export class ServerService {
     await this.deps.serverSwitch.switchOn();
     this.deps.status.reset();
     await this.check();
+  }
+
+  async chooseTranscriptionModel(id: string): Promise<void> {
+    const pairing = await this.loadPairing(this.deps.vault.availability());
+    if (pairing === null) {
+      return;
+    }
+    await this.deps.pairings.amend(pairing.deviceId, (current) => ({ ...current, transcriptionModel: id }));
+    this.publish();
   }
 
   onChange(listener: (view: ServerView) => void): () => void {

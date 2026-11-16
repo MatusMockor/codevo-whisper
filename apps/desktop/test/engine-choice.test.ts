@@ -16,8 +16,9 @@ const PAIRED: PairedServerView = {
   pairedAt: '2026-10-01T10:00:00.000Z',
   serverFingerprint: 'AAAA',
   deviceFingerprint: 'BBBB',
-  status: { kind: 'online', connectMs: 12, serverVersion: '0.1.0', languages: { kind: 'outdated', minVersion: '0.3.0' } },
+  status: { kind: 'online', connectMs: 12, serverVersion: '0.1.0', languages: { kind: 'outdated', minVersion: '0.3.0' }, transcriptionModels: [] },
   enabled: true,
+  transcriptionModel: null,
 };
 
 function modelState(status: ModelState['status']): ModelState {

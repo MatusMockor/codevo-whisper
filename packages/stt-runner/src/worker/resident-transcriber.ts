@@ -17,6 +17,10 @@ export class ResidentTranscriber {
     return this.worker.ready();
   }
 
+  resident(): boolean {
+    return this.worker.resident();
+  }
+
   transcribe(call: WorkerCall): Promise<string> {
     const { signal, ...request } = call;
     return this.worker.run(request, signal);

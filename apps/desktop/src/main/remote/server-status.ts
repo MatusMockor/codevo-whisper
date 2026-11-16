@@ -31,12 +31,12 @@ export class ServerStatusBoard implements ConnectionObserver {
   private epoch = 0;
   private readonly listeners: Listeners<ServerStatus>;
   private readonly expiry: Listeners<void>;
-  private readonly staleLanguages: Listeners<void>;
+  private readonly staleCapabilities: Listeners<void>;
 
   constructor(logger: Logger) {
     this.listeners = new Listeners(logger, 'A server status listener failed');
     this.expiry = new Listeners(logger, 'A server connection could not be stopped');
-    this.staleLanguages = new Listeners(logger, 'A server language refresh could not be started');
+    this.staleCapabilities = new Listeners(logger, 'A server capability refresh could not be started');
   }
 
   status(): ServerStatus {
@@ -50,6 +50,10 @@ export class ServerStatusBoard implements ConnectionObserver {
   failed(kind: RemoteFailureKind): void {
     if (kind === 'languages-unavailable') {
       this.invalidateLanguages();
+      return;
+    }
+    if (kind === 'model-unavailable') {
+      this.refreshCapabilities();
       return;
     }
     const next = STATUS_BY_FAILURE[kind] ?? this.unresolvedCheck();
@@ -97,8 +101,8 @@ export class ServerStatusBoard implements ConnectionObserver {
     return this.listeners.add(listener);
   }
 
-  onStaleLanguages(listener: () => void): () => void {
-    return this.staleLanguages.add(listener);
+  onStaleCapabilities(listener: () => void): () => void {
+    return this.staleCapabilities.add(listener);
   }
 
   private invalidateLanguages(): void {
@@ -106,7 +110,14 @@ export class ServerStatusBoard implements ConnectionObserver {
       return;
     }
     this.set({ ...this.current, languages: NO_LANGUAGES });
-    this.staleLanguages.emit();
+    this.staleCapabilities.emit();
+  }
+
+  private refreshCapabilities(): void {
+    if (this.current.kind !== 'online') {
+      return;
+    }
+    this.staleCapabilities.emit();
   }
 
   private whenExpired(epoch: number, listener: () => void): () => void {

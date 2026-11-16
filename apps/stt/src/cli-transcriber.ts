@@ -14,6 +14,10 @@ export class CliTranscriber implements Transcriber {
     return true;
   }
 
+  resident(): boolean {
+    return true;
+  }
+
   warmUp(): Promise<void> {
     return Promise.resolve();
   }

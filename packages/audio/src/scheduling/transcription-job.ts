@@ -17,6 +17,6 @@ export type TranscriptionJob<TContext = TranscriptionContext> = {
 
 export type QueueKey = Pick<TranscriptionJob<unknown>, 'sessionId' | 'deviceId' | 'kind'>;
 
-export type DropReason = 'partial-in-flight' | 'finalizing' | 'replaced' | 'superseded' | 'cancelled';
+export type DropReason = 'partial-in-flight' | 'finalizing' | 'replaced' | 'superseded' | 'cancelled' | 'model-loading';
 
 export type Dropped<T> = { entry: T; reason: DropReason };

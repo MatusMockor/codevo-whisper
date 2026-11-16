@@ -1,4 +1,4 @@
-import { LANGUAGE_SETS_MIN_VERSION, VOCABULARY_MIN_VERSION } from '@codevo-whisper/protocol';
+import { LANGUAGE_SETS_MIN_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION, VOCABULARY_MIN_VERSION } from '@codevo-whisper/protocol';
 import { describe, expect, it } from 'vitest';
 import { SERVER_VERSION } from '../src/version';
 
@@ -25,6 +25,11 @@ describe('server version', () => {
   it('is at least the version that introduced the dictation vocabulary', () => {
     expect(VOCABULARY_MIN_VERSION).toBe('0.4.0');
     expect(compareVersions(SERVER_VERSION, VOCABULARY_MIN_VERSION)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('is at least the version that introduced the transcription model selection', () => {
+    expect(TRANSCRIPTION_MODELS_MIN_VERSION).toBe('0.5.0');
+    expect(compareVersions(SERVER_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION)).toBeGreaterThanOrEqual(0);
   });
 
   it('compares versions numerically', () => {

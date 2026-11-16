@@ -1,8 +1,16 @@
-import { DICTATION_LANGUAGES, isModelName, UNKNOWN_MODELS, type DictationLanguage, type ServerModels } from '@codevo-whisper/protocol';
+import {
+  DICTATION_LANGUAGES,
+  isModelName,
+  isTranscriptionModelList,
+  UNKNOWN_MODELS,
+  type DictationLanguage,
+  type ServerModels,
+  type TranscriptionModelOption,
+} from '@codevo-whisper/protocol';
 
-export type SttCapabilityReport = { languages: readonly DictationLanguage[]; models: ServerModels };
+export type SttCapabilityReport = { languages: readonly DictationLanguage[]; models: ServerModels; transcriptionModels: readonly TranscriptionModelOption[] };
 
-export const NO_CAPABILITIES: SttCapabilityReport = Object.freeze({ languages: Object.freeze([]), models: UNKNOWN_MODELS });
+export const NO_CAPABILITIES: SttCapabilityReport = Object.freeze({ languages: Object.freeze([]), models: UNKNOWN_MODELS, transcriptionModels: Object.freeze([]) });
 
 export interface SttCapabilities {
   capabilities(): Promise<SttCapabilityReport>;
@@ -41,7 +49,20 @@ function modelsOf(value: unknown): ServerModels {
   };
 }
 
+function transcriptionModelOf(value: unknown): Fields {
+  const { id, name, available, default: isDefault } = fieldsOf(value);
+  return { id, name, available, default: isDefault };
+}
+
+function transcriptionModelsOf(value: unknown): readonly TranscriptionModelOption[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const options = value.map(transcriptionModelOf);
+  return isTranscriptionModelList(options) ? options : [];
+}
+
 export function parseSttCapabilities(body: unknown): SttCapabilityReport {
   const fields = fieldsOf(body);
-  return { languages: languagesOf(fields.languages), models: modelsOf(fields.models) };
+  return { languages: languagesOf(fields.languages), models: modelsOf(fields.models), transcriptionModels: transcriptionModelsOf(fields.transcriptionModels) };
 }

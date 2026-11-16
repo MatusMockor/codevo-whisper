@@ -1,6 +1,8 @@
 import { RollingSession, SegmentFailedError, SessionCancelledError, type TranscriptEvent } from '@codevo-whisper/audio';
 import { ProtocolError, type DictationLanguage, type ErrorCode, type Language } from '@codevo-whisper/protocol';
 import type { GatewayContext, GatewayDispatcher } from '../stt/gateway-context';
+import { submitterFor } from '../stt/model-ready-gate';
+import type { ModelPreparation } from '../stt/stt-client';
 import { limitText } from './limit-text';
 import { SegmentTranscripts } from './segment-transcripts';
 import type { SecureChannel } from './secure-channel';
@@ -11,8 +13,10 @@ export type DictationOptions = {
   language: Language;
   languages: readonly DictationLanguage[] | null;
   vocabulary: readonly string[];
+  model: string | null;
   partials: boolean;
   dispatcher: GatewayDispatcher;
+  preparation: ModelPreparation;
   clock: () => number;
   channel: SecureChannel;
 };
@@ -42,8 +46,8 @@ export class Dictation {
     this.session = new RollingSession({
       deviceId: options.deviceId,
       partials: options.partials,
-      context: { language: options.language, languages: options.languages, vocabulary: options.vocabulary, observer: this.transcripts },
-      submitter: options.dispatcher,
+      context: { language: options.language, languages: options.languages, vocabulary: options.vocabulary, model: options.model, observer: this.transcripts },
+      submitter: submitterFor(options.dispatcher, options.preparation, options.model),
       registry: options.dispatcher,
       interval: options.dispatcher.partialIntervalSource(),
       clock: { now: options.clock },

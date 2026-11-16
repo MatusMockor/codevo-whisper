@@ -2,6 +2,7 @@ import type { ClientMessage } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
 import type { CapabilityLookup } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
+import type { ModelPreparation } from '../stt/stt-client';
 import { logDictation } from './dictation-log';
 import { Dictation, type DictationResult } from './dictation';
 import type { DeviceAudioBudget } from './device-audio-budget';
@@ -26,9 +27,12 @@ export type SessionDeps = {
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
   capabilities: CapabilityLookup;
+  preparation: ModelPreparation;
 };
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
+
+type CapabilitiesRequest = Extract<ClientMessage, { type: 'capabilities' }>;
 
 type State =
   | { kind: 'idle' }
@@ -47,7 +51,7 @@ export class SessionHandler {
   private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
-    capabilities: () => this.onCapabilities(),
+    capabilities: (message) => this.onCapabilities(message),
     start: (message) => this.onStart(message),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),
@@ -85,13 +89,17 @@ export class SessionHandler {
     handler(message);
   }
 
-  private onCapabilities(): void {
+  private onCapabilities(message: CapabilitiesRequest): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
       return;
     }
-    const { languages, models } = this.deps.capabilities.current();
-    this.channel.send({ type: 'capabilities', languages, models });
+    const { languages, models, transcriptionModels } = this.deps.capabilities.current();
+    if (message.transcriptionModels !== true) {
+      this.channel.send({ type: 'capabilities', languages, models });
+      return;
+    }
+    this.channel.send({ type: 'capabilities', languages, models, transcriptionModels });
   }
 
   private onStart(message: StartMessage): void {
@@ -99,7 +107,11 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    if (message.languages !== undefined && !this.deps.capabilities.supports(message.languages)) {
+    if (message.model !== undefined && !this.deps.capabilities.offersModel(message.model)) {
+      this.channel.send({ type: 'error', code: 'model_unavailable', message: 'model_unavailable', sessionId: message.sessionId });
+      return;
+    }
+    if (this.refusesLanguages(message)) {
       this.channel.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
       return;
     }
@@ -109,13 +121,22 @@ export class SessionHandler {
       language: message.language,
       languages: message.languages ?? null,
       vocabulary: message.vocabulary ?? [],
+      model: message.model ?? null,
       partials: message.partials === true,
       dispatcher: this.deps.dispatcher,
+      preparation: this.deps.preparation,
       clock: this.deps.clock,
       channel: this.channel,
     });
     this.state = { kind: 'recording', dictation, startedAt: this.deps.clock() };
     this.shortFrameSeen = false;
+  }
+
+  private refusesLanguages(message: StartMessage): boolean {
+    if (message.languages === undefined || !this.deps.capabilities.routesLanguages(message.model ?? null)) {
+      return false;
+    }
+    return !this.deps.capabilities.supports(message.languages);
   }
 
   private onAudio(pcm: Uint8Array): void {

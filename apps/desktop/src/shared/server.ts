@@ -1,7 +1,8 @@
 import type { PairingEngineChange } from './engine-routing';
 import type { ServerLanguages } from './server-languages';
+import type { TranscriptionModelOption } from './transcription-models';
 
-export type ConnectedServer = { connectMs: number; serverVersion: string; languages: ServerLanguages };
+export type ConnectedServer = { connectMs: number; serverVersion: string; languages: ServerLanguages; transcriptionModels: readonly TranscriptionModelOption[] };
 
 export type VaultAvailability = 'available' | 'insecure' | 'unavailable';
 
@@ -23,6 +24,7 @@ export type PairedServerView = {
   deviceFingerprint: string;
   status: ServerStatus;
   enabled: boolean;
+  transcriptionModel: string | null;
 };
 
 export type PairingStep =

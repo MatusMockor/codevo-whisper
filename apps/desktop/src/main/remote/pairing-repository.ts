@@ -14,11 +14,15 @@ export type ServerPairing = {
   deviceId: string;
   deviceName: string;
   pairedAt: string;
+  transcriptionModel?: string;
 };
+
+export type PairingChange = (current: ServerPairing) => ServerPairing;
 
 export interface PairingRepository {
   load(): Promise<ServerPairing | null>;
   save(pairing: ServerPairing): Promise<void>;
+  amend(deviceId: string, change: PairingChange): Promise<void>;
   clear(): Promise<void>;
   clearDevice(deviceId: string): Promise<void>;
 }
@@ -59,10 +63,16 @@ export class EncryptedPairingFile implements PairingRepository {
 
   async save(pairing: ServerPairing): Promise<void> {
     this.assertSecure();
-    const sealed: SealedFile = { version: 1, sealed: Buffer.from(this.vault.seal(encodePairing(pairing))).toString('base64') };
+    return this.serialize(() => this.write(pairing));
+  }
+
+  amend(deviceId: string, change: PairingChange): Promise<void> {
     return this.serialize(async () => {
-      await writeFileAtomic(this.file, `${JSON.stringify(sealed)}\n`);
-      this.cached = pairing;
+      const current = await this.load();
+      if (current?.deviceId !== deviceId) {
+        return;
+      }
+      await this.write(change(current));
     });
   }
 
@@ -82,6 +92,13 @@ export class EncryptedPairingFile implements PairingRepository {
       await rm(this.file, { force: true });
       this.cached = null;
     });
+  }
+
+  private async write(pairing: ServerPairing): Promise<void> {
+    this.assertSecure();
+    const sealed: SealedFile = { version: 1, sealed: Buffer.from(this.vault.seal(encodePairing(pairing))).toString('base64') };
+    await writeFileAtomic(this.file, `${JSON.stringify(sealed)}\n`);
+    this.cached = pairing;
   }
 
   private serialize(write: () => Promise<void>): Promise<void> {

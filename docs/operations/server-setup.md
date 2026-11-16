@@ -40,9 +40,9 @@ Set in `infrastructure/compose/.env`:
 | `CW_PUBLIC_ENDPOINT` | The `ws://` or `wss://` URL devices use; it is written into pairing tokens. |
 | `RENDER_GID` | Numeric GID of the host `render` group (from `getent group render`), so the non-root `stt` user can open the render node. `VIDEO_GID` is no longer needed. |
 | `STT_RENDER_DEVICE` | Host render node of the GPU, default `/dev/dri/renderD128` (see above). |
-| `STT_MEM_LIMIT`, `STT_CPUS`, `GATEWAY_MEM_LIMIT`, `GATEWAY_CPUS` | Container limits, defaults `4g`, `4`, `512m`, `2`. Both services also run with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem, PID limits (stt 128, gateway 64) and `nofile` limits (stt 1024, gateway 4096). |
+| `STT_MEM_LIMIT`, `STT_CPUS`, `GATEWAY_MEM_LIMIT`, `GATEWAY_CPUS` | Container limits, defaults `8g`, `4`, `512m`, `2` (`8g` leaves room for Parakeet, Canary, the language ID and Whisper Large v3 resident at once). Both services also run with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem, PID limits (stt 128, gateway 64) and `nofile` limits (stt 1024, gateway 4096). |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
-| `STT_MODEL_PATH`, `STT_CONDITIONED_MODEL_PATH`, `STT_LID_MODEL_PATH` | Model files in the `cw-models` volume, defaults `/models/parakeet-ultra-F16.gguf`, `/models/canary-1b-v2-Q8_0.gguf` and `/models/lang-id-voxlingua107-ecapa-Q8_0.gguf`. Provisioning and the sidecar read the same values. |
+| `STT_MODEL_PATH`, `STT_CONDITIONED_MODEL_PATH`, `STT_LID_MODEL_PATH`, `STT_WHISPER_MODEL_PATH` | Model files in the `cw-models` volume, defaults `/models/parakeet-ultra-F16.gguf`, `/models/canary-1b-v2-Q8_0.gguf`, `/models/lang-id-voxlingua107-ecapa-Q8_0.gguf` and `/models/whisper-large-v3-F16.gguf`. Provisioning and the sidecar read the same values. |
 | `STT_LID_BACKEND` | Backend of the language ID model, `cpu` (default; about 12 ms per 2 s of audio), `vulkan` or `metal`. |
 | `STT_ENGINE` | `worker` (default) keeps the model loaded in one resident `cw-stt-worker` process; `cli` starts `transcribe-cli` for every call (the phase 2 behaviour; measured on the RX 7800 XT at about 550 ms against 120 ms per call for 12 s of audio). |
 | `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
@@ -58,15 +58,16 @@ $COMPOSE ps
 ss -ltn | grep 8787
 ```
 
-Provisioning downloads three pinned models into the `cw-models` volume:
+Provisioning downloads four pinned models into the `cw-models` volume:
 
 | Role | Repository and revision | File | Size | SHA-256 |
 |---|---|---|---|---|
 | Transcription | `handy-computer/parakeet-ultra-gguf` @ `a1539be1b849ea7463b88343e5277b373d0c4ea9` | `parakeet-ultra-F16.gguf` | 1,256,724,448 B | `cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d` |
 | Language-conditioned transcription | `handy-computer/canary-1b-v2-gguf` @ `692af661b140183b60e44f55ad03c59e1e77d078` | `canary-1b-v2-Q8_0.gguf` | 1,144,290,016 B | `224f83d1bc487b3303b495a7d6874912fdece93de19d1a04b550829c30a5d289` |
 | Language ID | `handy-computer/lang-id-voxlingua107-ecapa-gguf` @ `e59f0f3847e77723b7d58447ef9456fa0c7e9436` | `lang-id-voxlingua107-ecapa-Q8_0.gguf` | 26,693,632 B | `063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a` |
+| Selectable transcription (Whisper, MIT) | `handy-computer/whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b` | `whisper-large-v3-F16.gguf` | 3,107,236,640 B | `e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584` |
 
-It prints `Language models add 1.17 GB` first, then one line per file. Each file is written to a `.download` file, hashed while streaming and renamed only when the hash matches. Running it again verifies the existing files (`Model already present and verified`). The `stt` service never downloads at startup. It exits with `model_missing` if the transcription model is absent. Without Canary or the language ID model it starts anyway, logs `language_models_missing` and serves only automatic dictation.
+It prints `Optional models add 4.28 GB` first, then one line per file. Each file is written to a `.download` file, hashed while streaming and renamed only when the hash matches. Running it again verifies the existing files (`Model already present and verified`). The `stt` service never downloads at startup. It exits with `model_missing` if the transcription model is absent. Without Canary or the language ID model it starts anyway, logs `language_models_missing` and serves only automatic dictation. Without the Whisper file it logs `selectable_model_missing` and reports Whisper as unavailable; devices then can only use Parakeet. Parakeet is loaded at startup; Whisper is loaded when the first dictation that selects it starts (a few seconds; that dictation waits for it, the other devices keep dictating meanwhile) and stays resident.
 
 ### Verify "Výber jazykov"
 
@@ -79,8 +80,10 @@ $COMPOSE exec gateway node -e "fetch('http://stt:8001/capabilities').then((r) =>
 With all three models it prints the 25 languages and the model names:
 
 ```json
-{"languages":["bg","cs","da","de","el","en","es","et","fi","fr","hr","hu","it","lt","lv","mt","nl","pl","pt","ro","ru","sk","sl","sv","uk"],"models":{"transcription":"Parakeet Ultra (F16)","conditioned":"Canary 1B v2 (Q8)","languageId":"VoxLingua107 (rozpoznanie jazyka)"}}
+{"languages":["bg","cs","da","de","el","en","es","et","fi","fr","hr","hu","it","lt","lv","mt","nl","pl","pt","ro","ru","sk","sl","sv","uk"],"models":{"transcription":"Parakeet Ultra (F16)","conditioned":"Canary 1B v2 (Q8)","languageId":"VoxLingua107 (rozpoznanie jazyka)"},"transcriptionModels":[{"id":"parakeet-ultra","name":"Parakeet Ultra (F16)","available":true,"default":true},{"id":"whisper-large-v3","name":"Whisper Large v3 (F16)","available":true,"default":false}]}
 ```
+
+`transcriptionModels` lists the models a device can pick for its dictations (desktop apps need a gateway of version 0.5.0 or newer). `"available":false` means the file is missing: run the provisioning again, then restart the sidecar with `$COMPOSE restart stt`, because it checks for the Whisper file only at startup. The gateway picks up the new list on its next capability refresh (every 30 s, or on the next device connection), so no gateway restart is needed.
 
 `"languages":[]` means the language models are missing or not loaded: run the provisioning again and check `$COMPOSE logs stt` for `language_models_missing` or `language_models_warmup_failed`. A `404` means the sidecar image predates language sets; rebuild it. Desktop apps see the same list and models in the server card, and restricted dictation needs a gateway of version 0.3.0 or newer (`codevo-whisper status` prints the version). Older desktops and the mobile app keep working unchanged.
 

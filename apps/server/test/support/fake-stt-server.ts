@@ -4,13 +4,15 @@ import { DICTATION_LANGUAGES, MAX_DICTATION_LANGUAGES } from '@codevo-whisper/pr
 
 export type FakeSttResponse = { status: number; body: unknown };
 
-export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string; vocabulary?: string[] };
+export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string; vocabulary?: string[]; model?: string };
 
 export type FakeSttBehaviour = {
   respond?: (pcm: Uint8Array, language: string, request: FakeSttRequest) => FakeSttResponse;
   capabilities?: FakeSttResponse;
   delayMs?: number;
   delayFor?: (pcm: Uint8Array) => number;
+  loadDelayMs?: Readonly<Record<string, number>>;
+  failingLoads?: readonly string[];
 };
 
 export type FakeSttServer = {
@@ -20,6 +22,9 @@ export type FakeSttServer = {
   setCapabilities(response: FakeSttResponse): void;
   aborted(): number;
   maxActive(): number;
+  preparations(): string[];
+  loadingModels(): string[];
+  loadedModels(): string[];
   close(): Promise<void>;
 };
 
@@ -32,6 +37,14 @@ const OLD_STT: FakeSttResponse = { status: 404, body: { error: 'not found' } };
 export const ROUTING_MODELS = { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' };
 
 export const ROUTING_STT = { status: 200, body: { languages: [...DICTATION_LANGUAGES], models: ROUTING_MODELS } } satisfies FakeSttResponse;
+
+export const PARAKEET_OPTION = { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true };
+
+export const WHISPER_OPTION = { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: true, default: false };
+
+export const MODEL_SELECTION_STT = { status: 200, body: { ...ROUTING_STT.body, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } } satisfies FakeSttResponse;
+
+type OfferedModel = { id: string; available: boolean; default: boolean };
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
@@ -54,10 +67,12 @@ function requestOf(url: URL, bytes: number): FakeSttRequest {
   const languages = url.searchParams.get('languages');
   const terms = url.searchParams.getAll('vocabulary');
   const vocabulary = terms.length === 0 ? {} : { vocabulary: terms };
+  const id = url.searchParams.get('model');
+  const model = id === null ? {} : { model: id };
   if (languages === null) {
-    return { language, ...vocabulary, bytes };
+    return { language, ...vocabulary, ...model, bytes };
   }
-  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', ...vocabulary, bytes };
+  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', ...vocabulary, ...model, bytes };
 }
 
 function isValidSelection(request: FakeSttRequest): boolean {
@@ -75,6 +90,29 @@ function routes(capabilities: FakeSttResponse): boolean {
   return capabilities.status === 200 && Array.isArray(languages) && languages.length > 0;
 }
 
+function skipsRouting(model: string | undefined, capabilities: FakeSttResponse): boolean {
+  return model !== undefined && offeredModels(capabilities).some((offered) => offered.id === model && !offered.default);
+}
+
+function offeredModels(capabilities: FakeSttResponse): readonly OfferedModel[] {
+  const models = (capabilities.body as { transcriptionModels?: unknown } | null)?.transcriptionModels;
+  return Array.isArray(models) ? (models as OfferedModel[]) : [];
+}
+
+function modelRefusal(id: string | undefined, capabilities: FakeSttResponse): FakeSttResponse | null {
+  if (id === undefined) {
+    return null;
+  }
+  const offered = offeredModels(capabilities).find((model) => model.id === id);
+  if (offered === undefined) {
+    return { status: 400, body: { error: 'unknown model' } };
+  }
+  if (!offered.available) {
+    return { status: 409, body: { error: 'model unavailable' } };
+  }
+  return null;
+}
+
 function validationStatus(request: IncomingMessage, pcm: Uint8Array, query: FakeSttRequest, capabilities: FakeSttResponse): number | null {
   if (request.headers['content-type'] !== 'application/octet-stream') {
     return 415;
@@ -85,7 +123,7 @@ function validationStatus(request: IncomingMessage, pcm: Uint8Array, query: Fake
   if (pcm.length > MAX_BYTES) {
     return 413;
   }
-  if (query.languages !== undefined && !routes(capabilities)) {
+  if (query.languages !== undefined && !skipsRouting(query.model, capabilities) && !routes(capabilities)) {
     return 409;
   }
   return null;
@@ -116,6 +154,26 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
   let capabilityRequests = 0;
   let capabilities = behaviour.capabilities ?? OLD_STT;
   const respond = behaviour.respond ?? defaultResponse;
+  const loads = new Map<string, Promise<void>>();
+  const loaded = new Set<string>();
+  const preparations: string[] = [];
+
+  const isLoading = (model: string): boolean => behaviour.loadDelayMs?.[model] !== undefined && !loaded.has(model);
+
+  const load = (model: string): Promise<void> => {
+    const delayMs = behaviour.loadDelayMs?.[model];
+    if (delayMs === undefined || loaded.has(model)) {
+      return Promise.resolve();
+    }
+    const pending =
+      loads.get(model) ??
+      new Promise<void>((resolve) => setTimeout(resolve, delayMs)).then(() => {
+        loaded.add(model);
+        loads.delete(model);
+      });
+    loads.set(model, pending);
+    return pending;
+  };
 
   const handleTranscribe = async (request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> => {
     let pcm: Uint8Array;
@@ -129,6 +187,16 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
       throw error;
     }
     const query = requestOf(url, pcm.length);
+    const refused = modelRefusal(query.model, capabilities);
+    if (refused !== null) {
+      send(response, refused.status, refused.body);
+      return;
+    }
+    if (query.model !== undefined && isLoading(query.model)) {
+      void load(query.model);
+      send(response, 503, { error: 'model loading' });
+      return;
+    }
     const invalid = validationStatus(request, pcm, query, capabilities);
     if (invalid !== null) {
       send(response, invalid, { error: 'invalid request' });
@@ -147,6 +215,21 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     send(response, result.status, result.body);
   };
 
+  const handlePrepare = async (response: ServerResponse, model: string): Promise<void> => {
+    preparations.push(model);
+    const refused = modelRefusal(model, capabilities);
+    if (refused !== null) {
+      send(response, refused.status, refused.body);
+      return;
+    }
+    if (behaviour.failingLoads?.includes(model) === true) {
+      send(response, 502, { error: 'model failed to load' });
+      return;
+    }
+    await load(model);
+    send(response, 200, { status: 'ready' });
+  };
+
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://fake-stt');
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -156,6 +239,11 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     if (request.method === 'GET' && url.pathname === '/capabilities') {
       capabilityRequests += 1;
       send(response, capabilities.status, capabilities.body);
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/prepare') {
+      request.resume();
+      void handlePrepare(response, url.searchParams.get('model') ?? '');
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {
@@ -176,6 +264,9 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     },
     aborted: () => aborted,
     maxActive: () => maxActive,
+    preparations: () => [...preparations],
+    loadingModels: () => [...loads.keys()],
+    loadedModels: () => [...loaded],
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

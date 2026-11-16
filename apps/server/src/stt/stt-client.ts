@@ -7,12 +7,17 @@ export type SttRequest = {
   languages: readonly DictationLanguage[] | null;
   kind: JobKind;
   vocabulary: readonly string[];
+  model: string | null;
 };
 
 export type SttTranscript = { text: string; language: DictationLanguage | null; route: string | null };
 
 export interface SttClient {
   transcribe(request: SttRequest, signal: AbortSignal): Promise<SttTranscript>;
+}
+
+export interface ModelPreparation {
+  prepare(model: string, signal: AbortSignal): Promise<void>;
 }
 
 export type SttHealth = 'UP' | 'DOWN' | 'BUSY';

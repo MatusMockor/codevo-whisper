@@ -15,3 +15,12 @@ export {
 } from './message-types';
 export { decodeServerMessage, encodeServerMessage } from './server-messages';
 export { isModelName, MAX_MODEL_NAME_CHARS, UNKNOWN_MODELS, type ServerModels } from './server-models';
+export {
+  isTranscriptionModelId,
+  isTranscriptionModelList,
+  MAX_TRANSCRIPTION_MODEL_ID_CHARS,
+  MAX_TRANSCRIPTION_MODELS,
+  routesDictationLanguages,
+  TRANSCRIPTION_MODEL_ID_PATTERN,
+  type TranscriptionModelOption,
+} from './transcription-models';

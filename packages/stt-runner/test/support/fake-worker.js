@@ -109,6 +109,7 @@ function languageScores(allowed) {
 }
 
 async function handle(request) {
+  if (process.env.FAKE_WORKER_REQUESTS_FILE) appendFileSync(process.env.FAKE_WORKER_REQUESTS_FILE, `${process.pid}:${request.samples}\n`);
   if (process.env.FAKE_WORKER_REQUIRE_READY === '1' && !readySent) process.exit(83);
   if (request.role !== role) return reply(1, 'wrong role');
   if (primaryFailure === 'crash') process.exit(3);

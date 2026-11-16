@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { revokeCommand, type PairedServerView } from '../../shared/server';
 import type { EngineId } from '../../shared/settings';
 import { Glyph } from '../components/Glyph';
@@ -6,9 +6,10 @@ import { Led } from '../components/Led';
 import type { SignalState } from '../home/transcription-route';
 import { CommandBox } from './CommandBox';
 import { pairedOn, statusPill, type PillTone } from './server-copy';
-import { serverLanguageFacts } from './server-language-facts';
+import { serverLanguageFacts, type ServerFact } from './server-language-facts';
 import { ServerStatePanel } from './ServerStatePanel';
 import { useServerToggle } from './ServerToggle';
+import { TranscriptionModelSelect } from './TranscriptionModelSelect';
 
 type ServerCardProps = {
   server: PairedServerView;
@@ -84,6 +85,29 @@ function showsLatency(server: PairedServerView): boolean {
   return server.enabled && (server.status.kind === 'online' || server.status.kind === 'checking' || server.status.kind === 'unknown');
 }
 
+const MODEL_TERM_ID = 'srv-model-term';
+
+function Fact({ fact }: { fact: ServerFact }) {
+  if ('picker' in fact) {
+    return (
+      <>
+        <dt id={MODEL_TERM_ID} className="kv-control-term">
+          {fact.term}
+        </dt>
+        <dd className="kv-control">
+          <TranscriptionModelSelect picker={fact.picker} labelId={MODEL_TERM_ID} />
+        </dd>
+      </>
+    );
+  }
+  return (
+    <>
+      <dt>{fact.term}</dt>
+      <dd>{fact.value}</dd>
+    </>
+  );
+}
+
 function Details({ server }: { server: PairedServerView }) {
   return (
     <dl className="kv">
@@ -100,10 +124,7 @@ function Details({ server }: { server: PairedServerView }) {
         </>
       )}
       {serverLanguageFacts(server).map((fact) => (
-        <Fragment key={fact.term}>
-          <dt>{fact.term}</dt>
-          <dd>{fact.value}</dd>
-        </Fragment>
+        <Fact key={fact.term} fact={fact} />
       ))}
     </dl>
   );

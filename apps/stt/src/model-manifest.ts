@@ -1,10 +1,10 @@
 import { resolve } from 'node:path';
 
-export type ModelRole = 'verbatim' | 'conditioned' | 'language-id';
+export type ModelRole = 'verbatim' | 'conditioned' | 'language-id' | 'selectable';
 
 export type ModelFile = { role: ModelRole; url: string; sha256: string; size: number; target: string };
 
-export type ModelTargets = { model: string; conditionedModel: string; lidModel: string };
+export type ModelTargets = { model: string; conditionedModel: string; lidModel: string; whisperModel: string };
 
 const HUGGING_FACE = 'https://huggingface.co';
 
@@ -55,6 +55,13 @@ export class ServerModelManifest {
         sha256: '063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a',
         size: 26_693_632,
         target: targets.lidModel,
+      },
+      {
+        role: 'selectable',
+        url: huggingFaceUrl('handy-computer/whisper-large-v3-gguf', '274ad1d1cf680b7ee53cc70f78461394cd3a344b', 'whisper-large-v3-F16.gguf'),
+        sha256: 'e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584',
+        size: 3_107_236_640,
+        target: targets.whisperModel,
       },
     ]);
   }

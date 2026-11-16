@@ -5,13 +5,21 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliTranscriber } from '../src/cli-transcriber';
 import { UnavailableLanguageRouter } from '../src/language-router';
+import { RoutingTranscriptionModel } from '../src/routing-transcription-model';
 import { startSttServer, type SttServer } from '../src/server';
+import { TranscriptionModelCatalog } from '../src/transcription-model-catalog';
+import type { Transcriber } from '../src/transcriber';
 
 const FAKE_CLI = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-transcribe-cli.sh', import.meta.url));
 
 type Reply = { status: number; body: unknown };
 
 const NO_ROUTING = { router: new UnavailableLanguageRouter(), models: { transcription: 'fake', conditioned: null, languageId: null } };
+
+function serverFor(transcriber: Transcriber): Promise<SttServer> {
+  const catalog = new TranscriptionModelCatalog(new RoutingTranscriptionModel('parakeet-ultra', 'fake', transcriber, NO_ROUTING.router));
+  return startSttServer({ transcriber, ...NO_ROUTING, catalog, port: 0, host: '127.0.0.1' });
+}
 
 let server: SttServer;
 
@@ -47,7 +55,7 @@ function vocabularyPath(terms: readonly string[]): string {
 
 beforeEach(async () => {
   const transcriber = new CliTranscriber({ binary: FAKE_CLI, model: '/models/fake.gguf', backend: 'cpu', threads: 2 });
-  server = await startSttServer({ transcriber, ...NO_ROUTING, port: 0, host: '127.0.0.1' });
+  server = await serverFor(transcriber);
 });
 
 afterEach(async () => {
@@ -117,7 +125,7 @@ describe('STT sidecar', () => {
     await server.stop();
 
     const transcriber = new CliTranscriber({ binary: FAKE_CLI, model: '/models/fake.gguf', backend: 'cpu', threads: 2, timeoutMs: 100 });
-    server = await startSttServer({ transcriber, ...NO_ROUTING, port: 0, host: '127.0.0.1' });
+    server = await serverFor(transcriber);
     vi.stubEnv('FAKE_CLI_MODE', 'hang');
     expect((await send('/transcribe?language=sk', { body: new Uint8Array(32_000) })).status).toBe(504);
   });
@@ -158,7 +166,10 @@ describe('STT sidecar', () => {
   });
 
   it('reports no languages and refuses language lists without a language router', async () => {
-    expect(await send('/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: NO_ROUTING.models } });
+    expect(await send('/capabilities', { method: 'GET' })).toEqual({
+      status: 200,
+      body: { languages: [], models: NO_ROUTING.models, transcriptionModels: [{ id: 'parakeet-ultra', name: 'fake', available: true, default: true }] },
+    });
     expect(await send('/transcribe?language=auto&languages=sk,cs', { body: new Uint8Array(32_000) })).toEqual({ status: 409, body: { error: 'languages unavailable' } });
   });
 

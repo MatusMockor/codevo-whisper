@@ -22,6 +22,7 @@ import {
 } from './message-types';
 import { readServerModels } from './server-models';
 import { jsonFrame, splitTag } from './tagged-frame';
+import { readTranscriptionModels } from './transcription-models';
 
 const TYPES = ['ready', 'capabilities', 'partial', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
 const PAIR_STATUSES = ['approved', 'rejected'] as const;
@@ -50,12 +51,22 @@ function readDetectedLanguage(object: JsonObject): DetectedLanguage {
   return { language: readNullableChoice(object, 'language', DICTATION_LANGUAGES) };
 }
 
+type CapabilitiesReply = Extract<ServerMessage, { type: 'capabilities' }>;
+
+function readOfferedModels(object: JsonObject): Pick<CapabilitiesReply, 'transcriptionModels'> {
+  if (object.transcriptionModels === undefined) {
+    return {};
+  }
+  return { transcriptionModels: readTranscriptionModels(object, 'transcriptionModels') };
+}
+
 function decodeCapabilities(object: JsonObject): ServerMessage {
-  assertOnlyKeys(object, ['type', 'languages', 'models']);
+  assertOnlyKeys(object, ['type', 'languages', 'models', 'transcriptionModels']);
   return {
     type: 'capabilities',
     languages: readChoiceList(object, 'languages', DICTATION_LANGUAGES, { minItems: 0, maxItems: DICTATION_LANGUAGES.length }),
     models: readServerModels(object, 'models'),
+    ...readOfferedModels(object),
   };
 }
 

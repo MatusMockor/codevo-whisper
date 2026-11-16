@@ -2,7 +2,7 @@ import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DICTATION_LANGUAGES, UNKNOWN_MODELS } from '@codevo-whisper/protocol';
-import { ROUTING_MODELS, ROUTING_STT } from '../../server/test/support/fake-stt-server';
+import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_MODELS, ROUTING_STT, WHISPER_OPTION } from '../../server/test/support/fake-stt-server';
 import type { ServerPairing } from '../src/main/remote/pairing-repository';
 import type { RemoteFailureKind } from '../src/main/remote/remote-failure';
 import { ServerConnector, type ConnectionObserver } from '../src/main/remote/server-connector';
@@ -67,7 +67,30 @@ describe('ServerConnector', () => {
 
     const languages = { kind: 'reported', languages: [...DICTATION_LANGUAGES], models: ROUTING_MODELS };
     expect(ready.languages).toEqual(languages);
-    expect(observer.servers).toEqual([{ connectMs: ready.connectMs, serverVersion: ready.serverVersion, languages }]);
+    expect(observer.servers).toEqual([{ connectMs: ready.connectMs, serverVersion: ready.serverVersion, languages, transcriptionModels: [] }]);
+    ready.connection.close();
+  });
+
+  it('asks a server of version 0.5.0 for the transcription models a device can choose', async () => {
+    gateway = await startTestGateway({ stt: { capabilities: MODEL_SELECTION_STT } });
+    const observer = new RecordingObserver();
+
+    const ready = await connector(await gateway.addDevice(), observer).connect();
+
+    expect(ready.transcriptionModels).toEqual([PARAKEET_OPTION, WHISPER_OPTION]);
+    expect(observer.servers[0]?.transcriptionModels).toEqual([PARAKEET_OPTION, WHISPER_OPTION]);
+    ready.connection.close();
+  });
+
+  it('does not ask an older server for transcription models, which would refuse the unknown request', async () => {
+    gateway = await startTestGateway({ stt: { capabilities: MODEL_SELECTION_STT }, server: { serverVersion: '0.4.0' } });
+    const observer = new RecordingObserver();
+
+    const ready = await connector(await gateway.addDevice(), observer).connect();
+
+    expect(ready.languages).toMatchObject({ kind: 'reported', languages: [...DICTATION_LANGUAGES] });
+    expect(ready.transcriptionModels).toEqual([]);
+    expect(observer.events).toEqual([{ connected: ready.connectMs }]);
     ready.connection.close();
   });
 

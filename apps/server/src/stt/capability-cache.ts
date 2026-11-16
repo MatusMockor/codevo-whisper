@@ -1,9 +1,11 @@
-import type { DictationLanguage } from '@codevo-whisper/protocol';
+import { routesDictationLanguages, type DictationLanguage } from '@codevo-whisper/protocol';
 import { NO_CAPABILITIES, type SttCapabilities, type SttCapabilityReport } from './stt-capabilities';
 
 export interface CapabilityLookup {
   current(): SttCapabilityReport;
   supports(languages: readonly DictationLanguage[]): boolean;
+  offersModel(id: string): boolean;
+  routesLanguages(model: string | null): boolean;
 }
 
 export interface RefreshableCapabilities extends CapabilityLookup {
@@ -22,6 +24,14 @@ export class SttCapabilityCache implements RefreshableCapabilities {
 
   supports(languages: readonly DictationLanguage[]): boolean {
     return languages.length > 0 && languages.every((language) => this.report.languages.includes(language));
+  }
+
+  offersModel(id: string): boolean {
+    return this.report.transcriptionModels.some((model) => model.id === id && model.available);
+  }
+
+  routesLanguages(model: string | null): boolean {
+    return routesDictationLanguages(this.report.transcriptionModels, model);
   }
 
   refresh(): Promise<void> {

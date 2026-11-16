@@ -5,7 +5,8 @@ import type { ServerModels } from './model-names';
 import { readPcm } from './read-pcm';
 import { parseTranscribeQuery, type TranscribeQuery } from './transcribe-query';
 import type { Transcriber } from './transcriber';
-import { TranscriptionJobs } from './transcription-job';
+import type { TranscriptionModel } from './transcription-model';
+import type { ModelLookup, TranscriptionModelCatalog } from './transcription-model-catalog';
 
 export type SttServer = Server & { stop(): Promise<void> };
 
@@ -13,6 +14,7 @@ export type SttServerOptions = {
   transcriber: Transcriber;
   router: LanguageRouter;
   models: ServerModels;
+  catalog: TranscriptionModelCatalog;
   port: number;
   host: string;
   onError?: (code: string) => void;
@@ -39,6 +41,45 @@ function isOctetStream(request: IncomingMessage): boolean {
   return mediaType?.trim().toLowerCase() === 'application/octet-stream';
 }
 
+type Refusal = { status: number; body: { error: string } };
+
+const LOOKUP_REFUSALS: Readonly<Record<Exclude<ModelLookup['kind'], 'found'>, Refusal>> = {
+  unknown: { status: 400, body: { error: 'unknown model' } },
+  unavailable: { status: 409, body: { error: 'model unavailable' } },
+};
+
+const LOADING: Refusal = { status: 503, body: { error: 'model loading' } };
+
+function prepared(model: TranscriptionModel): Promise<boolean> {
+  return model.prepare().then(
+    () => true,
+    () => false,
+  );
+}
+
+function foundModel(catalog: TranscriptionModelCatalog, url: URL, response: ServerResponse): TranscriptionModel | null {
+  const lookup = catalog.lookup(url.searchParams.get('model'));
+  if (lookup.kind !== 'found') {
+    const refusal = LOOKUP_REFUSALS[lookup.kind];
+    reply(response, refusal.status, refusal.body);
+    return null;
+  }
+  return lookup.model;
+}
+
+async function prepareModel(catalog: TranscriptionModelCatalog, url: URL, response: ServerResponse, onError: ((code: string) => void) | undefined): Promise<void> {
+  const model = foundModel(catalog, url, response);
+  if (model === null) {
+    return;
+  }
+  if (!(await prepared(model))) {
+    onError?.('502');
+    reply(response, 502, { error: 'model failed to load' });
+    return;
+  }
+  reply(response, 200, { status: 'ready' });
+}
+
 function failureStatus(error: unknown): number {
   if (error instanceof TranscribeCliError && error.reason === 'timeout') {
     return 504;
@@ -50,7 +91,7 @@ class SingleFlightHandler {
   private busy = false;
 
   constructor(
-    private readonly jobs: TranscriptionJobs,
+    private readonly catalog: TranscriptionModelCatalog,
     private readonly onError: ((code: string) => void) | undefined,
   ) {}
 
@@ -63,19 +104,28 @@ class SingleFlightHandler {
       reply(response, 415, { error: 'expected application/octet-stream' });
       return;
     }
+    const model = foundModel(this.catalog, url, response);
+    if (model === null) {
+      return;
+    }
+    if (!model.ready()) {
+      model.prepare().catch(() => undefined);
+      reply(response, LOADING.status, LOADING.body);
+      return;
+    }
     if (this.busy) {
       reply(response, 503, { error: 'busy' });
       return;
     }
     this.busy = true;
     try {
-      await this.transcribe(request, response, parseTranscribeQuery(url.searchParams));
+      await this.transcribe(request, response, model, parseTranscribeQuery(url.searchParams));
     } finally {
       this.busy = false;
     }
   }
 
-  private async transcribe(request: IncomingMessage, response: ServerResponse, query: TranscribeQuery): Promise<void> {
+  private async transcribe(request: IncomingMessage, response: ServerResponse, model: TranscriptionModel, query: TranscribeQuery): Promise<void> {
     const body = await readPcm(request);
     if (body.kind === 'aborted') {
       request.destroy();
@@ -89,7 +139,7 @@ class SingleFlightHandler {
       reply(response, 400, { error: 'invalid PCM or language' });
       return;
     }
-    const job = this.jobs.for(query);
+    const job = model.jobFor(query);
     if (job === null) {
       reply(response, 409, { error: 'languages unavailable' });
       return;
@@ -107,8 +157,8 @@ class SingleFlightHandler {
 }
 
 export async function startSttServer(options: SttServerOptions): Promise<SttServer> {
-  const { router, models } = options;
-  const handler = new SingleFlightHandler(new TranscriptionJobs(options.transcriber, router), options.onError);
+  const { router, models, catalog } = options;
+  const handler = new SingleFlightHandler(catalog, options.onError);
   const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, (request, response) => {
     request.on('error', () => request.destroy());
     response.once('finish', () => request.resume());
@@ -124,7 +174,11 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
       return;
     }
     if (request.method === 'GET' && url.pathname === '/capabilities') {
-      reply(response, 200, { languages: router.languages(), models });
+      reply(response, 200, { languages: router.languages(), models, transcriptionModels: catalog.report() });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/prepare') {
+      prepareModel(catalog, url, response, options.onError).catch(() => reply(response, 500, { error: 'internal error' }));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {

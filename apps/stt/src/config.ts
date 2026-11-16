@@ -9,6 +9,7 @@ export type SttConfig = {
   model: string;
   conditionedModel: string;
   lidModel: string;
+  whisperModel: string;
   backend: TranscribeBackend;
   lidBackend: TranscribeBackend;
   threads: number;
@@ -51,6 +52,7 @@ export function loadSttConfig(env: NodeJS.ProcessEnv): SttConfig {
     model: value(env, 'STT_MODEL_PATH', '/models/parakeet-ultra-F16.gguf'),
     conditionedModel: value(env, 'STT_CONDITIONED_MODEL_PATH', '/models/canary-1b-v2-Q8_0.gguf'),
     lidModel: value(env, 'STT_LID_MODEL_PATH', '/models/lang-id-voxlingua107-ecapa-Q8_0.gguf'),
+    whisperModel: value(env, 'STT_WHISPER_MODEL_PATH', '/models/whisper-large-v3-F16.gguf'),
     backend: choice(env, 'STT_BACKEND', BACKENDS),
     lidBackend: choice(env, 'STT_LID_BACKEND', LID_BACKENDS),
     threads: integer(env, 'STT_THREADS', '4', { min: 1, max: 256 }),

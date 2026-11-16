@@ -279,6 +279,26 @@ describe('ResidentTranscriber', () => {
     expect(worker.ready()).toBe(true);
   });
 
+  it('stays ready but stops being resident once its worker is killed after a timeout or exits while idle', async () => {
+    vi.stubEnv('FAKE_WORKER_SLOW_SAMPLES', '2');
+    const worker = create({ timeoutMs: 100 });
+    expect(worker.resident()).toBe(false);
+    const first = Number(pidOf(await worker.transcribe({ pcm: pcm(1), language: 'sk' })));
+    expect(worker.resident()).toBe(true);
+
+    await expect(worker.transcribe({ pcm: pcm(2), language: 'sk' })).rejects.toMatchObject({ reason: 'timeout' });
+    await waitForExit(first);
+    expect(worker.ready()).toBe(true);
+    expect(worker.resident()).toBe(false);
+
+    await worker.warmUp();
+    expect(worker.resident()).toBe(true);
+    const second = Number(pidOf(await worker.transcribe({ pcm: pcm(1), language: 'sk' })));
+    process.kill(second, 'SIGKILL');
+    await waitForExit(second);
+    expect(worker.resident()).toBe(false);
+  });
+
   it('kills a worker that misses the startup deadline and reports not ready', async () => {
     const spawns = join(scratch, 'spawns.txt');
     vi.stubEnv('FAKE_WORKER_SPAWNS_FILE', spawns);

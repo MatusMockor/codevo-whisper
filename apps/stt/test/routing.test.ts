@@ -14,6 +14,11 @@ const CYRILLIC_DRIFT = 'привіт як справи';
 
 const ROUTING_MODELS = { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' };
 
+const TRANSCRIPTION_MODELS = [
+  { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true },
+  { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: false, default: false },
+];
+
 type WorkerEnv = Readonly<Record<string, string>>;
 
 let server: SttServer | undefined;
@@ -27,7 +32,7 @@ async function startWith(warmUp: () => Promise<unknown>, env: WorkerEnv): Promis
 
 async function serve(routing: boolean, warmUpBackoff?: RetryBackoff): Promise<{ engine: Engine; server: SttServer }> {
   engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, { routing, ...(warmUpBackoff === undefined ? {} : { warmUpBackoff }) });
-  server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
+  server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, catalog: engine.catalog, port: 0, host: '127.0.0.1' });
   return { engine, server };
 }
 
@@ -53,7 +58,7 @@ describe('language routing on resident workers', () => {
 
     expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({
       status: 200,
-      body: { languages: [], models: { transcription: 'Parakeet Ultra (F16)', conditioned: null, languageId: null } },
+      body: { languages: [], models: { transcription: 'Parakeet Ultra (F16)', conditioned: null, languageId: null }, transcriptionModels: TRANSCRIPTION_MODELS },
     });
     expect(await send(started.server, '/transcribe?language=auto&languages=sk', { body: pcm(TWO_SECONDS) })).toEqual({
       status: 409,
@@ -64,11 +69,11 @@ describe('language routing on resident workers', () => {
   it('reports the supported languages once all three workers are ready', async () => {
     const started = await serve(true);
 
-    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS } });
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS, transcriptionModels: TRANSCRIPTION_MODELS } });
     await started.engine.transcriber.warmUp();
-    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS } });
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS, transcriptionModels: TRANSCRIPTION_MODELS } });
     await started.engine.warmUpLanguageModels();
-    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS } });
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS, transcriptionModels: TRANSCRIPTION_MODELS } });
     expect((await send(started.server, '/health', { method: 'GET' })).body).toEqual({ status: 'UP', busy: false });
   });
 
@@ -85,7 +90,7 @@ describe('language routing on resident workers', () => {
 
     expect(await warmedUp).toBe(true);
     expect(retries).toEqual([10]);
-    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS } });
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [...SUPPORTED_LANGUAGES], models: ROUTING_MODELS, transcriptionModels: TRANSCRIPTION_MODELS } });
   });
 
   it('stops retrying the language model warm-up on shutdown', async () => {
@@ -101,7 +106,7 @@ describe('language routing on resident workers', () => {
     await started.engine.close();
 
     expect(await warmedUp).toBe(false);
-    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS } });
+    expect(await send(started.server, '/capabilities', { method: 'GET' })).toEqual({ status: 200, body: { languages: [], models: ROUTING_MODELS, transcriptionModels: TRANSCRIPTION_MODELS } });
   });
 
   it('routes a confident final segment to the conditioned model', async () => {

@@ -45,7 +45,7 @@ export class RemoteEngine implements TranscriptionEngine {
         ready.connection.close();
         return notReady('server-disconnected');
       }
-      const language = this.deps.languages.unavailableReason(selection, ready.languages);
+      const language = this.deps.languages.unavailableReason(selection, ready);
       if (language !== null) {
         ready.connection.close();
         return notReady(language);
@@ -57,7 +57,7 @@ export class RemoteEngine implements TranscriptionEngine {
           id: this.id,
           start: (options) => {
             stopWatching();
-            const refused = this.deps.languages.unavailableReason(options.languages, ready.languages);
+            const refused = this.deps.languages.unavailableReason(options.languages, ready);
             if (refused !== null) {
               ready.connection.close();
               throw new EngineUnavailableError(refused);

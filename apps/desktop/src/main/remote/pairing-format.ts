@@ -1,4 +1,4 @@
-import { IDENTIFIER_PATTERN, MAX_IDENTIFIER_CHARS, publicKeyOf } from '@codevo-whisper/protocol';
+import { IDENTIFIER_PATTERN, isTranscriptionModelId, MAX_IDENTIFIER_CHARS, publicKeyOf } from '@codevo-whisper/protocol';
 import type { ServerPairing } from './pairing-repository';
 
 type StoredPairing = {
@@ -9,6 +9,7 @@ type StoredPairing = {
   deviceId: string;
   deviceName: string;
   pairedAt: string;
+  transcriptionModel?: string;
 };
 
 const KEY_BYTES = 32;
@@ -47,6 +48,13 @@ function deviceId(value: unknown): string {
   return id;
 }
 
+function transcriptionModel(value: unknown): Pick<ServerPairing, 'transcriptionModel'> {
+  if (!isTranscriptionModelId(value)) {
+    return {};
+  }
+  return { transcriptionModel: value };
+}
+
 export function encodePairing(pairing: ServerPairing): string {
   deviceId(pairing.deviceId);
   const stored: StoredPairing = {
@@ -57,6 +65,7 @@ export function encodePairing(pairing: ServerPairing): string {
     deviceId: pairing.deviceId,
     deviceName: pairing.deviceName,
     pairedAt: pairing.pairedAt,
+    ...transcriptionModel(pairing.transcriptionModel),
   };
   return JSON.stringify(stored);
 }
@@ -74,5 +83,6 @@ export function decodePairing(json: string): ServerPairing {
     deviceId: deviceId(stored.deviceId),
     deviceName: text(stored.deviceName, 'deviceName'),
     pairedAt: text(stored.pairedAt, 'pairedAt'),
+    ...transcriptionModel(stored.transcriptionModel),
   };
 }

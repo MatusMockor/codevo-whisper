@@ -5,4 +5,5 @@ export type TranscriberCall = { pcm: Uint8Array; language: TranscribeLanguage; v
 
 export interface Transcriber extends EngineComponent {
   transcribe(call: TranscriberCall): Promise<string>;
+  resident(): boolean;
 }

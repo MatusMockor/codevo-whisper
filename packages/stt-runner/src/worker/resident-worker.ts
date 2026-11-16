@@ -68,6 +68,10 @@ export class ResidentWorker<Request, Result> {
     return this.state === 'ready';
   }
 
+  resident(): boolean {
+    return this.ready() && this.worker?.loaded === true;
+  }
+
   run(request: Request, signal?: AbortSignal): Promise<Result> {
     if (signal?.aborted === true) {
       return Promise.reject(asError(signal.reason));

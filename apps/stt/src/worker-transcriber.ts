@@ -16,6 +16,10 @@ export class WorkerTranscriber implements Transcriber {
     return this.worker.ready();
   }
 
+  resident(): boolean {
+    return this.worker.resident();
+  }
+
   warmUp(): Promise<void> {
     return this.worker.warmUp();
   }

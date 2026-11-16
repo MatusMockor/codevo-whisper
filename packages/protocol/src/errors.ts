@@ -10,6 +10,7 @@ export const ERROR_CODES = [
   'pairing_rejected',
   'server_key_changed',
   'languages_unavailable',
+  'model_unavailable',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

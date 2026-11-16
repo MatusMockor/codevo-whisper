@@ -307,7 +307,37 @@ test('the card shows that the server routes dictation languages and names its mo
 
   await expect(fact('Výber jazykov')).toHaveText('Podporovaný');
   await expect(fact('Model prepisu')).toHaveText('Parakeet Ultra (F16)');
+  await expect(card().getByRole('combobox', { name: 'Model prepisu' })).toHaveCount(0);
   await expect(fact('Modely pre jazyky')).toHaveText('Canary 1B v2 (Q8) + VoxLingua107 (rozpoznanie jazyka)');
+});
+
+test('the card lets this device choose the transcription model and keeps the choice after a relaunch', async () => {
+  await pairWith({ transcriptionModels: 'offered' });
+  const picker = card().getByRole('combobox', { name: 'Model prepisu' });
+
+  await expect(picker).toHaveValue('parakeet-ultra');
+  await expect(fact('Model prepisu')).toContainText('Najrýchlejší, 25 európskych jazykov.');
+  await expect(fact('Modely pre jazyky')).toHaveText('Canary 1B v2 (Q8) + VoxLingua107 (rozpoznanie jazyka)');
+
+  await picker.selectOption('whisper-large-v3');
+
+  await expect(picker).toHaveValue('whisper-large-v3');
+  await expect(fact('Model prepisu')).toContainText('Najpresnejší pre slovenčinu, ale pomalší.');
+  await expect(fact('Modely pre jazyky')).toHaveText('Nepoužívajú sa, model rozpozná jazyk sám');
+
+  await app.close();
+  await start();
+  await openTab('Prepis');
+  await expect(card().getByRole('combobox', { name: 'Model prepisu' })).toHaveValue('whisper-large-v3');
+});
+
+test('the card disables a model the server has not downloaded and tells how to get it', async () => {
+  await pairWith({ transcriptionModels: 'whisper-missing' });
+  const picker = card().getByRole('combobox', { name: 'Model prepisu' });
+
+  await expect(picker).toHaveValue('parakeet-ultra');
+  await expect(picker.locator('option[value="whisper-large-v3"]')).toBeDisabled();
+  await expect(fact('Model prepisu')).toContainText('Whisper Large v3 (F16) na serveri nie je stiahnutý. Spustite na serveri stt-provision.');
 });
 
 test('the card shows missing language models on a current server without them', async () => {

@@ -441,6 +441,24 @@
   overflow-wrap: anywhere;
 }
 
+.kv dt.kv-control-term {
+  align-self: start;
+  padding-top: 7px;
+}
+
+.kv dd.kv-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+.kv dd.kv-control .select {
+  max-width: 100%;
+}
+
 .e2e-line {
   display: flex;
   align-items: flex-start;
