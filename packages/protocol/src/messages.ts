@@ -20,6 +20,7 @@ export {
   isTranscriptionModelList,
   MAX_TRANSCRIPTION_MODEL_ID_CHARS,
   MAX_TRANSCRIPTION_MODELS,
+  routesDictationLanguages,
   TRANSCRIPTION_MODEL_ID_PATTERN,
   type TranscriptionModelOption,
 } from './transcription-models';

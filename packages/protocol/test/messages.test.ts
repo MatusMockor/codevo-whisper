@@ -12,6 +12,7 @@ import {
   MAX_TRANSCRIPTION_MODEL_ID_CHARS,
   MAX_TRANSCRIPTION_MODELS,
   MessageTag,
+  routesDictationLanguages,
   UNKNOWN_MODELS,
   type ClientMessage,
   type ServerMessage,
@@ -364,6 +365,16 @@ describe('transcription models', () => {
   function capabilities(transcriptionModels: unknown): Uint8Array {
     return json({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS, transcriptionModels });
   }
+
+  it('routes dictation languages only on the default model', () => {
+    const offered = [PARAKEET, { ...WHISPER, available: true }];
+
+    expect(routesDictationLanguages(offered, null)).toBe(true);
+    expect(routesDictationLanguages([], null)).toBe(true);
+    expect(routesDictationLanguages(offered, 'parakeet-ultra')).toBe(true);
+    expect(routesDictationLanguages(offered, 'whisper-large-v3')).toBe(false);
+    expect(routesDictationLanguages(offered, 'canary-1b-v2')).toBe(false);
+  });
 
   function start(fields: Record<string, unknown>): Uint8Array {
     return json({ type: 'start', sessionId: 'abc', language: 'auto', ...fields });

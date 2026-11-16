@@ -111,7 +111,7 @@ export class SessionHandler {
       this.channel.send({ type: 'error', code: 'model_unavailable', message: 'model_unavailable', sessionId: message.sessionId });
       return;
     }
-    if (message.languages !== undefined && !this.deps.capabilities.supports(message.languages)) {
+    if (this.refusesLanguages(message)) {
       this.channel.send({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: message.sessionId });
       return;
     }
@@ -130,6 +130,13 @@ export class SessionHandler {
     });
     this.state = { kind: 'recording', dictation, startedAt: this.deps.clock() };
     this.shortFrameSeen = false;
+  }
+
+  private refusesLanguages(message: StartMessage): boolean {
+    if (message.languages === undefined || !this.deps.capabilities.routesLanguages(message.model ?? null)) {
+      return false;
+    }
+    return !this.deps.capabilities.supports(message.languages);
   }
 
   private onAudio(pcm: Uint8Array): void {

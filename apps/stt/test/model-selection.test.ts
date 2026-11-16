@@ -72,6 +72,11 @@ function prepare(stt: SttServer, model: string): Promise<Reply> {
   return send(stt, `/prepare?model=${model}`);
 }
 
+async function inferences(file: string): Promise<string[]> {
+  const text = await readFile(file, 'utf8').catch(() => '');
+  return text.split('\n').filter((line) => line.length > 0);
+}
+
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -235,14 +240,16 @@ describe('selectable transcription models', () => {
   });
 
   it('loads Whisper again outside the inference slot after its worker was killed', async () => {
+    const requestsFile = join(scratch, 'requests.txt');
     vi.stubEnv('FAKE_WORKER_SLOW_SAMPLES', String(TWO_SECONDS));
+    vi.stubEnv('FAKE_WORKER_REQUESTS_FILE', requestsFile);
     const stt = await serveWithWhisper();
     const pid = Number(workerOf(await transcribe(stt, 'language=sk&model=whisper-large-v3', 1600)));
     const { port } = stt.address() as AddressInfo;
     const abandoned = request({ host: '127.0.0.1', port, path: '/transcribe?language=sk&model=whisper-large-v3', method: 'POST', headers: { 'content-type': 'application/octet-stream' } });
     abandoned.on('error', () => undefined);
     abandoned.end(Buffer.from(pcm(TWO_SECONDS)));
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await expect.poll(() => inferences(requestsFile), { interval: 10, timeout: 3000 }).toContain(`${pid}:${TWO_SECONDS}`);
     abandoned.destroy();
 
     await expect.poll(() => isAlive(pid), { interval: 20, timeout: 5000 }).toBe(false);

@@ -32,6 +32,13 @@ export function isTranscriptionModelList(value: unknown): value is Transcription
   return new Set(options.map((option) => option.id)).size === options.length && options.filter((option) => option.default).length <= 1;
 }
 
+export function routesDictationLanguages(options: readonly TranscriptionModelOption[], id: string | null): boolean {
+  if (id === null) {
+    return true;
+  }
+  return options.some((option) => option.id === id && option.default);
+}
+
 export function readTranscriptionModelId(object: JsonObject, key: string): string {
   const value = object[key];
   if (!isTranscriptionModelId(value)) {

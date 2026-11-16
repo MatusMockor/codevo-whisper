@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { MODEL_SELECTION_STT, PARAKEET_OPTION, WHISPER_OPTION, type FakeSttResponse } from '../../server/test/support/fake-stt-server';
+import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_MODELS, WHISPER_OPTION, type FakeSttResponse } from '../../server/test/support/fake-stt-server';
 import type { EngineDictation, Preparation } from '../src/main/engines/transcription-engine';
 import { serverHandlers } from '../src/main/ipc/server-handlers';
 import { InsecureTestVault } from '../src/main/remote/insecure-test-vault';
@@ -13,6 +13,7 @@ import { ServerReconnect } from '../src/main/remote/server-reconnect';
 import { failureState } from '../src/main/session/overlay-messages';
 import { SettingsStore } from '../src/main/settings/settings-store';
 import type { PairedServerView } from '../src/shared/server';
+import type { LanguageSelection } from '../src/shared/dictation-languages';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
 import { FakePowerEvents } from './fake-power-events';
 import { RecordingLogger } from './recording-logger';
@@ -20,6 +21,10 @@ import { startTestGateway, type TestGateway } from './support/gateway';
 import { createServerService, tinyModels, type ServerServiceHarness, type ServerServiceSetup } from './support/server-service';
 
 const WHISPER_MISSING: FakeSttResponse = { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } };
+
+const NO_ROUTING: FakeSttResponse = { status: 200, body: { languages: [], models: ROUTING_MODELS, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } };
+
+const SLOVAK_AND_ENGLISH: LanguageSelection = { mode: 'selected', selected: ['sk', 'en'] };
 
 const SECOND = 32_000;
 
@@ -71,15 +76,19 @@ function choose(id: unknown): Promise<void> {
   return serverHandlers({ server: harness.service }).chooseServerModel(id);
 }
 
-async function dictation(): Promise<EngineDictation> {
-  const preparation = await new RemoteEngine({ connector: harness.connector, languages: new ServerLanguageGate(), selection: () => DEFAULT_SETTINGS.languages }).prepare();
-  expect(preparation).toMatchObject({ ready: true });
-  const { engine } = preparation as Extract<Preparation, { ready: true }>;
-  return engine.start({ languages: DEFAULT_SETTINGS.languages, signal: new AbortController().signal });
+function prepareRemote(languages: LanguageSelection): Promise<Preparation> {
+  return new RemoteEngine({ connector: harness.connector, languages: new ServerLanguageGate(), selection: () => languages }).prepare();
 }
 
-async function dictate(): Promise<string> {
-  const running = await dictation();
+async function dictation(languages: LanguageSelection = DEFAULT_SETTINGS.languages): Promise<EngineDictation> {
+  const preparation = await prepareRemote(languages);
+  expect(preparation).toMatchObject({ ready: true });
+  const { engine } = preparation as Extract<Preparation, { ready: true }>;
+  return engine.start({ languages, signal: new AbortController().signal });
+}
+
+async function dictate(languages: LanguageSelection = DEFAULT_SETTINGS.languages): Promise<string> {
+  const running = await dictation(languages);
   running.push(new Uint8Array(SECOND).fill(5));
   return running.finish();
 }
@@ -111,6 +120,19 @@ describe('server transcription model selection', () => {
     await choose('parakeet-ultra');
     expect(await dictate()).toBe('ahoj svet');
     expect(requestedModels()).toEqual(['whisper-large-v3', 'parakeet-ultra']);
+  });
+
+  it('dictates selected languages on Whisper when the server cannot route them and still refuses them on the default model', async () => {
+    gateway.stt.setCapabilities(NO_ROUTING);
+    await pair();
+    await choose('whisper-large-v3');
+
+    expect(await dictate(SLOVAK_AND_ENGLISH)).toBe('ahoj svet');
+    expect(gateway.stt.requests).toMatchObject([{ languages: ['sk', 'en'], model: 'whisper-large-v3' }]);
+
+    await choose('parakeet-ultra');
+    expect(await prepareRemote(SLOVAK_AND_ENGLISH)).toEqual({ ready: false, reason: 'server-languages-missing' });
+    expect(gateway.stt.requests).toHaveLength(1);
   });
 
   it('keeps the last of two quickly repeated choices', async () => {

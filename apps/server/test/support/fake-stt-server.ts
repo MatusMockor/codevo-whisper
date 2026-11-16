@@ -44,7 +44,7 @@ export const WHISPER_OPTION = { id: 'whisper-large-v3', name: 'Whisper Large v3 
 
 export const MODEL_SELECTION_STT = { status: 200, body: { ...ROUTING_STT.body, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } } satisfies FakeSttResponse;
 
-type OfferedModel = { id: string; available: boolean };
+type OfferedModel = { id: string; available: boolean; default: boolean };
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
@@ -90,6 +90,10 @@ function routes(capabilities: FakeSttResponse): boolean {
   return capabilities.status === 200 && Array.isArray(languages) && languages.length > 0;
 }
 
+function skipsRouting(model: string | undefined, capabilities: FakeSttResponse): boolean {
+  return model !== undefined && offeredModels(capabilities).some((offered) => offered.id === model && !offered.default);
+}
+
 function offeredModels(capabilities: FakeSttResponse): readonly OfferedModel[] {
   const models = (capabilities.body as { transcriptionModels?: unknown } | null)?.transcriptionModels;
   return Array.isArray(models) ? (models as OfferedModel[]) : [];
@@ -119,7 +123,7 @@ function validationStatus(request: IncomingMessage, pcm: Uint8Array, query: Fake
   if (pcm.length > MAX_BYTES) {
     return 413;
   }
-  if (query.languages !== undefined && !routes(capabilities)) {
+  if (query.languages !== undefined && !skipsRouting(query.model, capabilities) && !routes(capabilities)) {
     return 409;
   }
   return null;

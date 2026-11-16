@@ -22,6 +22,8 @@ import { waitUntil } from './support/wait-until';
 
 type DictationLine = { event: string; result: string; routes: Record<string, number> };
 
+const NO_ROUTING: FakeSttResponse = { status: 200, body: { languages: [], models: ROUTING_MODELS, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } };
+
 const WHISPER_MISSING: FakeSttResponse = { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } };
 
 let dir: Awaited<ReturnType<typeof createTempDir>>;
@@ -228,6 +230,23 @@ describe('transcription model selection on the gateway', () => {
       { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 'w1' },
     ]);
     expect(fake.preparations()).toHaveLength(MAX_MODEL_LOADS);
+  });
+
+  it('accepts dictation languages for a model that skips routing while the stt cannot route languages', async () => {
+    const respond = (): FakeSttResponse => ({ status: 200, body: { text: 'ahoj', language: null, route: 'direct' } });
+    const session = await readySession(await start({ capabilities: NO_ROUTING, respond }));
+
+    expect(await dictate(session, { type: 'start', sessionId: 'w1', language: 'auto', languages: ['sk', 'en'], model: 'whisper-large-v3' })).toEqual([
+      { type: 'final', sessionId: 'w1', segmentId: 0, text: 'ahoj', language: null },
+      { type: 'done', sessionId: 'w1' },
+    ]);
+    expect(fake.requests).toEqual([{ language: 'auto', languages: ['sk', 'en'], kind: 'final', model: 'whisper-large-v3', bytes: 64_000 }]);
+
+    session.send({ type: 'start', sessionId: 'p1', language: 'auto', languages: ['sk', 'en'] });
+    expect(await session.next()).toEqual({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: 'p1' });
+    session.send({ type: 'start', sessionId: 'p2', language: 'auto', languages: ['sk', 'en'], model: 'parakeet-ultra' });
+    expect(await session.next()).toEqual({ type: 'error', code: 'languages_unavailable', message: 'languages_unavailable', sessionId: 'p2' });
+    expect(fake.requests).toHaveLength(1);
   });
 
   it('refuses an unavailable or unknown model at start and keeps the connection for the default model', async () => {

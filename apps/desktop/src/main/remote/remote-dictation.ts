@@ -5,9 +5,9 @@ import { asRemoteFailure, failureForCode, RemoteFailure, type RemoteFailureKind 
 import { RetryBuffer } from './retry-buffer';
 import type { SecureConnection } from './secure-connection';
 import type { ReadyConnection } from './server-connector';
+import { requestedModel } from './requested-model';
 import { ServerFeatures } from './server-features';
 import type { ServerLanguageSupport } from './server-language-support';
-import { requestedTranscriptionModel } from '../../shared/transcription-models';
 
 export type RemoteDictationDeps = {
   options: DictationOptions;
@@ -59,10 +59,7 @@ function closeWhenReady(attempt: Promise<ReadyConnection>): void {
 }
 
 function modelField(ready: ReadyConnection): { model?: string } {
-  if (!ServerFeatures.of(ready.serverVersion).transcriptionModels) {
-    return {};
-  }
-  const model = requestedTranscriptionModel(ready.transcriptionModels, ready.pairing.transcriptionModel ?? null);
+  const model = requestedModel(ready);
   return model === undefined ? {} : { model };
 }
 
@@ -360,7 +357,7 @@ export class RemoteDictation implements EngineDictation {
   }
 
   private resume(ready: ReadyConnection): void {
-    const refused = this.deps.languages.unavailableReason(this.deps.options.languages, ready.languages);
+    const refused = this.deps.languages.unavailableReason(this.deps.options.languages, ready);
     if (refused !== null) {
       ready.connection.close();
       this.refuse(refused);

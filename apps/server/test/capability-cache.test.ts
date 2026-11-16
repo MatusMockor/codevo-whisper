@@ -87,6 +87,15 @@ describe('SttCapabilityCache', () => {
     expect(cache.offersModel('parakeet-ultra')).toBe(false);
   });
 
+  it('routes dictation languages only for a session on the default model', async () => {
+    const { cache } = await cacheFor(MODEL_SELECTION_STT);
+    await cache.refresh();
+
+    expect(cache.routesLanguages(null)).toBe(true);
+    expect(cache.routesLanguages('parakeet-ultra')).toBe(true);
+    expect(cache.routesLanguages('whisper-large-v3')).toBe(false);
+  });
+
   it('forgets the languages when the stt loses its routing models', async () => {
     const { cache, stt } = await cacheFor();
     await cache.refresh();

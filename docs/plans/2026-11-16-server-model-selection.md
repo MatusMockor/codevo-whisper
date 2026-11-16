@@ -8,6 +8,7 @@ Scope of this plan: `apps/stt`, `packages/protocol`, `apps/server`, compose and 
 
 - Stable ids `parakeet-ultra` (default) and `whisper-large-v3`, names "Parakeet Ultra (F16)" and "Whisper Large v3 (F16)" (`model-names.ts`).
 - Whisper bypasses Canary and the language ID. The language hint is the selected language when exactly one is selected, otherwise `auto` (Whisper detects the language itself). The legacy `language` (`sk`, `en`, `cs`, `auto`) is passed through as the hint.
+- Only the default model routes dictation languages (Canary + language ID); every other offered model transcribes directly. The rule is `routesDictationLanguages` in `packages/protocol` (no model or the option with `default: true`), shared by the gateway and the desktop, so the wire contract stays as it is. A `start` with `languages` is checked against `capabilities.languages` (and refused with `languages_unavailable`) only when its model routes; a direct model accepts any valid language list even when the sidecar reports `languages: []`. The desktop applies the same rule before it refuses a dictation with `server-languages-missing`.
 - Vocabulary is sent to Whisper exactly as to Parakeet. `cw-stt-worker` (`stt-worker-asr.c`) only hands it to transcribe.cpp when the model reports `TRANSCRIBE_FEATURE_VOCABULARY`, otherwise the terms are dropped, so it is safe for any model.
 - Language codes: the worker frame accepts the 25 `LANGUAGE_CODES`, all of them are Whisper languages.
 - Whisper file: `handy-computer/whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b`, `whisper-large-v3-F16.gguf`, 3,107,236,640 B, SHA-256 `e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584`, MIT (OpenAI Whisper). The server side carries no attribution files today, so none are added.
@@ -64,6 +65,6 @@ Decoding is strict on both sides (`assertOnlyKeys`), so the existing compat mech
 
 ## Known limits
 
-- A dictation with `languages` is still checked against `capabilities.languages`, which needs Canary and the language ID; with the pinned provisioning all models are present.
+- A dictation with `languages` on the default model is still checked against `capabilities.languages`, which needs Canary and the language ID; with the pinned provisioning all models are present.
 - The preparation has its own 5 min timeout (the per-request STT timeout of 40 s applies only to transcription). A dictation started with a model that is still loading waits for it, so its first transcript comes only after the load; partials of that dictation start once the model is ready.
 - Real Whisper load and inference on Vulkan (RX 7700/7800 XT) is not covered by the automated tests, which use the fake worker.
