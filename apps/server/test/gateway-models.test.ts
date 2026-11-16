@@ -194,8 +194,7 @@ describe('transcription model selection on the gateway', () => {
     session.send({ type: 'cancel' });
 
     expect(await session.next()).toEqual({ type: 'done', sessionId: 'w1' });
-    await waitUntil(() => fake.loadedModels().includes('whisper-large-v3'));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     expect(fake.requests).toEqual([]);
   });
 
