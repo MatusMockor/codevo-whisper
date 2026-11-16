@@ -1,5 +1,7 @@
+import { pinnedCatalog } from './catalog-models';
 import { loadSttConfig } from './config';
 import { createEngine } from './create-engine';
+import { removePartials } from './model-downloads';
 import { missingFiles } from './model-files';
 import { startSttServer } from './server';
 
@@ -19,17 +21,19 @@ if (missingLanguageModels.length > 0) {
   log('language_models_missing', { models: missingLanguageModels.join(','), hint: PROVISION_HINT });
 }
 
-const whisperPresent = (await missingFiles([config.whisperModel])).length === 0;
-if (!whisperPresent) {
-  log('selectable_model_missing', { model: config.whisperModel, hint: PROVISION_HINT });
-}
+const catalog = pinnedCatalog(config);
+await removePartials(catalog.alternatives).catch(() => log('model_partials_cleanup_failed', { models: config.modelsDir }));
+const missingAlternatives = await missingFiles(catalog.alternatives.map((model) => model.target));
+const installed = catalog.alternatives.filter((model) => !missingAlternatives.includes(model.target)).map((model) => model.id);
+log('selectable_models', { installed: installed.join(','), downloads: config.modelDownloads, maxResident: config.maxResidentModels });
 
-const engine = createEngine(config, { routing: missingLanguageModels.length === 0, whisper: whisperPresent });
+const engine = createEngine(config, { routing: missingLanguageModels.length === 0, catalog, installed, downloads: { onEvent: log } });
 const server = await startSttServer({
   transcriber: engine.transcriber,
   router: engine.router,
   models: engine.models,
   catalog: engine.catalog,
+  management: engine.management,
   port: config.port,
   host: config.host,
   onError: (status) => log('engine_error', { status }),

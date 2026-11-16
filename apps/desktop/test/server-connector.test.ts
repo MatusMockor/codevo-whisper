@@ -9,6 +9,8 @@ import { ServerConnector, type ConnectionObserver } from '../src/main/remote/ser
 import type { ConnectedServer } from '../src/shared/server';
 import { freePort, startTestGateway, type TestGateway } from './support/gateway';
 
+const NO_CATALOG = { canManage: false, downloadsEnabled: false, models: [] };
+
 class RecordingObserver implements ConnectionObserver {
   readonly events: Array<{ connected: number } | { failed: RemoteFailureKind }> = [];
   readonly servers: ConnectedServer[] = [];
@@ -67,7 +69,7 @@ describe('ServerConnector', () => {
 
     const languages = { kind: 'reported', languages: [...DICTATION_LANGUAGES], models: ROUTING_MODELS };
     expect(ready.languages).toEqual(languages);
-    expect(observer.servers).toEqual([{ connectMs: ready.connectMs, serverVersion: ready.serverVersion, languages, transcriptionModels: [] }]);
+    expect(observer.servers).toEqual([{ connectMs: ready.connectMs, serverVersion: ready.serverVersion, languages, transcriptionModels: [], modelCatalog: NO_CATALOG }]);
     ready.connection.close();
   });
 
@@ -90,6 +92,7 @@ describe('ServerConnector', () => {
 
     expect(ready.languages).toMatchObject({ kind: 'reported', languages: [...DICTATION_LANGUAGES] });
     expect(ready.transcriptionModels).toEqual([]);
+    expect(ready.modelCatalog).toBeNull();
     expect(observer.events).toEqual([{ connected: ready.connectMs }]);
     ready.connection.close();
   });

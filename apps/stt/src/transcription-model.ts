@@ -13,5 +13,14 @@ export interface TranscriptionModel {
   available(): boolean;
   ready(): boolean;
   prepare(): Promise<void>;
+  use<T>(work: () => Promise<T>): Promise<T>;
   jobFor(query: ValidQuery): TranscriptionJob | null;
+}
+
+export interface ManagedModel extends TranscriptionModel {
+  inUse(): boolean;
+  removing(): boolean;
+  beginRemoval(): boolean;
+  endRemoval(): void;
+  unload(): Promise<void>;
 }

@@ -1,4 +1,4 @@
-import type { TranscriptionModel, TranscriptionModelReport } from './transcription-model';
+import type { ManagedModel, TranscriptionModel, TranscriptionModelReport } from './transcription-model';
 
 export type ModelLookup = { kind: 'found'; model: TranscriptionModel } | { kind: 'unknown' } | { kind: 'unavailable' };
 
@@ -10,7 +10,7 @@ export class TranscriptionModelCatalog {
 
   constructor(
     private readonly defaultModel: TranscriptionModel,
-    alternatives: readonly TranscriptionModel[] = [],
+    private readonly alternatives: readonly ManagedModel[] = [],
   ) {
     this.models = [defaultModel, ...alternatives];
     if (new Set(this.models.map((model) => model.id)).size !== this.models.length) {
@@ -30,6 +30,10 @@ export class TranscriptionModelCatalog {
       return UNAVAILABLE;
     }
     return { kind: 'found', model };
+  }
+
+  managed(id: string): ManagedModel | null {
+    return this.alternatives.find((model) => model.id === id) ?? null;
   }
 
   report(): TranscriptionModelReport[] {

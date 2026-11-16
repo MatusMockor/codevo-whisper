@@ -6,6 +6,7 @@ import { createEngine } from '../src/create-engine';
 import type { Engine } from '../src/engine';
 import { startSttServer, type SttServer } from '../src/server';
 import type { RetryBackoff } from '../src/warm-up-retry';
+import { catalogOptions } from './support/catalog-options';
 import { pcm, send } from './support/http-client';
 
 const FAKE_WORKER = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-worker.js', import.meta.url));
@@ -14,10 +15,7 @@ const CYRILLIC_DRIFT = 'привіт як справи';
 
 const ROUTING_MODELS = { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' };
 
-const TRANSCRIPTION_MODELS = [
-  { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true },
-  { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: false, default: false },
-];
+const TRANSCRIPTION_MODELS = catalogOptions();
 
 type WorkerEnv = Readonly<Record<string, string>>;
 

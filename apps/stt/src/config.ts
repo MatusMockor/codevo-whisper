@@ -2,6 +2,8 @@ import type { TranscribeBackend } from '@codevo-whisper/stt-runner';
 
 export type SttEngine = 'worker' | 'cli';
 
+export type ModelDownloadsSwitch = 'enabled' | 'disabled';
+
 export type SttConfig = {
   engine: SttEngine;
   workerBinary: string;
@@ -10,6 +12,9 @@ export type SttConfig = {
   conditionedModel: string;
   lidModel: string;
   whisperModel: string;
+  modelsDir: string;
+  modelDownloads: ModelDownloadsSwitch;
+  maxResidentModels: number;
   backend: TranscribeBackend;
   lidBackend: TranscribeBackend;
   threads: number;
@@ -20,6 +25,7 @@ export type SttConfig = {
 const BACKENDS: readonly TranscribeBackend[] = ['vulkan', 'metal', 'cpu'];
 const LID_BACKENDS: readonly TranscribeBackend[] = ['cpu', 'vulkan', 'metal'];
 const ENGINES: readonly SttEngine[] = ['worker', 'cli'];
+const DOWNLOAD_SWITCHES: readonly ModelDownloadsSwitch[] = ['enabled', 'disabled'];
 
 function value(env: NodeJS.ProcessEnv, key: string, fallback: string): string {
   const raw = env[key]?.trim();
@@ -53,6 +59,9 @@ export function loadSttConfig(env: NodeJS.ProcessEnv): SttConfig {
     conditionedModel: value(env, 'STT_CONDITIONED_MODEL_PATH', '/models/canary-1b-v2-Q8_0.gguf'),
     lidModel: value(env, 'STT_LID_MODEL_PATH', '/models/lang-id-voxlingua107-ecapa-Q8_0.gguf'),
     whisperModel: value(env, 'STT_WHISPER_MODEL_PATH', '/models/whisper-large-v3-F16.gguf'),
+    modelsDir: value(env, 'STT_MODELS_DIR', '/models'),
+    modelDownloads: choice(env, 'STT_MODEL_DOWNLOADS', DOWNLOAD_SWITCHES),
+    maxResidentModels: integer(env, 'STT_MAX_RESIDENT_MODELS', '2', { min: 1, max: 8 }),
     backend: choice(env, 'STT_BACKEND', BACKENDS),
     lidBackend: choice(env, 'STT_LID_BACKEND', LID_BACKENDS),
     threads: integer(env, 'STT_THREADS', '4', { min: 1, max: 256 }),

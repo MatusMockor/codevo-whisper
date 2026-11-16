@@ -40,6 +40,7 @@ export class AdminCommands {
         pairedAt: device.pairedAt,
         lastSeenAt: device.lastSeenAt,
         fingerprint: fingerprint(device.publicKey),
+        manageModels: device.manageModels,
       })),
     };
   }
@@ -48,6 +49,11 @@ export class AdminCommands {
     const revoked = await this.deps.devices.remove(deviceId);
     const closedSessions = this.deps.sessions.closeDevice(deviceId, 'revoked');
     return { revoked, closedSessions };
+  }
+
+  async manageModels(deviceId: string, allowed: boolean): Promise<object> {
+    const found = await this.deps.devices.allowModelManagement(deviceId, allowed);
+    return { found, manageModels: found && allowed };
   }
 
   async rotateKey(): Promise<object> {

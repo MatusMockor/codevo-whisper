@@ -29,7 +29,7 @@ export class FileDeviceRepository implements DeviceRepository {
       if (devices.some((device) => device.id === id)) {
         throw new Error(`device id ${id} is already used by another key`);
       }
-      const device: Device = { id, name, publicKey: Uint8Array.from(publicKey), pairedAt: new Date().toISOString(), lastSeenAt: null };
+      const device: Device = { id, name, publicKey: Uint8Array.from(publicKey), pairedAt: new Date().toISOString(), lastSeenAt: null, manageModels: false };
       return { devices: [...devices, device], result: copy(device) };
     });
   }
@@ -37,6 +37,12 @@ export class FileDeviceRepository implements DeviceRepository {
   async findByPublicKey(publicKey: Uint8Array): Promise<Device | null> {
     const devices = await this.serialized(() => this.read());
     const device = devices.find((candidate) => equalBytes(candidate.publicKey, publicKey));
+    return device === undefined ? null : copy(device);
+  }
+
+  async findById(id: string): Promise<Device | null> {
+    const devices = await this.serialized(() => this.read());
+    const device = devices.find((candidate) => candidate.id === id);
     return device === undefined ? null : copy(device);
   }
 
@@ -60,6 +66,13 @@ export class FileDeviceRepository implements DeviceRepository {
     return this.mutate((devices) => ({
       devices: devices.map((device) => (device.id === id ? { ...device, lastSeenAt: at.toISOString() } : device)),
       result: undefined,
+    }));
+  }
+
+  allowModelManagement(id: string, allowed: boolean): Promise<boolean> {
+    return this.mutate((devices) => ({
+      devices: devices.map((device) => (device.id === id ? { ...device, manageModels: allowed } : device)),
+      result: devices.some((device) => device.id === id),
     }));
   }
 

@@ -15,6 +15,7 @@ import { ServerLanguageGate } from '../remote/server-language-support';
 import type { SecretVault } from '../remote/secret-vault';
 import { vaultKind, type VaultContext } from '../remote/vault-choice';
 import { ServerConnector } from '../remote/server-connector';
+import { ServerModelOperations } from '../remote/server-model-operations';
 import { ServerReconnect } from '../remote/server-reconnect';
 import { ServerService } from '../remote/server-service';
 import { ServerStatusBoard } from '../remote/server-status';
@@ -37,7 +38,7 @@ export type ServerWiringDeps = {
   logger: Logger;
 };
 
-export type ServerServices = { engine: RemoteEngine; service: ServerService; dispose(): void };
+export type ServerServices = { engine: RemoteEngine; service: ServerService; models: ServerModelOperations; dispose(): void };
 
 export function vaultFor(context: VaultContext): SecretVault {
   if (vaultKind(context) === 'insecure-test') {
@@ -62,6 +63,7 @@ export function createServerServices({ settings, order, local, window, power, e2
   return {
     engine: new RemoteEngine({ connector, languages: new ServerLanguageGate(), selection: () => settings.get().languages }),
     service,
+    models: new ServerModelOperations({ connector, serverSwitch, logger, timeoutMs: CONNECT_TIMEOUT_MS }),
     dispose: () => {
       for (const unsubscribe of unsubscribers.splice(0)) {
         unsubscribe();

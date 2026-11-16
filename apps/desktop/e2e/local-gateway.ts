@@ -7,7 +7,7 @@ import type { FakeSttRequest } from '../../server/test/support/fake-stt-server';
 const runner = fileURLToPath(new URL('../test/support/run-gateway.ts', import.meta.url));
 const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
 
-export type LocalGatewayOptions = { serverVersion?: string; languageModels?: boolean; transcriptionModels?: 'offered' | 'whisper-missing'; failWhileFile?: string; sttDelayMs?: number };
+export type LocalGatewayOptions = { serverVersion?: string; languageModels?: boolean; transcriptionModels?: 'offered' | 'whisper-missing' | 'catalog'; failWhileFile?: string; sttDelayMs?: number };
 
 export type AdminConnection = { send(value: object): void; next(): Promise<unknown>; close(): void };
 
@@ -17,6 +17,7 @@ export type LocalGateway = {
   openPairingWindow(): Promise<{ admin: AdminConnection; token: string }>;
   admin(command: object): Promise<unknown>;
   sttRequests(): readonly FakeSttRequest[];
+  completeDownload(id: string): void;
   close(): Promise<void>;
 };
 
@@ -83,6 +84,9 @@ export async function startLocalGateway(options: LocalGatewayOptions = {}): Prom
     url: started.url,
     admin,
     sttRequests: () => sttRequests,
+    completeDownload: (id) => {
+      child.stdin.write(`${JSON.stringify({ completeDownload: id })}\n`);
+    },
     openPairingWindow: async () => {
       const connection = await connectAdmin(started.adminSocket);
       connection.send({ cmd: 'pair' });

@@ -13,6 +13,7 @@ x-model-paths: &model-paths
   STT_CONDITIONED_MODEL_PATH: ${STT_CONDITIONED_MODEL_PATH:-/models/canary-1b-v2-Q8_0.gguf}
   STT_LID_MODEL_PATH: ${STT_LID_MODEL_PATH:-/models/lang-id-voxlingua107-ecapa-Q8_0.gguf}
   STT_WHISPER_MODEL_PATH: ${STT_WHISPER_MODEL_PATH:-/models/whisper-large-v3-F16.gguf}
+  STT_MODELS_DIR: ${STT_MODELS_DIR:-/models}
 
 services:
   gateway:
@@ -56,6 +57,8 @@ services:
       STT_BACKEND: ${STT_BACKEND:-vulkan}
       STT_LID_BACKEND: ${STT_LID_BACKEND:-cpu}
       STT_THREADS: ${STT_THREADS:-4}
+      STT_MODEL_DOWNLOADS: ${STT_MODEL_DOWNLOADS:-enabled}
+      STT_MAX_RESIDENT_MODELS: ${STT_MAX_RESIDENT_MODELS:-2}
       TMPDIR: /tmp
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -64,7 +67,7 @@ services:
     group_add:
       - "${RENDER_GID:?set RENDER_GID in .env}"
     volumes:
-      - cw-models:/models:ro
+      - cw-models:/models
     mem_limit: ${STT_MEM_LIMIT:-8g}
     cpus: ${STT_CPUS:-4}
     pids_limit: 128

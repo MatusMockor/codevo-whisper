@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { CANARY_1B_V2_Q8, PARAKEET_ULTRA_F16, pinnedUrl, VOXLINGUA107_Q8, WHISPER_LARGE_V3_F16, type PinnedFile } from './pinned-models';
 
 export type ModelRole = 'verbatim' | 'conditioned' | 'language-id' | 'selectable';
 
@@ -6,10 +7,8 @@ export type ModelFile = { role: ModelRole; url: string; sha256: string; size: nu
 
 export type ModelTargets = { model: string; conditionedModel: string; lidModel: string; whisperModel: string };
 
-const HUGGING_FACE = 'https://huggingface.co';
-
-function huggingFaceUrl(repo: string, revision: string, file: string): string {
-  return `${HUGGING_FACE}/${repo}/resolve/${revision}/${file}`;
+function manifestFile(role: ModelRole, pinned: PinnedFile, target: string): ModelFile {
+  return { role, url: pinnedUrl(pinned), sha256: pinned.sha256, size: pinned.size, target };
 }
 
 function conflictingTarget(files: readonly ModelFile[]): string | null {
@@ -35,34 +34,10 @@ export class ServerModelManifest {
 
   static pinned(targets: ModelTargets): ServerModelManifest {
     return new ServerModelManifest([
-      {
-        role: 'verbatim',
-        url: huggingFaceUrl('handy-computer/parakeet-ultra-gguf', 'a1539be1b849ea7463b88343e5277b373d0c4ea9', 'parakeet-ultra-F16.gguf'),
-        sha256: 'cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d',
-        size: 1_256_724_448,
-        target: targets.model,
-      },
-      {
-        role: 'conditioned',
-        url: huggingFaceUrl('handy-computer/canary-1b-v2-gguf', '692af661b140183b60e44f55ad03c59e1e77d078', 'canary-1b-v2-Q8_0.gguf'),
-        sha256: '224f83d1bc487b3303b495a7d6874912fdece93de19d1a04b550829c30a5d289',
-        size: 1_144_290_016,
-        target: targets.conditionedModel,
-      },
-      {
-        role: 'language-id',
-        url: huggingFaceUrl('handy-computer/lang-id-voxlingua107-ecapa-gguf', 'e59f0f3847e77723b7d58447ef9456fa0c7e9436', 'lang-id-voxlingua107-ecapa-Q8_0.gguf'),
-        sha256: '063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a',
-        size: 26_693_632,
-        target: targets.lidModel,
-      },
-      {
-        role: 'selectable',
-        url: huggingFaceUrl('handy-computer/whisper-large-v3-gguf', '274ad1d1cf680b7ee53cc70f78461394cd3a344b', 'whisper-large-v3-F16.gguf'),
-        sha256: 'e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584',
-        size: 3_107_236_640,
-        target: targets.whisperModel,
-      },
+      manifestFile('verbatim', PARAKEET_ULTRA_F16, targets.model),
+      manifestFile('conditioned', CANARY_1B_V2_Q8, targets.conditionedModel),
+      manifestFile('language-id', VOXLINGUA107_Q8, targets.lidModel),
+      manifestFile('selectable', WHISPER_LARGE_V3_F16, targets.whisperModel),
     ]);
   }
 

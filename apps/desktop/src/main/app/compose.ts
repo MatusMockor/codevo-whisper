@@ -186,6 +186,7 @@ export function composeApplication(logger: Logger): Application {
       pickModelFile,
       microphones: settingsServices.microphones,
       server: server.service,
+      serverModels: server.models,
       order,
       routing,
       sectionFocus,

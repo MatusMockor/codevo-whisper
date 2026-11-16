@@ -1,5 +1,6 @@
 import type { EngineComponent } from './engine-component';
 import type { LanguageRouter } from './language-router';
+import type { ModelManagement } from './model-management';
 import type { ServerModels } from './model-names';
 import type { TranscriptionModelCatalog } from './transcription-model-catalog';
 import type { Transcriber } from './transcriber';
@@ -10,6 +11,7 @@ export type EngineParts = {
   router: LanguageRouter;
   models: ServerModels;
   catalog: TranscriptionModelCatalog;
+  management: ModelManagement;
   languageModels: readonly EngineComponent[];
   selectableModels: readonly EngineComponent[];
 };
@@ -19,6 +21,7 @@ export class Engine {
   readonly router: LanguageRouter;
   readonly models: ServerModels;
   readonly catalog: TranscriptionModelCatalog;
+  readonly management: ModelManagement;
   private readonly components: readonly EngineComponent[];
   private readonly languageWarmUp: WarmUpRetry;
 
@@ -27,6 +30,7 @@ export class Engine {
     this.router = parts.router;
     this.models = parts.models;
     this.catalog = parts.catalog;
+    this.management = parts.management;
     this.components = [parts.transcriber, ...parts.languageModels, ...parts.selectableModels];
     this.languageWarmUp = new WarmUpRetry(parts.languageModels, warmUpBackoff);
   }
@@ -37,6 +41,7 @@ export class Engine {
 
   async close(): Promise<void> {
     this.languageWarmUp.stop();
+    await this.management.close();
     await Promise.all(this.components.map((component) => component.close()));
   }
 }

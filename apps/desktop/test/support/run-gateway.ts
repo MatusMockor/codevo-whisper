@@ -2,17 +2,22 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { startServer } from '../../../server/src/app';
-import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_STT, startFakeSttServer, WHISPER_OPTION, type FakeSttRequest, type FakeSttResponse } from '../../../server/test/support/fake-stt-server';
+import { FAKE_CATALOG_MODELS } from '../../../server/test/support/fake-model-catalog';
+import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_STT, startFakeSttServer, WHISPER_OPTION, type FakeSttBehaviour, type FakeSttRequest, type FakeSttResponse } from '../../../server/test/support/fake-stt-server';
 import { freePort } from './free-port';
 
-type TranscriptionModels = 'offered' | 'whisper-missing';
+type TranscriptionModels = 'offered' | 'whisper-missing' | 'catalog';
 
 type GatewayOptions = { serverVersion?: string; languageModels?: boolean; transcriptionModels?: TranscriptionModels; failWhileFile?: string; sttDelayMs?: number };
+
+type GatewayControl = { completeDownload?: string };
 
 const MODEL_CAPABILITIES: Readonly<Record<TranscriptionModels, FakeSttResponse>> = {
   offered: MODEL_SELECTION_STT,
   'whisper-missing': { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } },
+  catalog: { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION, { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo (F16)', available: false, default: false }] } },
 };
 
 function transcript(request: FakeSttRequest): FakeSttResponse {
@@ -30,7 +35,8 @@ function respond(_pcm: Uint8Array, _language: string, request: FakeSttRequest): 
   return transcript(request);
 }
 const dataDir = await mkdtemp(join(tmpdir(), 'cw-e2e-gw-'));
-function capabilities(): { capabilities?: FakeSttResponse } {
+function capabilities(): Pick<FakeSttBehaviour, 'capabilities' | 'catalog'> {
+  if (options.transcriptionModels === 'catalog') return { capabilities: MODEL_CAPABILITIES.catalog, catalog: { downloadsEnabled: true, models: FAKE_CATALOG_MODELS } };
   if (options.transcriptionModels !== undefined) return { capabilities: MODEL_CAPABILITIES[options.transcriptionModels] };
   return options.languageModels === true ? { capabilities: ROUTING_STT } : {};
 }
@@ -50,6 +56,11 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
+function control(line: string): void {
+  const command = JSON.parse(line) as GatewayControl;
+  if (command.completeDownload !== undefined) stt.completeDownload(command.completeDownload);
+}
+
 process.once('SIGTERM', () => void shutdown());
+createInterface({ input: process.stdin }).on('line', control);
 process.stdin.on('end', () => void shutdown());
-process.stdin.resume();

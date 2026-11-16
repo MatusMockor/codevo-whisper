@@ -8,7 +8,7 @@ export type CliIo = { input: Readable; output: Writable; socketPath: string };
 
 type Command = (admin: AdminConnection, io: CliIo, prompt: Prompt, args: string[]) => Promise<number>;
 
-const USAGE = 'Použitie: codevo-whisper <pair|devices|revoke <id>|rotate-key|status>\n';
+const USAGE = 'Použitie: codevo-whisper <pair|devices|revoke <id>|grant-models <id>|revoke-models <id>|rotate-key|status>\n';
 
 const LOST_CONNECTION = Symbol('lost connection');
 
@@ -44,6 +44,7 @@ const devices: Command = async (admin, io) => {
     io.output.write(`${text(device, 'id')}  ${text(device, 'name')}\n`);
     io.output.write(`  spárované: ${text(device, 'pairedAt')}  naposledy: ${text(device, 'lastSeenAt')}\n`);
     io.output.write(`  odtlačok:  ${text(device, 'fingerprint')}\n`);
+    io.output.write(`  správa modelov: ${device.manageModels === true ? 'povolená' : 'nepovolená'}\n`);
   });
   return 0;
 };
@@ -65,6 +66,30 @@ const revoke: Command = async (admin, io, _prompt, args) => {
   io.output.write(`Zariadenie ${deviceId} odobraté, zatvorené relácie: ${text(reply, 'closedSessions')}.\n`);
   return 0;
 };
+
+function modelPermission(allowed: boolean, message: (deviceId: string) => string): Command {
+  return async (admin, io, _prompt, args) => {
+    const [deviceId] = args;
+    if (deviceId === undefined) {
+      io.output.write(USAGE);
+      return 2;
+    }
+    const reply = await request(admin, { cmd: 'manage-models', deviceId, allowed });
+    if (failed(reply, io.output)) {
+      return 1;
+    }
+    if (reply.found !== true) {
+      io.output.write(`Zariadenie ${deviceId} neexistuje.\n`);
+      return 1;
+    }
+    io.output.write(`${message(deviceId)}\n`);
+    return 0;
+  };
+}
+
+const grantModels = modelPermission(true, (deviceId) => `Zariadenie ${deviceId} môže sťahovať a odstraňovať modely servera.`);
+
+const revokeModels = modelPermission(false, (deviceId) => `Zariadenie ${deviceId} už nemôže sťahovať ani odstraňovať modely servera.`);
 
 const rotateKey: Command = async (admin, io, prompt) => {
   const confirmed = await prompt.confirm('Všetky zariadenia sa budú musieť znova spárovať. Pokračovať? [y/N]');
@@ -97,6 +122,8 @@ const COMMANDS: Record<string, Command> = {
   pair: (admin, io, prompt) => pairCommand(admin, io.output, prompt),
   devices,
   revoke,
+  'grant-models': grantModels,
+  'revoke-models': revokeModels,
   'rotate-key': rotateKey,
   status,
 };

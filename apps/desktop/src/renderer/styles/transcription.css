@@ -347,7 +347,7 @@
 }
 
 .srv-panel .srv-panel-warn {
-  color: var(--err-text);
+  color: var(--bad-ink);
   font-weight: 600;
 }
 
@@ -357,7 +357,7 @@
 }
 
 .srv-panel.err > .ic {
-  color: var(--err-text);
+  color: var(--bad-ink);
 }
 
 .srv-panel.amber {
@@ -910,4 +910,56 @@
 .now-note p {
   flex: 1 1 320px;
   margin: 0;
+}
+
+.srv-models-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+
+.srv-models {
+  display: grid;
+  gap: 8px;
+  align-self: stretch;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--inset);
+}
+
+.srv-models h4 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.srv-models .models {
+  padding: 0;
+}
+
+.srv-models .model {
+  padding: 8px 0;
+}
+
+.srv-models .model-info b {
+  font-size: 13px;
+}
+
+.srv-models .model-status.warn {
+  color: var(--bad-ink);
+  font-weight: 600;
+}
+
+.srv-models-notice {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.srv-models-notice .cmd {
+  justify-self: stretch;
 }

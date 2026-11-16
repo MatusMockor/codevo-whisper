@@ -11,6 +11,9 @@ describe('loadSttConfig', () => {
       conditionedModel: '/models/canary-1b-v2-Q8_0.gguf',
       lidModel: '/models/lang-id-voxlingua107-ecapa-Q8_0.gguf',
       whisperModel: '/models/whisper-large-v3-F16.gguf',
+      modelsDir: '/models',
+      modelDownloads: 'enabled',
+      maxResidentModels: 2,
       backend: 'vulkan',
       lidBackend: 'cpu',
       threads: 4,
@@ -29,6 +32,9 @@ describe('loadSttConfig', () => {
         STT_CONDITIONED_MODEL_PATH: '/c.gguf',
         STT_LID_MODEL_PATH: '/l.gguf',
         STT_WHISPER_MODEL_PATH: '/w.gguf',
+        STT_MODELS_DIR: '/data/models',
+        STT_MODEL_DOWNLOADS: 'disabled',
+        STT_MAX_RESIDENT_MODELS: '1',
         STT_BACKEND: 'cpu',
         STT_LID_BACKEND: 'vulkan',
         STT_THREADS: '8',
@@ -43,6 +49,9 @@ describe('loadSttConfig', () => {
       conditionedModel: '/c.gguf',
       lidModel: '/l.gguf',
       whisperModel: '/w.gguf',
+      modelsDir: '/data/models',
+      modelDownloads: 'disabled',
+      maxResidentModels: 1,
       backend: 'cpu',
       lidBackend: 'vulkan',
       threads: 8,
@@ -57,5 +66,8 @@ describe('loadSttConfig', () => {
     expect(() => loadSttConfig({ STT_ENGINE: 'server' })).toThrow(/STT_ENGINE/);
     expect(() => loadSttConfig({ STT_THREADS: '0' })).toThrow(/STT_THREADS/);
     expect(() => loadSttConfig({ STT_PORT: 'abc' })).toThrow(/STT_PORT/);
+    expect(() => loadSttConfig({ STT_MODEL_DOWNLOADS: 'off' })).toThrow(/STT_MODEL_DOWNLOADS/);
+    expect(() => loadSttConfig({ STT_MAX_RESIDENT_MODELS: '0' })).toThrow(/STT_MAX_RESIDENT_MODELS/);
+    expect(() => loadSttConfig({ STT_MAX_RESIDENT_MODELS: '9' })).toThrow(/STT_MAX_RESIDENT_MODELS/);
   });
 });

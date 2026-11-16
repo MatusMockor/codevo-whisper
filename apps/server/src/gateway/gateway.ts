@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import type { ServerConfig } from '../config';
 import type { DeviceRepository } from '../devices/device-repository';
 import { silentLogger, type Logger } from '../logging/logger';
+import type { DeviceModelCatalog } from '../models/model-catalog-service';
 import type { PairingService } from '../pairing/pairing-service';
 import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
@@ -29,6 +30,7 @@ export type GatewayDeps = {
   pairing: PairingService;
   capabilities: RefreshableCapabilities;
   preparation: ModelPreparation;
+  models: DeviceModelCatalog;
   clock?: () => number;
   handshakeTimeoutMs?: number;
   logger?: Logger;
@@ -81,6 +83,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     pairing: deps.pairing,
     capabilities: deps.capabilities,
     preparation: deps.preparation,
+    models: deps.models,
     sessions,
     clock,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),

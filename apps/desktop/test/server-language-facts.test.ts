@@ -20,7 +20,7 @@ const BOTH_MODELS = [
 ];
 
 function online(languages: ServerLanguages, transcriptionModels: readonly TranscriptionModelOption[] = [], transcriptionModel: string | null = null): CardServer {
-  return { status: { kind: 'online', connectMs: 21, serverVersion: '0.5.0', languages, transcriptionModels }, transcriptionModel };
+  return { status: { kind: 'online', connectMs: 21, serverVersion: '0.5.0', languages, transcriptionModels, modelCatalog: null }, transcriptionModel };
 }
 
 function at(status: ServerStatus): CardServer {

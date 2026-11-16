@@ -24,7 +24,11 @@ import {
 import { jsonFrame, splitTag, tagged } from './tagged-frame';
 import { readTranscriptionModelId } from './transcription-models';
 
-const JSON_TYPES = ['hello', 'capabilities', 'start', 'finish', 'cancel', 'pair-request'] as const;
+const JSON_TYPES = ['hello', 'capabilities', 'start', 'finish', 'cancel', 'pair-request', 'model-download', 'model-remove', 'model-download-cancel'] as const;
+
+const MODEL_COMMANDS = ['model-download', 'model-remove', 'model-download-cancel'] as const;
+
+type ModelCommand = Extract<ClientMessage, { type: (typeof MODEL_COMMANDS)[number] }>;
 
 type JsonClientMessage = Exclude<ClientMessage, { type: 'audio' }>;
 
@@ -79,12 +83,25 @@ function readModel(object: JsonObject): Pick<StartMessage, 'model'> {
 
 type CapabilitiesRequest = Extract<ClientMessage, { type: 'capabilities' }>;
 
-function decodeCapabilitiesRequest(object: JsonObject): CapabilitiesRequest {
-  assertOnlyKeys(object, ['type', 'transcriptionModels']);
-  if (object.transcriptionModels === undefined) {
-    return { type: 'capabilities' };
+function readFlag<K extends 'transcriptionModels' | 'modelCatalog'>(object: JsonObject, key: K): Partial<Record<K, boolean>> {
+  if (object[key] === undefined) {
+    return {};
   }
-  return { type: 'capabilities', transcriptionModels: readBoolean(object, 'transcriptionModels') };
+  return { [key]: readBoolean(object, key) } as Partial<Record<K, boolean>>;
+}
+
+function decodeCapabilitiesRequest(object: JsonObject): CapabilitiesRequest {
+  assertOnlyKeys(object, ['type', 'transcriptionModels', 'modelCatalog']);
+  return { type: 'capabilities', ...readFlag(object, 'transcriptionModels'), ...readFlag(object, 'modelCatalog') };
+}
+
+function isModelCommand(type: (typeof JSON_TYPES)[number]): type is ModelCommand['type'] {
+  return (MODEL_COMMANDS as readonly string[]).includes(type);
+}
+
+function decodeModelCommand(object: JsonObject, type: ModelCommand['type']): ModelCommand {
+  assertOnlyKeys(object, ['type', 'id']);
+  return { type, id: readTranscriptionModelId(object, 'id') };
 }
 
 function decodeStart(object: JsonObject): StartMessage {
@@ -108,6 +125,9 @@ function decodeJson(object: JsonObject): JsonClientMessage {
   }
   if (type === 'capabilities') {
     return decodeCapabilitiesRequest(object);
+  }
+  if (isModelCommand(type)) {
+    return decodeModelCommand(object, type);
   }
   if (type === 'pair-request') {
     assertOnlyKeys(object, ['type', 'deviceName']);

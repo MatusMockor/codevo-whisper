@@ -7,6 +7,7 @@ import type { SignalState } from '../home/transcription-route';
 import { CommandBox } from './CommandBox';
 import { pairedOn, statusPill, type PillTone } from './server-copy';
 import { serverLanguageFacts, type ServerFact } from './server-language-facts';
+import { ServerModels } from './ServerModels';
 import { ServerStatePanel } from './ServerStatePanel';
 import { useServerToggle } from './ServerToggle';
 import { TranscriptionModelSelect } from './TranscriptionModelSelect';
@@ -87,7 +88,7 @@ function showsLatency(server: PairedServerView): boolean {
 
 const MODEL_TERM_ID = 'srv-model-term';
 
-function Fact({ fact }: { fact: ServerFact }) {
+function Fact({ fact, server }: { fact: ServerFact; server: PairedServerView }) {
   if ('picker' in fact) {
     return (
       <>
@@ -96,6 +97,7 @@ function Fact({ fact }: { fact: ServerFact }) {
         </dt>
         <dd className="kv-control">
           <TranscriptionModelSelect picker={fact.picker} labelId={MODEL_TERM_ID} />
+          <ServerModels server={server} />
         </dd>
       </>
     );
@@ -124,7 +126,7 @@ function Details({ server }: { server: PairedServerView }) {
         </>
       )}
       {serverLanguageFacts(server).map((fact) => (
-        <Fact key={fact.term} fact={fact} />
+        <Fact key={fact.term} fact={fact} server={server} />
       ))}
     </dl>
   );

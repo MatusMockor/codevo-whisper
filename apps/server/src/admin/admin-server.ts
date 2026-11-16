@@ -51,6 +51,9 @@ function execute(commands: AdminCommands, channel: LineChannel, command: AdminCo
   if (command.cmd === 'revoke') {
     return commands.revoke(command.deviceId);
   }
+  if (command.cmd === 'manage-models') {
+    return commands.manageModels(command.deviceId, command.allowed);
+  }
   if (command.cmd === 'rotate-key') {
     return commands.rotateKey();
   }

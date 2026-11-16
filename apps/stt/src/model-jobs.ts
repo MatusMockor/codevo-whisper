@@ -1,28 +1,28 @@
 import type { LanguageRouter } from './language-router';
-import { PlainJob, RoutedJob, type TranscriptionJob } from './transcription-job';
-import type { TranscriptionModel } from './transcription-model';
+import { DirectJob, PlainJob, RoutedJob, type TranscriptionJob } from './transcription-job';
 import type { ValidQuery } from './transcribe-query';
 import type { Transcriber } from './transcriber';
 
-export class RoutingTranscriptionModel implements TranscriptionModel {
+export interface ModelJobs {
+  jobFor(query: ValidQuery): TranscriptionJob | null;
+}
+
+export class DirectJobs implements ModelJobs {
+  constructor(private readonly transcriber: Transcriber) {}
+
+  jobFor(query: ValidQuery): TranscriptionJob {
+    if (query.kind === 'plain') {
+      return new PlainJob(this.transcriber, query);
+    }
+    return new DirectJob(this.transcriber, query);
+  }
+}
+
+export class RoutedJobs implements ModelJobs {
   constructor(
-    readonly id: string,
-    readonly name: string,
     private readonly transcriber: Transcriber,
     private readonly router: LanguageRouter,
   ) {}
-
-  available(): boolean {
-    return true;
-  }
-
-  ready(): boolean {
-    return true;
-  }
-
-  prepare(): Promise<void> {
-    return Promise.resolve();
-  }
 
   jobFor(query: ValidQuery): TranscriptionJob | null {
     if (query.kind === 'plain') {
