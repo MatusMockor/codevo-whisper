@@ -11,6 +11,8 @@ export type FakeSttBehaviour = {
   capabilities?: FakeSttResponse;
   delayMs?: number;
   delayFor?: (pcm: Uint8Array) => number;
+  loadDelayMs?: Readonly<Record<string, number>>;
+  failingLoads?: readonly string[];
 };
 
 export type FakeSttServer = {
@@ -20,6 +22,9 @@ export type FakeSttServer = {
   setCapabilities(response: FakeSttResponse): void;
   aborted(): number;
   maxActive(): number;
+  preparations(): string[];
+  loadingModels(): string[];
+  loadedModels(): string[];
   close(): Promise<void>;
 };
 
@@ -90,11 +95,11 @@ function offeredModels(capabilities: FakeSttResponse): readonly OfferedModel[] {
   return Array.isArray(models) ? (models as OfferedModel[]) : [];
 }
 
-function modelRefusal(query: FakeSttRequest, capabilities: FakeSttResponse): FakeSttResponse | null {
-  if (query.model === undefined) {
+function modelRefusal(id: string | undefined, capabilities: FakeSttResponse): FakeSttResponse | null {
+  if (id === undefined) {
     return null;
   }
-  const offered = offeredModels(capabilities).find((model) => model.id === query.model);
+  const offered = offeredModels(capabilities).find((model) => model.id === id);
   if (offered === undefined) {
     return { status: 400, body: { error: 'unknown model' } };
   }
@@ -145,6 +150,26 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
   let capabilityRequests = 0;
   let capabilities = behaviour.capabilities ?? OLD_STT;
   const respond = behaviour.respond ?? defaultResponse;
+  const loads = new Map<string, Promise<void>>();
+  const loaded = new Set<string>();
+  const preparations: string[] = [];
+
+  const isLoading = (model: string): boolean => behaviour.loadDelayMs?.[model] !== undefined && !loaded.has(model);
+
+  const load = (model: string): Promise<void> => {
+    const delayMs = behaviour.loadDelayMs?.[model];
+    if (delayMs === undefined || loaded.has(model)) {
+      return Promise.resolve();
+    }
+    const pending =
+      loads.get(model) ??
+      new Promise<void>((resolve) => setTimeout(resolve, delayMs)).then(() => {
+        loaded.add(model);
+        loads.delete(model);
+      });
+    loads.set(model, pending);
+    return pending;
+  };
 
   const handleTranscribe = async (request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> => {
     let pcm: Uint8Array;
@@ -158,9 +183,14 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
       throw error;
     }
     const query = requestOf(url, pcm.length);
-    const refused = modelRefusal(query, capabilities);
+    const refused = modelRefusal(query.model, capabilities);
     if (refused !== null) {
       send(response, refused.status, refused.body);
+      return;
+    }
+    if (query.model !== undefined && isLoading(query.model)) {
+      void load(query.model);
+      send(response, 503, { error: 'model loading' });
       return;
     }
     const invalid = validationStatus(request, pcm, query, capabilities);
@@ -181,6 +211,21 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     send(response, result.status, result.body);
   };
 
+  const handlePrepare = async (response: ServerResponse, model: string): Promise<void> => {
+    preparations.push(model);
+    const refused = modelRefusal(model, capabilities);
+    if (refused !== null) {
+      send(response, refused.status, refused.body);
+      return;
+    }
+    if (behaviour.failingLoads?.includes(model) === true) {
+      send(response, 502, { error: 'model failed to load' });
+      return;
+    }
+    await load(model);
+    send(response, 200, { status: 'ready' });
+  };
+
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://fake-stt');
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -190,6 +235,11 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     if (request.method === 'GET' && url.pathname === '/capabilities') {
       capabilityRequests += 1;
       send(response, capabilities.status, capabilities.body);
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/prepare') {
+      request.resume();
+      void handlePrepare(response, url.searchParams.get('model') ?? '');
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {
@@ -210,6 +260,9 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     },
     aborted: () => aborted,
     maxActive: () => maxActive,
+    preparations: () => [...preparations],
+    loadingModels: () => [...loads.keys()],
+    loadedModels: () => [...loaded],
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

@@ -16,6 +16,10 @@ export class RoutingTranscriptionModel implements TranscriptionModel {
     return true;
   }
 
+  ready(): boolean {
+    return true;
+  }
+
   prepare(): Promise<void> {
     return Promise.resolve();
   }

@@ -46,6 +46,12 @@ async function serve(options: EngineOptions = { routing: false, whisper: true })
   return server;
 }
 
+async function serveWithWhisper(): Promise<SttServer> {
+  const stt = await serve();
+  expect((await prepare(stt, 'whisper-large-v3')).status).toBe(200);
+  return stt;
+}
+
 async function spawnedModels(): Promise<string[]> {
   const text = await readFile(argsFile, 'utf8').catch(() => '');
   return text
@@ -60,6 +66,10 @@ async function whisperSpawns(): Promise<number> {
 
 function transcribe(stt: SttServer, query: string, samples = TWO_SECONDS): Promise<TextReply> {
   return send(stt, `/transcribe?${query}`, { body: pcm(samples) }) as Promise<TextReply>;
+}
+
+function prepare(stt: SttServer, model: string): Promise<Reply> {
+  return send(stt, `/prepare?model=${model}`);
 }
 
 function workerOf(reply: Reply): string {
@@ -100,10 +110,22 @@ describe('selectable transcription models', () => {
     expect((await transcribe(stt, 'language=sk')).status).toBe(200);
   });
 
+  it('answers model loading at once for a Whisper request before the load and starts the load', async () => {
+    const stt = await serve();
+    vi.stubEnv('FAKE_WORKER_LOAD_DELAY_MS', '300');
+
+    expect(await transcribe(stt, 'language=sk&model=whisper-large-v3')).toEqual({ status: 503, body: { error: 'model loading' } });
+    await expect.poll(whisperSpawns, { interval: 10 }).toBe(1);
+    expect(await prepare(stt, 'whisper-large-v3')).toEqual({ status: 200, body: { status: 'ready' } });
+    expect((await transcribe(stt, 'language=sk&model=whisper-large-v3')).body.text).toMatch(/^\d+:sk:32000$/);
+    expect(await whisperSpawns()).toBe(1);
+  });
+
   it('loads Whisper on first use only and keeps it resident beside the default model', async () => {
     const stt = await serve();
     expect(await whisperSpawns()).toBe(0);
 
+    expect(await prepare(stt, 'whisper-large-v3')).toEqual({ status: 200, body: { status: 'ready' } });
     const first = await transcribe(stt, 'language=sk&model=whisper-large-v3');
     const second = await transcribe(stt, 'language=en&model=whisper-large-v3');
     const parakeet = await transcribe(stt, 'language=sk');
@@ -115,8 +137,18 @@ describe('selectable transcription models', () => {
     expect(await spawnedModels()).toEqual(['/models/parakeet-ultra-F16.gguf', WHISPER_PATH]);
   });
 
+  it('prepares the default model at once and refuses to prepare an unknown or missing model', async () => {
+    const stt = await serve({ routing: false });
+
+    expect(await prepare(stt, 'parakeet-ultra')).toEqual({ status: 200, body: { status: 'ready' } });
+    expect(await send(stt, '/prepare')).toEqual({ status: 200, body: { status: 'ready' } });
+    expect(await prepare(stt, 'whisper')).toEqual({ status: 400, body: { error: 'unknown model' } });
+    expect(await prepare(stt, 'whisper-large-v3')).toEqual({ status: 409, body: { error: 'model unavailable' } });
+    expect(await whisperSpawns()).toBe(0);
+  });
+
   it('bypasses language routing and hints the single selected language', async () => {
-    const stt = await serve();
+    const stt = await serveWithWhisper();
 
     expect(await transcribe(stt, 'language=auto&languages=cs&kind=partial&model=whisper-large-v3')).toEqual({
       status: 200,
@@ -127,7 +159,7 @@ describe('selectable transcription models', () => {
   });
 
   it('lets Whisper detect the language when several languages are selected', async () => {
-    const stt = await serve();
+    const stt = await serveWithWhisper();
 
     expect(await transcribe(stt, 'language=auto&languages=sk,cs,en&model=whisper-large-v3')).toEqual({
       status: 200,
@@ -137,7 +169,7 @@ describe('selectable transcription models', () => {
 
   it('passes the vocabulary to Whisper as it does to the default model', async () => {
     vi.stubEnv('FAKE_WORKER_VOCABULARY', '1');
-    const stt = await serve();
+    const stt = await serveWithWhisper();
 
     expect(await transcribe(stt, 'language=auto&languages=sk,cs&vocabulary=Kumiba&vocabulary=%C5%BDilina&model=whisper-large-v3')).toEqual({
       status: 200,
@@ -151,8 +183,10 @@ describe('selectable transcription models', () => {
     vi.stubEnv('FAKE_WORKER_LOAD_DELAY_MS', '300');
     vi.stubEnv('FAKE_WORKER_DELAY_MS', '200');
 
+    const loads = await Promise.all([prepare(stt, 'whisper-large-v3'), prepare(stt, 'whisper-large-v3'), transcribe(stt, 'language=sk&model=whisper-large-v3')]);
     const replies = await Promise.all([transcribe(stt, 'language=sk&model=whisper-large-v3'), transcribe(stt, 'language=cs&model=whisper-large-v3')]);
 
+    expect(loads.map((reply) => reply.status)).toEqual([200, 200, 503]);
     expect(replies.map((reply) => reply.status).sort()).toEqual([200, 503]);
     expect(await whisperSpawns()).toBe(1);
   });
@@ -160,34 +194,35 @@ describe('selectable transcription models', () => {
   it('keeps the default model serving other devices while Whisper loads', async () => {
     const stt = await serve();
     vi.stubEnv('FAKE_WORKER_LOAD_DELAY_MS', '800');
-    let whisperDone = false;
+    let loaded = false;
 
-    const whisper = transcribe(stt, 'language=sk&model=whisper-large-v3').then((reply) => {
-      whisperDone = true;
+    const load = prepare(stt, 'whisper-large-v3').then((reply) => {
+      loaded = true;
       return reply;
     });
     await expect.poll(whisperSpawns, { interval: 10 }).toBe(1);
     const parakeet = await transcribe(stt, 'language=sk');
+    const whisper = await transcribe(stt, 'language=sk&model=whisper-large-v3');
 
     expect(parakeet.status).toBe(200);
-    expect(whisperDone).toBe(false);
-    expect((await whisper).status).toBe(200);
+    expect(whisper).toEqual({ status: 503, body: { error: 'model loading' } });
+    expect(loaded).toBe(false);
+    expect((await load).status).toBe(200);
   });
 
-  it('drops a Whisper request whose client left during the load instead of transcribing it', async () => {
+  it('keeps loading Whisper after the client that asked for it left', async () => {
     const stt = await serve();
     vi.stubEnv('FAKE_WORKER_LOAD_DELAY_MS', '300');
-    vi.stubEnv('FAKE_WORKER_DELAY_MS', '1500');
     const { port } = stt.address() as AddressInfo;
-    const abandoned = request({ host: '127.0.0.1', port, path: '/transcribe?language=sk&model=whisper-large-v3', method: 'POST', headers: { 'content-type': 'application/octet-stream' } });
+    const abandoned = request({ host: '127.0.0.1', port, path: '/prepare?model=whisper-large-v3', method: 'POST' });
     abandoned.on('error', () => undefined);
-    abandoned.end(Buffer.from(pcm(TWO_SECONDS)));
+    abandoned.end();
 
     await expect.poll(whisperSpawns, { interval: 10 }).toBe(1);
     abandoned.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    expect((await transcribe(stt, 'language=sk')).status).toBe(200);
+    await expect.poll(async () => (await transcribe(stt, 'language=sk&model=whisper-large-v3')).status, { interval: 50, timeout: 3000 }).toBe(200);
+    expect(await whisperSpawns()).toBe(1);
   });
 
   it('answers 502 when Whisper fails to load and loads it again on the next request', async () => {
@@ -198,11 +233,12 @@ describe('selectable transcription models', () => {
     await engine.transcriber.warmUp();
     vi.stubEnv('FAKE_WORKER_LOAD', 'fail');
 
-    expect(await transcribe(server, 'language=sk&model=whisper-large-v3')).toEqual({ status: 502, body: { error: 'model failed to load' } });
+    expect(await prepare(server, 'whisper-large-v3')).toEqual({ status: 502, body: { error: 'model failed to load' } });
     expect(errors).toEqual(['502']);
     expect((await transcribe(server, 'language=sk')).status).toBe(200);
 
     vi.stubEnv('FAKE_WORKER_LOAD', '');
+    expect(await prepare(server, 'whisper-large-v3')).toEqual({ status: 200, body: { status: 'ready' } });
     expect((await transcribe(server, 'language=sk&model=whisper-large-v3')).body.text).toMatch(/^\d+:sk:32000$/);
     expect(await whisperSpawns()).toBe(2);
   });

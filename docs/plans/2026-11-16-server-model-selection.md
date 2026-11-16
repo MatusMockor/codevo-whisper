@@ -11,7 +11,7 @@ Scope of this plan: `apps/stt`, `packages/protocol`, `apps/server`, compose and 
 - Vocabulary is sent to Whisper exactly as to Parakeet. `cw-stt-worker` (`stt-worker-asr.c`) only hands it to transcribe.cpp when the model reports `TRANSCRIBE_FEATURE_VOCABULARY`, otherwise the terms are dropped, so it is safe for any model.
 - Language codes: the worker frame accepts the 25 `LANGUAGE_CODES`, all of them are Whisper languages.
 - Whisper file: `handy-computer/whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b`, `whisper-large-v3-F16.gguf`, 3,107,236,640 B, SHA-256 `e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584`, MIT (OpenAI Whisper). The server side carries no attribution files today, so none are added.
-- Lazy load: the first Whisper request starts one shared warm-up of the resident worker (single flight, not bound to the request, so an aborted request does not kill the load). The wait for the load does not hold the sidecar's single-flight `busy` slot, so Parakeet dictations of other devices keep running while Whisper loads. A failed load is retried by the next Whisper request (the worker's restart backoff applies).
+- Lazy load, outside the inference slot: the gateway serves every segment through one dispatcher slot, so a load must never happen inside a transcription request. A session that starts with a non-default model asks the sidecar to prepare it (`POST /prepare`) right at `start`. Its segments wait for that answer in a per-session gate in front of the dispatcher (`ModelReadyGate`), so they never occupy the slot while the model loads and other devices keep dictating on Parakeet. Partials of that session are dropped (`model-loading`) until the model is ready; cancel or a failed segment drops the waiting segments. The sidecar starts one shared warm-up per model (single flight, not bound to the request, so an aborted request does not kill the load). A `/transcribe` for a model that is not loaded yet never waits: it starts the warm-up and answers `503 model loading` at once; the gateway then waits for the model again outside the slot and resubmits the segment (at most 3 loads per segment, then `stt_unavailable`). A failed load fails the segments of that session with `stt_unavailable` and is retried by the next preparation (the worker's restart backoff applies).
 - A missing Whisper file is not fatal: the model is reported with `available: false`, requests for it get 409.
 - `stt` `mem_limit` default raised from `4g` to `8g` (`STT_MEM_LIMIT` still overrides).
 
@@ -20,10 +20,15 @@ Scope of this plan: `apps/stt`, `packages/protocol`, `apps/server`, compose and 
 ### STT sidecar (internal HTTP)
 
 - Env `STT_WHISPER_MODEL_PATH`, default `/models/whisper-large-v3-F16.gguf`.
-- `POST /transcribe?...&model=<id>`. Without `model` the default model serves the request, exactly as today.
+- `POST /prepare?model=<id>` (no body) loads the model and answers when it is resident. Without `model` it prepares the default model, which is always ready.
+  - ready: `200 {"status":"ready"}` (at once when the model is already resident)
   - unknown id: `400 {"error":"unknown model"}`
   - known but file missing: `409 {"error":"model unavailable"}`
   - load failed: `502 {"error":"model failed to load"}`
+- `POST /transcribe?...&model=<id>`. Without `model` the default model serves the request, exactly as today.
+  - unknown id: `400 {"error":"unknown model"}`
+  - known but file missing: `409 {"error":"model unavailable"}`
+  - model not loaded yet: `503 {"error":"model loading"}` at once, the load starts in the background (only a request with `model` can get it, so older gateways never see it)
   - Whisper with `languages`: `200 {"text":"...","language":<the single selected language or null>,"route":"direct"}`
 - `GET /capabilities` gains `transcriptionModels`:
 
@@ -53,12 +58,12 @@ Decoding is strict on both sides (`assertOnlyKeys`), so the existing compat mech
 
 1. Protocol: `transcription-models.ts` (option type, id rule, list validator), optional fields on `capabilities` (both directions) and `start`, `model_unavailable`, `TRANSCRIPTION_MODELS_MIN_VERSION`. Tests: round trips, limits, legacy-decoder documentation, close code order.
 2. stt: config, `TranscriptionModel` strategy (`RoutingTranscriptionModel` for Parakeet + routing, `DirectTranscriptionModel` for Whisper), `TranscriptionModelCatalog` registry, `SingleFlightWarmUp`, `model` query param, capability report, `createEngine` wiring, `main.ts` file check and log, manifest entry, model name. Tests with the fake worker binary through the real HTTP server.
-3. Gateway: `SttCapabilityReport.transcriptionModels`, `CapabilityLookup.offersModel`, `SttRequest.model`, `GatewayContext.model`, start validation, `model_unavailable` mapping, server version 0.5.0. Tests through the real gateway and the fake stt server.
+3. Gateway: `SttCapabilityReport.transcriptionModels`, `CapabilityLookup.offersModel`, `SttRequest.model`, `GatewayContext.model`, start validation, `model_unavailable` mapping, `ModelPreparation` (`HttpSttClient.prepare`, own 5 min timeout), `ModelReadyGate` in front of the dispatcher, server version 0.5.0. Tests through the real gateway and the fake stt server (which simulates a slow load).
 4. Compose (`x-model-paths`, `mem_limit`), Dockerfile env, `server-setup.md`.
 5. `pnpm lint`, `pnpm typecheck`, `pnpm test`.
 
 ## Known limits
 
 - A dictation with `languages` is still checked against `capabilities.languages`, which needs Canary and the language ID; with the pinned provisioning all models are present.
-- The gateway's per-request STT timeout is 40 s. If the first Whisper load takes longer, the first segment fails with `stt_unavailable` while the load continues in the background; the next dictation finds the model resident.
+- The preparation has its own 5 min timeout (the per-request STT timeout of 40 s applies only to transcription). A dictation started with a model that is still loading waits for it, so its first transcript comes only after the load; partials of that dictation start once the model is ready.
 - Real Whisper load and inference on Vulkan (RX 7700/7800 XT) is not covered by the automated tests, which use the fake worker.

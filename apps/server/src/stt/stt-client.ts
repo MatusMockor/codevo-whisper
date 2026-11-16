@@ -16,6 +16,10 @@ export interface SttClient {
   transcribe(request: SttRequest, signal: AbortSignal): Promise<SttTranscript>;
 }
 
+export interface ModelPreparation {
+  prepare(model: string, signal: AbortSignal): Promise<void>;
+}
+
 export type SttHealth = 'UP' | 'DOWN' | 'BUSY';
 
 export interface SttHealthCheck {

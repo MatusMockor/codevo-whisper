@@ -48,6 +48,8 @@ const LOOKUP_REFUSALS: Readonly<Record<Exclude<ModelLookup['kind'], 'found'>, Re
   unavailable: { status: 409, body: { error: 'model unavailable' } },
 };
 
+const LOADING: Refusal = { status: 503, body: { error: 'model loading' } };
+
 function prepared(model: TranscriptionModel): Promise<boolean> {
   return model.prepare().then(
     () => true,
@@ -55,18 +57,27 @@ function prepared(model: TranscriptionModel): Promise<boolean> {
   );
 }
 
-type ClientDeparture = { left(): boolean; release(): void };
+function foundModel(catalog: TranscriptionModelCatalog, url: URL, response: ServerResponse): TranscriptionModel | null {
+  const lookup = catalog.lookup(url.searchParams.get('model'));
+  if (lookup.kind !== 'found') {
+    const refusal = LOOKUP_REFUSALS[lookup.kind];
+    reply(response, refusal.status, refusal.body);
+    return null;
+  }
+  return lookup.model;
+}
 
-function clientDeparture(response: ServerResponse): ClientDeparture {
-  let left = false;
-  const onClose = (): void => {
-    left = true;
-  };
-  response.once('close', onClose);
-  return {
-    left: () => left || response.destroyed,
-    release: () => response.off('close', onClose),
-  };
+async function prepareModel(catalog: TranscriptionModelCatalog, url: URL, response: ServerResponse, onError: ((code: string) => void) | undefined): Promise<void> {
+  const model = foundModel(catalog, url, response);
+  if (model === null) {
+    return;
+  }
+  if (!(await prepared(model))) {
+    onError?.('502');
+    reply(response, 502, { error: 'model failed to load' });
+    return;
+  }
+  reply(response, 200, { status: 'ready' });
 }
 
 function failureStatus(error: unknown): number {
@@ -93,30 +104,22 @@ class SingleFlightHandler {
       reply(response, 415, { error: 'expected application/octet-stream' });
       return;
     }
-    const lookup = this.catalog.lookup(url.searchParams.get('model'));
-    if (lookup.kind !== 'found') {
-      const refusal = LOOKUP_REFUSALS[lookup.kind];
-      reply(response, refusal.status, refusal.body);
+    const model = foundModel(this.catalog, url, response);
+    if (model === null) {
       return;
     }
-    const departure = clientDeparture(response);
-    if (!(await prepared(lookup.model))) {
-      this.onError?.('502');
-      reply(response, 502, { error: 'model failed to load' });
+    if (!model.ready()) {
+      model.prepare().catch(() => undefined);
+      reply(response, LOADING.status, LOADING.body);
       return;
     }
-    if (departure.left()) {
-      request.destroy();
-      return;
-    }
-    departure.release();
     if (this.busy) {
       reply(response, 503, { error: 'busy' });
       return;
     }
     this.busy = true;
     try {
-      await this.transcribe(request, response, lookup.model, parseTranscribeQuery(url.searchParams));
+      await this.transcribe(request, response, model, parseTranscribeQuery(url.searchParams));
     } finally {
       this.busy = false;
     }
@@ -172,6 +175,10 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
     }
     if (request.method === 'GET' && url.pathname === '/capabilities') {
       reply(response, 200, { languages: router.languages(), models, transcriptionModels: catalog.report() });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/prepare') {
+      prepareModel(catalog, url, response, options.onError).catch(() => reply(response, 500, { error: 'internal error' }));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {

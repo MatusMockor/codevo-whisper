@@ -4,6 +4,7 @@ import { ProtocolError } from '@codevo-whisper/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { UNKNOWN_MODELS } from '@codevo-whisper/protocol';
 import { DEFAULT_STT_TIMEOUT_MS, HttpSttClient, MAX_CAPABILITIES_RESPONSE_BYTES, MAX_STT_RESPONSE_BYTES } from '../src/stt/http-stt-client';
+import { ModelLoadingError } from '../src/stt/model-loading-error';
 import { NO_CAPABILITIES } from '../src/stt/stt-capabilities';
 import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_MODELS, ROUTING_STT, startFakeSttServer, WHISPER_OPTION, type FakeSttServer } from './support/fake-stt-server';
 import type { SttRequest } from '../src/stt/stt-client';
@@ -341,6 +342,43 @@ describe('HttpSttClient transcription models', () => {
     fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, respond: () => ({ status: 409, body: { error: 'model unavailable' } }) });
 
     await expect(new HttpSttClient(fake.url).transcribe(legacy(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+  });
+
+  it('reports a model that is still loading apart from a busy engine', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 5_000 } });
+
+    await expect(new HttpSttClient(fake.url).transcribe(whisper(pcmSeconds(0.1)), signal())).rejects.toBeInstanceOf(ModelLoadingError);
+    expect(fake.loadingModels()).toEqual(['whisper-large-v3']);
+  });
+
+  it('prepares a model until it is loaded', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 100 } });
+
+    await expect(new HttpSttClient(fake.url).prepare('whisper-large-v3', signal())).resolves.toBeUndefined();
+    expect(fake.preparations()).toEqual(['whisper-large-v3']);
+    expect(fake.loadedModels()).toEqual(['whisper-large-v3']);
+  });
+
+  it('maps a refused preparation to model_unavailable or stt_unavailable', async () => {
+    fake = await startFakeSttServer({ capabilities: { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } }, failingLoads: ['parakeet-ultra'] });
+    const client = new HttpSttClient(fake.url);
+
+    await expect(client.prepare('whisper-large-v3', signal())).rejects.toMatchObject({ code: 'model_unavailable' });
+    await expect(client.prepare('canary-1b-v2', signal())).rejects.toMatchObject({ code: 'model_unavailable' });
+    await expect(client.prepare('parakeet-ultra', signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+    await expect(new HttpSttClient(await closedPortUrl()).prepare('parakeet-ultra', signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+  });
+
+  it('stops waiting for a preparation when it is aborted or times out', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 5_000 } });
+    const controller = new AbortController();
+    const reason = new Error('session cancelled');
+
+    const aborted = new HttpSttClient(fake.url).prepare('whisper-large-v3', controller.signal);
+    controller.abort(reason);
+
+    await expect(aborted).rejects.toBe(reason);
+    await expect(new HttpSttClient(fake.url, DEFAULT_STT_TIMEOUT_MS, 50).prepare('whisper-large-v3', signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
   });
 
   it('reads the transcription models of the stt', async () => {

@@ -8,6 +8,7 @@ import { silentLogger, type Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
 import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
+import type { ModelPreparation } from '../stt/stt-client';
 import { GatewayConnection } from './connection';
 import { ClientAdmission } from './client-admission';
 import { HANDSHAKE_TIMEOUT_MS, INGESTION_LIMITS, MAX_AUDIO_SECONDS, MAX_WS_PAYLOAD, PRE_AUTH_LIMITS, PROXIED_TCP_LIMITS } from './limits';
@@ -27,6 +28,7 @@ export type GatewayDeps = {
   dispatcher: GatewayDispatcher;
   pairing: PairingService;
   capabilities: RefreshableCapabilities;
+  preparation: ModelPreparation;
   clock?: () => number;
   handshakeTimeoutMs?: number;
   logger?: Logger;
@@ -78,6 +80,7 @@ export async function startGateway(deps: GatewayDeps): Promise<Gateway> {
     dispatcher: deps.dispatcher,
     pairing: deps.pairing,
     capabilities: deps.capabilities,
+    preparation: deps.preparation,
     sessions,
     clock,
     beforeReady: deps.beforeReady ?? (() => Promise.resolve()),

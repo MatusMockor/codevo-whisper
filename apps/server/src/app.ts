@@ -51,6 +51,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     dispatcher,
     pairing,
     capabilities,
+    preparation: stt,
     clock,
     logger: options.logger ?? silentLogger,
     ...(options.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: options.handshakeTimeoutMs }),

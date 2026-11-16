@@ -11,6 +11,7 @@ export interface TranscriptionModel {
   readonly id: string;
   readonly name: string;
   available(): boolean;
+  ready(): boolean;
   prepare(): Promise<void>;
   jobFor(query: ValidQuery): TranscriptionJob | null;
 }

@@ -2,6 +2,7 @@ import type { ClientMessage } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
 import type { CapabilityLookup } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
+import type { ModelPreparation } from '../stt/stt-client';
 import { logDictation } from './dictation-log';
 import { Dictation, type DictationResult } from './dictation';
 import type { DeviceAudioBudget } from './device-audio-budget';
@@ -26,6 +27,7 @@ export type SessionDeps = {
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
   capabilities: CapabilityLookup;
+  preparation: ModelPreparation;
 };
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
@@ -122,6 +124,7 @@ export class SessionHandler {
       model: message.model ?? null,
       partials: message.partials === true,
       dispatcher: this.deps.dispatcher,
+      preparation: this.deps.preparation,
       clock: this.deps.clock,
       channel: this.channel,
     });

@@ -15,6 +15,7 @@ import type { Logger } from '../logging/logger';
 import type { PairingService } from '../pairing/pairing-service';
 import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
+import type { ModelPreparation } from '../stt/stt-client';
 import { respondToPairing, respondToSession } from './handshake-responder';
 import { closeSocket } from './close-socket';
 import type { DeviceAudioBudget } from './device-audio-budget';
@@ -36,6 +37,7 @@ export type ConnectionDeps = {
   budget: DeviceAudioBudget;
   ingestion: IngestionLimiter;
   capabilities: RefreshableCapabilities;
+  preparation: ModelPreparation;
   serverVersion: string;
 };
 
@@ -137,6 +139,7 @@ export class GatewayConnection {
       budget: this.deps.budget,
       ingestion: this.deps.ingestion,
       capabilities: this.deps.capabilities,
+      preparation: this.deps.preparation,
     });
     channel.send({ type: 'ready', serverVersion: this.deps.serverVersion });
   }

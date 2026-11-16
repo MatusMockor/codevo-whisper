@@ -1,6 +1,7 @@
 import type { ServerMessage } from '@codevo-whisper/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { streamLogger } from '../src/logging/logger';
+import { MAX_MODEL_LOADS } from '../src/stt/model-ready-gate';
 import {
   MODEL_SELECTION_STT,
   PARAKEET_OPTION,
@@ -149,6 +150,84 @@ describe('transcription model selection on the gateway', () => {
     expect(whisperMessages.at(-1)).toEqual({ type: 'done', sessionId: 'w1' });
     expect(parakeetMessages.at(-1)).toEqual({ type: 'done', sessionId: 'p1' });
     expect(fake.requests.map((request) => request.model ?? 'default').sort()).toEqual(['default', 'parakeet-ultra', 'whisper-large-v3']);
+  });
+
+  it('keeps dictating another device on the default model while the selected model of one device loads', async () => {
+    const server = await start({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 1500 } });
+    const whisper = await readySession(server);
+    const parakeet = await readySession(server);
+
+    const whisperMessages = dictate(whisper, { type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' });
+    await waitUntil(() => fake.loadingModels().includes('whisper-large-v3'));
+    const parakeetMessages = await dictate(parakeet, { type: 'start', sessionId: 'p1', language: 'sk' });
+
+    expect(parakeetMessages).toEqual([
+      { type: 'final', sessionId: 'p1', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 'p1' },
+    ]);
+    expect(fake.loadedModels()).toEqual([]);
+    expect(await whisperMessages).toEqual([
+      { type: 'final', sessionId: 'w1', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 'w1' },
+    ]);
+    expect(fake.loadedModels()).toEqual(['whisper-large-v3']);
+  });
+
+  it('starts loading the selected model as soon as the session starts', async () => {
+    const session = await readySession(await start({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 300 } }));
+
+    session.send({ type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' });
+
+    await waitUntil(() => fake.loadingModels().includes('whisper-large-v3'));
+    expect(fake.preparations()).toEqual(['whisper-large-v3']);
+    expect(fake.requests).toEqual([]);
+  });
+
+  it('drops the segments waiting for the model when the dictation is cancelled', async () => {
+    const session = await readySession(await start({ capabilities: MODEL_SELECTION_STT, loadDelayMs: { 'whisper-large-v3': 300 } }));
+
+    session.send({ type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' });
+    sendAudio(session, speech(2));
+    session.send({ type: 'finish' });
+    session.send({ type: 'cancel' });
+
+    expect(await session.next()).toEqual({ type: 'done', sessionId: 'w1' });
+    await waitUntil(() => fake.loadedModels().includes('whisper-large-v3'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fake.requests).toEqual([]);
+  });
+
+  it('fails the dictation with stt_unavailable when the selected model fails to load and keeps the default model', async () => {
+    const session = await readySession(await start({ capabilities: MODEL_SELECTION_STT, failingLoads: ['whisper-large-v3'] }));
+
+    expect(await dictate(session, { type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' })).toEqual([
+      { type: 'final', sessionId: 'w1', segmentId: 0, text: '' },
+      { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 'w1' },
+    ]);
+    expect(await dictate(session, { type: 'start', sessionId: 'p1', language: 'sk' })).toMatchObject([{ type: 'final', text: 'ahoj svet' }, { type: 'done', sessionId: 'p1' }]);
+    expect(fake.requests).toStrictEqual([{ language: 'sk', bytes: 64_000 }]);
+  });
+
+  it('waits for the model again outside the inference slot when the stt reports it loading after it was ready', async () => {
+    let loading = 1;
+    const respond = (): FakeSttResponse => (loading-- > 0 ? { status: 503, body: { error: 'model loading' } } : { status: 200, body: { text: 'ahoj svet' } });
+    const session = await readySession(await start({ capabilities: MODEL_SELECTION_STT, respond }));
+
+    expect(await dictate(session, { type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' })).toEqual([
+      { type: 'final', sessionId: 'w1', segmentId: 0, text: 'ahoj svet' },
+      { type: 'done', sessionId: 'w1' },
+    ]);
+    expect(fake.preparations()).toEqual(['whisper-large-v3', 'whisper-large-v3']);
+  });
+
+  it('gives up with stt_unavailable when the stt keeps reporting the model loading', async () => {
+    const session = await readySession(await start({ capabilities: MODEL_SELECTION_STT, respond: () => ({ status: 503, body: { error: 'model loading' } }) }));
+
+    expect(await dictate(session, { type: 'start', sessionId: 'w1', language: 'sk', model: 'whisper-large-v3' })).toEqual([
+      { type: 'final', sessionId: 'w1', segmentId: 0, text: '' },
+      { type: 'error', code: 'stt_unavailable', message: 'stt_unavailable', sessionId: 'w1' },
+    ]);
+    expect(fake.preparations()).toHaveLength(MAX_MODEL_LOADS);
   });
 
   it('refuses an unavailable or unknown model at start and keeps the connection for the default model', async () => {

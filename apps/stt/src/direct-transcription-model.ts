@@ -20,6 +20,10 @@ export class DirectTranscriptionModel implements TranscriptionModel {
     return this.present;
   }
 
+  ready(): boolean {
+    return this.transcriber.ready();
+  }
+
   prepare(): Promise<void> {
     return this.warmUp.run();
   }
