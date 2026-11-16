@@ -248,7 +248,7 @@ describe('SessionCoordinator with the server engine', () => {
   });
 
   it('transcribes in automatic mode on the server exactly as before', async () => {
-    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'auto', selected: ['sk', 'cs'] } }, { respond: () => ({ status: 200, body: { text: 'automaticky' } }) });
+    const harness = await prepared({ engineOrder: ['server'], languages: { mode: 'auto', selected: [] } }, { respond: () => ({ status: 200, body: { text: 'automaticky' } }) });
 
     await dictate(harness, stampedPcm(2));
 

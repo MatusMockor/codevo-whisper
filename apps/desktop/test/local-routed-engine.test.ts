@@ -8,7 +8,7 @@ import type { Preparation } from '../src/main/engines/transcription-engine';
 import { createLanguagePack, type LanguagePack } from '../src/main/models/language-pack';
 import { ModelManager } from '../src/main/models/model-manager';
 import { SettingsStore } from '../src/main/settings/settings-store';
-import type { LanguageSelection } from '../src/shared/dictation-languages';
+import { AUTO_LANGUAGES, type LanguageSelection } from '../src/shared/dictation-languages';
 import { PCM_BYTES_PER_SECOND } from '../src/shared/pcm';
 import { testEntry } from './model-fixtures';
 import { RecordingLogger } from './recording-logger';
@@ -131,7 +131,7 @@ describe('LocalEngine readiness for selected languages', () => {
   });
 
   it('prepares the routed models for a language chosen for one dictation while the setting stays automatic', async () => {
-    await settings.update({ languages: AUTO });
+    await settings.update({ languages: AUTO_LANGUAGES });
     await installPack();
     const chosen: LanguageSelection = { mode: 'selected', selected: ['cs'] };
 
@@ -139,11 +139,11 @@ describe('LocalEngine readiness for selected languages', () => {
     dictation.push(new Uint8Array(PCM_BYTES_PER_SECOND));
 
     await expect(dictation.finish()).resolves.toMatch(/:cs:/);
-    expect(settings.get().languages).toEqual(AUTO);
+    expect(settings.get().languages).toEqual(AUTO_LANGUAGES);
   });
 
   it('never asks for the pack in automatic mode', async () => {
-    await settings.update({ languages: AUTO });
+    await settings.update({ languages: AUTO_LANGUAGES });
 
     await expect(local.isReady()).resolves.toEqual({ ready: true });
     await expect(dictate(AUTO)).resolves.toMatch(/^\d+:auto:16000$/);
@@ -254,7 +254,7 @@ describe('LocalEngine routed generation', () => {
     await dictate();
     const routed = (await starts()).map((start) => start.pid);
 
-    await settings.update({ languages: AUTO });
+    await settings.update({ languages: AUTO_LANGUAGES });
     await expect(dictate(AUTO)).resolves.toMatch(/^\d+:auto:16000$/);
 
     await expect.poll(() => routed.some(alive)).toBe(false);
@@ -307,7 +307,7 @@ describe('LocalEngine routed generation', () => {
 
   it('settles overlapping preparations across a mode change on one generation at a time', async () => {
     stubWorkers({ ...CONFIDENT_CS, CW_MODEL_REPLIES: JSON.stringify({ parakeet: CYRILLIC }) });
-    await settings.update({ languages: AUTO });
+    await settings.update({ languages: AUTO_LANGUAGES });
     const direct = local.prepare();
     await settings.update({ languages: SK_CS });
     const routed = local.prepare();
@@ -339,7 +339,7 @@ describe('LocalEngine routed generation', () => {
     });
     const selected = local.prepare();
     await expect.poll(() => lookups).toBe(1);
-    await settings.update({ languages: AUTO });
+    await settings.update({ languages: AUTO_LANGUAGES });
     const recording = prepared(await local.prepare()).start({ languages: AUTO, signal: new AbortController().signal });
     recording.push(new Uint8Array(PCM_BYTES_PER_SECOND));
 

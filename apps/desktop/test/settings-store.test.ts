@@ -8,7 +8,7 @@ import { RecordingLogger } from './recording-logger';
 
 const ENGLISH: Settings['languages'] = { mode: 'selected', selected: ['en'] };
 const CZECH: Settings['languages'] = { mode: 'selected', selected: ['cs', 'sk'] };
-const AUTO_ENGLISH: Settings['languages'] = { mode: 'auto', selected: ['en'] };
+const AUTOMATIC: Settings['languages'] = { mode: 'auto', selected: [] };
 
 let dir: string;
 let file: string;
@@ -277,9 +277,9 @@ describe('SettingsStore', () => {
     const store = new SettingsStore(file);
     await store.load();
 
-    await Promise.all([store.update({ languages: ENGLISH }), store.update({ mode: 'toggle' }), store.update({ languages: AUTO_ENGLISH })]);
+    await Promise.all([store.update({ languages: ENGLISH }), store.update({ mode: 'toggle' }), store.update({ languages: AUTOMATIC })]);
 
-    const expected = { ...DEFAULT_SETTINGS, languages: AUTO_ENGLISH, mode: 'toggle' };
+    const expected = { ...DEFAULT_SETTINGS, languages: AUTOMATIC, mode: 'toggle' };
     expect(store.get()).toEqual(expected);
     expect(await new SettingsStore(file).load()).toEqual(expected);
   });
@@ -289,11 +289,40 @@ describe('SettingsStore', () => {
     await store.load();
 
     const queued = store.update({ languages: CZECH });
-    const derived = store.update((current) => ({ languages: { ...current.languages, mode: 'auto' } }));
+    const derived = store.update((current) => ({ languages: { ...current.languages, selected: [...current.languages.selected, 'en'] } }));
     await Promise.all([queued, derived]);
 
-    expect(store.get().languages).toEqual({ mode: 'auto', selected: ['cs', 'sk'] });
-    expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'auto', selected: ['cs', 'sk'] });
+    expect(store.get().languages).toEqual({ mode: 'selected', selected: ['cs', 'sk', 'en'] });
+    expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'selected', selected: ['cs', 'sk', 'en'] });
+  });
+
+  it('defaults to automatic recognition with no languages', async () => {
+    expect((await new SettingsStore(file).load()).languages).toEqual(AUTOMATIC);
+  });
+
+  it.each([
+    [{ mode: 'auto', selected: ['sk'] }, { mode: 'selected', selected: ['sk'] }],
+    [{ mode: 'auto', selected: ['sk', 'cs'] }, { mode: 'selected', selected: ['sk', 'cs'] }],
+    [{ mode: 'selected', selected: [] }, AUTOMATIC],
+    [{ mode: 'auto', selected: [] }, AUTOMATIC],
+    [{ mode: 'selected', selected: ['cs'] }, { mode: 'selected', selected: ['cs'] }],
+  ] as const)('loads stored languages %j as %j', async (stored, expected) => {
+    await writeFile(file, JSON.stringify({ languages: stored }));
+
+    expect((await new SettingsStore(file).load()).languages).toEqual(expected);
+  });
+
+  it.each([
+    [{ mode: 'auto', selected: ['en'] }, ENGLISH],
+    [{ mode: 'selected', selected: [] }, AUTOMATIC],
+  ] as const)('normalizes the saved languages %j to %j', async (languages, expected) => {
+    const store = new SettingsStore(file);
+    await store.load();
+
+    const updated = await store.update({ languages });
+
+    expect(updated.languages).toEqual(expected);
+    expect((JSON.parse(await readFile(file, 'utf8')) as { languages: Settings['languages'] }).languages).toEqual(expected);
   });
 
   it('survives a stray temp file', async () => {

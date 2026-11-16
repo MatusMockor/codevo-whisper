@@ -1,4 +1,5 @@
 import { upgradeLegacyCustomWords } from '../../shared/custom-words';
+import { normalizedLanguages } from '../../shared/dictation-languages';
 import { parseHotkeySetting } from '../../shared/hotkey';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings';
 import { isReservedHotkey } from './hotkey-policy';
@@ -29,10 +30,14 @@ function storedMicrophones(source: Record<string, unknown>): unknown {
   return isMicrophone(legacy) ? [legacy] : undefined;
 }
 
+export function normalizeSettings(settings: Settings): Settings {
+  return { ...settings, languages: normalizedLanguages(settings.languages) };
+}
+
 export function sanitizeSettings(raw: unknown): Settings {
   const source = isPlainRecord(raw) ? { ...raw } : {};
   source['hotkey'] = storedHotkey(source['hotkey']);
   source['customWords'] = upgradeLegacyCustomWords(source['customWords']);
   source['microphones'] = storedMicrophones(source);
-  return Object.fromEntries(SETTINGS_KEYS.map((key) => [key, pickField(source, key)])) as Settings;
+  return normalizeSettings(Object.fromEntries(SETTINGS_KEYS.map((key) => [key, pickField(source, key)])) as Settings);
 }

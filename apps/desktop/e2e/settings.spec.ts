@@ -21,7 +21,7 @@ const DEFAULTS: Settings = {
   hotkey: null,
   sessionShortcuts: { 'toggle-polish': { key: 'a', modifiers: ['control', 'alt'] }, 'cycle-language': { key: 'j', modifiers: ['control', 'alt'] } },
   mode: 'smart',
-  languages: { mode: 'auto', selected: ['sk'] },
+  languages: { mode: 'auto', selected: [] },
   microphones: [],
   engineOrder: ['local'],
   serverEnabled: true,
@@ -669,13 +669,14 @@ test.describe('settings page', () => {
 
     await modes().getByRole('button', { name: 'Automaticky' }).click();
     await expect(usedZone()).toHaveCount(0);
-    await expect.poll(onDisk).toEqual({ mode: 'auto', selected: ['sk', 'pl', 'cs'] });
+    await expect.poll(onDisk).toEqual({ mode: 'auto', selected: [] });
     await app.close();
     await start();
     await openSettings();
     await expect(modes().getByRole('button', { name: 'Automaticky' })).toHaveAttribute('aria-pressed', 'true');
     await modes().getByRole('button', { name: 'Zvolené jazyky' }).click();
-    await expect(used()).toHaveText([/Slovenčina/, /Poľština/, /Čeština/]);
+    await expect(used()).toHaveText([/Slovenčina/]);
+    await expect.poll(onDisk).toEqual({ mode: 'selected', selected: ['sk'] });
   });
 
   test('Jazyky diktovania scrolls the page while a chip is dragged to the top edge and drops it in the used list', async () => {

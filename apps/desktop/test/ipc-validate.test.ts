@@ -168,8 +168,9 @@ describe('validateSettingsPatch', () => {
   it('accepts dictation languages in order and rejects malformed selections', () => {
     expect(validateSettingsPatch({ languages: { mode: 'selected', selected: ['cs', 'sk', 'en', 'de', 'pl'] } })).toEqual({ languages: { mode: 'selected', selected: ['cs', 'sk', 'en', 'de', 'pl'] } });
     expect(validateSettingsPatch({ languages: { mode: 'auto', selected: ['uk'] } })).toEqual({ languages: { mode: 'auto', selected: ['uk'] } });
+    expect(validateSettingsPatch({ languages: { mode: 'auto', selected: [] } })).toEqual({ languages: { mode: 'auto', selected: [] } });
+    expect(validateSettingsPatch({ languages: { mode: 'selected', selected: [] } })).toEqual({ languages: { mode: 'selected', selected: [] } });
     for (const languages of [
-      { mode: 'selected', selected: [] },
       { mode: 'selected', selected: ['sk', 'cs', 'en', 'de', 'pl', 'hu'] },
       { mode: 'selected', selected: ['sk', 'sk'] },
       { mode: 'selected', selected: ['sk', 'auto'] },

@@ -1,5 +1,6 @@
 import { Menu, Tray } from 'electron';
 import type { AudioCapture } from '../audio/audio-capture';
+import { languagesForMode } from '../../shared/dictation-languages';
 import { promoteMicrophone, type AudioDevice } from '../../shared/microphones';
 import type { ActiveModel } from '../engines/active-model';
 import type { LastTranscript } from '../insertion/last-transcript';
@@ -153,7 +154,7 @@ export class TrayMenu {
         void settings
           .update((current) => ({ microphones: microphone === null ? [] : promoteMicrophone(current.microphones, microphone) }))
           .catch(report('The microphone could not be saved')),
-      chooseLanguageMode: (mode) => void settings.update((current) => ({ languages: { ...current.languages, mode } })).catch(report('The language mode could not be saved')),
+      chooseLanguageMode: (mode) => void settings.update((current) => ({ languages: languagesForMode(mode, current.languages) })).catch(report('The language mode could not be saved')),
       editLanguages: () => this.deps.openSettings(),
       openApp: () => this.deps.openApp(),
       openSettings: () => this.deps.openSettings(),

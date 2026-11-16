@@ -1,6 +1,6 @@
 import type { AiProvider, CodexEffort } from './ai';
 import type { CustomWord } from './custom-words';
-import type { LanguageSelection } from './dictation-languages';
+import { AUTO_LANGUAGES, type LanguageSelection } from './dictation-languages';
 import type { HotkeyBinding } from './hotkey';
 import { DEFAULT_SESSION_SHORTCUTS, type SessionShortcutSettings } from './session-shortcuts';
 
@@ -88,7 +88,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   hotkey: null,
   sessionShortcuts: DEFAULT_SESSION_SHORTCUTS,
   mode: 'smart',
-  languages: Object.freeze({ mode: 'auto', selected: Object.freeze(['sk'] as const) }),
+  languages: AUTO_LANGUAGES,
   microphones: Object.freeze([]),
   engineOrder: Object.freeze(['local']) as Array<EngineId>,
   serverEnabled: true,

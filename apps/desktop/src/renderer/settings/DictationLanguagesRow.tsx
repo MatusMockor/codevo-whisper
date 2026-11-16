@@ -1,6 +1,6 @@
 import { Fragment, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { LANGUAGE_NAMES, MAX_SELECTED_LANGUAGES, type DictationLanguage, type LanguageSelection } from '../../shared/dictation-languages';
+import { LANGUAGE_NAMES, languagesForMode, MAX_SELECTED_LANGUAGES, type DictationLanguage, type LanguageSelection } from '../../shared/dictation-languages';
 import type { ModelInfo } from '../../shared/models';
 import type { EngineId } from '../../shared/settings';
 import { insertionIndex, regionAt, type Point } from '../components/pointer-drag';
@@ -301,7 +301,7 @@ export function DictationLanguagesRow({ languages, activeModel, engineOrder }: R
 
   return (
     <SettingsRow id="languages" title="Jazyky diktovania" description={LANGUAGE_MODE_DESCRIPTIONS[effective.mode]}>
-      <SegmentedControl label="Jazyky diktovania" options={languageModeOptions(activeModel?.languageHint ?? null)} value={effective.mode} onChange={(mode) => save({ ...effective, mode })} />
+      <SegmentedControl label="Jazyky diktovania" options={languageModeOptions(activeModel?.languageHint ?? null)} value={effective.mode} onChange={(mode) => save(languagesForMode(mode, effective))} />
       {effective.mode === 'selected' && <LanguageBoard selected={effective.selected} activeModel={activeModel} engineOrder={engineOrder} availability={availability} onChange={(selected) => save({ mode: 'selected', selected })} />}
     </SettingsRow>
   );

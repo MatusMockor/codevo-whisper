@@ -3,7 +3,7 @@ import { readOptionalFile } from '../fs/read-optional-file';
 import { consoleLogger, type Logger } from '../logging/logger';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings';
 import { readLegacyLanguage, type LegacyLanguage, type LegacySettingsReader } from './legacy-settings';
-import { sanitizeSettings } from './sanitize-settings';
+import { normalizeSettings, sanitizeSettings } from './sanitize-settings';
 
 export type SettingsListener = (next: Settings, previous: Settings) => void;
 
@@ -95,7 +95,7 @@ export class SettingsStore implements LegacySettingsReader {
   private async apply(patch: SettingsPatch): Promise<Settings> {
     const previous = this.current;
     const changes = typeof patch === 'function' ? patch(previous) : patch;
-    const next = freezeSettings({ ...previous, ...changes });
+    const next = freezeSettings(normalizeSettings({ ...previous, ...changes }));
     const legacy = Object.hasOwn(changes, 'languages') ? null : this.legacy;
     const stored = legacy === null ? next : { ...next, language: legacy };
     await writeFileAtomic(this.file, `${JSON.stringify(stored, null, 2)}\n`);

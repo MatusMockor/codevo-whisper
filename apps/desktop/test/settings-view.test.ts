@@ -47,7 +47,7 @@ describe('languageModeOptions', () => {
 
 describe('needsLanguageChoice', () => {
   it('asks for a language before a model that requires one becomes active while Automaticky is set', () => {
-    const auto = { languages: { mode: 'auto', selected: ['sk'] }, localModelId: null } as const;
+    const auto = { languages: { mode: 'auto', selected: [] }, localModelId: null } as const;
 
     expect(needsLanguageChoice(CANARY, 'activate', { ...auto, localModelId: 'parakeet-ultra-q8' })).toBe(true);
     expect(needsLanguageChoice(CANARY, 'download', auto)).toBe(true);
