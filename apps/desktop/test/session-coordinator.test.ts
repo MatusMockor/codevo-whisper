@@ -1464,6 +1464,25 @@ describe('SessionCoordinator', () => {
     expect(harness.settings.get().languages).toEqual({ mode: 'selected', selected: ['sk', 'cs'] });
   });
 
+  it('starts on the first stored language when an older file kept it next to automatic recognition', async () => {
+    await writeFile(join(scratch, 'settings.json'), JSON.stringify({ languages: { mode: 'auto', selected: ['sk'] } }));
+    const harness = await prepared({ languageHint: 'required' });
+
+    await pressAndSpeak(harness, 7);
+    expect(lastVisible(harness.states)).toMatchObject({ kind: 'recording', languageChip: 'SK' });
+    const chips = ['cycle-language', 'cycle-language'].map(() => {
+      harness.helper.pressSessionShortcut('cycle-language');
+      return (lastVisible(harness.states) as { languageChip?: string }).languageChip;
+    });
+    expect(chips).toEqual(['AUTO', 'SK']);
+    harness.helper.emitHotkey('up');
+
+    await expect.poll(() => harness.helper.pasted).toEqual([ONE_SECOND_TEXT(7)]);
+    const calls = await readRecordedCalls(argsFile);
+    expect(calls.at(-1)?.[calls.at(-1)!.indexOf('--language') + 1]).toBe('sk');
+    expect(harness.settings.get().languages).toEqual({ mode: 'selected', selected: ['sk'] });
+  });
+
   it('cleans up the final text in the chosen language, not the starting one', async () => {
     await setWorkerMode('text');
     vi.stubEnv('FAKE_CLI_TEXT', 'Es geht um das Haus.');

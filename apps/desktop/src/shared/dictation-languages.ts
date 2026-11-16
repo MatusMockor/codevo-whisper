@@ -45,3 +45,28 @@ export function isDictationLanguage(value: unknown): value is DictationLanguage 
 export function primaryLanguage(selection: LanguageSelection): DictationLanguage | null {
   return selection.selected[0] ?? null;
 }
+
+const DEFAULT_SELECTED_LANGUAGE: DictationLanguage = 'sk';
+
+export const AUTO_LANGUAGES: LanguageSelection = Object.freeze({ mode: 'auto', selected: Object.freeze([]) });
+
+export function languagesOf(selected: readonly DictationLanguage[]): LanguageSelection {
+  if (selected.length === 0) {
+    return AUTO_LANGUAGES;
+  }
+  return { mode: 'selected', selected };
+}
+
+export function normalizedLanguages(selection: LanguageSelection): LanguageSelection {
+  return languagesOf(selection.selected);
+}
+
+export function languagesForMode(mode: LanguageMode, current: LanguageSelection): LanguageSelection {
+  if (mode === 'auto') {
+    return AUTO_LANGUAGES;
+  }
+  if (current.selected.length === 0) {
+    return languagesOf([DEFAULT_SELECTED_LANGUAGE]);
+  }
+  return languagesOf(current.selected);
+}

@@ -88,6 +88,9 @@ function microphoneMenu(model: TrayMenuModel, actions: TrayMenuActions): MenuIte
 }
 
 function selectedLabel(languages: LanguageSelection): string {
+  if (languages.selected.length === 0) {
+    return 'Zvolené jazyky';
+  }
   return `Zvolené: ${languages.selected.map((language) => language.toUpperCase()).join(', ')}`;
 }
 

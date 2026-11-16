@@ -11,7 +11,7 @@ const MODEL: TrayMenuModel = {
     { deviceId: 'usb', label: 'Shure MV7', isBluetooth: false, isDefault: false },
   ],
   microphones: [],
-  languages: { mode: 'auto', selected: ['sk', 'cs', 'en'] },
+  languages: { mode: 'auto', selected: [] },
   autoLanguageAllowed: true,
   readyUpdate: null,
   installingUpdate: false,
@@ -149,13 +149,22 @@ describe('trayMenuTemplate', () => {
     const { actions, calls } = recordingActions();
     const languages = submenu(trayMenuTemplate(MODEL, actions), 'Jazyk');
 
-    expect(labels(languages)).toEqual(['Automaticky', 'Zvolené: SK, CS, EN', '---', 'Upraviť jazyky…']);
+    expect(labels(languages)).toEqual(['Automaticky', 'Zvolené jazyky', '---', 'Upraviť jazyky…']);
     expect(item(languages, 'Automaticky')).toMatchObject({ type: 'radio', checked: true, enabled: true });
-    expect(item(languages, 'Zvolené: SK, CS, EN')).toMatchObject({ type: 'radio', checked: false });
-    click(item(languages, 'Zvolené: SK, CS, EN'));
+    expect(item(languages, 'Zvolené jazyky')).toMatchObject({ type: 'radio', checked: false });
+    click(item(languages, 'Zvolené jazyky'));
     click(item(languages, 'Automaticky'));
     click(item(languages, 'Upraviť jazyky…'));
     expect(calls).toEqual(['language-mode:selected', 'language-mode:auto', 'edit-languages']);
+  });
+
+  it('names the selected languages in order when the list is not empty', () => {
+    const { actions } = recordingActions();
+    const languages = submenu(trayMenuTemplate({ ...MODEL, languages: { mode: 'selected', selected: ['sk', 'cs', 'en'] } }, actions), 'Jazyk');
+
+    expect(labels(languages)).toEqual(['Automaticky', 'Zvolené: SK, CS, EN', '---', 'Upraviť jazyky…']);
+    expect(item(languages, 'Zvolené: SK, CS, EN').checked).toBe(true);
+    expect(item(languages, 'Automaticky').checked).toBe(false);
   });
 
   it('marks the selected mode and disables Automaticky when the model needs languages', () => {

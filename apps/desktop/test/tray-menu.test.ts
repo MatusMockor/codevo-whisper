@@ -121,12 +121,12 @@ describe('TrayMenu on Linux', () => {
     tray.reflect({ kind: 'recording', elapsedMs: 0, level: 0, languageChip: 'SK' });
     expect(attachedMenu()[0]?.label).toBe('Nahrávam…');
 
-    submenu('Jazyk').find((item) => item.label === 'Zvolené: SK')?.click?.(undefined as never, undefined, undefined as never);
+    submenu('Jazyk').find((item) => item.label === 'Zvolené jazyky')?.click?.(undefined as never, undefined, undefined as never);
     await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Zvolené: SK'));
     expect(current().languages).toEqual({ mode: 'selected', selected: ['sk'] });
     submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
     await vi.waitFor(() => expect(submenu('Jazyk').find((item) => item.checked)?.label).toBe('Automaticky'));
-    expect(current().languages).toEqual({ mode: 'auto', selected: ['sk'] });
+    expect(current().languages).toEqual({ mode: 'auto', selected: [] });
   });
 
   it('enables Skúsiť znova while a failed recording is held and retries it', () => {
@@ -156,6 +156,25 @@ describe('TrayMenu on Linux', () => {
     await vi.waitFor(() => expect(current().microphones).toEqual([]));
   });
 
+  it('keeps the stored languages when Zvolené is chosen on top of a languages write that is still queued', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cw-tray-languages-'));
+    try {
+      const store = new SettingsStore(join(dir, 'settings.json'));
+      await store.load();
+      const tray = new TrayMenu(trayDeps(store));
+      tray.create();
+      const pending = store.update({ languages: { mode: 'selected', selected: ['cs', 'en'] } });
+
+      submenu('Jazyk').find((item) => item.label === 'Zvolené jazyky')?.click?.(undefined as never, undefined, undefined as never);
+      await pending;
+
+      await vi.waitFor(() => expect(store.get().languages).toEqual({ mode: 'selected', selected: ['cs', 'en'] }));
+      tray.destroy();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('switches the mode on top of a languages write that is still queued', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'cw-tray-languages-'));
     try {
@@ -169,8 +188,8 @@ describe('TrayMenu on Linux', () => {
       submenu('Jazyk').find((item) => item.label === 'Automaticky')?.click?.(undefined as never, undefined, undefined as never);
       await pending;
 
-      await vi.waitFor(() => expect(store.get().languages).toEqual({ mode: 'auto', selected: ['sk', 'cs', 'en'] }));
-      expect((await new SettingsStore(join(dir, 'settings.json')).load()).languages).toEqual({ mode: 'auto', selected: ['sk', 'cs', 'en'] });
+      await vi.waitFor(() => expect(store.get().languages).toEqual({ mode: 'auto', selected: [] }));
+      expect((await new SettingsStore(join(dir, 'settings.json')).load()).languages).toEqual({ mode: 'auto', selected: [] });
       tray.destroy();
     } finally {
       await rm(dir, { recursive: true, force: true });

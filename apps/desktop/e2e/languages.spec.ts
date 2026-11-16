@@ -113,7 +113,7 @@ test('a server without the language models shows the overlay error and the provi
 
 async function useCustomWords(): Promise<void> {
   const customWords = [{ word: 'Prepis zo', aliases: [] }, { word: 'Kumiba MCP', aliases: ['servera'] }];
-  await page.evaluate((words) => window.codevo.updateSettings({ languages: { mode: 'auto', selected: ['sk', 'cs'] }, customWords: words }), customWords);
+  await page.evaluate((words) => window.codevo.updateSettings({ languages: { mode: 'auto', selected: [] }, customWords: words }), customWords);
 }
 
 test('a current server gets the custom words as vocabulary and the transcript gets aliases and multi-word terms corrected', async () => {

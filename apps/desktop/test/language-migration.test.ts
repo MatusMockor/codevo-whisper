@@ -41,11 +41,13 @@ describe('legacy language migration', () => {
     ['sk', 'canary', { mode: 'selected', selected: ['sk'] }],
     ['cs', 'canary', { mode: 'selected', selected: ['cs'] }],
     ['en', 'canary', { mode: 'selected', selected: ['en'] }],
-    ['sk', 'parakeet', { mode: 'auto', selected: ['sk'] }],
-    ['cs', 'whisper', { mode: 'auto', selected: ['cs'] }],
-    ['en', null, { mode: 'auto', selected: ['en'] }],
-    ['auto', 'parakeet', DEFAULT_SETTINGS.languages],
-    ['auto', null, DEFAULT_SETTINGS.languages],
+    ['sk', 'parakeet', { mode: 'selected', selected: ['sk'] }],
+    ['cs', 'whisper', { mode: 'selected', selected: ['cs'] }],
+    ['en', null, { mode: 'selected', selected: ['en'] }],
+    ['auto', 'canary', { mode: 'selected', selected: ['sk'] }],
+    ['auto', 'parakeet', { mode: 'auto', selected: [] }],
+    ['auto', 'whisper', { mode: 'auto', selected: [] }],
+    ['auto', null, { mode: 'auto', selected: [] }],
   ] as const)('turns language %s with the active model %s into %j and writes it once', async (language, localModelId, expected) => {
     const { migrated, settings, onDisk } = await migrate({ language, localModelId, engineOrder: ['server'] });
 
@@ -56,10 +58,10 @@ describe('legacy language migration', () => {
     expect(onDisk['engineOrder']).toEqual(['server']);
   });
 
-  it('migrates the owner file to automatic recognition with Slovak kept for one click', async () => {
+  it('migrates the owner file to Slovak as the dictation language', async () => {
     const { settings } = await migrate({ engineOrder: ['server'], localModelId: null, language: 'sk' });
 
-    expect(settings.languages).toEqual({ mode: 'auto', selected: ['sk'] });
+    expect(settings.languages).toEqual({ mode: 'selected', selected: ['sk'] });
   });
 
   it('keeps valid stored languages without a legacy key', async () => {
@@ -105,12 +107,12 @@ describe('legacy language migration', () => {
     await migrate({ language: 'sk', localModelId: 'canary' });
     const settings = new SettingsStore(file);
     await settings.load();
-    await settings.update({ languages: { mode: 'auto', selected: ['en'] } });
+    await settings.update({ languages: { mode: 'selected', selected: ['en'] } });
 
     const migrated = await migrateLegacyLanguage({ legacy: settings, settings, activeLanguageHint: () => 'required' });
 
     expect(migrated).toBe(false);
-    expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'auto', selected: ['en'] });
+    expect((await new SettingsStore(file).load()).languages).toEqual({ mode: 'selected', selected: ['en'] });
   });
 
   it('keeps the legacy value through unrelated updates until the languages are saved', async () => {

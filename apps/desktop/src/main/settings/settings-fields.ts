@@ -61,7 +61,7 @@ function isMicrophones(value: unknown): value is Settings['microphones'] {
 }
 
 function isSelectedLanguages(value: unknown): value is Settings['languages']['selected'] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SELECTED_LANGUAGES) {
+  if (!Array.isArray(value) || value.length > MAX_SELECTED_LANGUAGES) {
     return false;
   }
   return value.every(isDictationLanguage) && new Set(value).size === value.length;

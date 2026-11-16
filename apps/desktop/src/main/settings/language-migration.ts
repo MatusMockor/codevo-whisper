@@ -1,4 +1,4 @@
-import type { LanguageSelection } from '../../shared/dictation-languages';
+import { languagesForMode, languagesOf, type LanguageSelection } from '../../shared/dictation-languages';
 import type { LanguageHint } from '../../shared/models';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings';
 import type { LegacyLanguage, LegacySettingsReader } from './legacy-settings';
@@ -10,13 +10,13 @@ export type LanguageMigrationDeps = {
 };
 
 export function migratedLanguages(legacy: LegacyLanguage, hint: LanguageHint | null): LanguageSelection {
-  if (legacy === 'auto') {
-    return DEFAULT_SETTINGS.languages;
+  if (legacy !== 'auto') {
+    return languagesOf([legacy]);
   }
   if (hint === 'required') {
-    return { mode: 'selected', selected: [legacy] };
+    return languagesForMode('selected', DEFAULT_SETTINGS.languages);
   }
-  return { mode: 'auto', selected: [legacy] };
+  return DEFAULT_SETTINGS.languages;
 }
 
 export async function migrateLegacyLanguage({ legacy, settings, activeLanguageHint }: LanguageMigrationDeps): Promise<boolean> {

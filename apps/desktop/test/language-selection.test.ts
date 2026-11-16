@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addLanguage, availableLanguages, beginSave, effectiveSelection, moveLanguage, removeLanguage, settleSave, shiftLanguage } from '../src/renderer/settings/language-selection';
 import { DICTATION_LANGUAGES } from '@codevo-whisper/protocol';
-import { LANGUAGE_NAMES, LANGUAGE_ORDER } from '../src/shared/dictation-languages';
+import { AUTO_LANGUAGES, LANGUAGE_NAMES, LANGUAGE_ORDER, languagesForMode, languagesOf, normalizedLanguages } from '../src/shared/dictation-languages';
 
 describe('dictation language catalog', () => {
   it('offers exactly the protocol languages, Slovak, Czech and English first, then by Slovak name', () => {
@@ -11,6 +11,23 @@ describe('dictation language catalog', () => {
       'Bulharčina', 'Dánčina', 'Estónčina', 'Fínčina', 'Francúzština', 'Gréčtina', 'Holandčina', 'Chorvátčina', 'Litovčina', 'Lotyština', 'Maďarčina',
       'Maltčina', 'Nemčina', 'Poľština', 'Portugalčina', 'Rumunčina', 'Ruština', 'Slovinčina', 'Španielčina', 'Švédčina', 'Taliančina', 'Ukrajinčina',
     ]);
+  });
+});
+
+describe('language mode follows the list', () => {
+  it('uses the listed languages when there are any and automatic recognition only for an empty list', () => {
+    expect(languagesOf(['sk', 'cs'])).toEqual({ mode: 'selected', selected: ['sk', 'cs'] });
+    expect(languagesOf([])).toEqual({ mode: 'auto', selected: [] });
+    expect(normalizedLanguages({ mode: 'auto', selected: ['sk'] })).toEqual({ mode: 'selected', selected: ['sk'] });
+    expect(normalizedLanguages({ mode: 'selected', selected: [] })).toEqual(AUTO_LANGUAGES);
+    expect(normalizedLanguages({ mode: 'selected', selected: ['en', 'de'] })).toEqual({ mode: 'selected', selected: ['en', 'de'] });
+  });
+
+  it('clears the list for Automaticky and keeps or seeds Slovak for Zvolené jazyky', () => {
+    expect(languagesForMode('auto', { mode: 'selected', selected: ['cs', 'sk'] })).toEqual({ mode: 'auto', selected: [] });
+    expect(languagesForMode('auto', AUTO_LANGUAGES)).toEqual({ mode: 'auto', selected: [] });
+    expect(languagesForMode('selected', AUTO_LANGUAGES)).toEqual({ mode: 'selected', selected: ['sk'] });
+    expect(languagesForMode('selected', { mode: 'selected', selected: ['cs', 'en'] })).toEqual({ mode: 'selected', selected: ['cs', 'en'] });
   });
 });
 
