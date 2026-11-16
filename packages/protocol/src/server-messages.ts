@@ -20,11 +20,12 @@ import {
   MessageTag,
   type ServerMessage,
 } from './message-types';
+import { MODEL_OPERATION_OUTCOMES, MODEL_OPERATIONS, readModelCatalog } from './model-catalog';
 import { readServerModels } from './server-models';
 import { jsonFrame, splitTag } from './tagged-frame';
-import { readTranscriptionModels } from './transcription-models';
+import { readTranscriptionModelId, readTranscriptionModels } from './transcription-models';
 
-const TYPES = ['ready', 'capabilities', 'partial', 'final', 'done', 'flow', 'error', 'pair-result'] as const;
+const TYPES = ['ready', 'capabilities', 'partial', 'final', 'done', 'flow', 'error', 'pair-result', 'model-operation'] as const;
 const PAIR_STATUSES = ['approved', 'rejected'] as const;
 const IDENTIFIER = { maxChars: MAX_IDENTIFIER_CHARS, pattern: IDENTIFIER_PATTERN };
 
@@ -60,13 +61,31 @@ function readOfferedModels(object: JsonObject): Pick<CapabilitiesReply, 'transcr
   return { transcriptionModels: readTranscriptionModels(object, 'transcriptionModels') };
 }
 
+function readCatalog(object: JsonObject): Pick<CapabilitiesReply, 'modelCatalog'> {
+  if (object.modelCatalog === undefined) {
+    return {};
+  }
+  return { modelCatalog: readModelCatalog(object, 'modelCatalog') };
+}
+
 function decodeCapabilities(object: JsonObject): ServerMessage {
-  assertOnlyKeys(object, ['type', 'languages', 'models', 'transcriptionModels']);
+  assertOnlyKeys(object, ['type', 'languages', 'models', 'transcriptionModels', 'modelCatalog']);
   return {
     type: 'capabilities',
     languages: readChoiceList(object, 'languages', DICTATION_LANGUAGES, { minItems: 0, maxItems: DICTATION_LANGUAGES.length }),
     models: readServerModels(object, 'models'),
     ...readOfferedModels(object),
+    ...readCatalog(object),
+  };
+}
+
+function decodeModelOperation(object: JsonObject): ServerMessage {
+  assertOnlyKeys(object, ['type', 'id', 'operation', 'outcome']);
+  return {
+    type: 'model-operation',
+    id: readTranscriptionModelId(object, 'id'),
+    operation: readChoice(object, 'operation', MODEL_OPERATIONS),
+    outcome: readChoice(object, 'outcome', MODEL_OPERATION_OUTCOMES),
   };
 }
 
@@ -123,6 +142,9 @@ function decodeJson(object: JsonObject): ServerMessage {
   }
   if (type === 'pair-result') {
     return decodePairResult(object);
+  }
+  if (type === 'model-operation') {
+    return decodeModelOperation(object);
   }
   throw badMessage('unknown server message type');
 }

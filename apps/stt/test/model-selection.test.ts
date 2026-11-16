@@ -9,13 +9,12 @@ import { loadSttConfig } from '../src/config';
 import { createEngine, type EngineOptions } from '../src/create-engine';
 import type { Engine } from '../src/engine';
 import { startSttServer, type SttServer } from '../src/server';
+import { catalogOptions } from './support/catalog-options';
 import { pcm, send, type Reply } from './support/http-client';
 
 const FAKE_WORKER = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-worker.js', import.meta.url));
 const TWO_SECONDS = 32_000;
 const WHISPER_PATH = '/models/whisper-large-v3-F16.gguf';
-const PARAKEET = { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true };
-const WHISPER = { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: true, default: false };
 
 type TextReply = { status: number; body: { text: string; language?: string | null; route?: string } };
 
@@ -39,7 +38,7 @@ afterEach(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function serve(options: EngineOptions = { routing: false, whisper: true }): Promise<SttServer> {
+async function serve(options: EngineOptions = { routing: false, installed: ['whisper-large-v3'] }): Promise<SttServer> {
   engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, options);
   server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, catalog: engine.catalog, port: 0, host: '127.0.0.1' });
   await engine.transcriber.warmUp();
@@ -94,12 +93,12 @@ describe('selectable transcription models', () => {
   it('lists the default and the Whisper model with their availability', async () => {
     const present = await serve();
 
-    expect((await send(present, '/capabilities', { method: 'GET' })).body).toMatchObject({ transcriptionModels: [PARAKEET, WHISPER] });
+    expect((await send(present, '/capabilities', { method: 'GET' })).body).toMatchObject({ transcriptionModels: catalogOptions(['whisper-large-v3']) });
     await present.stop();
     await engine?.close();
 
     const missing = await serve({ routing: false });
-    expect((await send(missing, '/capabilities', { method: 'GET' })).body).toMatchObject({ transcriptionModels: [PARAKEET, { ...WHISPER, available: false }] });
+    expect((await send(missing, '/capabilities', { method: 'GET' })).body).toMatchObject({ transcriptionModels: catalogOptions() });
   });
 
   it('serves a request without a model and one naming the default from the resident default worker', async () => {
@@ -262,7 +261,7 @@ describe('selectable transcription models', () => {
 
   it('answers 502 when Whisper fails to load and loads it again on the next request', async () => {
     const errors: string[] = [];
-    engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, { routing: false, whisper: true });
+    engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER, threads: 1 }, { routing: false, installed: ['whisper-large-v3'] });
     const { transcriber, router, models, catalog } = engine;
     server = await startSttServer({ transcriber, router, models, catalog, port: 0, host: '127.0.0.1', onError: (code) => errors.push(code) });
     await engine.transcriber.warmUp();
@@ -279,8 +278,8 @@ describe('selectable transcription models', () => {
   });
 
   it('keeps the Whisper model available on the per-call CLI engine', () => {
-    engine = createEngine(loadSttConfig({ STT_ENGINE: 'cli' }), { routing: false, whisper: true });
+    engine = createEngine(loadSttConfig({ STT_ENGINE: 'cli' }), { routing: false, installed: ['whisper-large-v3'] });
 
-    expect(engine.catalog.report()).toEqual([PARAKEET, WHISPER]);
+    expect(engine.catalog.report()).toEqual(catalogOptions(['whisper-large-v3']));
   });
 });

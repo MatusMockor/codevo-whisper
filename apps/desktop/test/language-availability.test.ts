@@ -5,7 +5,7 @@ import type { ServerStatus } from '../src/shared/server';
 import type { ServerLanguages } from '../src/shared/server-languages';
 
 function online(serverVersion: string, languages: ServerLanguages): { status: ServerStatus } {
-  return { status: { kind: 'online', connectMs: 21, serverVersion, languages, transcriptionModels: [] } };
+  return { status: { kind: 'online', connectMs: 21, serverVersion, languages, transcriptionModels: [], modelCatalog: null } };
 }
 
 const ROUTING = online('0.3.0', { kind: 'reported', languages: ['sk', 'cs', 'en'], models: ROUTING_MODELS });

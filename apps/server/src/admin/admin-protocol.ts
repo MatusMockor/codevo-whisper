@@ -4,6 +4,7 @@ export type AdminCommand =
   | { cmd: 'pair'; ttlMs?: number }
   | { cmd: 'devices' }
   | { cmd: 'revoke'; deviceId: string }
+  | { cmd: 'manage-models'; deviceId: string; allowed: boolean }
   | { cmd: 'rotate-key' }
   | { cmd: 'status' };
 
@@ -39,12 +40,29 @@ function parsePair(object: Record<string, unknown>): ParsedCommand {
   return { ok: true, command: { cmd: 'pair', ttlMs } };
 }
 
+function isDeviceId(value: unknown): value is string {
+  return typeof value === 'string' && DEVICE_ID.test(value);
+}
+
+const INVALID_DEVICE_ID = 'deviceId must be 8 lowercase hex characters';
+
 function parseRevoke(object: Record<string, unknown>): ParsedCommand {
   const { deviceId } = object;
-  if (typeof deviceId !== 'string' || !DEVICE_ID.test(deviceId)) {
-    return invalid('deviceId must be 8 lowercase hex characters');
+  if (!isDeviceId(deviceId)) {
+    return invalid(INVALID_DEVICE_ID);
   }
   return { ok: true, command: { cmd: 'revoke', deviceId } };
+}
+
+function parseManageModels(object: Record<string, unknown>): ParsedCommand {
+  const { deviceId, allowed } = object;
+  if (!isDeviceId(deviceId)) {
+    return invalid(INVALID_DEVICE_ID);
+  }
+  if (typeof allowed !== 'boolean') {
+    return invalid('allowed must be true or false');
+  }
+  return { ok: true, command: { cmd: 'manage-models', deviceId, allowed } };
 }
 
 export function parseAdminCommand(line: string): ParsedCommand {
@@ -57,6 +75,9 @@ export function parseAdminCommand(line: string): ParsedCommand {
   }
   if (object.cmd === 'revoke') {
     return parseRevoke(object);
+  }
+  if (object.cmd === 'manage-models') {
+    return parseManageModels(object);
   }
   if (object.cmd === 'devices' || object.cmd === 'rotate-key' || object.cmd === 'status') {
     return { ok: true, command: { cmd: object.cmd } };

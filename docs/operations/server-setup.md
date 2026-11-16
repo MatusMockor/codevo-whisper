@@ -3,7 +3,7 @@
 The server runs as a Docker Compose project with two services, or natively on a Linux desktop with the Codevo Whisper app installed (see [Native (systemd, without Docker)](#native-systemd-without-docker)):
 
 - `gateway` - the encrypted WebSocket endpoint for paired devices, the admin socket and the `codevo-whisper` CLI. It is the only service that publishes a port, on `127.0.0.1:8787` by default.
-- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node, plus Canary 1B v2 and VoxLingua107 language ID for "Výber jazykov"). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is mounted read-only; provisioning runs as the separate `stt-provision` service.
+- `stt` - the transcribe.cpp sidecar (Parakeet Ultra F16, Vulkan on one GPU render node, plus Canary 1B v2 and VoxLingua107 language ID for "Výber jazykov"). Internal only, reachable from the gateway as `http://stt:8001`. The model volume is writable for the sidecar so that authorized devices can download and remove the optional transcription models (see [Server models from the desktop app](#server-models-from-the-desktop-app)); the initial provisioning still runs as the separate `stt-provision` service.
 
 The gateway stores only its static key (`/data/server-key.json`, mode 0600) and the device registry (`/data/devices.json`) in the `cw-data` volume. Audio and transcripts stay in memory. Core dumps are disabled in both containers (`ulimits.core: 0`) and logs contain only device ids, sizes, durations and error codes. Swap is outside the app's control; disable it or encrypt it if that matters to you.
 
@@ -20,7 +20,7 @@ ls -l /dev/dri/by-path/            # pci-0000:03:00.0-render -> ../renderD128
 ```
 
 Set `STT_RENDER_DEVICE` to that node (default `/dev/dri/renderD128`). It appears in the container as `/dev/dri/renderD128`, so Vulkan sees only that GPU, even on hosts with an integrated GPU next to the discrete one.
-- About 2.5 GB of disk for the three models (1.3 GB without "Výber jazykov") and about 1 GB for the images.
+- About 2.5 GB of disk for the three models (1.3 GB without "Výber jazykov"), 3.1 GB more for the provisioned Whisper Large v3, and about 1 GB for the images. Every optional model downloaded from the desktop app needs its size plus 1 GiB of free space in the `cw-models` volume when the download starts (Parakeet Ultra Q8 0.74 GB, Whisper Large v3 Q8 1.67 GB, Whisper Large v3 Turbo F16 1.63 GB, Whisper Large v3 Turbo Q8 0.89 GB).
 
 ## Install
 
@@ -43,6 +43,9 @@ Set in `infrastructure/compose/.env`:
 | `STT_MEM_LIMIT`, `STT_CPUS`, `GATEWAY_MEM_LIMIT`, `GATEWAY_CPUS` | Container limits, defaults `8g`, `4`, `512m`, `2` (`8g` leaves room for Parakeet, Canary, the language ID and Whisper Large v3 resident at once). Both services also run with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem, PID limits (stt 128, gateway 64) and `nofile` limits (stt 1024, gateway 4096). |
 | `STT_BACKEND`, `STT_THREADS` | `vulkan` (default) or `cpu`, and the engine thread count. |
 | `STT_MODEL_PATH`, `STT_CONDITIONED_MODEL_PATH`, `STT_LID_MODEL_PATH`, `STT_WHISPER_MODEL_PATH` | Model files in the `cw-models` volume, defaults `/models/parakeet-ultra-F16.gguf`, `/models/canary-1b-v2-Q8_0.gguf`, `/models/lang-id-voxlingua107-ecapa-Q8_0.gguf` and `/models/whisper-large-v3-F16.gguf`. Provisioning and the sidecar read the same values. |
+| `STT_MODELS_DIR` | Directory in the `cw-models` volume where downloaded models are stored, default `/models`. The default model and Whisper Large v3 keep their own paths above. |
+| `STT_MODEL_DOWNLOADS` | `enabled` (default) or `disabled`. The kill switch for downloading and removing models from devices; `disabled` refuses both and the desktop app shows the catalog read-only. |
+| `STT_MAX_RESIDENT_MODELS` | How many optional models (everything except the default Parakeet Ultra) may stay loaded at once, 1 to 8, default `2`. When another one has to load, the least recently used idle one is unloaded first; a model is never unloaded while it transcribes. |
 | `STT_LID_BACKEND` | Backend of the language ID model, `cpu` (default; about 12 ms per 2 s of audio), `vulkan` or `metal`. |
 | `STT_ENGINE` | `worker` (default) keeps the model loaded in one resident `cw-stt-worker` process; `cli` starts `transcribe-cli` for every call (the phase 2 behaviour; measured on the RX 7800 XT at about 550 ms against 120 ms per call for 12 s of audio). |
 | `CW_TRUSTED_PROXY_HEADER` | Empty by default. Set it only when every connection arrives through a proxy you control that sets this header, for example `CF-Connecting-IP` behind Cloudflare Tunnel. See "Limits behind tunnels and proxies". |
@@ -67,7 +70,7 @@ Provisioning downloads four pinned models into the `cw-models` volume:
 | Language ID | `handy-computer/lang-id-voxlingua107-ecapa-gguf` @ `e59f0f3847e77723b7d58447ef9456fa0c7e9436` | `lang-id-voxlingua107-ecapa-Q8_0.gguf` | 26,693,632 B | `063e6cb0af3d53085fc7d68356dfde5ecee2ffa7bc79855f7e4ff930081bfe3a` |
 | Selectable transcription (Whisper, MIT) | `handy-computer/whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b` | `whisper-large-v3-F16.gguf` | 3,107,236,640 B | `e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584` |
 
-It prints `Optional models add 4.28 GB` first, then one line per file. Each file is written to a `.download` file, hashed while streaming and renamed only when the hash matches. Running it again verifies the existing files (`Model already present and verified`). The `stt` service never downloads at startup. It exits with `model_missing` if the transcription model is absent. Without Canary or the language ID model it starts anyway, logs `language_models_missing` and serves only automatic dictation. Without the Whisper file it logs `selectable_model_missing` and reports Whisper as unavailable; devices then can only use Parakeet. Parakeet is loaded at startup; Whisper is loaded when the first dictation that selects it starts (a few seconds; that dictation waits for it, the other devices keep dictating meanwhile) and stays resident.
+It prints `Optional models add 4.28 GB` first, then one line per file. Each file is written to a `.download` file, hashed while streaming and renamed only when the hash matches. Running it again verifies the existing files (`Model already present and verified`). The `stt` service never downloads at startup. It exits with `model_missing` if the transcription model is absent. Without Canary or the language ID model it starts anyway, logs `language_models_missing` and serves only automatic dictation. At startup it logs `selectable_models` with the optional models whose files are present (`installed`), the kill switch (`downloads`) and the residency limit (`maxResident`); a missing optional model is reported as unavailable, devices then use Parakeet or download it (see below). Parakeet is loaded at startup; an optional model such as Whisper is loaded when the first dictation that selects it starts (a few seconds; that dictation waits for it, the other devices keep dictating meanwhile) and stays resident until the residency limit (`STT_MAX_RESIDENT_MODELS`) needs its place.
 
 ### Verify "Výber jazykov"
 
@@ -83,7 +86,7 @@ With all three models it prints the 25 languages and the model names:
 {"languages":["bg","cs","da","de","el","en","es","et","fi","fr","hr","hu","it","lt","lv","mt","nl","pl","pt","ro","ru","sk","sl","sv","uk"],"models":{"transcription":"Parakeet Ultra (F16)","conditioned":"Canary 1B v2 (Q8)","languageId":"VoxLingua107 (rozpoznanie jazyka)"},"transcriptionModels":[{"id":"parakeet-ultra","name":"Parakeet Ultra (F16)","available":true,"default":true},{"id":"whisper-large-v3","name":"Whisper Large v3 (F16)","available":true,"default":false}]}
 ```
 
-`transcriptionModels` lists the models a device can pick for its dictations (desktop apps need a gateway of version 0.5.0 or newer). `"available":false` means the file is missing: run the provisioning again, then restart the sidecar with `$COMPOSE restart stt`, because it checks for the Whisper file only at startup. The gateway picks up the new list on its next capability refresh (every 30 s, or on the next device connection), so no gateway restart is needed.
+`transcriptionModels` lists every model of the pinned catalog that a device can pick for its dictations (desktop apps need a gateway of version 0.5.0 or newer). `"available":false` means the file is missing: download it from an authorized desktop app, or run the provisioning again and restart the sidecar with `$COMPOSE restart stt` (files added outside the sidecar are picked up only at startup; downloads and removals through the sidecar take effect at once). The gateway picks up the new list on its next capability refresh (every 30 s, or on the next device connection), so no gateway restart is needed.
 
 `"languages":[]` means the language models are missing or not loaded: run the provisioning again and check `$COMPOSE logs stt` for `language_models_missing` or `language_models_warmup_failed`. A `404` means the sidecar image predates language sets; rebuild it. Desktop apps see the same list and models in the server card, and restricted dictation needs a gateway of version 0.3.0 or newer (`codevo-whisper status` prints the version). Older desktops and the mobile app keep working unchanged.
 
@@ -108,10 +111,46 @@ Then choose the order in **Prepis > Trasa prepisu**: "Lokálne", "Server", "Serv
 ```bash
 $COMPOSE exec gateway codevo-whisper devices
 $COMPOSE exec gateway codevo-whisper revoke <id>
+$COMPOSE exec gateway codevo-whisper grant-models <id>
+$COMPOSE exec gateway codevo-whisper revoke-models <id>
 $COMPOSE exec gateway codevo-whisper status
 ```
 
 `revoke` takes effect immediately: open sessions of the device are closed with `revoked`, its queued and running transcriptions are cancelled and its buffered audio is dropped. "Odpojiť" in the app only pauses the connection and keeps the pairing; "Pripojiť" resumes it without pairing again. "Zrušiť párovanie" deletes the pairing on the device only; use `revoke` to remove it from the server.
+
+## Server models from the desktop app
+
+Gateway 0.6.0 and newer offer a pinned catalog of transcription models, all from Hugging Face `handy-computer` at fixed revisions and verified by size and SHA-256:
+
+| Id | Name | Repository @ revision | File | Size | SHA-256 |
+|---|---|---|---|---|---|
+| `parakeet-ultra` | Parakeet Ultra (F16), default, cannot be removed | `parakeet-ultra-gguf` @ `a1539be1b849ea7463b88343e5277b373d0c4ea9` | `parakeet-ultra-F16.gguf` | 1,256,724,448 B | `cd97f94fa50a034a9019a47e2ed7a2de3963eed8316d1df4de9efdccca6fe78d` |
+| `parakeet-ultra-q8` | Parakeet Ultra (Q8) | `parakeet-ultra-gguf` @ `a1539be1b849ea7463b88343e5277b373d0c4ea9` | `parakeet-ultra-Q8_0.gguf` | 740,363,168 B | `007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59` |
+| `whisper-large-v3` | Whisper Large v3 (F16) | `whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b` | `whisper-large-v3-F16.gguf` | 3,107,236,640 B | `e633ab1d74b0e98f4f57daedaee34291297dbbf01389bda3d890766600c1c584` |
+| `whisper-large-v3-q8` | Whisper Large v3 (Q8) | `whisper-large-v3-gguf` @ `274ad1d1cf680b7ee53cc70f78461394cd3a344b` | `whisper-large-v3-Q8_0.gguf` | 1,668,741,440 B | `2fa1a5f179f8a511a53e2108db270aa4af3ce08cd976af4180e2854666bb4ba3` |
+| `whisper-large-v3-turbo` | Whisper Large v3 Turbo (F16) | `whisper-large-v3-turbo-gguf` @ `18ada752005f5fddef499256f9a458d0b37a203a` | `whisper-large-v3-turbo-F16.gguf` | 1,625,935,488 B | `c8506ddfa3d4eb9279170d722a75422db00dbdbd7618531bbb81926e0598eb8f` |
+| `whisper-large-v3-turbo-q8` | Whisper Large v3 Turbo (Q8) | `whisper-large-v3-turbo-gguf` @ `18ada752005f5fddef499256f9a458d0b37a203a` | `whisper-large-v3-turbo-Q8_0.gguf` | 886,381,728 B | `257aa7ec9121c22c167d5e2c49e3e76b4ba0e6e27ebc13074eba0a80f8190220` |
+
+Parakeet models dictate through Canary and the language ID like the default; Whisper models transcribe directly. Every paired device may choose a model; only devices you authorize may download or remove one:
+
+```bash
+$COMPOSE exec gateway codevo-whisper grant-models <id>    # on Linux native: codevo-whisper-server grant-models <id>
+$COMPOSE exec gateway codevo-whisper revoke-models <id>
+```
+
+The permission is stored with the device in `devices.json` (`"manageModels": true`, absent means not allowed) and takes effect at once, also for open connections. `devices` shows it as `správa modelov: povolená` or `nepovolená`. Revoking the device removes it too.
+
+How downloads work:
+
+- The `stt` sidecar downloads the file itself, so it needs outbound HTTPS to `huggingface.co`. Only the pinned files above can be downloaded; devices never send a URL.
+- One download at a time for the whole server; a second one is refused as busy. Before it starts, the sidecar checks that the volume has the model size plus 1 GiB free (`statfs`).
+- The file is written to `<target>.partial` in the models directory, checked for its exact size and SHA-256, flushed, renamed atomically and the directory is synced. A failed, mismatched or cancelled download deletes the partial file; leftovers from a crash are deleted at the next start. A failed download stays visible as failed until the next attempt or restart.
+- A finished download is available at once, no restart. A removal unloads the model first and then deletes the file; the default model can never be removed and a model that is transcribing at that moment is refused.
+- Logs: `model_download_started`, `model_downloaded`, `model_download_failed` (with the reason), `model_download_cancelled`.
+- `STT_MODEL_DOWNLOADS=disabled` in `.env` (then `$COMPOSE up -d stt`) turns downloading and removing off for every device; the files already in the volume stay usable.
+- Memory: with the default limit, Parakeet, Canary, the language ID and two optional models can be loaded at once. Two large F16 models together can exceed the default `STT_MEM_LIMIT=8g`; lower `STT_MAX_RESIDENT_MODELS` to `1` or raise the limit.
+
+`stt-provision` still downloads only the default model, the two language models and Whisper Large v3.
 
 ## Rotate the server key
 
@@ -128,7 +167,7 @@ $COMPOSE logs -f gateway
 $COMPOSE logs -f stt
 ```
 
-The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs`, `result` (`ok`, `cancelled` or an error code) and `routes`, the number of final segments per routing decision of a dictation with languages (for example `{"conditioned":5,"verbatim-unsure":1}`, empty for automatic dictation). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`, `language_models_missing`, `language_models_ready` or `language_models_warmup_failed`) and engine error status codes. Neither logs audio, text or the language of a segment.
+The gateway logs one JSON line per dictation: `deviceId`, `audioSeconds`, `finals`, `partials`, `durationMs`, `result` (`ok`, `cancelled` or an error code) and `routes`, the number of final segments per routing decision of a dictation with languages (for example `{"conditioned":5,"verbatim-unsure":1}`, empty for automatic dictation). The sidecar logs only startup (`listening`, `engine_ready` or `engine_warmup_failed`, `language_models_missing`, `language_models_ready` or `language_models_warmup_failed`, `selectable_models`), model downloads (`model_download_*`, `model_downloaded`) and engine error status codes. Neither logs audio, text or the language of a segment.
 
 ## Native (systemd, without Docker)
 
@@ -153,11 +192,14 @@ Later runs keep the copied worker and language models; to replace one, pass its 
 codevo-whisper-server pair
 codevo-whisper-server devices
 codevo-whisper-server revoke <id>
+codevo-whisper-server grant-models <id>
 codevo-whisper-server status
 journalctl --user -u codevo-whisper-gateway -f
 journalctl --user -u codevo-whisper-stt -f
 curl -s http://127.0.0.1:8001/capabilities
 ```
+
+Model downloads from the desktop app write to `STT_MODELS_DIR` (default `/models`, which does not exist on a native install) and Whisper Large v3 to `STT_WHISPER_MODEL_PATH`. The install script does not set them yet; to use downloads natively, add `STT_MODELS_DIR=$HOME/.local/share/codevo-whisper-server/models` and `STT_WHISPER_MODEL_PATH=$HOME/.local/share/codevo-whisper-server/models/whisper-large-v3-F16.gguf` (expanded paths) to `~/.config/codevo-whisper-server/env` and run `systemctl --user restart codevo-whisper-stt`. Without them a download is refused as `stt_unavailable`.
 
 Tailscale: keep `CW_BIND=127.0.0.1`, run `tailscale serve --bg 8787` and install with `CW_PUBLIC_ENDPOINT=wss://<host>.ts.net` (the MagicDNS name of the machine). Pair devices only after the endpoint is set; tokens carry it.
 

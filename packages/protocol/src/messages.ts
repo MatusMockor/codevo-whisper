@@ -14,6 +14,19 @@ export {
   type ServerMessage,
 } from './message-types';
 export { decodeServerMessage, encodeServerMessage } from './server-messages';
+export {
+  CATALOG_STATES,
+  isCatalogEntryList,
+  MODEL_FAMILIES,
+  MODEL_OPERATION_OUTCOMES,
+  MODEL_OPERATIONS,
+  type CatalogEntry,
+  type CatalogState,
+  type ModelCatalog,
+  type ModelFamily,
+  type ModelOperation,
+  type ModelOperationOutcome,
+} from './model-catalog';
 export { isModelName, MAX_MODEL_NAME_CHARS, UNKNOWN_MODELS, type ServerModels } from './server-models';
 export {
   isTranscriptionModelId,

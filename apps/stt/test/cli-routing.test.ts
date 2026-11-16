@@ -8,6 +8,7 @@ import { loadSttConfig } from '../src/config';
 import { createEngine } from '../src/create-engine';
 import type { Engine } from '../src/engine';
 import { startSttServer, type SttServer } from '../src/server';
+import { catalogOptions } from './support/catalog-options';
 import { pcm, send } from './support/http-client';
 
 const FAKE_CLI = fileURLToPath(new URL('../../../packages/stt-runner/test/support/fake-transcribe-cli.sh', import.meta.url));
@@ -67,10 +68,7 @@ describe('language routing on the per-call CLI', () => {
       body: {
         languages: [...SUPPORTED_LANGUAGES],
         models: { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' },
-        transcriptionModels: [
-          { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true },
-          { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: false, default: false },
-        ],
+        transcriptionModels: catalogOptions(),
       },
     });
   });

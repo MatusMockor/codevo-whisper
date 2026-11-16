@@ -91,7 +91,13 @@ export class ServerConnector {
       assertCurrent(scope);
       const opened = await this.open(pairing, cancel.signal);
       this.keepIfCurrent(opened, scope);
-      scope.connected({ connectMs: opened.connectMs, serverVersion: opened.serverVersion, languages: opened.languages, transcriptionModels: opened.transcriptionModels });
+      scope.connected({
+        connectMs: opened.connectMs,
+        serverVersion: opened.serverVersion,
+        languages: opened.languages,
+        transcriptionModels: opened.transcriptionModels,
+        modelCatalog: opened.modelCatalog,
+      });
       return { ...opened, scope };
     } catch (error) {
       const failure = failureIn(scope, error);

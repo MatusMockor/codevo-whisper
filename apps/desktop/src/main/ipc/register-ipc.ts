@@ -15,6 +15,7 @@ import { microphoneHandlers, type MicrophoneHandlerDeps } from './microphone-han
 import { modelHandlers, type ModelHandlerDeps } from './model-handlers';
 import { permissionHandlers, type PermissionHandlerDeps } from './permission-handlers';
 import { serverHandlers, type ServerHandlerDeps } from './server-handlers';
+import { serverModelHandlers, type ServerModelHandlerDeps } from './server-model-handlers';
 import { isTrustedSenderUrl } from './trusted-sender';
 import { updateHandlers, type UpdateHandlerDeps } from './update-handlers';
 import { IpcValidationError } from './validate';
@@ -25,6 +26,7 @@ export type IpcDependencies = CoreHandlerDeps &
   ModelHandlerDeps &
   MicrophoneHandlerDeps &
   ServerHandlerDeps &
+  ServerModelHandlerDeps &
   EngineHandlerDeps &
   FocusHandlerDeps &
   UpdateHandlerDeps &
@@ -43,6 +45,7 @@ function invokeHandlers(dependencies: IpcDependencies): InvokeHandlers {
     ...modelHandlers(dependencies),
     ...microphoneHandlers(dependencies),
     ...serverHandlers(dependencies),
+    ...serverModelHandlers(dependencies),
     ...engineHandlers(dependencies),
     ...focusHandlers(dependencies),
     ...updateHandlers(dependencies),

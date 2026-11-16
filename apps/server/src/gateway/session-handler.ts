@@ -1,5 +1,6 @@
-import type { ClientMessage } from '@codevo-whisper/protocol';
+import type { ClientMessage, ModelOperation, ServerMessage } from '@codevo-whisper/protocol';
 import type { Logger } from '../logging/logger';
+import type { DeviceModelCatalog } from '../models/model-catalog-service';
 import type { CapabilityLookup } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
 import type { ModelPreparation } from '../stt/stt-client';
@@ -28,11 +29,14 @@ export type SessionDeps = {
   ingestion: IngestionLimiter;
   capabilities: CapabilityLookup;
   preparation: ModelPreparation;
+  models: DeviceModelCatalog;
 };
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
 
 type CapabilitiesRequest = Extract<ClientMessage, { type: 'capabilities' }>;
+
+type CapabilitiesReply = Extract<ServerMessage, { type: 'capabilities' }>;
 
 type State =
   | { kind: 'idle' }
@@ -57,6 +61,9 @@ export class SessionHandler {
     finish: () => this.onFinish(),
     cancel: () => this.onCancel(),
     'pair-request': () => this.channel.fail('bad_message'),
+    'model-download': (message) => this.onModelOperation('download', message.id),
+    'model-remove': (message) => this.onModelOperation('remove', message.id),
+    'model-download-cancel': (message) => this.onModelOperation('cancel', message.id),
   };
 
   constructor(
@@ -94,12 +101,35 @@ export class SessionHandler {
       this.channel.fail('bad_message');
       return;
     }
-    const { languages, models, transcriptionModels } = this.deps.capabilities.current();
-    if (message.transcriptionModels !== true) {
-      this.channel.send({ type: 'capabilities', languages, models });
+    if (message.modelCatalog === true) {
+      this.replyWithCatalog(message).catch(() => this.channel.close(CLOSE_INTERNAL_ERROR));
       return;
     }
-    this.channel.send({ type: 'capabilities', languages, models, transcriptionModels });
+    this.channel.send(this.capabilitiesReply(message));
+  }
+
+  private capabilitiesReply(message: CapabilitiesRequest): CapabilitiesReply {
+    const { languages, models, transcriptionModels } = this.deps.capabilities.current();
+    if (message.transcriptionModels !== true) {
+      return { type: 'capabilities', languages, models };
+    }
+    return { type: 'capabilities', languages, models, transcriptionModels };
+  }
+
+  private async replyWithCatalog(message: CapabilitiesRequest): Promise<void> {
+    const modelCatalog = await this.deps.models.catalog(this.deviceId);
+    this.channel.send({ ...this.capabilitiesReply(message), modelCatalog });
+  }
+
+  private onModelOperation(operation: ModelOperation, id: string): void {
+    if (this.state.kind !== 'idle') {
+      this.channel.fail('bad_message');
+      return;
+    }
+    this.deps.models.run(this.deviceId, operation, id).then(
+      (outcome) => this.channel.send({ type: 'model-operation', id, operation, outcome }),
+      () => this.channel.close(CLOSE_INTERNAL_ERROR),
+    );
   }
 
   private onStart(message: StartMessage): void {

@@ -14,4 +14,8 @@ export class SingleFlightWarmUp {
     });
     return this.pending;
   }
+
+  running(): boolean {
+    return this.pending !== null;
+  }
 }

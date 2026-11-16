@@ -4,7 +4,7 @@ import type { SttServer } from '../../src/server';
 
 export type Reply = { status: number; body: unknown };
 
-export type SendOptions = { method?: 'GET' | 'POST'; body?: Uint8Array };
+export type SendOptions = { method?: 'GET' | 'POST' | 'DELETE'; body?: Uint8Array };
 
 export function send(server: SttServer, path: string, options: SendOptions = {}): Promise<Reply> {
   const { port } = server.address() as AddressInfo;

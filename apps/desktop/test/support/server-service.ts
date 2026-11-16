@@ -10,6 +10,7 @@ import { PairingEngineSwitch } from '../../src/main/remote/pairing-engine-switch
 import { EncryptedPairingFile, type PairingRepository } from '../../src/main/remote/pairing-repository';
 import type { SecretVault, VaultAvailability } from '../../src/main/remote/secret-vault';
 import { ServerConnector } from '../../src/main/remote/server-connector';
+import { ServerModelOperations } from '../../src/main/remote/server-model-operations';
 import { ServerService } from '../../src/main/remote/server-service';
 import { ServerStatusBoard } from '../../src/main/remote/server-status';
 import { ServerSwitch } from '../../src/main/remote/server-switch';
@@ -28,7 +29,7 @@ export type ServerServiceSetup = {
   wrapPairings?: (pairings: PairingRepository) => PairingRepository;
 };
 
-export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; connector: ServerConnector; file: string };
+export type ServerServiceHarness = { service: ServerService; pairings: EncryptedPairingFile; status: ServerStatusBoard; order: EngineOrderQueue; connector: ServerConnector; serverModels: ServerModelOperations; file: string };
 
 const MODEL_BODY = 'GGUF';
 
@@ -56,5 +57,6 @@ export function createServerService(setup: ServerServiceSetup): ServerServiceHar
   const clock = setup.clock === undefined ? {} : { clock: setup.clock };
   const serverSwitch = new ServerSwitch({ settings, queue: order, local: new ActiveModelReadiness(models, settings) });
   const service = new ServerService({ pairings: stored, vault, connector, status, pairing, engineSwitch, serverSwitch, logger, ...clock });
-  return { service, pairings, status, order, connector, file };
+  const serverModels = new ServerModelOperations({ connector, serverSwitch, logger, timeoutMs });
+  return { service, pairings, status, order, connector, serverModels, file };
 }

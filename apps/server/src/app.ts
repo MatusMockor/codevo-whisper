@@ -9,9 +9,12 @@ import { startGateway, type Gateway } from './gateway/gateway';
 import { ServerKeyHolder } from './keys/server-key-holder';
 import { ServerKeyStore } from './keys/server-key-store';
 import { silentLogger, type Logger } from './logging/logger';
+import { ModelCatalogService } from './models/model-catalog-service';
+import { DeviceModelPermissions } from './models/model-permissions';
 import { WindowPairingService } from './pairing/window-pairing-service';
 import { refreshEvery, SttCapabilityCache } from './stt/capability-cache';
 import { HttpSttClient } from './stt/http-stt-client';
+import { HttpSttModelManagement } from './stt/http-stt-model-management';
 import type { GatewayDispatcher } from './stt/gateway-context';
 import { SttSegmentTranscriber } from './stt/stt-segment-transcriber';
 import { DeviceGuardedTranscriber } from './stt/device-guarded-transcriber';
@@ -43,6 +46,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const transcriber = new DeviceGuardedTranscriber(new SttSegmentTranscriber(stt), clock, ENGINE_GUARD_LIMITS);
   const dispatcher: GatewayDispatcher = new TranscriptionDispatcher({ transcriber, clock: { now: clock } });
   const capabilities = new SttCapabilityCache(stt);
+  const models = new ModelCatalogService({ stt: new HttpSttModelManagement(config.sttUrl), permissions: new DeviceModelPermissions(devices), capabilities });
   const pairing = new WindowPairingService({ serverKey: () => keys.current(), endpoint: config.publicEndpoint, devices, clock });
   const gateway = await startGateway({
     config,
@@ -52,6 +56,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     pairing,
     capabilities,
     preparation: stt,
+    models,
     clock,
     logger: options.logger ?? silentLogger,
     ...(options.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: options.handshakeTimeoutMs }),

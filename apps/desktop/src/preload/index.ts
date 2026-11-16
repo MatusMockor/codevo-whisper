@@ -12,6 +12,7 @@ import type { AudioDevice } from '../shared/microphones';
 import type { DiarizerView, LanguagePackView, ModelCatalogView, ModelState } from '../shared/models';
 import type { PermissionGuide, PermissionsStatus } from '../shared/permissions';
 import type { DisconnectResult, ServerView } from '../shared/server';
+import type { ServerModelOutcome } from '../shared/server-model-catalog';
 import type { Settings } from '../shared/settings';
 import type { FocusRequest } from '../shared/section-focus';
 import type { DayStats } from '../shared/stats';
@@ -75,6 +76,10 @@ const api: IpcApi = {
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
   setServerEnabled: (enabled) => ipcRenderer.invoke(INVOKE_CHANNELS.setServerEnabled, enabled) as Promise<void>,
   chooseServerModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.chooseServerModel, id) as Promise<void>,
+  serverModelDownload: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.serverModelDownload, id) as Promise<ServerModelOutcome>,
+  serverModelRemove: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.serverModelRemove, id) as Promise<ServerModelOutcome>,
+  serverModelCancel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.serverModelCancel, id) as Promise<ServerModelOutcome>,
+  refreshServerModels: () => ipcRenderer.invoke(INVOKE_CHANNELS.refreshServerModels) as Promise<void>,
   preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<EngineSwitch>,
   takeSectionFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSectionFocus) as Promise<FocusRequest | null>,
   getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,

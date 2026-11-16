@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { DICTATION_LANGUAGES, MAX_DICTATION_LANGUAGES } from '@codevo-whisper/protocol';
+import { DICTATION_LANGUAGES, MAX_DICTATION_LANGUAGES, type CatalogEntry } from '@codevo-whisper/protocol';
+import { FakeModelCatalog, type FakeCatalog } from './fake-model-catalog';
 
 export type FakeSttResponse = { status: number; body: unknown };
 
@@ -13,6 +14,7 @@ export type FakeSttBehaviour = {
   delayFor?: (pcm: Uint8Array) => number;
   loadDelayMs?: Readonly<Record<string, number>>;
   failingLoads?: readonly string[];
+  catalog?: FakeCatalog;
 };
 
 export type FakeSttServer = {
@@ -25,6 +27,12 @@ export type FakeSttServer = {
   preparations(): string[];
   loadingModels(): string[];
   loadedModels(): string[];
+  catalogRequests(): number;
+  modelOperations(): string[];
+  completeDownload(id: string): void;
+  failDownload(id: string): void;
+  setModelInUse(id: string, inUse: boolean): void;
+  catalogEntries(): CatalogEntry[];
   close(): Promise<void>;
 };
 
@@ -129,6 +137,15 @@ function validationStatus(request: IncomingMessage, pcm: Uint8Array, query: Fake
   return null;
 }
 
+function withAvailability(capabilities: FakeSttResponse, id: string, available: boolean): FakeSttResponse {
+  const body = capabilities.body as { transcriptionModels?: unknown } | null;
+  if (!Array.isArray(body?.transcriptionModels)) {
+    return capabilities;
+  }
+  const transcriptionModels = (body.transcriptionModels as OfferedModel[]).map((model) => (model.id === id ? { ...model, available } : model));
+  return { ...capabilities, body: { ...body, transcriptionModels } };
+}
+
 function defaultResponse(_pcm: Uint8Array, _language: string, request: FakeSttRequest): FakeSttResponse {
   if (request.languages === undefined) {
     return { status: 200, body: { text: 'ahoj svet' } };
@@ -157,6 +174,9 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
   const loads = new Map<string, Promise<void>>();
   const loaded = new Set<string>();
   const preparations: string[] = [];
+  const catalog = behaviour.catalog === undefined ? null : new FakeModelCatalog(behaviour.catalog, (id, available) => {
+    capabilities = withAvailability(capabilities, id, available);
+  });
 
   const isLoading = (model: string): boolean => behaviour.loadDelayMs?.[model] !== undefined && !loaded.has(model);
 
@@ -250,6 +270,12 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
       void handleTranscribe(request, response, url);
       return;
     }
+    const answer = catalog?.handle(request.method ?? '', url.pathname) ?? null;
+    if (answer !== null) {
+      request.resume();
+      send(response, answer.status, answer.body);
+      return;
+    }
     send(response, 404, { error: 'not found' });
   });
 
@@ -267,6 +293,12 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
     preparations: () => [...preparations],
     loadingModels: () => [...loads.keys()],
     loadedModels: () => [...loaded],
+    catalogRequests: () => catalog?.catalogRequests ?? 0,
+    modelOperations: () => [...(catalog?.operations ?? [])],
+    completeDownload: (id) => catalog?.complete(id),
+    failDownload: (id) => catalog?.fail(id),
+    setModelInUse: (id, inUse) => catalog?.setInUse(id, inUse),
+    catalogEntries: () => catalog?.entries() ?? [],
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

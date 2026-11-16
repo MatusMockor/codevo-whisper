@@ -12,6 +12,7 @@ import {
 import WebSocket from 'ws';
 import type { DeviceRepository } from '../devices/device-repository';
 import type { Logger } from '../logging/logger';
+import type { DeviceModelCatalog } from '../models/model-catalog-service';
 import type { PairingService } from '../pairing/pairing-service';
 import type { RefreshableCapabilities } from '../stt/capability-cache';
 import type { GatewayDispatcher } from '../stt/gateway-context';
@@ -38,6 +39,7 @@ export type ConnectionDeps = {
   ingestion: IngestionLimiter;
   capabilities: RefreshableCapabilities;
   preparation: ModelPreparation;
+  models: DeviceModelCatalog;
   serverVersion: string;
 };
 
@@ -140,6 +142,7 @@ export class GatewayConnection {
       ingestion: this.deps.ingestion,
       capabilities: this.deps.capabilities,
       preparation: this.deps.preparation,
+      models: this.deps.models,
     });
     channel.send({ type: 'ready', serverVersion: this.deps.serverVersion });
   }

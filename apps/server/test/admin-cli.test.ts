@@ -98,6 +98,40 @@ describe('codevo-whisper CLI', () => {
     expect(await cli(['revoke', 'deadbeef'], terminal())).toBe(1);
   });
 
+  it('grant-models and revoke-models switch the model management permission of a device', async () => {
+    await harness.addDevice('Pracovný Mac');
+    const [registered] = await harness.devices.list();
+    const deviceId = registered?.id ?? '';
+    expect(registered?.manageModels).toBe(false);
+    const granted = terminal();
+
+    expect(await cli(['grant-models', deviceId], granted)).toBe(0);
+    expect(granted.text()).toContain(`Zariadenie ${deviceId} môže sťahovať a odstraňovať modely servera.`);
+    expect((await harness.devices.findById(deviceId))?.manageModels).toBe(true);
+    const listed = terminal();
+    expect(await cli(['devices'], listed)).toBe(0);
+    expect(listed.text()).toContain('správa modelov: povolená');
+
+    const revoked = terminal();
+    expect(await cli(['revoke-models', deviceId], revoked)).toBe(0);
+    expect(revoked.text()).toContain(`Zariadenie ${deviceId} už nemôže sťahovať ani odstraňovať modely servera.`);
+    expect((await harness.devices.findById(deviceId))?.manageModels).toBe(false);
+    const relisted = terminal();
+    expect(await cli(['devices'], relisted)).toBe(0);
+    expect(relisted.text()).toContain('správa modelov: nepovolená');
+  });
+
+  it('grant-models refuses an unknown device and a missing id', async () => {
+    const unknown = terminal();
+    const missing = terminal();
+
+    expect(await cli(['grant-models', 'deadbeef'], unknown)).toBe(1);
+    expect(unknown.text()).toContain('Zariadenie deadbeef neexistuje.');
+    expect(await cli(['grant-models'], missing)).toBe(2);
+    expect(missing.text()).toContain('grant-models <id>');
+    expect(await cli(['revoke-models', 'NOT-HEX'], terminal())).toBe(1);
+  });
+
   it('rotate-key asks for confirmation', async () => {
     await harness.addDevice();
     const declined = terminal();
@@ -150,6 +184,6 @@ describe('codevo-whisper CLI', () => {
     const term = terminal();
 
     expect(await cli(['explode'], term)).toBe(2);
-    expect(term.text()).toContain('codevo-whisper <pair|devices|revoke <id>|rotate-key|status>');
+    expect(term.text()).toContain('codevo-whisper <pair|devices|revoke <id>|grant-models <id>|revoke-models <id>|rotate-key|status>');
   });
 });

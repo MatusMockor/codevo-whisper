@@ -2,6 +2,7 @@ import { expect, test, type ElectronApplication, type Locator, type Page } from 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pairingStep } from '../src/renderer/server/server-copy';
+import { grantModelsCommand } from '../src/shared/server';
 import type { Settings } from '../src/shared/settings';
 import { mainWindow } from './app-windows';
 import { createUserDataDir, FAKE_MEDIA_ARGS, launchApp, ONBOARDED, removeUserDataDir } from './launch-app';
@@ -338,6 +339,46 @@ test('the card disables a model the server has not downloaded and tells how to g
   await expect(picker).toHaveValue('parakeet-ultra');
   await expect(picker.locator('option[value="whisper-large-v3"]')).toBeDisabled();
   await expect(fact('Model prepisu')).toContainText('Whisper Large v3 (F16) na serveri nie je stiahnutý. Spustite na serveri stt-provision.');
+});
+
+test('the card downloads and removes server models once the server grants this device', async () => {
+  await gateway.close();
+  gateway = await startLocalGateway({ transcriptionModels: 'catalog' });
+  await openTab('Prepis');
+  const { deviceId } = await pair();
+  const picker = card().getByRole('combobox', { name: 'Model prepisu' });
+  const models = card().getByRole('region', { name: 'Modely na serveri' });
+  const turbo = models.locator('[data-server-model="whisper-large-v3-turbo"]');
+  const whisper = models.locator('[data-server-model="whisper-large-v3"]');
+
+  await card().getByRole('button', { name: 'Spravovať modely' }).click();
+
+  await expect(models).toContainText('Toto zariadenie nemá povolené spravovať modely na serveri.');
+  await expect(models.locator('.cmd code')).toHaveText(grantModelsCommand(deviceId, process.platform === 'linux'));
+  await expect(models.getByRole('button', { name: 'Stiahnuť: Whisper Large v3 Turbo (F16)' })).toHaveCount(0);
+
+  expect(await gateway.admin({ cmd: 'manage-models', deviceId, allowed: true })).toEqual({ found: true, manageModels: true });
+  await models.getByRole('button', { name: 'Skontrolovať znova' }).click();
+  await expect(models.locator('.cmd')).toHaveCount(0);
+  await expect(picker.locator('option[value="whisper-large-v3-turbo"]')).toBeDisabled();
+
+  await turbo.getByRole('button', { name: 'Stiahnuť: Whisper Large v3 Turbo (F16)' }).click();
+  await expect(turbo.getByRole('progressbar', { name: 'Sťahovanie: Whisper Large v3 Turbo (F16)' })).toBeVisible();
+  await expect(turbo).toContainText('Sťahuje sa, 0 %');
+
+  gateway.completeDownload('whisper-large-v3-turbo');
+
+  await expect(turbo).toContainText('Stiahnutý');
+  await expect(picker.locator('option[value="whisper-large-v3-turbo"]')).toBeEnabled();
+  await picker.selectOption('whisper-large-v3');
+  await expect(picker).toHaveValue('whisper-large-v3');
+
+  await whisper.getByRole('button', { name: 'Odstrániť: Whisper Large v3 (F16)' }).click();
+  await models.getByRole('button', { name: 'Áno, odstrániť' }).click();
+
+  await expect(whisper).toContainText('Nie je stiahnutý');
+  await expect(picker).toHaveValue('parakeet-ultra');
+  await expect(picker.locator('option[value="whisper-large-v3"]')).toBeDisabled();
 });
 
 test('the card shows missing language models on a current server without them', async () => {

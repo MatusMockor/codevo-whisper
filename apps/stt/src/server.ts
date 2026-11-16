@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { MAX_VOCABULARY_TERMS, TranscribeCliError } from '@codevo-whisper/stt-runner';
 import type { LanguageRouter } from './language-router';
+import type { ModelManagement } from './model-management';
 import type { ServerModels } from './model-names';
+import { ModelRoutes } from './model-routes';
 import { readPcm } from './read-pcm';
 import { parseTranscribeQuery, type TranscribeQuery } from './transcribe-query';
 import type { Transcriber } from './transcriber';
@@ -15,6 +17,7 @@ export type SttServerOptions = {
   router: LanguageRouter;
   models: ServerModels;
   catalog: TranscriptionModelCatalog;
+  management?: ModelManagement;
   port: number;
   host: string;
   onError?: (code: string) => void;
@@ -119,7 +122,7 @@ class SingleFlightHandler {
     }
     this.busy = true;
     try {
-      await this.transcribe(request, response, model, parseTranscribeQuery(url.searchParams));
+      await model.use(() => this.transcribe(request, response, model, parseTranscribeQuery(url.searchParams)));
     } finally {
       this.busy = false;
     }
@@ -159,6 +162,7 @@ class SingleFlightHandler {
 export async function startSttServer(options: SttServerOptions): Promise<SttServer> {
   const { router, models, catalog } = options;
   const handler = new SingleFlightHandler(catalog, options.onError);
+  const modelRoutes = options.management === undefined ? null : new ModelRoutes(options.management, reply);
   const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, (request, response) => {
     request.on('error', () => request.destroy());
     response.once('finish', () => request.resume());
@@ -179,6 +183,10 @@ export async function startSttServer(options: SttServerOptions): Promise<SttServ
     }
     if (request.method === 'POST' && url.pathname === '/prepare') {
       prepareModel(catalog, url, response, options.onError).catch(() => reply(response, 500, { error: 'internal error' }));
+      return;
+    }
+    if (modelRoutes?.handles(request, url) === true) {
+      modelRoutes.handle(request, response, url).catch(() => reply(response, 500, { error: 'internal error' }));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/transcribe') {

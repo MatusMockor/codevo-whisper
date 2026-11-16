@@ -72,6 +72,42 @@ describe('FileDeviceRepository', () => {
     expect((await repository.list())[0]?.lastSeenAt).toBe('2026-10-25T10:00:00.000Z');
   });
 
+  it('finds a device by id and switches its model management permission', async () => {
+    const repository = new FileDeviceRepository(dir.path);
+    const device = await repository.add('MacBook', generateKeyPair().publicKey);
+
+    expect(device.manageModels).toBe(false);
+    expect(await repository.findById(device.id)).toEqual(device);
+    expect(await repository.findById('deadbeef')).toBeNull();
+    expect(await repository.allowModelManagement(device.id, true)).toBe(true);
+    expect(await new FileDeviceRepository(dir.path).findById(device.id)).toEqual({ ...device, manageModels: true });
+    expect(await repository.allowModelManagement(device.id, false)).toBe(true);
+    expect((await repository.findById(device.id))?.manageModels).toBe(false);
+    expect(await repository.allowModelManagement('deadbeef', true)).toBe(false);
+  });
+
+  it('reads a registry written before model management as devices without the permission and writes the field only when granted', async () => {
+    const legacy = {
+      version: 1,
+      devices: [{ id: 'aaaaaaaa', name: 'Starý Mac', publicKey: Buffer.alloc(32, 7).toString('base64url'), pairedAt: '2026-10-25T10:00:00.000Z', lastSeenAt: null }],
+    };
+    await writeFile(join(dir.path, 'devices.json'), JSON.stringify(legacy), { mode: 0o600 });
+    const repository = new FileDeviceRepository(dir.path);
+
+    expect((await repository.findById('aaaaaaaa'))?.manageModels).toBe(false);
+    await repository.touch('aaaaaaaa', new Date('2026-11-17T10:00:00.000Z'));
+    expect(JSON.parse(await readFile(join(dir.path, 'devices.json'), 'utf8'))).toEqual({ version: 1, devices: [{ ...legacy.devices[0], lastSeenAt: '2026-11-17T10:00:00.000Z' }] });
+    await repository.allowModelManagement('aaaaaaaa', true);
+    expect(JSON.parse(await readFile(join(dir.path, 'devices.json'), 'utf8'))).toMatchObject({ devices: [{ id: 'aaaaaaaa', manageModels: true }] });
+  });
+
+  it('rejects a registry whose model management permission is not a boolean', async () => {
+    const registry = { version: 1, devices: [{ id: 'aaaaaaaa', name: 'Mac', publicKey: Buffer.alloc(32, 7).toString('base64url'), pairedAt: '2026-10-25T10:00:00.000Z', lastSeenAt: null, manageModels: 'yes' }] };
+    await writeFile(join(dir.path, 'devices.json'), JSON.stringify(registry), { mode: 0o600 });
+
+    await expect(new FileDeviceRepository(dir.path).list()).rejects.toThrow('device registry has an unknown format');
+  });
+
   it('persists across instances', async () => {
     const { publicKey } = generateKeyPair();
     const device = await new FileDeviceRepository(dir.path).add('MacBook', publicKey);

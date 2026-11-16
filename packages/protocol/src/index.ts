@@ -1,4 +1,4 @@
-export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION, VOCABULARY_MIN_VERSION } from './version';
+export { LANGUAGE_SETS_MIN_VERSION, MODEL_CATALOG_MIN_VERSION, PROTOCOL_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION, VOCABULARY_MIN_VERSION } from './version';
 
 export { CipherState, MAX_NONCE } from './noise/cipher-state';
 export {
@@ -15,12 +15,14 @@ export { ERROR_CODES, isErrorCode, ProtocolError, type ErrorCode } from './error
 export { decodeOpeningFrame, encodeOpeningFrame, HandshakeMode, PROLOGUE_PAIR, PROLOGUE_SESSION, type OpeningFrame } from './framing';
 export { MAX_PLAINTEXT } from './limits';
 export {
+  CATALOG_STATES,
   decodeClientMessage,
   decodeServerMessage,
   encodeClientMessage,
   encodeServerMessage,
   DICTATION_LANGUAGES,
   IDENTIFIER_PATTERN,
+  isCatalogEntryList,
   isModelName,
   isTranscriptionModelId,
   isTranscriptionModelList,
@@ -33,12 +35,21 @@ export {
   MAX_TRANSCRIPTION_MODEL_ID_CHARS,
   MAX_TRANSCRIPTION_MODELS,
   MessageTag,
+  MODEL_FAMILIES,
+  MODEL_OPERATION_OUTCOMES,
+  MODEL_OPERATIONS,
   routesDictationLanguages,
   TRANSCRIPTION_MODEL_ID_PATTERN,
   UNKNOWN_MODELS,
+  type CatalogEntry,
+  type CatalogState,
   type ClientMessage,
   type DictationLanguage,
   type Language,
+  type ModelCatalog,
+  type ModelFamily,
+  type ModelOperation,
+  type ModelOperationOutcome,
   type ServerMessage,
   type ServerModels,
   type TranscriptionModelOption,

@@ -1,4 +1,5 @@
 import type { ErrorCode } from './errors';
+import type { ModelCatalog, ModelOperation, ModelOperationOutcome } from './model-catalog';
 import type { ServerModels } from './server-models';
 import type { TranscriptionModelOption } from './transcription-models';
 
@@ -28,7 +29,7 @@ export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'capabilities'; transcriptionModels?: boolean }
+  | { type: 'capabilities'; transcriptionModels?: boolean; modelCatalog?: boolean }
   | {
       type: 'start';
       sessionId: string;
@@ -41,14 +42,24 @@ export type ClientMessage =
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }
   | { type: 'cancel' }
-  | { type: 'pair-request'; deviceName: string };
+  | { type: 'pair-request'; deviceName: string }
+  | { type: 'model-download'; id: string }
+  | { type: 'model-remove'; id: string }
+  | { type: 'model-download-cancel'; id: string };
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
-  | { type: 'capabilities'; languages: readonly DictationLanguage[]; models: ServerModels; transcriptionModels?: readonly TranscriptionModelOption[] }
+  | {
+      type: 'capabilities';
+      languages: readonly DictationLanguage[];
+      models: ServerModels;
+      transcriptionModels?: readonly TranscriptionModelOption[];
+      modelCatalog?: ModelCatalog;
+    }
   | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string; language?: DictationLanguage | null }
   | { type: 'final'; sessionId: string; segmentId: number; text: string; language?: DictationLanguage | null }
   | { type: 'done'; sessionId: string }
   | { type: 'flow'; paused: boolean }
   | { type: 'error'; code: ErrorCode; message: string; sessionId?: string }
-  | { type: 'pair-result'; status: 'approved' | 'rejected'; deviceId?: string };
+  | { type: 'pair-result'; status: 'approved' | 'rejected'; deviceId?: string }
+  | { type: 'model-operation'; id: string; operation: ModelOperation; outcome: ModelOperationOutcome };

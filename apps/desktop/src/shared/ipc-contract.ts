@@ -11,6 +11,7 @@ import type { DiarizerView, LanguagePackView, ModelCatalogView, ModelState } fro
 import type { PageId } from './pages';
 import type { PermissionGuide, PermissionKind, PermissionsStatus } from './permissions';
 import type { DisconnectResult, ServerView } from './server';
+import type { ServerModelOutcome } from './server-model-catalog';
 import type { EngineId, MicrophoneSetting, Settings } from './settings';
 import type { FocusRequest } from './section-focus';
 import type { DayStats } from './stats';
@@ -57,6 +58,10 @@ export type IpcInvokeApi = {
   disconnectServer(): Promise<DisconnectResult>;
   setServerEnabled(enabled: boolean): Promise<void>;
   chooseServerModel(id: string): Promise<void>;
+  serverModelDownload(id: string): Promise<ServerModelOutcome>;
+  serverModelRemove(id: string): Promise<ServerModelOutcome>;
+  serverModelCancel(id: string): Promise<ServerModelOutcome>;
+  refreshServerModels(): Promise<void>;
   preferEngine(engine: EngineId): Promise<EngineSwitch>;
   takeSectionFocus(): Promise<FocusRequest | null>;
   getUpdateStatus(): Promise<UpdateStatus>;
@@ -148,6 +153,10 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   disconnectServer: 'server:disconnect',
   setServerEnabled: 'server:set-enabled',
   chooseServerModel: 'server:choose-model',
+  serverModelDownload: 'server:model-download',
+  serverModelRemove: 'server:model-remove',
+  serverModelCancel: 'server:model-cancel',
+  refreshServerModels: 'server:refresh-models',
   preferEngine: 'engines:prefer',
   takeSectionFocus: 'window:take-section-focus',
   getUpdateStatus: 'updates:status',

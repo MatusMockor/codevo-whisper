@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliTranscriber } from '../src/cli-transcriber';
 import { UnavailableLanguageRouter } from '../src/language-router';
-import { RoutingTranscriptionModel } from '../src/routing-transcription-model';
+import { RoutedJobs } from '../src/model-jobs';
+import { ResidentTranscriptionModel } from '../src/resident-transcription-model';
 import { startSttServer, type SttServer } from '../src/server';
 import { TranscriptionModelCatalog } from '../src/transcription-model-catalog';
 import type { Transcriber } from '../src/transcriber';
@@ -17,7 +18,7 @@ type Reply = { status: number; body: unknown };
 const NO_ROUTING = { router: new UnavailableLanguageRouter(), models: { transcription: 'fake', conditioned: null, languageId: null } };
 
 function serverFor(transcriber: Transcriber): Promise<SttServer> {
-  const catalog = new TranscriptionModelCatalog(new RoutingTranscriptionModel('parakeet-ultra', 'fake', transcriber, NO_ROUTING.router));
+  const catalog = new TranscriptionModelCatalog(new ResidentTranscriptionModel('parakeet-ultra', 'fake', new RoutedJobs(transcriber, NO_ROUTING.router)));
   return startSttServer({ transcriber, ...NO_ROUTING, catalog, port: 0, host: '127.0.0.1' });
 }
 

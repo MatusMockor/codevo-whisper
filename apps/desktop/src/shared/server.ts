@@ -1,8 +1,9 @@
 import type { PairingEngineChange } from './engine-routing';
+import type { ModelCatalog } from './server-model-catalog';
 import type { ServerLanguages } from './server-languages';
 import type { TranscriptionModelOption } from './transcription-models';
 
-export type ConnectedServer = { connectMs: number; serverVersion: string; languages: ServerLanguages; transcriptionModels: readonly TranscriptionModelOption[] };
+export type ConnectedServer = { connectMs: number; serverVersion: string; languages: ServerLanguages; transcriptionModels: readonly TranscriptionModelOption[]; modelCatalog: ModelCatalog | null };
 
 export type VaultAvailability = 'available' | 'insecure' | 'unavailable';
 
@@ -50,4 +51,9 @@ export const PAIR_COMMAND = 'docker compose -f infrastructure/compose/compose.ya
 export function revokeCommand(deviceId: string, linux = false): string {
   if (linux) return `codevo-whisper-server revoke ${deviceId}`;
   return `docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper revoke ${deviceId}`;
+}
+
+export function grantModelsCommand(deviceId: string, linux = false): string {
+  if (linux) return `codevo-whisper-server grant-models ${deviceId}`;
+  return `docker compose -f infrastructure/compose/compose.yaml exec gateway codevo-whisper grant-models ${deviceId}`;
 }

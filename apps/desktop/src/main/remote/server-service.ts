@@ -136,13 +136,21 @@ export class ServerService {
   }
 
   check(): Promise<void> {
+    return this.startCheck((scope) => scope.checking());
+  }
+
+  refreshModels(): Promise<void> {
+    return this.startCheck(() => undefined);
+  }
+
+  private startCheck(announce: (scope: StatusScope) => void): Promise<void> {
     if (this.checking !== null && this.checking.scope.isCurrent()) {
       return this.checking.run;
     }
     const scope = this.deps.status.scope();
     const running: RunningCheck = {
       scope,
-      run: this.runCheck(scope).finally(() => {
+      run: this.runCheck(scope, announce).finally(() => {
         if (this.checking === running) {
           this.checking = null;
         }
@@ -163,7 +171,7 @@ export class ServerService {
     return (this.deps.clock ?? Date.now)();
   }
 
-  private async runCheck(scope: StatusScope): Promise<void> {
+  private async runCheck(scope: StatusScope, announce: (scope: StatusScope) => void): Promise<void> {
     this.lastCheckAt = this.now();
     const read = await this.readPairing(this.deps.vault.availability());
     if (!scope.isCurrent()) {
@@ -177,7 +185,7 @@ export class ServerService {
       scope.failed('storage-insecure');
       return;
     }
-    scope.checking();
+    announce(scope);
     try {
       const ready = await this.deps.connector.connect(scope);
       ready.connection.close();
