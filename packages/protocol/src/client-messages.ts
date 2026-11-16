@@ -22,6 +22,7 @@ import {
   type Language,
 } from './message-types';
 import { jsonFrame, splitTag, tagged } from './tagged-frame';
+import { readTranscriptionModelId } from './transcription-models';
 
 const JSON_TYPES = ['hello', 'capabilities', 'start', 'finish', 'cancel', 'pair-request'] as const;
 
@@ -69,8 +70,25 @@ function readVocabulary(object: JsonObject): Pick<StartMessage, 'vocabulary'> {
   return { vocabulary: readStringList(object, 'vocabulary', VOCABULARY_TERM, { minItems: 1, maxItems: 100 }) };
 }
 
+function readModel(object: JsonObject): Pick<StartMessage, 'model'> {
+  if (object.model === undefined) {
+    return {};
+  }
+  return { model: readTranscriptionModelId(object, 'model') };
+}
+
+type CapabilitiesRequest = Extract<ClientMessage, { type: 'capabilities' }>;
+
+function decodeCapabilitiesRequest(object: JsonObject): CapabilitiesRequest {
+  assertOnlyKeys(object, ['type', 'transcriptionModels']);
+  if (object.transcriptionModels === undefined) {
+    return { type: 'capabilities' };
+  }
+  return { type: 'capabilities', transcriptionModels: readBoolean(object, 'transcriptionModels') };
+}
+
 function decodeStart(object: JsonObject): StartMessage {
-  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials', 'languages', 'vocabulary']);
+  assertOnlyKeys(object, ['type', 'sessionId', 'language', 'partials', 'languages', 'vocabulary', 'model']);
   const language = readChoice(object, 'language', LANGUAGES);
   return {
     type: 'start',
@@ -79,6 +97,7 @@ function decodeStart(object: JsonObject): StartMessage {
     ...readPartials(object),
     ...readLanguageSet(object, language),
     ...readVocabulary(object),
+    ...readModel(object),
   };
 }
 
@@ -86,6 +105,9 @@ function decodeJson(object: JsonObject): JsonClientMessage {
   const type = readChoice(object, 'type', JSON_TYPES);
   if (type === 'start') {
     return decodeStart(object);
+  }
+  if (type === 'capabilities') {
+    return decodeCapabilitiesRequest(object);
   }
   if (type === 'pair-request') {
     assertOnlyKeys(object, ['type', 'deviceName']);

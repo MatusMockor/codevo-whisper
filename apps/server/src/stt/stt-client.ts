@@ -7,6 +7,7 @@ export type SttRequest = {
   languages: readonly DictationLanguage[] | null;
   kind: JobKind;
   vocabulary: readonly string[];
+  model: string | null;
 };
 
 export type SttTranscript = { text: string; language: DictationLanguage | null; route: string | null };

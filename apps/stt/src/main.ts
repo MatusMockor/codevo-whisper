@@ -19,11 +19,17 @@ if (missingLanguageModels.length > 0) {
   log('language_models_missing', { models: missingLanguageModels.join(','), hint: PROVISION_HINT });
 }
 
-const engine = createEngine(config, { routing: missingLanguageModels.length === 0 });
+const whisperPresent = (await missingFiles([config.whisperModel])).length === 0;
+if (!whisperPresent) {
+  log('selectable_model_missing', { model: config.whisperModel, hint: PROVISION_HINT });
+}
+
+const engine = createEngine(config, { routing: missingLanguageModels.length === 0, whisper: whisperPresent });
 const server = await startSttServer({
   transcriber: engine.transcriber,
   router: engine.router,
   models: engine.models,
+  catalog: engine.catalog,
   port: config.port,
   host: config.host,
   onError: (status) => log('engine_error', { status }),

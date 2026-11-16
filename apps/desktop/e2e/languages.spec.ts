@@ -111,6 +111,16 @@ test('a server without the language models shows the overlay error and the provi
   await expect(await languagesRow()).toContainText('Na serveri chýbajú modely pre výber jazykov. Spustite na serveri stt-provision.');
 });
 
+test('a dictation on a current server uses the transcription model chosen for this device', async () => {
+  await pair({ transcriptionModels: 'offered' });
+  await page.evaluate(() => window.codevo.chooseServerModel('whisper-large-v3'));
+
+  await dictate();
+
+  await expect.poll(pasted).toEqual(['prepis v jazykoch sk cs']);
+  expect(gateway?.sttRequests().map((request) => request.model)).toEqual(['whisper-large-v3']);
+});
+
 async function useCustomWords(): Promise<void> {
   const customWords = [{ word: 'Prepis zo', aliases: [] }, { word: 'Kumiba MCP', aliases: ['servera'] }];
   await page.evaluate((words) => window.codevo.updateSettings({ languages: { mode: 'auto', selected: ['sk', 'cs'] }, customWords: words }), customWords);

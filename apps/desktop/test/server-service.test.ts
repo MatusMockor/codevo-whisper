@@ -75,6 +75,7 @@ function saveGate(): SaveGate {
       load: () => pairings.load(),
       clear: () => pairings.clear(),
       clearDevice: (deviceId) => pairings.clearDevice(deviceId),
+      amend: (deviceId, change) => pairings.amend(deviceId, change),
       save: async (pairing) => {
         saving.resolve();
         await released.promise;

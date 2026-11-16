@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LANGUAGE_SETS_MIN_VERSION, VOCABULARY_MIN_VERSION } from '@codevo-whisper/protocol';
+import { LANGUAGE_SETS_MIN_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION, VOCABULARY_MIN_VERSION } from '@codevo-whisper/protocol';
 import { SERVER_VERSION } from '../../server/src/version';
 import { ServerFeatures } from '../src/main/remote/server-features';
 
@@ -21,6 +21,8 @@ describe('ServerFeatures', () => {
     expect(ServerFeatures.of(SERVER_VERSION).languageSets).toBe(true);
     expect(ServerFeatures.of(VOCABULARY_MIN_VERSION).vocabulary).toBe(true);
     expect(ServerFeatures.of(SERVER_VERSION).vocabulary).toBe(true);
+    expect(ServerFeatures.of(TRANSCRIPTION_MODELS_MIN_VERSION).transcriptionModels).toBe(true);
+    expect(ServerFeatures.of(SERVER_VERSION).transcriptionModels).toBe(true);
   });
 
   it.each(['0.4.0', '0.4.1', '0.10.0', '1.0.0'])('offers the dictation vocabulary on server %s', (version) => {
@@ -29,5 +31,13 @@ describe('ServerFeatures', () => {
 
   it.each(['0.3.0', '0.3.9', '0.4.0-rc.1', '', 'dev'])('treats server %j as too old for the dictation vocabulary', (version) => {
     expect(ServerFeatures.of(version).vocabulary).toBe(false);
+  });
+
+  it.each(['0.5.0', '0.5.1', '0.10.0', '1.0.0'])('offers the transcription model choice on server %s', (version) => {
+    expect(ServerFeatures.of(version).transcriptionModels).toBe(true);
+  });
+
+  it.each(['0.4.0', '0.4.9', '0.5.0-rc.1', '', 'dev'])('treats server %j as too old for the transcription model choice', (version) => {
+    expect(ServerFeatures.of(version).transcriptionModels).toBe(false);
   });
 });

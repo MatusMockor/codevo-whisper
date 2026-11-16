@@ -50,7 +50,7 @@ beforeEach(async () => {
   vi.stubEnv('FAKE_CLI_ARGS_FILE', argsFile);
   vi.stubEnv('FAKE_CLI_MODE', 'model-language');
   engine = createEngine({ ...loadSttConfig({ STT_ENGINE: 'cli' }), binary: FAKE_CLI, threads: 1 }, { routing: true });
-  server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
+  server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, catalog: engine.catalog, port: 0, host: '127.0.0.1' });
 });
 
 afterEach(async () => {
@@ -67,6 +67,10 @@ describe('language routing on the per-call CLI', () => {
       body: {
         languages: [...SUPPORTED_LANGUAGES],
         models: { transcription: 'Parakeet Ultra (F16)', conditioned: 'Canary 1B v2 (Q8)', languageId: 'VoxLingua107 (rozpoznanie jazyka)' },
+        transcriptionModels: [
+          { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true },
+          { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: false, default: false },
+        ],
       },
     });
   });

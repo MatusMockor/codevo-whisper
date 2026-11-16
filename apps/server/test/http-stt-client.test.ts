@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { UNKNOWN_MODELS } from '@codevo-whisper/protocol';
 import { DEFAULT_STT_TIMEOUT_MS, HttpSttClient, MAX_CAPABILITIES_RESPONSE_BYTES, MAX_STT_RESPONSE_BYTES } from '../src/stt/http-stt-client';
 import { NO_CAPABILITIES } from '../src/stt/stt-capabilities';
-import { ROUTING_MODELS, ROUTING_STT, startFakeSttServer, type FakeSttServer } from './support/fake-stt-server';
+import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_MODELS, ROUTING_STT, startFakeSttServer, WHISPER_OPTION, type FakeSttServer } from './support/fake-stt-server';
 import type { SttRequest } from '../src/stt/stt-client';
 import { pcmSeconds } from './support/pcm';
 import { waitUntil } from './support/wait-until';
@@ -27,9 +27,9 @@ async function closedPortUrl(): Promise<string> {
 
 const signal = (): AbortSignal => new AbortController().signal;
 
-const legacy = (pcm: Uint8Array): SttRequest => ({ pcm, language: 'sk', languages: null, kind: 'final', vocabulary: [] });
+const legacy = (pcm: Uint8Array): SttRequest => ({ pcm, language: 'sk', languages: null, kind: 'final', vocabulary: [], model: null });
 
-const routed = (pcm: Uint8Array, kind: SttRequest['kind'] = 'final'): SttRequest => ({ pcm, language: 'auto', languages: ['sk', 'cs'], kind, vocabulary: [] });
+const routed = (pcm: Uint8Array, kind: SttRequest['kind'] = 'final'): SttRequest => ({ pcm, language: 'auto', languages: ['sk', 'cs'], kind, vocabulary: [], model: null });
 
 type RawServer = { url: string; close(): Promise<void> };
 
@@ -238,7 +238,7 @@ describe('HttpSttClient capabilities', () => {
   it('reads the languages and models of the stt', async () => {
     fake = await startFakeSttServer({ capabilities: ROUTING_STT });
 
-    expect(await new HttpSttClient(fake.url).capabilities()).toEqual({ languages: ROUTING_STT.body.languages, models: ROUTING_MODELS });
+    expect(await new HttpSttClient(fake.url).capabilities()).toEqual({ languages: ROUTING_STT.body.languages, models: ROUTING_MODELS, transcriptionModels: [] });
   });
 
   it('treats a 404 from an old stt, an error status and an unreachable stt as no capabilities', async () => {
@@ -246,14 +246,14 @@ describe('HttpSttClient capabilities', () => {
     expect(await new HttpSttClient(fake.url).capabilities()).toEqual(NO_CAPABILITIES);
     fake.setCapabilities({ status: 500, body: { error: 'internal error' } });
     expect(await new HttpSttClient(fake.url).capabilities()).toEqual(NO_CAPABILITIES);
-    expect(await new HttpSttClient(await closedPortUrl()).capabilities()).toEqual({ languages: [], models: UNKNOWN_MODELS });
+    expect(await new HttpSttClient(await closedPortUrl()).capabilities()).toEqual({ languages: [], models: UNKNOWN_MODELS, transcriptionModels: [] });
   });
 
   it('drops a malformed language list and keeps valid model names', async () => {
     const models = { transcription: 'Parakeet Ultra (F16)', conditioned: 'x'.repeat(65), languageId: 'Vox\nLingua' };
     fake = await startFakeSttServer({ capabilities: { status: 200, body: { languages: ['sk', 'ja'], models } } });
 
-    expect(await new HttpSttClient(fake.url).capabilities()).toEqual({ languages: [], models: { ...UNKNOWN_MODELS, transcription: 'Parakeet Ultra (F16)' } });
+    expect(await new HttpSttClient(fake.url).capabilities()).toEqual({ languages: [], models: { ...UNKNOWN_MODELS, transcription: 'Parakeet Ultra (F16)' }, transcriptionModels: [] });
   });
 
   it('drops duplicated languages and models that are not an object', async () => {
@@ -289,5 +289,87 @@ describe('HttpSttClient capabilities', () => {
     } finally {
       await silent.close();
     }
+  });
+});
+
+describe('HttpSttClient transcription models', () => {
+  const whisper = (pcm: Uint8Array): SttRequest => ({ ...legacy(pcm), model: 'whisper-large-v3' });
+
+  it('sends the model of the session and no model parameter for a session without one', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT });
+    const client = new HttpSttClient(fake.url);
+
+    await client.transcribe(whisper(pcmSeconds(0.1)), signal());
+    await client.transcribe({ ...routed(pcmSeconds(0.1)), model: 'parakeet-ultra' }, signal());
+    await client.transcribe(legacy(pcmSeconds(0.1)), signal());
+
+    expect(fake.requests).toStrictEqual([
+      { language: 'sk', model: 'whisper-large-v3', bytes: 3200 },
+      { language: 'auto', languages: ['sk', 'cs'], kind: 'final', model: 'parakeet-ultra', bytes: 3200 },
+      { language: 'sk', bytes: 3200 },
+    ]);
+  });
+
+  it('keeps the direct route of a Whisper segment', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, respond: () => ({ status: 200, body: { text: 'ahoj', language: 'sk', route: 'direct' } }) });
+
+    expect(await new HttpSttClient(fake.url).transcribe({ ...routed(pcmSeconds(0.1)), model: 'whisper-large-v3' }, signal())).toEqual({ text: 'ahoj', language: 'sk', route: 'direct' });
+  });
+
+  it('maps an unknown or unavailable model to model_unavailable', async () => {
+    fake = await startFakeSttServer({ capabilities: { status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } } });
+    const client = new HttpSttClient(fake.url);
+
+    await expect(client.transcribe(whisper(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'model_unavailable' });
+    await expect(client.transcribe({ ...routed(pcmSeconds(0.1)), model: 'whisper-large-v3' }, signal())).rejects.toMatchObject({ code: 'model_unavailable' });
+    await expect(client.transcribe({ ...legacy(pcmSeconds(0.1)), model: 'canary-1b-v2' }, signal())).rejects.toMatchObject({ code: 'model_unavailable' });
+  });
+
+  it('keeps languages_unavailable and stt_unavailable for other refusals of a request with a model', async () => {
+    let reply = { status: 409, body: { error: 'languages unavailable' } as unknown };
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, respond: () => reply });
+    const client = new HttpSttClient(fake.url);
+
+    await expect(client.transcribe({ ...routed(pcmSeconds(0.1)), model: 'parakeet-ultra' }, signal())).rejects.toMatchObject({ code: 'languages_unavailable' });
+    reply = { status: 400, body: 'model unavailable' };
+    await expect(client.transcribe(whisper(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+    reply = { status: 502, body: { error: 'model failed to load' } };
+    await expect(client.transcribe(whisper(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+  });
+
+  it('never maps a refusal of a request without a model to model_unavailable', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT, respond: () => ({ status: 409, body: { error: 'model unavailable' } }) });
+
+    await expect(new HttpSttClient(fake.url).transcribe(legacy(pcmSeconds(0.1)), signal())).rejects.toMatchObject({ code: 'stt_unavailable' });
+  });
+
+  it('reads the transcription models of the stt', async () => {
+    fake = await startFakeSttServer({ capabilities: MODEL_SELECTION_STT });
+
+    expect(await new HttpSttClient(fake.url).capabilities()).toEqual({ languages: ROUTING_STT.body.languages, models: ROUTING_MODELS, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] });
+  });
+
+  it('drops extra fields of a model and the whole list when it is malformed', async () => {
+    const report = (transcriptionModels: unknown) => ({ status: 200, body: { ...ROUTING_STT.body, transcriptionModels } });
+    fake = await startFakeSttServer({ capabilities: report([{ ...WHISPER_OPTION, sizeBytes: 3 }]) });
+    const client = new HttpSttClient(fake.url);
+    expect((await client.capabilities()).transcriptionModels).toEqual([WHISPER_OPTION]);
+
+    const malformed: unknown[] = [
+      null,
+      { id: 'whisper-large-v3' },
+      [PARAKEET_OPTION, PARAKEET_OPTION],
+      [PARAKEET_OPTION, { ...WHISPER_OPTION, default: true }],
+      [{ ...WHISPER_OPTION, id: 'Whisper Large' }],
+      [{ ...WHISPER_OPTION, name: 'n'.repeat(65) }],
+      [{ ...WHISPER_OPTION, available: 'yes' }],
+      [{ id: 'whisper-large-v3', name: 'Whisper', available: true }],
+      Array.from({ length: 9 }, (_, index) => ({ ...WHISPER_OPTION, id: `model-${index}` })),
+    ];
+    for (const transcriptionModels of malformed) {
+      fake.setCapabilities(report(transcriptionModels));
+      expect((await client.capabilities()).transcriptionModels, JSON.stringify(transcriptionModels)).toEqual([]);
+    }
+    expect((await client.capabilities()).languages).toEqual(ROUTING_STT.body.languages);
   });
 });

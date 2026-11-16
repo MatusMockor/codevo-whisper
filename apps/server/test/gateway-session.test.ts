@@ -80,7 +80,7 @@ describe('gateway sessions', () => {
     const device = await server.addDevice();
     const session = await connectSession(server.url, device, server.serverKey.publicKey);
 
-    expect(manifest.version).toBe('0.4.0');
+    expect(manifest.version).toBe('0.5.0');
     expect(await session.next()).toEqual({ type: 'ready', serverVersion: manifest.version });
   });
 

@@ -11,6 +11,7 @@ export type DictationOptions = {
   language: Language;
   languages: readonly DictationLanguage[] | null;
   vocabulary: readonly string[];
+  model: string | null;
   partials: boolean;
   dispatcher: GatewayDispatcher;
   clock: () => number;
@@ -42,7 +43,7 @@ export class Dictation {
     this.session = new RollingSession({
       deviceId: options.deviceId,
       partials: options.partials,
-      context: { language: options.language, languages: options.languages, vocabulary: options.vocabulary, observer: this.transcripts },
+      context: { language: options.language, languages: options.languages, vocabulary: options.vocabulary, model: options.model, observer: this.transcripts },
       submitter: options.dispatcher,
       registry: options.dispatcher,
       interval: options.dispatcher.partialIntervalSource(),

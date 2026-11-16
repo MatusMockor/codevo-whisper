@@ -52,7 +52,7 @@ afterEach(async () => {
 describe('engine selection', () => {
   it('serves every request from one resident worker by default', async () => {
     engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER }, { routing: false });
-    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
+    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, catalog: engine.catalog, port: 0, host: '127.0.0.1' });
 
     const first = await post('/transcribe?language=sk', new Uint8Array(32_000));
     const second = await post('/transcribe?language=auto', new Uint8Array(6_400));
@@ -64,7 +64,7 @@ describe('engine selection', () => {
 
   it('reports DOWN until the resident worker answered ready', async () => {
     engine = createEngine({ ...loadSttConfig({}), workerBinary: FAKE_WORKER }, { routing: false });
-    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, port: 0, host: '127.0.0.1' });
+    server = await startSttServer({ transcriber: engine.transcriber, router: engine.router, models: engine.models, catalog: engine.catalog, port: 0, host: '127.0.0.1' });
 
     expect(await get('/health')).toEqual({ status: 503, body: { status: 'DOWN', busy: false } });
     await engine.transcriber.warmUp();

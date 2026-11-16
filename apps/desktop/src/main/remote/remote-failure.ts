@@ -9,6 +9,7 @@ export type RemoteFailureKind =
   | 'busy'
   | 'stt-unavailable'
   | 'languages-unavailable'
+  | 'model-unavailable'
   | 'too-long'
   | 'connection-lost'
   | 'protocol'
@@ -41,6 +42,7 @@ const KIND_BY_CODE: Readonly<Record<ErrorCode, RemoteFailureKind>> = Object.free
   pairing_rejected: 'pairing-rejected',
   server_key_changed: 'server-key-changed',
   languages_unavailable: 'languages-unavailable',
+  model_unavailable: 'model-unavailable',
 });
 
 export function failureForCode(code: ErrorCode): RemoteFailureKind {

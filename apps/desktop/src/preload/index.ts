@@ -74,6 +74,7 @@ const api: IpcApi = {
   checkServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.checkServer) as Promise<void>,
   disconnectServer: () => ipcRenderer.invoke(INVOKE_CHANNELS.disconnectServer) as Promise<DisconnectResult>,
   setServerEnabled: (enabled) => ipcRenderer.invoke(INVOKE_CHANNELS.setServerEnabled, enabled) as Promise<void>,
+  chooseServerModel: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.chooseServerModel, id) as Promise<void>,
   preferEngine: (engine) => ipcRenderer.invoke(INVOKE_CHANNELS.preferEngine, engine) as Promise<EngineSwitch>,
   takeSectionFocus: () => ipcRenderer.invoke(INVOKE_CHANNELS.takeSectionFocus) as Promise<FocusRequest | null>,
   getUpdateStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.getUpdateStatus) as Promise<UpdateStatus>,

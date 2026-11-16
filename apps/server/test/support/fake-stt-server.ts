@@ -4,7 +4,7 @@ import { DICTATION_LANGUAGES, MAX_DICTATION_LANGUAGES } from '@codevo-whisper/pr
 
 export type FakeSttResponse = { status: number; body: unknown };
 
-export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string; vocabulary?: string[] };
+export type FakeSttRequest = { language: string; bytes: number; languages?: string[]; kind?: string; vocabulary?: string[]; model?: string };
 
 export type FakeSttBehaviour = {
   respond?: (pcm: Uint8Array, language: string, request: FakeSttRequest) => FakeSttResponse;
@@ -33,6 +33,14 @@ export const ROUTING_MODELS = { transcription: 'Parakeet Ultra (F16)', condition
 
 export const ROUTING_STT = { status: 200, body: { languages: [...DICTATION_LANGUAGES], models: ROUTING_MODELS } } satisfies FakeSttResponse;
 
+export const PARAKEET_OPTION = { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true };
+
+export const WHISPER_OPTION = { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: true, default: false };
+
+export const MODEL_SELECTION_STT = { status: 200, body: { ...ROUTING_STT.body, transcriptionModels: [PARAKEET_OPTION, WHISPER_OPTION] } } satisfies FakeSttResponse;
+
+type OfferedModel = { id: string; available: boolean };
+
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
@@ -54,10 +62,12 @@ function requestOf(url: URL, bytes: number): FakeSttRequest {
   const languages = url.searchParams.get('languages');
   const terms = url.searchParams.getAll('vocabulary');
   const vocabulary = terms.length === 0 ? {} : { vocabulary: terms };
+  const id = url.searchParams.get('model');
+  const model = id === null ? {} : { model: id };
   if (languages === null) {
-    return { language, ...vocabulary, bytes };
+    return { language, ...vocabulary, ...model, bytes };
   }
-  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', ...vocabulary, bytes };
+  return { language, languages: languages.split(','), kind: url.searchParams.get('kind') ?? 'final', ...vocabulary, ...model, bytes };
 }
 
 function isValidSelection(request: FakeSttRequest): boolean {
@@ -73,6 +83,25 @@ function isValidSelection(request: FakeSttRequest): boolean {
 function routes(capabilities: FakeSttResponse): boolean {
   const languages = (capabilities.body as { languages?: unknown } | null)?.languages;
   return capabilities.status === 200 && Array.isArray(languages) && languages.length > 0;
+}
+
+function offeredModels(capabilities: FakeSttResponse): readonly OfferedModel[] {
+  const models = (capabilities.body as { transcriptionModels?: unknown } | null)?.transcriptionModels;
+  return Array.isArray(models) ? (models as OfferedModel[]) : [];
+}
+
+function modelRefusal(query: FakeSttRequest, capabilities: FakeSttResponse): FakeSttResponse | null {
+  if (query.model === undefined) {
+    return null;
+  }
+  const offered = offeredModels(capabilities).find((model) => model.id === query.model);
+  if (offered === undefined) {
+    return { status: 400, body: { error: 'unknown model' } };
+  }
+  if (!offered.available) {
+    return { status: 409, body: { error: 'model unavailable' } };
+  }
+  return null;
 }
 
 function validationStatus(request: IncomingMessage, pcm: Uint8Array, query: FakeSttRequest, capabilities: FakeSttResponse): number | null {
@@ -129,6 +158,11 @@ export async function startFakeSttServer(behaviour: FakeSttBehaviour = {}): Prom
       throw error;
     }
     const query = requestOf(url, pcm.length);
+    const refused = modelRefusal(query, capabilities);
+    if (refused !== null) {
+      send(response, refused.status, refused.body);
+      return;
+    }
     const invalid = validationStatus(request, pcm, query, capabilities);
     if (invalid !== null) {
       send(response, invalid, { error: 'invalid request' });

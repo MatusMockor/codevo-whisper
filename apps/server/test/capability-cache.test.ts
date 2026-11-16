@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { refreshEvery, SttCapabilityCache } from '../src/stt/capability-cache';
 import { HttpSttClient } from '../src/stt/http-stt-client';
 import { NO_CAPABILITIES } from '../src/stt/stt-capabilities';
-import { ROUTING_MODELS, ROUTING_STT, startFakeSttServer, type FakeSttResponse, type FakeSttServer } from './support/fake-stt-server';
+import { MODEL_SELECTION_STT, PARAKEET_OPTION, ROUTING_MODELS, ROUTING_STT, startFakeSttServer, WHISPER_OPTION, type FakeSttResponse, type FakeSttServer } from './support/fake-stt-server';
 import { waitUntil } from './support/wait-until';
 
 let fake: FakeSttServer | undefined;
@@ -47,7 +47,7 @@ describe('SttCapabilityCache', () => {
     const { cache } = await cacheFor();
     await cache.refresh();
 
-    expect(cache.current()).toEqual({ languages: ROUTING_STT.body.languages, models: ROUTING_MODELS });
+    expect(cache.current()).toEqual({ languages: ROUTING_STT.body.languages, models: ROUTING_MODELS, transcriptionModels: [] });
   });
 
   it('shares one stt request between concurrent refreshes', async () => {
@@ -66,6 +66,25 @@ describe('SttCapabilityCache', () => {
     expect(cache.supports(['cs', 'sk'])).toBe(true);
     expect(cache.supports(['sk', 'en'])).toBe(false);
     expect(cache.supports([])).toBe(false);
+  });
+
+  it('offers only the transcription models the stt reports as available', async () => {
+    const { cache, stt } = await cacheFor(MODEL_SELECTION_STT);
+    expect(cache.offersModel('parakeet-ultra')).toBe(false);
+    await cache.refresh();
+
+    expect(cache.current().transcriptionModels).toEqual([PARAKEET_OPTION, WHISPER_OPTION]);
+    expect(cache.offersModel('parakeet-ultra')).toBe(true);
+    expect(cache.offersModel('whisper-large-v3')).toBe(true);
+    expect(cache.offersModel('canary-1b-v2')).toBe(false);
+
+    stt.setCapabilities({ status: 200, body: { ...MODEL_SELECTION_STT.body, transcriptionModels: [PARAKEET_OPTION, { ...WHISPER_OPTION, available: false }] } });
+    await cache.refresh();
+    expect(cache.offersModel('whisper-large-v3')).toBe(false);
+
+    stt.setCapabilities(ROUTING_STT);
+    await cache.refresh();
+    expect(cache.offersModel('parakeet-ultra')).toBe(false);
   });
 
   it('forgets the languages when the stt loses its routing models', async () => {

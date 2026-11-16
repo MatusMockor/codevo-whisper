@@ -4,7 +4,7 @@ import { expectedMessage } from './expected-message';
 import type { PairingRepository, ServerPairing } from './pairing-repository';
 import { asRemoteFailure, RemoteFailure, type RemoteFailureKind } from './remote-failure';
 import { SecureConnection } from './secure-connection';
-import { queryServerLanguages } from './server-language-query';
+import { queryServerCapabilities } from './server-capability-query';
 
 export type ReadyConnection = ConnectedServer & { connection: SecureConnection; pairing: ServerPairing; scope: ConnectionScope };
 
@@ -91,7 +91,7 @@ export class ServerConnector {
       assertCurrent(scope);
       const opened = await this.open(pairing, cancel.signal);
       this.keepIfCurrent(opened, scope);
-      scope.connected({ connectMs: opened.connectMs, serverVersion: opened.serverVersion, languages: opened.languages });
+      scope.connected({ connectMs: opened.connectMs, serverVersion: opened.serverVersion, languages: opened.languages, transcriptionModels: opened.transcriptionModels });
       return { ...opened, scope };
     } catch (error) {
       const failure = failureIn(scope, error);
@@ -123,8 +123,8 @@ export class ServerConnector {
       connection.send({ type: 'hello' });
       const { serverVersion } = expectedMessage(await connection.next(this.deps.timeoutMs), 'ready');
       const connectMs = this.deps.clock() - startedAt;
-      const languages = await queryServerLanguages(connection, serverVersion, this.deps.timeoutMs);
-      return { connection, serverVersion, connectMs, languages, pairing };
+      const capabilities = await queryServerCapabilities(connection, serverVersion, this.deps.timeoutMs);
+      return { connection, serverVersion, connectMs, ...capabilities, pairing };
     } catch (error) {
       connection.close();
       throw error;

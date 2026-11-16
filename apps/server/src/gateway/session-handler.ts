@@ -30,6 +30,8 @@ export type SessionDeps = {
 
 type StartMessage = Extract<ClientMessage, { type: 'start' }>;
 
+type CapabilitiesRequest = Extract<ClientMessage, { type: 'capabilities' }>;
+
 type State =
   | { kind: 'idle' }
   | { kind: 'recording'; dictation: Dictation; startedAt: number }
@@ -47,7 +49,7 @@ export class SessionHandler {
   private readonly timers: NodeJS.Timeout[];
   private readonly handlers: Handlers = {
     hello: () => this.channel.fail('bad_message'),
-    capabilities: () => this.onCapabilities(),
+    capabilities: (message) => this.onCapabilities(message),
     start: (message) => this.onStart(message),
     audio: (message) => this.onAudio(message.pcm),
     finish: () => this.onFinish(),
@@ -85,18 +87,26 @@ export class SessionHandler {
     handler(message);
   }
 
-  private onCapabilities(): void {
+  private onCapabilities(message: CapabilitiesRequest): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
       return;
     }
-    const { languages, models } = this.deps.capabilities.current();
-    this.channel.send({ type: 'capabilities', languages, models });
+    const { languages, models, transcriptionModels } = this.deps.capabilities.current();
+    if (message.transcriptionModels !== true) {
+      this.channel.send({ type: 'capabilities', languages, models });
+      return;
+    }
+    this.channel.send({ type: 'capabilities', languages, models, transcriptionModels });
   }
 
   private onStart(message: StartMessage): void {
     if (this.state.kind !== 'idle') {
       this.channel.fail('bad_message');
+      return;
+    }
+    if (message.model !== undefined && !this.deps.capabilities.offersModel(message.model)) {
+      this.channel.send({ type: 'error', code: 'model_unavailable', message: 'model_unavailable', sessionId: message.sessionId });
       return;
     }
     if (message.languages !== undefined && !this.deps.capabilities.supports(message.languages)) {
@@ -109,6 +119,7 @@ export class SessionHandler {
       language: message.language,
       languages: message.languages ?? null,
       vocabulary: message.vocabulary ?? [],
+      model: message.model ?? null,
       partials: message.partials === true,
       dispatcher: this.deps.dispatcher,
       clock: this.deps.clock,

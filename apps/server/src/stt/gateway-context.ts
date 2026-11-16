@@ -12,6 +12,7 @@ export type GatewayContext = {
   language: Language;
   languages: readonly DictationLanguage[] | null;
   vocabulary: readonly string[];
+  model: string | null;
   observer: TranscriptObserver;
 };
 

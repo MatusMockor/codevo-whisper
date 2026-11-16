@@ -7,6 +7,7 @@ import type { SecureConnection } from './secure-connection';
 import type { ReadyConnection } from './server-connector';
 import { ServerFeatures } from './server-features';
 import type { ServerLanguageSupport } from './server-language-support';
+import { requestedTranscriptionModel } from '../../shared/transcription-models';
 
 export type RemoteDictationDeps = {
   options: DictationOptions;
@@ -30,6 +31,7 @@ const REASON_BY_KIND: Partial<Record<RemoteFailureKind, EngineFailureReason>> = 
   busy: 'busy',
   'stt-unavailable': 'stt-unavailable',
   'languages-unavailable': 'stt-unavailable',
+  'model-unavailable': 'model-unavailable',
   'too-long': 'too-long',
   'device-unknown': 'repair-needed',
   'server-key-changed': 'repair-needed',
@@ -54,6 +56,14 @@ function closeWhenReady(attempt: Promise<ReadyConnection>): void {
     (ready) => ready.connection.close(),
     () => undefined,
   );
+}
+
+function modelField(ready: ReadyConnection): { model?: string } {
+  if (!ServerFeatures.of(ready.serverVersion).transcriptionModels) {
+    return {};
+  }
+  const model = requestedTranscriptionModel(ready.transcriptionModels, ready.pairing.transcriptionModel ?? null);
+  return model === undefined ? {} : { model };
 }
 
 function joinSegments(segments: ReadonlyMap<number, string>): string {
@@ -123,15 +133,16 @@ export class RemoteDictation implements EngineDictation {
     return { connection, sessionId: '', segments: new Map(), textChars: 0, finishSent: false };
   }
 
-  private begin({ connection, serverVersion }: ReadyConnection): Attempt {
+  private begin(ready: ReadyConnection): Attempt {
+    const { connection } = ready;
     const attempt: Attempt = { ...this.idle(connection), sessionId: this.deps.newSessionId?.() ?? crypto.randomUUID() };
     connection.onMessage((message) => this.receive(attempt, message));
     connection.onClose((failure) => this.dropped(attempt, failure));
-    connection.send(this.startMessage(attempt.sessionId, serverVersion));
+    connection.send(this.startMessage(attempt.sessionId, ready));
     return attempt;
   }
 
-  private startMessage(sessionId: string, serverVersion: string): ClientMessage {
+  private startMessage(sessionId: string, ready: ReadyConnection): ClientMessage {
     const { partials, languages, vocabulary = [] } = this.deps.options;
     return {
       type: 'start',
@@ -139,7 +150,8 @@ export class RemoteDictation implements EngineDictation {
       language: 'auto',
       ...(partials === true ? { partials: true } : {}),
       ...(languages.mode === 'selected' ? { languages: languages.selected } : {}),
-      ...(vocabulary.length > 0 && ServerFeatures.of(serverVersion).vocabulary ? { vocabulary } : {}),
+      ...(vocabulary.length > 0 && ServerFeatures.of(ready.serverVersion).vocabulary ? { vocabulary } : {}),
+      ...modelField(ready),
     };
   }
 

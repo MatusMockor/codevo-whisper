@@ -1,7 +1,7 @@
 import { DICTATION_LANGUAGES, MAX_TEXT_CHARS, ProtocolError, type DictationLanguage } from '@codevo-whisper/protocol';
 import type { SttRequest, SttTranscript } from './stt-client';
 
-const ROUTES: readonly string[] = ['auto', 'verbatim-short', 'verbatim-foreign', 'verbatim-unsure', 'conditioned-fix', 'verbatim-guard', 'conditioned', 'verbatim-fallback'];
+const ROUTES: readonly string[] = ['auto', 'verbatim-short', 'verbatim-foreign', 'verbatim-unsure', 'conditioned-fix', 'verbatim-guard', 'conditioned', 'verbatim-fallback', 'direct'];
 
 type Reply = { text: string; language?: unknown; route?: unknown };
 

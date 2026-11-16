@@ -5,7 +5,7 @@ import type { ServerStatusBoard } from './server-status';
 export const RECONNECT_DELAYS_MS: readonly number[] = Object.freeze([5_000, 15_000, 30_000, 60_000]);
 
 export type ServerReconnectDeps = {
-  status: Pick<ServerStatusBoard, 'onChange' | 'onStaleLanguages'>;
+  status: Pick<ServerStatusBoard, 'onChange' | 'onStaleCapabilities'>;
   check: () => Promise<void>;
   power: PowerEvents;
   delaysMs?: readonly number[];
@@ -22,7 +22,7 @@ export class ServerReconnect {
     const wake = (): void => this.checkNow();
     this.unsubscribers = [
       this.deps.status.onChange((status) => this.follow(status)),
-      this.deps.status.onStaleLanguages(wake),
+      this.deps.status.onStaleCapabilities(wake),
       this.deps.power.on('resume', wake),
       this.deps.power.on('unlock-screen', wake),
     ];

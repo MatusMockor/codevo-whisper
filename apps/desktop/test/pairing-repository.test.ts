@@ -115,6 +115,37 @@ describe('EncryptedPairingFile', () => {
     expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual(saved);
   });
 
+  it('keeps the chosen transcription model with the pairing and amends only the pairing of the given device', async () => {
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+    const saved = pairing();
+    await repository.save(saved);
+
+    await repository.amend('f3a1c0de', (current) => ({ ...current, transcriptionModel: 'parakeet-ultra' }));
+    await repository.amend(saved.deviceId, (current) => ({ ...current, transcriptionModel: 'whisper-large-v3' }));
+
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toEqual({ ...saved, transcriptionModel: 'whisper-large-v3' });
+    expect(await readFile(file, 'utf8')).not.toContain('whisper');
+  });
+
+  it('does not bring back a pairing that was cleared before the amendment ran', async () => {
+    const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
+    const saved = pairing();
+    await repository.save(saved);
+
+    await Promise.all([repository.clear(), repository.amend(saved.deviceId, (current) => ({ ...current, transcriptionModel: 'whisper-large-v3' }))]);
+
+    expect(await new EncryptedPairingFile(file, new InsecureTestVault('available')).load()).toBeNull();
+    await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('reads a pairing with a malformed transcription model as a pairing without a choice', async () => {
+    const vault = new InsecureTestVault('available');
+    const saved = pairing();
+    await new EncryptedPairingFile(file, vault).save({ ...saved, transcriptionModel: 'Whisper Large' });
+
+    expect(await new EncryptedPairingFile(file, vault).load()).toEqual(saved);
+  });
+
   it('round-trips any device id the protocol accepts and refuses to write one it does not', async () => {
     const repository = new EncryptedPairingFile(file, new InsecureTestVault('available'));
     const saved = { ...pairing(), deviceId: 'Device_01-A' };

@@ -1,5 +1,6 @@
 import type { ErrorCode } from './errors';
 import type { ServerModels } from './server-models';
+import type { TranscriptionModelOption } from './transcription-models';
 
 export const LANGUAGES = ['sk', 'en', 'cs', 'auto'] as const;
 
@@ -27,8 +28,16 @@ export const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'capabilities' }
-  | { type: 'start'; sessionId: string; language: Language; partials?: boolean; languages?: readonly DictationLanguage[]; vocabulary?: readonly string[] }
+  | { type: 'capabilities'; transcriptionModels?: boolean }
+  | {
+      type: 'start';
+      sessionId: string;
+      language: Language;
+      partials?: boolean;
+      languages?: readonly DictationLanguage[];
+      vocabulary?: readonly string[];
+      model?: string;
+    }
   | { type: 'audio'; pcm: Uint8Array }
   | { type: 'finish' }
   | { type: 'cancel' }
@@ -36,7 +45,7 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'ready'; serverVersion: string }
-  | { type: 'capabilities'; languages: readonly DictationLanguage[]; models: ServerModels }
+  | { type: 'capabilities'; languages: readonly DictationLanguage[]; models: ServerModels; transcriptionModels?: readonly TranscriptionModelOption[] }
   | { type: 'partial'; sessionId: string; segmentId: number; revision: number; text: string; language?: DictationLanguage | null }
   | { type: 'final'; sessionId: string; segmentId: number; text: string; language?: DictationLanguage | null }
   | { type: 'done'; sessionId: string }

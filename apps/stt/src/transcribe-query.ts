@@ -5,7 +5,9 @@ export type PlainQuery = { kind: 'plain'; language: TranscribeLanguage; vocabula
 
 export type RoutedQuery = { kind: 'routed'; selection: LanguageSelection; segment: SegmentKind; vocabulary: readonly string[] };
 
-export type TranscribeQuery = PlainQuery | RoutedQuery | { kind: 'invalid' };
+export type ValidQuery = PlainQuery | RoutedQuery;
+
+export type TranscribeQuery = ValidQuery | { kind: 'invalid' };
 
 const LANGUAGES: readonly TranscribeLanguage[] = ['sk', 'en', 'cs', 'auto'];
 const SEGMENT_KINDS: readonly SegmentKind[] = ['final', 'partial'];

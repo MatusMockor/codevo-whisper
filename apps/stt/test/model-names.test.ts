@@ -8,6 +8,7 @@ describe('modelName', () => {
     ['/models/parakeet-ultra-F16.gguf', 'Parakeet Ultra (F16)'],
     ['/models/canary-1b-v2-Q8_0.gguf', 'Canary 1B v2 (Q8)'],
     ['/models/lang-id-voxlingua107-ecapa-Q8_0.gguf', 'VoxLingua107 (rozpoznanie jazyka)'],
+    ['/models/whisper-large-v3-F16.gguf', 'Whisper Large v3 (F16)'],
     ['/elsewhere/canary-1b-v2-Q8_0.gguf', 'Canary 1B v2 (Q8)'],
   ])('names the pinned model %s', (path, name) => {
     expect(modelName(path)).toBe(name);

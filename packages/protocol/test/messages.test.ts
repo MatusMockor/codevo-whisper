@@ -9,10 +9,13 @@ import {
   encodeServerMessage,
   MAX_DICTATION_LANGUAGES,
   MAX_MODEL_NAME_CHARS,
+  MAX_TRANSCRIPTION_MODEL_ID_CHARS,
+  MAX_TRANSCRIPTION_MODELS,
   MessageTag,
   UNKNOWN_MODELS,
   type ClientMessage,
   type ServerMessage,
+  type TranscriptionModelOption,
 } from '../src/messages';
 
 const encoder = new TextEncoder();
@@ -278,7 +281,7 @@ describe('dictation languages', () => {
 
   it('adds languages_unavailable after the existing error codes so their close codes stay stable', () => {
     expect(ERROR_CODES.indexOf('server_key_changed')).toBe(9);
-    expect(ERROR_CODES.at(-1)).toBe('languages_unavailable');
+    expect(ERROR_CODES.indexOf('languages_unavailable')).toBe(10);
   });
 });
 
@@ -351,5 +354,108 @@ describe('compatibility with peers that predate dictation languages', () => {
     expectBadMessage(() => assertOnlyKeys(final, LEGACY_FINAL_KEYS));
     expectBadMessage(() => readChoice(body(encodeClientMessage({ type: 'capabilities' })), 'type', LEGACY_CLIENT_TYPES));
     expectBadMessage(() => readChoice(body(encodeServerMessage({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS })), 'type', LEGACY_SERVER_TYPES));
+  });
+});
+
+describe('transcription models', () => {
+  const PARAKEET: TranscriptionModelOption = { id: 'parakeet-ultra', name: 'Parakeet Ultra (F16)', available: true, default: true };
+  const WHISPER: TranscriptionModelOption = { id: 'whisper-large-v3', name: 'Whisper Large v3 (F16)', available: false, default: false };
+
+  function capabilities(transcriptionModels: unknown): Uint8Array {
+    return json({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS, transcriptionModels });
+  }
+
+  function start(fields: Record<string, unknown>): Uint8Array {
+    return json({ type: 'start', sessionId: 'abc', language: 'auto', ...fields });
+  }
+
+  function option(fields: Record<string, unknown>): Record<string, unknown> {
+    return { ...WHISPER, ...fields };
+  }
+
+  it.each<ClientMessage>([
+    { type: 'capabilities', transcriptionModels: true },
+    { type: 'capabilities', transcriptionModels: false },
+    { type: 'start', sessionId: 'whisper', language: 'auto', model: 'whisper-large-v3' },
+    { type: 'start', sessionId: 'routed', language: 'auto', partials: true, languages: ['sk', 'cs'], vocabulary: ['Kumiba'], model: 'parakeet-ultra' },
+  ])('round-trips the client message %o', (message) => {
+    expect(decodeClientMessage(encodeClientMessage(message))).toEqual(message);
+  });
+
+  it.each<ServerMessage>([
+    { type: 'capabilities', languages: [], models: UNKNOWN_MODELS, transcriptionModels: [] },
+    { type: 'capabilities', languages: ['sk'], models: UNKNOWN_MODELS, transcriptionModels: [PARAKEET, WHISPER] },
+    { type: 'error', code: 'model_unavailable', message: 'model_unavailable', sessionId: 's1' },
+  ])('round-trips the server message %o', (message) => {
+    expect(decodeServerMessage(encodeServerMessage(message))).toEqual(message);
+  });
+
+  it('decodes requests and replies without the new fields exactly as before', () => {
+    expect(decodeClientMessage(json({ type: 'capabilities' }))).toStrictEqual({ type: 'capabilities' });
+    expect(decodeClientMessage(start({}))).toStrictEqual({ type: 'start', sessionId: 'abc', language: 'auto' });
+    expect(decodeServerMessage(json({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS }))).toStrictEqual({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS });
+  });
+
+  it('accepts a model id up to the limit and rejects ids outside the id rule', () => {
+    const longest = 'm'.repeat(MAX_TRANSCRIPTION_MODEL_ID_CHARS);
+
+    expect(decodeClientMessage(start({ model: longest }))).toMatchObject({ model: longest });
+    expect(decodeClientMessage(start({ model: 'canary-1b.v2' }))).toMatchObject({ model: 'canary-1b.v2' });
+    ['', ' ', 'm'.repeat(MAX_TRANSCRIPTION_MODEL_ID_CHARS + 1), 'Whisper', 'whisper large', '-whisper', 'whisper-', 'whisper--v3', 'whisper_v3', 'whisper\n', null, 1, true, ['whisper'], {}].forEach((model) => {
+      expectBadMessage(() => decodeClientMessage(start({ model })));
+    });
+  });
+
+  it('rejects a capabilities request flag that is not a boolean and other fields on it', () => {
+    ['yes', 1, null, []].forEach((transcriptionModels) => {
+      expectBadMessage(() => decodeClientMessage(json({ type: 'capabilities', transcriptionModels })));
+    });
+    expectBadMessage(() => decodeClientMessage(json({ type: 'capabilities', transcriptionModels: true, models: true })));
+  });
+
+  it('accepts up to the maximum number of models and rejects longer lists', () => {
+    const many = Array.from({ length: MAX_TRANSCRIPTION_MODELS + 1 }, (_, index) => option({ id: `model-${index}` }));
+
+    expect(decodeServerMessage(capabilities(many.slice(0, MAX_TRANSCRIPTION_MODELS)))).toMatchObject({ transcriptionModels: many.slice(0, MAX_TRANSCRIPTION_MODELS) });
+    expectBadMessage(() => decodeServerMessage(capabilities(many)));
+  });
+
+  it('rejects duplicate ids, more than one default and malformed entries', () => {
+    const malformed: unknown[] = [
+      null,
+      'whisper-large-v3',
+      {},
+      [PARAKEET, PARAKEET],
+      [PARAKEET, option({ default: true })],
+      [option({ id: 'Whisper' })],
+      [option({ name: '' })],
+      [option({ name: 'n'.repeat(MAX_MODEL_NAME_CHARS + 1) })],
+      [option({ name: 'Whisper\u0000' })],
+      [option({ available: 'yes' })],
+      [option({ default: 1 })],
+      [option({ size: 3 })],
+      [{ id: 'whisper-large-v3', name: 'Whisper', available: true }],
+      [['whisper-large-v3']],
+    ];
+
+    malformed.forEach((transcriptionModels) => {
+      expectBadMessage(() => decodeServerMessage(capabilities(transcriptionModels)));
+    });
+  });
+
+  it('adds model_unavailable after the existing error codes so their close codes stay stable', () => {
+    expect(ERROR_CODES.indexOf('languages_unavailable')).toBe(10);
+    expect(ERROR_CODES.at(-1)).toBe('model_unavailable');
+  });
+
+  it('would be rejected by a decoder that predates model selection, so the new fields need the server version gate', () => {
+    const LEGACY_CAPABILITIES_REPLY_KEYS = ['type', 'languages', 'models'];
+    const LEGACY_START_KEYS = ['type', 'sessionId', 'language', 'partials', 'languages', 'vocabulary'];
+    const body = (frame: Uint8Array): Record<string, unknown> => JSON.parse(new TextDecoder().decode(frame.subarray(1))) as Record<string, unknown>;
+
+    expectBadMessage(() => assertOnlyKeys(body(encodeClientMessage({ type: 'capabilities', transcriptionModels: true })), ['type']));
+    expectBadMessage(() => assertOnlyKeys(body(encodeClientMessage({ type: 'start', sessionId: 'abc', language: 'auto', model: 'whisper-large-v3' })), LEGACY_START_KEYS));
+    expectBadMessage(() => assertOnlyKeys(body(encodeServerMessage({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS, transcriptionModels: [] })), LEGACY_CAPABILITIES_REPLY_KEYS));
+    expect(() => assertOnlyKeys(body(encodeServerMessage({ type: 'capabilities', languages: [], models: UNKNOWN_MODELS })), LEGACY_CAPABILITIES_REPLY_KEYS)).not.toThrow();
   });
 });

@@ -56,6 +56,7 @@ export type IpcInvokeApi = {
   checkServer(): Promise<void>;
   disconnectServer(): Promise<DisconnectResult>;
   setServerEnabled(enabled: boolean): Promise<void>;
+  chooseServerModel(id: string): Promise<void>;
   preferEngine(engine: EngineId): Promise<EngineSwitch>;
   takeSectionFocus(): Promise<FocusRequest | null>;
   getUpdateStatus(): Promise<UpdateStatus>;
@@ -146,6 +147,7 @@ export const INVOKE_CHANNELS: { readonly [K in keyof IpcInvokeApi]: string } = O
   checkServer: 'server:check',
   disconnectServer: 'server:disconnect',
   setServerEnabled: 'server:set-enabled',
+  chooseServerModel: 'server:choose-model',
   preferEngine: 'engines:prefer',
   takeSectionFocus: 'window:take-section-focus',
   getUpdateStatus: 'updates:status',

@@ -1,3 +1,4 @@
+import { isTranscriptionModelId } from '@codevo-whisper/protocol';
 import { isAiBaseUrl, isAiKey, type CodexEffort } from '../../shared/ai';
 import { isEngineId } from '../../shared/engine-routing';
 import { parseHotkeySetting } from '../../shared/hotkey';
@@ -73,6 +74,14 @@ export function validateEnabled(args: readonly unknown[]): boolean {
     throw new IpcValidationError('Invalid enabled flag');
   }
   return enabled;
+}
+
+export function validateTranscriptionModelId(args: readonly unknown[]): string {
+  const [id] = args;
+  if (args.length !== 1 || !isTranscriptionModelId(id)) {
+    throw new IpcValidationError('Invalid transcription model');
+  }
+  return id;
 }
 
 export function validatePermissionKind(input: unknown): PermissionKind {

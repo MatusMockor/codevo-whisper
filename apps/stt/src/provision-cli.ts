@@ -19,7 +19,7 @@ const onProgress = (file: ModelFile, bytes: number, total: number | null): void 
   process.stdout.write(`${file.target}: ${percent} %\n`);
 };
 
-process.stdout.write(`Language models add ${(manifest.extraBytes() / GIGABYTE).toFixed(2)} GB\n`);
+process.stdout.write(`Optional models add ${(manifest.extraBytes() / GIGABYTE).toFixed(2)} GB\n`);
 for (const { file, result } of await provisionManifest(manifest, onProgress)) {
   process.stdout.write(`${result === 'present' ? 'Model already present and verified' : 'Model downloaded and verified'}: ${file.target}\n`);
 }

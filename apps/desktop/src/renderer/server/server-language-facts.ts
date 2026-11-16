@@ -1,9 +1,16 @@
 import { isServerDown, type PairedServerView } from '../../shared/server';
 import { routesLanguages, type ServerModels } from '../../shared/server-languages';
+import { transcriptionModelPicker, type ModelPicker } from './transcription-model-picker';
 
-export type ServerFact = { term: string; value: string };
+export type ServerFact = { term: string; value: string } | { term: string; picker: ModelPicker };
 
 const LANGUAGE_SETS = 'Výber jazykov';
+
+const TRANSCRIPTION_MODEL = 'Model prepisu';
+
+const LANGUAGE_MODELS = 'Modely pre jazyky';
+
+const DETECTS_LANGUAGE = 'Nepoužívajú sa, model rozpozná jazyk sám';
 
 const UNKNOWN = '-';
 
@@ -14,7 +21,20 @@ function languageModels(models: ServerModels): string {
   return `${models.conditioned} + ${models.languageId}`;
 }
 
-export function serverLanguageFacts(server: Pick<PairedServerView, 'status'>): readonly ServerFact[] {
+function modelFacts(models: ServerModels, picker: ModelPicker | null): readonly ServerFact[] {
+  if (picker === null) {
+    return [
+      { term: TRANSCRIPTION_MODEL, value: models.transcription ?? UNKNOWN },
+      { term: LANGUAGE_MODELS, value: languageModels(models) },
+    ];
+  }
+  return [
+    { term: TRANSCRIPTION_MODEL, picker },
+    { term: LANGUAGE_MODELS, value: picker.routesLanguages ? languageModels(models) : DETECTS_LANGUAGE },
+  ];
+}
+
+export function serverLanguageFacts(server: Pick<PairedServerView, 'status' | 'transcriptionModel'>): readonly ServerFact[] {
   const { status } = server;
   if (isServerDown(status) || status.kind === 'repair-needed') {
     return [];
@@ -25,9 +45,5 @@ export function serverLanguageFacts(server: Pick<PairedServerView, 'status'>): r
   if (status.languages.kind === 'outdated') {
     return [{ term: LANGUAGE_SETS, value: 'Server je zastaraný' }];
   }
-  return [
-    { term: LANGUAGE_SETS, value: routesLanguages(status.languages) ? 'Podporovaný' : 'Chýbajú modely' },
-    { term: 'Model prepisu', value: status.languages.models.transcription ?? UNKNOWN },
-    { term: 'Modely pre jazyky', value: languageModels(status.languages.models) },
-  ];
+  return [{ term: LANGUAGE_SETS, value: routesLanguages(status.languages) ? 'Podporovaný' : 'Chýbajú modely' }, ...modelFacts(status.languages.models, transcriptionModelPicker(server))];
 }

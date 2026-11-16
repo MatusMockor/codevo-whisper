@@ -14,8 +14,9 @@ const PAIRED: PairedServerView = {
   pairedAt: '2026-11-01T10:00:00.000Z',
   serverFingerprint: 'AA',
   deviceFingerprint: 'BB',
-  status: { kind: 'online', connectMs: 12, serverVersion: '1.0.0', languages: { kind: 'reported', languages: ['sk'], models: { transcription: 'Parakeet', conditioned: 'Canary', languageId: 'VoxLingua107' } } },
+  status: { kind: 'online', connectMs: 12, serverVersion: '1.0.0', languages: { kind: 'reported', languages: ['sk'], models: { transcription: 'Parakeet', conditioned: 'Canary', languageId: 'VoxLingua107' } }, transcriptionModels: [] },
   enabled: true,
+  transcriptionModel: null,
 };
 
 describe('localZone', () => {

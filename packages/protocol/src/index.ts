@@ -1,4 +1,4 @@
-export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION, VOCABULARY_MIN_VERSION } from './version';
+export { LANGUAGE_SETS_MIN_VERSION, PROTOCOL_VERSION, TRANSCRIPTION_MODELS_MIN_VERSION, VOCABULARY_MIN_VERSION } from './version';
 
 export { CipherState, MAX_NONCE } from './noise/cipher-state';
 export {
@@ -22,19 +22,25 @@ export {
   DICTATION_LANGUAGES,
   IDENTIFIER_PATTERN,
   isModelName,
+  isTranscriptionModelId,
+  isTranscriptionModelList,
   LANGUAGES,
   MAX_DEVICE_NAME_CHARS,
   MAX_DICTATION_LANGUAGES,
   MAX_IDENTIFIER_CHARS,
   MAX_MODEL_NAME_CHARS,
   MAX_TEXT_CHARS,
+  MAX_TRANSCRIPTION_MODEL_ID_CHARS,
+  MAX_TRANSCRIPTION_MODELS,
   MessageTag,
+  TRANSCRIPTION_MODEL_ID_PATTERN,
   UNKNOWN_MODELS,
   type ClientMessage,
   type DictationLanguage,
   type Language,
   type ServerMessage,
   type ServerModels,
+  type TranscriptionModelOption,
 } from './messages';
 export { MAX_NOISE_MESSAGE, REKEY_EVERY, SecureTransport } from './transport/secure-transport';
 export { createPairingSecret, encodePairingToken, fingerprint, parsePairingToken, type PairingToken } from './pairing';
